@@ -24,6 +24,8 @@ configure: configure-stamp
 configure-stamp:
 	dh_testdir
 	# Add here commands to configure the package.
+	./autogen.sh
+	CFLAGS="$(CFLAGS) -msse2" ./configure --prefix=/usr
 
 	touch configure-stamp
 
@@ -67,7 +69,7 @@ binary-indep: build install
 binary-arch: build install
 	dh_testdir
 	dh_testroot
-#	dh_installchangelogs ChangeLog
+	dh_installchangelogs NEWS
 	dh_installdocs
 #	dh_installexamples
 #	dh_install

@@ -2,7 +2,7 @@ Source: bitcoin-cpuminer
 Section: network
 Priority: extra
 Maintainer: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
-Build-Depends: debhelper (>= 5), libcurl-dev
+Build-Depends: debhelper (>= 5), libcurl3-dev, autoconf (>= 2.5), automake (>= 1.7)
 Standards-Version: 3.7.2
 
 Package: bitcoin-cpuminer
