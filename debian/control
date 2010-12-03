@@ -1,0 +1,13 @@
+Source: bitcoin-cpuminer
+Section: network
+Priority: extra
+Maintainer: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Build-Depends: debhelper (>= 5), libcurl-dev
+Standards-Version: 3.7.2
+
+Package: bitcoin-cpuminer
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libcurl3
+Description: This is a multi-threaded CPU miner for bitcoin
+ This is a multi-threaded CPU miner for bitcoin.
+
