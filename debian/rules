@@ -60,6 +60,9 @@ install: build
 	# Add here commands to install the package into debian/bitcoin-cpuminer.
 	$(MAKE) DESTDIR=$(CURDIR)/debian/bitcoin-cpuminer install
 
+	# change minerd name to bitcoin-cpuminer
+	mv -f $(CURDIR)/debian/bitcoin-cpuminer/usr/bin/minerd \
+		$(CURDIR)/debian/bitcoin-cpuminer/usr/bin/bitcoin-cpuminer
 
 # Build architecture-independent files here.
 binary-indep: build install
