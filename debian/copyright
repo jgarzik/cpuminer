@@ -1,7 +1,7 @@
-This is bitcoin-cpuminer, written and maintained by Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
-on Thu,  2 Dec 2010 21:20:20 -0600.
+This package was debianized by Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com> on
+Thu,  2 Dec 2010 21:20:20 -0600.
 
-The original source can always be found at: https://github.com/jgarzik/cpuminer
+It was downloaded from https://github.com/jgarzik/cpuminer
 
 Copyright: 2010, Jeff Garzik <jeff@garzik.org>
 License: GPL-2+
@@ -52,5 +52,5 @@ License: MIT
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
   THE SOFTWARE.
 
-On Debian systems, the complete text of the GNU General
-Public License can be found in `/usr/share/common-licenses/GPL'.
+The Debian packaging is (C) 2010, Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com> and
+is licensed under the GPL, see `/usr/share/common-licenses/GPL'.
