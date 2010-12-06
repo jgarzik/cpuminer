@@ -47,7 +47,17 @@ clean:
 	rm -f build-stamp configure-stamp
 
 	# Add here commands to clean up after the build process.
-	-$(MAKE) clean
+	$(MAKE) clean
+
+	# delete missing files
+	rm -f config.log config.status
+
+	rm -rf .deps/ compat/jansson/.deps/
+	rm -f INSTALL Makefile Makefile.in aclocal.m4
+	rm -f compat/Makefile compat/Makefile.in
+	rm -f compat/jansson/Makefile compat/jansson/Makefile.in
+	rm -f compile configure cpuminer-config.* depcomp
+	rm -f install-sh missing stamp-h1
 
 	dh_clean 
 
@@ -72,7 +82,7 @@ binary-indep: build install
 binary-arch: build install
 	dh_testdir
 	dh_testroot
-	dh_installchangelogs NEWS
+	dh_installchangelogs ChangeLog
 	dh_installdocs
 #	dh_installexamples
 #	dh_install
