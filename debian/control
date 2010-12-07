@@ -4,6 +4,9 @@ Priority: optional
 Maintainer: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
 Build-Depends: debhelper (>= 5), libcurl3-dev, autoconf (>= 2.5), automake (>= 1.7)
 Standards-Version: 3.7.2
+Vcs-Git: git://github.com/jgarzik/cpuminer.git
+Vcs-browser: https://github.com/jgarzik/cpuminer
+Homepage: http://www.bitcoin.org/smf/index.php?topic=1925.0
 
 Package: bitcoin-cpuminer
 Architecture: any
