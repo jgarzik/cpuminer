@@ -47,17 +47,13 @@ clean:
 	rm -f build-stamp configure-stamp
 
 	# Add here commands to clean up after the build process.
-	$(MAKE) clean
+	[ ! -f Makefile ] || $(MAKE) distclean
 
 	# delete missing files
-	rm -f config.log config.status
-
-	rm -rf .deps/ compat/jansson/.deps/
-	rm -f INSTALL Makefile Makefile.in aclocal.m4
-	rm -f compat/Makefile compat/Makefile.in
-	rm -f compat/jansson/Makefile compat/jansson/Makefile.in
+	rm -f INSTALL Makefile.in aclocal.m4
+	rm -f compat/Makefile.in compat/jansson/Makefile.in
 	rm -f compile configure cpuminer-config.* depcomp
-	rm -f install-sh missing stamp-h1
+	rm -f install-sh missing
 
 	dh_clean 
 
@@ -96,7 +92,7 @@ binary-arch: build install
 #	dh_installinit
 #	dh_installcron
 #	dh_installinfo
-	dh_installman
+	dh_installman debian/bitcoin-cpuminer.1
 	dh_link
 	dh_strip
 	dh_compress
