@@ -66,10 +66,6 @@ install: build
 	# Add here commands to install the package into debian/bitcoin-cpuminer.
 	$(MAKE) DESTDIR=$(CURDIR)/debian/bitcoin-cpuminer install
 
-	# change minerd name to bitcoin-cpuminer
-	mv -f $(CURDIR)/debian/bitcoin-cpuminer/usr/bin/minerd \
-		$(CURDIR)/debian/bitcoin-cpuminer/usr/bin/bitcoin-cpuminer
-
 # Build architecture-independent files here.
 binary-indep: build install
 # We have nothing to do by default.
@@ -78,7 +74,7 @@ binary-indep: build install
 binary-arch: build install
 	dh_testdir
 	dh_testroot
-	dh_installchangelogs ChangeLog
+	dh_installchangelogs debian/ChangeLog.1
 	dh_installdocs
 #	dh_installexamples
 #	dh_install
@@ -92,7 +88,7 @@ binary-arch: build install
 #	dh_installinit
 #	dh_installcron
 #	dh_installinfo
-	dh_installman debian/bitcoin-cpuminer.1
+	dh_installman debian/minerd.1
 	dh_link
 	dh_strip
 	dh_compress

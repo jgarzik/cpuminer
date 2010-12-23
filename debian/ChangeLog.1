@@ -1,0 +1,322 @@
+commit 18d3ab876c5c2b77c56b436bcf7f7507ec451455
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Nov 29 12:27:11 2010 -0500
+
+    Release version 0.2.1.
+
+commit 145e5fe141857c0757fdb5bb6909583aa67691b1
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Nov 29 12:21:03 2010 -0500
+
+    submit_work: increase string buffer, to avoid overflow
+
+commit 74bb196296f8c56fd8925856ed59f05aa3850f9b
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sun Nov 28 20:16:22 2010 -0500
+
+    Add Crypto++ sha256 implementation (C only, ASM elided for now)
+
+commit 339ddf4d757e17687d18d59e8ded57a71f186121
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 04:31:32 2010 -0500
+
+    Move sha256_generic into its own .o build output.  Const-ify midstate param.
+
+commit ad3fda8aba5f3f1f4820a20a925c6387347876f9
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 03:56:47 2010 -0500
+
+    Release version 0.2.
+
+commit 4c47553c856183d16d4b9a22490bc419b9036109
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 03:50:52 2010 -0500
+
+    Clean up multi-algorithm selection and display
+
+commit 6288d943abe9418164da5d5e5dc97e0065e1fa82
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 03:50:12 2010 -0500
+
+    sha256_4way: patch proper nonce into data block
+
+commit eeea340b17302c3b82d29a7d2f50238cd1b24af4
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 03:45:47 2010 -0500
+
+    sha256_via: add further comments on byte-swapping work
+
+commit 4da2e4fbe25e0053a155d026121d645dc660f549
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 01:59:03 2010 -0500
+
+    miner.h: include sys/time.h for struct timeval definition
+
+commit e2eeaaf75bc19c759565dac8184655e8f3f1830e
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 01:29:56 2010 -0500
+
+    Add experimental (read: probably broken) VIA padlock support.
+
+commit 86eb37d631e704768cc4f9684b79fc00e67b384b
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 00:46:59 2010 -0500
+
+    Improve and modularize compile-time CPU detection.
+    
+    Ideally, we should move this to autoconf.
+
+commit 500759cea12cc08abf5af2bdb1bab1eff72d8542
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 00:12:28 2010 -0500
+
+    s/__SSE__/__SSE2__/
+
+commit a7518360addc6d3365c8dc4895614f98e084535d
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 23:32:29 2010 -0500
+
+    Windows build tweaks.
+
+commit 2f2bf745c462ae282e5c6cdccb6c68bff05ee85c
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 23:16:38 2010 -0500
+
+    Note that 4way is experimental
+
+commit eed9b3c7df021d3229a4f212548075084913cc1b
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 23:15:38 2010 -0500
+
+    sha256_4way: perform 16m hashes, not 64k, per invocation
+
+commit 35ea649d976b938f09f383bbc580872aaa5c61eb
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 23:12:24 2010 -0500
+
+    Improve hash performance statistics.
+
+commit a50201eb2142f6ea7ffe451c87a341ef158be84e
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 20:15:07 2010 -0500
+
+    Improve --help output.  Mention --help in README.
+
+commit 099b6b065e29abe4da02c1271883963b2957224d
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 19:43:54 2010 -0500
+
+    Drop all Windows DLL in same dir as minerd.exe
+
+commit 1f5074381f9e9bf96236ae50e27863b098856c84
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 19:12:22 2010 -0500
+
+    Correct -a command line help.
+
+commit c639149977837c26c0f9c50352ffebd95d519456
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 19:04:48 2010 -0500
+
+    Add tcatm's 4way SSE2 sha256 implementation.
+
+commit d2fded613578c03a6290c86384e5ca320ed55efb
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 18:13:16 2010 -0500
+
+    README: add win32 installer instructions
+
+commit 7c6014c60b5f99dce0fbbd8f595beebf523e85f0
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 18:01:25 2010 -0500
+
+    Add Windows installer creation script, mknsis.sh.
+
+commit 6f30fc1d87b513591c93c254212be23735cfa9ff
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 16:38:16 2010 -0500
+
+    Release version 0.1.2.
+
+commit 7f98b6a2bb0c31f48159af23383f60634b8769c5
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 16:35:54 2010 -0500
+
+    README: update dependency list and build instructions
+
+commit 0a333110f7c7228a2e2d4f57814979392df192c3
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 16:28:12 2010 -0500
+
+    Build on Windows using mingw32.
+
+commit 4575851ea331ea85946c30421541a493c6659445
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 16:13:32 2010 -0500
+
+    Build jansson 1.3 in-tree, if not present on system.
+
+commit 750deb7a9912af13a83f737753fac24dc4dc5bd8
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 15:52:06 2010 -0500
+
+    Makefile.am: add compat.h, to correct 'make distcheck' failures
+
+commit 352bab2109d491639b9571211b6f59ddeda0e304
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 15:50:36 2010 -0500
+
+    Introduce compat.h, for Win32 builds
+
+commit b7cc9b68ad0df14e976fa02e5eaa51149aac2414
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 15:46:11 2010 -0500
+
+    Replace argp with getopt_long
+
+commit 59f1fb2ec87b4a8e3d6608b405b6aa649b89db95
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 15:20:54 2010 -0500
+
+    Link with pthreads lib, if present.  Remove GNU-specific asprintf usage.
+
+commit 5d1a45294b4dcc1ca7e1e2c1243ee4904f0f53fe
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Nov 25 04:04:30 2010 -0500
+
+    code movement: move submit_work() above hot path
+
+commit 945be82ea15854bd6ecb24e04f6157b9c2c2b040
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Nov 25 04:03:59 2010 -0500
+
+    Move utility routines to util.c.
+
+commit 822cf2cc450b1bd643d1362c6d6f4950b24ddf76
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Nov 25 03:51:04 2010 -0500
+
+    sha256: Remove unused include arpa/inet.h
+
+commit e4c4b3fe5f701aa4d154e4e651f1e3e34d35b001
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Nov 25 01:27:19 2010 -0500
+
+    scanhash micro-optimizations
+    
+    * don't bother returning nonce, we only need success/fail boolean
+    * don't needlessly read nonce pointer data, for each loop
+
+commit 1032fec15b036b5f1be1b30f174deb21d377c22a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Nov 25 01:16:34 2010 -0500
+
+    Allocate work struct once, on stack, rather than alloc+free for each getwork.
+
+commit a614823fa7891bef6bfa3e4b44f40a22ce557cef
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Nov 25 01:02:53 2010 -0500
+
+    Remove unused OpenSSL dependency.
+    
+    Also, turn a few strings into #define'd constants.
+
+commit 23cd22a5a539f8d831faa3b376ea33cba73a222b
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Nov 25 00:49:39 2010 -0500
+
+    RPC URL, username and password become arguments,
+    rather than compile-time constants.
+
+commit 67d3c91317522eb70b8987b91aa0e87339ac1ae8
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Nov 25 00:36:40 2010 -0500
+
+    Small cleanups and comment additions.  Don't sleep after proof of work found.
+
+commit ea6c1126ec2837461c1869d93d83877d7d40a2b8
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 19:50:46 2010 -0500
+
+    Add GPLv2 header.
+
+commit 82fff8f4cf6625f0d1ccdee4dab8018fa3804cd8
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 19:34:59 2010 -0500
+
+    Do not build sha256_generic module separate from cpu-miner.c.  Version 0.1.1.
+
+commit 702e2ac8119943ded0e95a77b3e9c63f7311f717
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 19:31:12 2010 -0500
+
+    Convert over to autotools.  Release version 0.1.
+
+commit e33abcdbe4a811b99c90c81f44e4a0641e426e1c
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 18:45:56 2010 -0500
+
+    sha256: note about bitcoin input data
+
+commit 19b51e360050443be2e950b7cfe8758bd969f53d
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 18:25:06 2010 -0500
+
+    Clean up protocol debugging output, and other cleanups.
+
+commit b7201e9deca1f9600b683c9ac0467c1056512bf1
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 18:24:12 2010 -0500
+
+    sha256: Assume that input is already big endian.
+
+commit 5b0ab3cf792eb0f4e1eb8ef7e652772b3205ac54
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 15:39:37 2010 -0500
+
+    Remove byte reversing in submit_work()
+
+commit 89a05600baf704b7c68e612b3536e92772bedcf3
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 05:55:56 2010 -0500
+
+    Code movement.  Update stats counter more frequently.
+
+commit 5b6e9a92f1f9ad2c96c5c3b670b0ad4e026a9e9c
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 03:36:53 2010 -0500
+
+    Add command line parsing, and multiple threads.
+
+commit 45a29ac9973e3cb8d188abd6053a5c95433db2ab
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 02:11:59 2010 -0500
+
+    Add timing info.  Remove BIGNUM PoW checks.
+
+commit 666af32046b550fa0de407e4b052a3980219bf3b
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 01:19:47 2010 -0500
+
+    Clean up proof-of-work checking,
+    attempting to address find-solution-too-fast problem.
+
+commit 16b535e2dd9075956c9ad47f2193fadf19a781b6
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Nov 23 23:54:37 2010 -0500
+
+    Add some code comments.
+
+commit 9bc3649e9190a7ba847d56ffeab1cbbae4481f2c
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Nov 23 23:43:45 2010 -0500
+
+    Add README and license info.
+
+commit 9599867d8b9ddd909ea3dc37679b34cab5de5674
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Nov 23 23:33:20 2010 -0500
+
+    Initial revision of CPU miner.
+    
+    NOTE: non-functional (incorrectly thinks it finds solution, too quickly)

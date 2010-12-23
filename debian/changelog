@@ -1,3 +1,14 @@
+bitcoin-cpuminer (0.2.1-2) unstable; urgency=low
+
+  * debian/control: updated short and full description, thanks to adv
+    (bitcoin forum user).
+  * debian/rules: undo binary rename.
+  * renamed "bitcoin-cpuminer" manpage to "minerd".
+  * moved "ChangeLog" file to "debian/ChangeLog.1".
+  * restored from source "ChangeLog" file.
+
+ -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Wed, 22 Dec 2010 23:59:52 -0600
+
 bitcoin-cpuminer (0.2.1-1) unstable; urgency=low
 
   * Initial Release.
