@@ -1,3 +1,15 @@
+bitcoin-cpuminer (0.3.2-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/ChangeLog.1: updated with the last output of "git-log".
+  * debian/minerd.1: updated with the last output of "minerd -h".
+  * debian/control: updated full description.
+  * debian/copyright: added missing copyright.
+  * debian/rules: first try to use cross compile.
+  * debian/watch: added to update the source code by uscan from github.
+
+ -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Fri, 24 Dec 2010 18:51:23 -0600
+
 bitcoin-cpuminer (0.2.1-2) unstable; urgency=low
 
   * debian/control: updated short and full description, thanks to adv

@@ -1,3 +1,97 @@
+commit ae4cc6fc392e375d8b7c1d9e722bf5163afe42cc
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Dec 23 20:23:13 2010 -0500
+
+    Release version 0.3.2.
+
+commit d88648dd3952f4ea2f9aad135710e9f106fe85c4
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Dec 23 20:21:00 2010 -0500
+
+    sha256_via: ensure that found nonce is copied back into output data buffer
+    
+    Also, some minor cleanups, removing unused args.
+
+commit 309d1bdc16de5267aee5b13791907c93b69c8be6
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sun Dec 19 21:47:41 2010 -0500
+
+    Release version 0.3.1.
+
+commit d363a1d68d26ea6a82426f65845edb69121a9d57
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sun Dec 19 21:37:30 2010 -0500
+
+    sha256_via: ensure proper data area is fully checksummed
+
+commit ee592d0a60f187a3e9ba5b3c1f793b2d19eb0eb0
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Dec 18 22:22:06 2010 -0500
+
+    Handle temporary JSON failures (due to server reboot, etc.)
+
+commit 4c8d703551f13a951f254ba49e396663ca5838d4
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Dec 18 16:42:40 2010 -0500
+
+    README: update win32 build insns
+
+commit 857ba8f6cc6929e5da92c38bc74d7bec8f56ecd6
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Dec 18 16:31:28 2010 -0500
+
+    Release version 0.3.
+
+commit 0ee24c00ceaea805c0c7222a13733e4030331ac5
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Dec 18 16:29:07 2010 -0500
+
+    sha256_4way: work around gcc 4.5.x bug by always inlining ROTR and SHR
+
+commit ce1c9a8aca8b5fa43a3bcf577b1897e5e6a5cf3d
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Dec 6 20:21:22 2010 -0500
+
+    Display version on minerd --help usage output.
+
+commit f1fcd76ba7514003135f3d76ef2308b86b754507
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Dec 6 20:14:58 2010 -0500
+
+    sha256_cryptopp: Add crypto++ 32-bit assembly implementation
+
+commit 1a1a018627d11ac7475f0c27e2cbdb7f248314f2
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Dec 6 02:30:57 2010 -0500
+
+    Release version 0.2.2.
+    
+    Remove 'experimental' marker from VIA padlock implementation.
+
+commit 8ca6ffa8a92ed50de916fbbc95c9c6900bd71ef8
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Dec 6 00:59:59 2010 -0500
+
+    sha256_4way: do not include unnecessary headers, when !4way
+    
+    Reported by lfm
+
+commit 6b5fb469cc04f81249cff4db604738c80a6a2590
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Dec 6 00:57:48 2010 -0500
+
+    sha256_via: align tmp_hash1 to 128, to avoid stack clobber
+    
+    Reported by lfm
+
+commit 276dcdbcec044b44835eacd16982badce3ad4d87
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sun Dec 5 23:18:18 2010 -0500
+
+    Avoid null deref in command line arg processing.
+    
+    Reported by lfm.
+
 commit 18d3ab876c5c2b77c56b436bcf7f7507ec451455
 Author: Jeff Garzik <jeff@garzik.org>
 Date:   Mon Nov 29 12:27:11 2010 -0500
