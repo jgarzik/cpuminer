@@ -4,15 +4,16 @@
 
 // tcatm's 4-way 128-bit SSE2 SHA-256
 
+#include "miner.h"
+
+#ifdef WANT_SSE2_4WAY
+
 #include <string.h>
 #include <assert.h>
 
 #include <xmmintrin.h>
 #include <stdint.h>
 #include <stdio.h>
-#include "miner.h"
-
-#ifdef WANT_SSE2_4WAY
 
 #define NPAR 32
 
@@ -46,11 +47,11 @@ static inline __m128i Maj(const __m128i b, const __m128i c, const __m128i d) {
     return (b & c) ^ (b & d) ^ (c & d);
 }
 
-static inline __m128i ROTR(__m128i x, const int n) {
+static __attribute__((always_inline)) __m128i ROTR(__m128i x, const int n) {
     return _mm_srli_epi32(x, n) | _mm_slli_epi32(x, 32 - n);
 }
 
-static inline __m128i SHR(__m128i x, const int n) {
+static __attribute__((always_inline)) __m128i SHR(__m128i x, const int n) {
     return _mm_srli_epi32(x, n);
 }
 

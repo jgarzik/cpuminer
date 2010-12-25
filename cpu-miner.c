@@ -33,13 +33,15 @@
 enum {
 	STAT_SLEEP_INTERVAL		= 100,
 	STAT_CTR_INTERVAL		= 10000000,
+	FAILURE_INTERVAL		= 30,
 };
 
 enum sha256_algos {
 	ALGO_C,			/* plain C */
 	ALGO_4WAY,		/* parallel SSE2 */
 	ALGO_VIA,		/* VIA padlock */
-	ALGO_CRYPTOPP,		/* Crypto++ */
+	ALGO_CRYPTOPP,		/* Crypto++ (C) */
+	ALGO_CRYPTOPP_ASM32,	/* Crypto++ 32-bit assembly */
 };
 
 static const char *algo_names[] = {
@@ -51,10 +53,14 @@ static const char *algo_names[] = {
 	[ALGO_VIA]		= "via",
 #endif
 	[ALGO_CRYPTOPP]		= "cryptopp",
+#ifdef WANT_CRYPTOPP_ASM32
+	[ALGO_CRYPTOPP_ASM32]	= "cryptopp_asm32",
+#endif
 };
 
 bool opt_debug = false;
 bool opt_protocol = false;
+static int opt_retries = 10;
 static bool program_running = true;
 static const bool opt_time = true;
 static enum sha256_algos opt_algo = ALGO_C;
@@ -79,9 +85,12 @@ static struct option_help options_help[] = {
 	  "\n\t4way\t\ttcatm's 4-way SSE2 implementation"
 #endif
 #ifdef WANT_VIA_PADLOCK
-	  "\n\tvia\t\tVIA padlock implementation (EXPERIMENTAL)"
+	  "\n\tvia\t\tVIA padlock implementation"
 #endif
-	  "\n\tcryptopp\tCrypto++ library implementation (EXPERIMENTAL)"
+	  "\n\tcryptopp\tCrypto++ library implementation"
+#ifdef WANT_CRYPTOPP_ASM32
+	  "\n\tcryptopp_asm32\tCrypto++ library implementation"
+#endif
 	  },
 
 	{ "debug",
@@ -89,6 +98,10 @@ static struct option_help options_help[] = {
 
 	{ "protocol-dump",
 	  "(-P) Verbose dump of protocol-level activities (default: off)" },
+
+	{ "retries N",
+	  "(-r N) Number of times to retry, if JSON-RPC call fails\n"
+	  "\t(default: 10; use -1 for \"never\")" },
 
 	{ "threads N",
 	  "(-t N) Number of miner threads (default: 1)" },
@@ -108,6 +121,7 @@ static struct option options[] = {
 	{ "debug", 0, NULL, 'D' },
 	{ "protocol-dump", 0, NULL, 'P' },
 	{ "threads", 1, NULL, 't' },
+	{ "retries", 1, NULL, 'r' },
 	{ "url", 1, NULL, 1001 },
 	{ "userpass", 1, NULL, 1002 },
 	{ }
@@ -235,6 +249,7 @@ static void hashmeter(int thr_id, struct timeval *tv_start,
 static void *miner_thread(void *thr_id_int)
 {
 	int thr_id = (unsigned long) thr_id_int;
+	int failures = 0;
 	static const char *rpc_req =
 		"{\"method\": \"getwork\", \"params\": [], \"id\":0}\r\n";
 
@@ -248,15 +263,35 @@ static void *miner_thread(void *thr_id_int)
 		/* obtain new work from bitcoin */
 		val = json_rpc_call(rpc_url, userpass, rpc_req);
 		if (!val) {
-			fprintf(stderr, "json_rpc_call failed\n");
-			return NULL;
+			fprintf(stderr, "json_rpc_call failed, ");
+
+			if ((opt_retries >= 0) && (++failures > opt_retries)) {
+				fprintf(stderr, "terminating thread\n");
+				return NULL;	/* exit thread */
+			}
+
+			/* pause, then restart work loop */
+			fprintf(stderr, "retry after %d seconds\n",
+				FAILURE_INTERVAL);
+			sleep(FAILURE_INTERVAL);
+			continue;
 		}
 
 		/* decode result into work state struct */
 		rc = work_decode(json_object_get(val, "result"), &work);
 		if (!rc) {
-			fprintf(stderr, "work decode failed\n");
-			return NULL;
+			fprintf(stderr, "JSON-decode of work failed, ");
+
+			if ((opt_retries >= 0) && (++failures > opt_retries)) {
+				fprintf(stderr, "terminating thread\n");
+				return NULL;	/* exit thread */
+			}
+
+			/* pause, then restart work loop */
+			fprintf(stderr, "retry after %d seconds\n",
+				FAILURE_INTERVAL);
+			sleep(FAILURE_INTERVAL);
+			continue;
 		}
 
 		json_decref(val);
@@ -284,9 +319,7 @@ static void *miner_thread(void *thr_id_int)
 
 #ifdef WANT_VIA_PADLOCK
 		case ALGO_VIA:
-			rc = scanhash_via(work.midstate, work.data + 64,
-					  work.hash1, work.hash,
-					  &hashes_done);
+			rc = scanhash_via(work.data, &hashes_done);
 			break;
 #endif
 		case ALGO_CRYPTOPP:
@@ -294,6 +327,16 @@ static void *miner_thread(void *thr_id_int)
 				        work.hash1, work.hash, &hashes_done);
 			break;
 
+#ifdef WANT_CRYPTOPP_ASM32
+		case ALGO_CRYPTOPP_ASM32:
+			rc = scanhash_asm32(work.midstate, work.data + 64,
+				        work.hash1, work.hash, &hashes_done);
+			break;
+#endif
+
+		default:
+			/* should never happen */
+			return NULL;
 		}
 
 		hashmeter(thr_id, &tv_start, hashes_done);
@@ -301,6 +344,8 @@ static void *miner_thread(void *thr_id_int)
 		/* if nonce found, submit work */
 		if (rc)
 			submit_work(&work);
+
+		failures = 0;
 	}
 
 	return NULL;
@@ -310,6 +355,7 @@ static void show_usage(void)
 {
 	int i;
 
+	printf("minerd version %s\n\n", VERSION);
 	printf("Usage:\tminerd [options]\n\nSupported options:\n");
 	for (i = 0; i < ARRAY_SIZE(options_help); i++) {
 		struct option_help *h;
@@ -328,7 +374,8 @@ static void parse_arg (int key, char *arg)
 	switch(key) {
 	case 'a':
 		for (i = 0; i < ARRAY_SIZE(algo_names); i++) {
-			if (!strcmp(arg, algo_names[i])) {
+			if (algo_names[i] &&
+			    !strcmp(arg, algo_names[i])) {
 				opt_algo = i;
 				break;
 			}
@@ -341,6 +388,13 @@ static void parse_arg (int key, char *arg)
 		break;
 	case 'P':
 		opt_protocol = true;
+		break;
+	case 'r':
+		v = atoi(arg);
+		if (v < -1 || v > 9999)	/* sanity check */
+			show_usage();
+
+		opt_retries = v;
 		break;
 	case 't':
 		v = atoi(arg);
