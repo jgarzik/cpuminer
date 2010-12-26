@@ -1,3 +1,11 @@
+bitcoin-cpuminer (0.3.2-2) unstable; urgency=low
+
+  * debian/control: fixed lintian warning
+    "possible-unindented-list-in-extended-description".
+  * debian/rules: removed cross compile code.
+
+ -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Sun, 26 Dec 2010 16:56:18 -0600
+
 bitcoin-cpuminer (0.3.2-1) unstable; urgency=low
 
   * New upstream release.
