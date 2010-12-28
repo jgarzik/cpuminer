@@ -1,3 +1,10 @@
+bitcoin-cpuminer (0.3.3-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/ChangeLog.1: updated with the last output of "git-log".
+
+ -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Mon, 27 Dec 2010 18:07:21 -0600
+
 bitcoin-cpuminer (0.3.2-2) unstable; urgency=low
 
   * debian/control: fixed lintian warning
