@@ -10,15 +10,19 @@ Files: ./compat/jasson/*
 Copyright: 2009-2010, Petri Lehtinen <petri@digip.org>
 License: MIT
 
-Files: ./sha256_4way.c
+File: ./sha256_4way.c
 Copyright: 2010, Satoshi Nakamoto <satoshin@gmx.com>
 License: MIT
 
-Files: ./sha256_generic.c
+File: ./sha256_generic.c
 Copyright: Jean-Luc Cooke <jlcooke@certainkey.com>
            Andrew McDonald <andrew@mcdonald.org.uk>
            2002, James Morris <jmorris@intercode.com.au>
            SHA224 Support Copyright 2007, Intel Corporation <jonathan.lynch@intel.com>
+License: GPL-2+
+
+Files: ./debian/*
+Copyright: 2010, Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
 License: GPL-2+
 
 License: GPL-2+
@@ -56,4 +60,4 @@ License: MIT
   THE SOFTWARE.
 
 The Debian packaging is (C) 2010, Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com> and
-is licensed under the GPL, see `/usr/share/common-licenses/GPL'.
+is licensed under the GPL-2, see `/usr/share/common-licenses/GPL-2'.
