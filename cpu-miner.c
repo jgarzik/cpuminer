@@ -31,8 +31,6 @@
 #define DEF_RPC_USERPASS	"rpcuser:rpcpass"
 
 enum {
-	STAT_SLEEP_INTERVAL		= 100,
-	STAT_CTR_INTERVAL		= 10000000,
 	FAILURE_INTERVAL		= 30,
 };
 
@@ -60,8 +58,8 @@ static const char *algo_names[] = {
 
 bool opt_debug = false;
 bool opt_protocol = false;
+bool opt_quiet = false;
 static int opt_retries = 10;
-static bool program_running = true;
 static const bool opt_time = true;
 static enum sha256_algos opt_algo = ALGO_C;
 static int opt_n_threads = 1;
@@ -87,11 +85,14 @@ static struct option_help options_help[] = {
 #ifdef WANT_VIA_PADLOCK
 	  "\n\tvia\t\tVIA padlock implementation"
 #endif
-	  "\n\tcryptopp\tCrypto++ library implementation"
+	  "\n\tcryptopp\tCrypto++ C/C++ implementation"
 #ifdef WANT_CRYPTOPP_ASM32
-	  "\n\tcryptopp_asm32\tCrypto++ library implementation"
+	  "\n\tcryptopp_asm32\tCrypto++ 32-bit assembler implementation"
 #endif
 	  },
+
+	{ "quiet",
+	  "(-q) Disable per-thread hashmeter output (default: off)" },
 
 	{ "debug",
 	  "(-D) Enable debug output (default: off)" },
@@ -118,6 +119,7 @@ static struct option_help options_help[] = {
 static struct option options[] = {
 	{ "help", 0, NULL, 'h' },
 	{ "algo", 1, NULL, 'a' },
+	{ "quiet", 0, NULL, 'q' },
 	{ "debug", 0, NULL, 'D' },
 	{ "protocol-dump", 0, NULL, 'P' },
 	{ "threads", 1, NULL, 't' },
@@ -241,9 +243,10 @@ static void hashmeter(int thr_id, struct timeval *tv_start,
 	khashes = hashes_done / 1000.0;
 	secs = (double)diff.tv_sec + ((double)diff.tv_usec / 1000000.0);
 
-	printf("HashMeter(%d): %lu hashes, %.2f khash/sec\n",
-	       thr_id, hashes_done,
-	       khashes / secs);
+	if (!opt_quiet)
+		printf("HashMeter(%d): %lu hashes, %.2f khash/sec\n",
+		       thr_id, hashes_done,
+		       khashes / secs);
 }
 
 static void *miner_thread(void *thr_id_int)
@@ -383,6 +386,9 @@ static void parse_arg (int key, char *arg)
 		if (i == ARRAY_SIZE(algo_names))
 			show_usage();
 		break;
+	case 'q':
+		opt_quiet = true;
+		break;
 	case 'D':
 		opt_debug = true;
 		break;
@@ -437,6 +443,7 @@ static void parse_cmdline(int argc, char *argv[])
 int main (int argc, char *argv[])
 {
 	int i;
+	pthread_t *t_all;
 
 	/* parse command line */
 	parse_cmdline(argc, argv);
@@ -445,11 +452,13 @@ int main (int argc, char *argv[])
 	if (setpriority(PRIO_PROCESS, 0, 19))
 		perror("setpriority");
 
+	t_all = calloc(opt_n_threads, sizeof(pthread_t));
+	if (!t_all)
+		return 1;
+
 	/* start mining threads */
 	for (i = 0; i < opt_n_threads; i++) {
-		pthread_t t;
-
-		if (pthread_create(&t, NULL, miner_thread,
+		if (pthread_create(&t_all[i], NULL, miner_thread,
 				   (void *)(unsigned long) i)) {
 			fprintf(stderr, "thread %d create failed\n", i);
 			return 1;
@@ -463,11 +472,11 @@ int main (int argc, char *argv[])
 		opt_n_threads,
 		algo_names[opt_algo]);
 
-	/* main loop */
-	while (program_running) {
-		sleep(STAT_SLEEP_INTERVAL);
-		/* do nothing */
-	}
+	/* main loop - simply wait for all threads to exit */
+	for (i = 0; i < opt_n_threads; i++)
+		pthread_join(t_all[i], NULL);
+
+	fprintf(stderr, "all threads dead, fred. exiting.\n");
 
 	return 0;
 }
