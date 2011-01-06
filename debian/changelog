@@ -1,3 +1,13 @@
+bitcoin-cpuminer (0.5-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/ChangeLog.1: updated with last output from "git-log".
+  * debian/copyright: added missing debian package license.
+  * debian/control: updated package description, small change in crypto++ comment.
+  * debian/minerd.1: updated manpage with txt2man.
+
+ -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Thu, 06 Jan 2011 00:08:52 -0600
+
 bitcoin-cpuminer (0.3.3-1) unstable; urgency=low
 
   * New upstream release.
