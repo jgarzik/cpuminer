@@ -1,3 +1,34 @@
+commit fc4ed179e8f657eb5486d12857d6612a0c3160a5
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Dec 28 22:38:57 2010 -0500
+
+    Release version 0.5.
+
+commit 16006f9037973e72c1cc7c4556ae9ec2c4c0248f
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Dec 28 21:10:41 2010 -0500
+
+    Rather than sleep-loop, main thread waits for all threads to exit.
+
+commit 2f9a6deef91afd4c0ef67dc332e39b4fdfb4d3b4
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Dec 28 17:13:59 2010 -0500
+
+    Improve CURL HTTP request error diagnostics.
+
+commit 9e5a173c3845fb7b5d316b0455352a08847b8c23
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Dec 28 15:22:53 2010 -0500
+
+    Improve JSON-RPC result/error checking, and improve error diagnostic
+    output.
+
+commit 872211caada9a42a5de31d3dacf3eab7eba5e34a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Dec 27 02:13:15 2010 -0500
+
+    Add --quiet option, to disable hashmeter output.
+
 commit 724fe3742c09ca26834f4e76995868a14ac365d7
 Author: Jeff Garzik <jeff@garzik.org>
 Date:   Mon Dec 27 00:34:23 2010 -0500
@@ -26,8 +57,9 @@ commit d88648dd3952f4ea2f9aad135710e9f106fe85c4
 Author: Jeff Garzik <jeff@garzik.org>
 Date:   Thu Dec 23 20:21:00 2010 -0500
 
-    sha256_via: ensure that found nonce is copied back into output data buffer
-    
+    sha256_via: ensure that found nonce is copied back into output
+    data buffer
+
     Also, some minor cleanups, removing unused args.
 
 commit 309d1bdc16de5267aee5b13791907c93b69c8be6
@@ -83,7 +115,7 @@ Author: Jeff Garzik <jeff@garzik.org>
 Date:   Mon Dec 6 02:30:57 2010 -0500
 
     Release version 0.2.2.
-    
+
     Remove 'experimental' marker from VIA padlock implementation.
 
 commit 8ca6ffa8a92ed50de916fbbc95c9c6900bd71ef8
@@ -91,7 +123,7 @@ Author: Jeff Garzik <jeff@garzik.org>
 Date:   Mon Dec 6 00:59:59 2010 -0500
 
     sha256_4way: do not include unnecessary headers, when !4way
-    
+
     Reported by lfm
 
 commit 6b5fb469cc04f81249cff4db604738c80a6a2590
@@ -99,7 +131,7 @@ Author: Jeff Garzik <jeff@garzik.org>
 Date:   Mon Dec 6 00:57:48 2010 -0500
 
     sha256_via: align tmp_hash1 to 128, to avoid stack clobber
-    
+
     Reported by lfm
 
 commit 276dcdbcec044b44835eacd16982badce3ad4d87
@@ -107,7 +139,7 @@ Author: Jeff Garzik <jeff@garzik.org>
 Date:   Sun Dec 5 23:18:18 2010 -0500
 
     Avoid null deref in command line arg processing.
-    
+
     Reported by lfm.
 
 commit 18d3ab876c5c2b77c56b436bcf7f7507ec451455
@@ -132,7 +164,8 @@ commit 339ddf4d757e17687d18d59e8ded57a71f186121
 Author: Jeff Garzik <jeff@garzik.org>
 Date:   Sat Nov 27 04:31:32 2010 -0500
 
-    Move sha256_generic into its own .o build output.  Const-ify midstate param.
+    Move sha256_generic into its own .o build output.  Const-ify midstate
+    param.
 
 commit ad3fda8aba5f3f1f4820a20a925c6387347876f9
 Author: Jeff Garzik <jeff@garzik.org>
@@ -175,7 +208,7 @@ Author: Jeff Garzik <jeff@garzik.org>
 Date:   Sat Nov 27 00:46:59 2010 -0500
 
     Improve and modularize compile-time CPU detection.
-    
+
     Ideally, we should move this to autoconf.
 
 commit 500759cea12cc08abf5af2bdb1bab1eff72d8542
@@ -290,7 +323,8 @@ commit 59f1fb2ec87b4a8e3d6608b405b6aa649b89db95
 Author: Jeff Garzik <jeff@garzik.org>
 Date:   Fri Nov 26 15:20:54 2010 -0500
 
-    Link with pthreads lib, if present.  Remove GNU-specific asprintf usage.
+    Link with pthreads lib, if present.  Remove GNU-specific asprintf
+    usage.
 
 commit 5d1a45294b4dcc1ca7e1e2c1243ee4904f0f53fe
 Author: Jeff Garzik <jeff@garzik.org>
@@ -315,7 +349,7 @@ Author: Jeff Garzik <jeff@garzik.org>
 Date:   Thu Nov 25 01:27:19 2010 -0500
 
     scanhash micro-optimizations
-    
+
     * don't bother returning nonce, we only need success/fail boolean
     * don't needlessly read nonce pointer data, for each loop
 
@@ -323,14 +357,15 @@ commit 1032fec15b036b5f1be1b30f174deb21d377c22a
 Author: Jeff Garzik <jeff@garzik.org>
 Date:   Thu Nov 25 01:16:34 2010 -0500
 
-    Allocate work struct once, on stack, rather than alloc+free for each getwork.
+    Allocate work struct once, on stack, rather than alloc+free for
+    each getwork.
 
 commit a614823fa7891bef6bfa3e4b44f40a22ce557cef
 Author: Jeff Garzik <jeff@garzik.org>
 Date:   Thu Nov 25 01:02:53 2010 -0500
 
     Remove unused OpenSSL dependency.
-    
+
     Also, turn a few strings into #define'd constants.
 
 commit 23cd22a5a539f8d831faa3b376ea33cba73a222b
@@ -344,7 +379,8 @@ commit 67d3c91317522eb70b8987b91aa0e87339ac1ae8
 Author: Jeff Garzik <jeff@garzik.org>
 Date:   Thu Nov 25 00:36:40 2010 -0500
 
-    Small cleanups and comment additions.  Don't sleep after proof of work found.
+    Small cleanups and comment additions.  Don't sleep after proof of
+    work found.
 
 commit ea6c1126ec2837461c1869d93d83877d7d40a2b8
 Author: Jeff Garzik <jeff@garzik.org>
@@ -356,7 +392,8 @@ commit 82fff8f4cf6625f0d1ccdee4dab8018fa3804cd8
 Author: Jeff Garzik <jeff@garzik.org>
 Date:   Wed Nov 24 19:34:59 2010 -0500
 
-    Do not build sha256_generic module separate from cpu-miner.c.  Version 0.1.1.
+    Do not build sha256_generic module separate from cpu-miner.c.
+    Version 0.1.1.
 
 commit 702e2ac8119943ded0e95a77b3e9c63f7311f717
 Author: Jeff Garzik <jeff@garzik.org>
@@ -430,5 +467,6 @@ Author: Jeff Garzik <jeff@garzik.org>
 Date:   Tue Nov 23 23:33:20 2010 -0500
 
     Initial revision of CPU miner.
-    
-    NOTE: non-functional (incorrectly thinks it finds solution, too quickly)
+
+    NOTE: non-functional (incorrectly thinks it finds solution, too
+    quickly)
