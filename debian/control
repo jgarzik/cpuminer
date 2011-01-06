@@ -29,5 +29,5 @@ Description: Multi-threaded CPU miner for bitcoin
   * Linux kernel sha256, implemented in C.
   * tcatm's 4-way SSE2 implementation.
   * VIA padlock implementation.
-  * Crypto++ (C) library implementation.
+  * Crypto++ C/C++ library implementation.
   * Crypto++ 32-bit assembly library implementation.
