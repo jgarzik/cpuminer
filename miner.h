@@ -22,15 +22,9 @@
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
-#define ___constant_swab32(x) ((uint32_t)(                       \
-        (((uint32_t)(x) & (uint32_t)0x000000ffUL) << 24) |            \
-        (((uint32_t)(x) & (uint32_t)0x0000ff00UL) <<  8) |            \
-        (((uint32_t)(x) & (uint32_t)0x00ff0000UL) >>  8) |            \
-        (((uint32_t)(x) & (uint32_t)0xff000000UL) >> 24)))
-
 static inline uint32_t swab32(uint32_t v)
 {
-	return ___constant_swab32(v);
+	return __builtin_bswap32(v);
 }
 
 extern bool opt_debug;
@@ -43,19 +37,20 @@ extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
 extern unsigned int ScanHash_4WaySSE2(const unsigned char *pmidstate,
 	unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
-	unsigned long *nHashesDone);
+	uint32_t max_nonce, unsigned long *nHashesDone);
 
-extern bool scanhash_via(unsigned char *data_inout, unsigned long *hashes_done);
+extern bool scanhash_via(unsigned char *data_inout,
+	uint32_t max_nonce, unsigned long *hashes_done);
 
 extern bool scanhash_c(const unsigned char *midstate, unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
-	      unsigned long *hashes_done);
+	      uint32_t max_nonce, unsigned long *hashes_done);
 extern bool scanhash_cryptopp(const unsigned char *midstate,unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
-	      unsigned long *hashes_done);
+	      uint32_t max_nonce, unsigned long *hashes_done);
 extern bool scanhash_asm32(const unsigned char *midstate,unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
-	      unsigned long *hashes_done);
+	      uint32_t max_nonce, unsigned long *hashes_done);
 
 extern int
 timeval_subtract (struct timeval *result, struct timeval *x, struct timeval *y);
