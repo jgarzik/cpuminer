@@ -75,7 +75,7 @@ binary-indep: build install
 binary-arch: build install
 	dh_testdir
 	dh_testroot
-	dh_installchangelogs debian/ChangeLog.1
+	dh_installchangelogs debian/ChangeLog
 	dh_installdocs
 #	dh_installexamples
 #	dh_install
