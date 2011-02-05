@@ -1,3 +1,63 @@
+commit a816470950a0a00d37cc920cda51dad51558659b
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Jan 29 02:15:46 2011 -0500
+
+    Release version 0.6.
+
+commit f889476bbd35b4d1667e58522666688bef1f9a89
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Jan 29 01:14:12 2011 -0500
+
+    Dynamically adjust time spent hashing current work unit, to meet
+    target
+
+commit 0b677407076a55c6a758d1414fade617abd552e5
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Jan 29 00:56:24 2011 -0500
+
+    Pass max-nonce as arg to each sha256 algo.
+
+    Should be an equivalent transformation, with no behavior changes.
+
+commit f570ffcf75764398c9682c310ad7420acd7593c2
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Jan 29 00:47:48 2011 -0500
+
+    Code movement: move second hash time sampling to main miner loop
+
+commit a2967993586cdfe32bc6c61513a449c900820613
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Jan 29 00:41:27 2011 -0500
+
+    Replace ___constant_swab32() with gcc's __builtin_bswap32
+
+    http://www.bitcoin.org/smf/index.php?topic=1925.msg34827#msg34827
+
+    Credit: lfm
+
+commit 8504cf48031a98a4f76f0602098e000f369be704
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Jan 29 00:36:32 2011 -0500
+
+    sha256_4way minor optimizations
+
+    http://www.bitcoin.org/smf/index.php?topic=820.msg40022#msg40022
+
+    Credit: BeeCee1
+
+commit e41171424ab1c4430f78f81b08797ab79e8ddd9a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Jan 29 00:28:19 2011 -0500
+
+    Fix non-working short options -q and -r N, by listing them in
+    optstring.
+
+commit fd19172c5028d0f8b521a433ea8be3993ed9a9e8
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Jan 20 02:32:11 2011 -0500
+
+    README: mention CFLAGS on *nix builds
+
 commit fc4ed179e8f657eb5486d12857d6612a0c3160a5
 Author: Jeff Garzik <jeff@garzik.org>
 Date:   Tue Dec 28 22:38:57 2010 -0500
