@@ -1,3 +1,12 @@
+bitcoin-cpuminer (0.6-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/minerd.1: updated with last help info using txt2man.
+  * rename "debian/ChangeLog.1" to "debian/ChangeLog".
+  * debian/ChangeLog.1: updated with git-log.
+
+ -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Fri, 11 Feb 2011 18:39:10 -0600
+
 bitcoin-cpuminer (0.5-1) unstable; urgency=low
 
   * New upstream release.
