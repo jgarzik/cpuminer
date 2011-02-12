@@ -1,3 +1,11 @@
+bitcoin-cpuminer (0.6.1.git20110209-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/minerd.1: updated manpage with txt2man.
+  * debian/ChangeLog: updated with git-log.
+
+ -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Fri, 11 Feb 2011 20:58:20 -0600
+
 bitcoin-cpuminer (0.6-1) unstable; urgency=low
 
   * New upstream release.
