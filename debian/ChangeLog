@@ -1,3 +1,74 @@
+commit 9f3472ad19480ad54c34a01ddffb93ee439303da
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Feb 10 00:52:22 2011 -0500
+
+    Use bswap_32 from byteswap.h, if __builtin_bswap() is not available
+
+commit c0935a94899bc7261bc98b17a52d7c11b005fde4
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Feb 10 00:41:44 2011 -0500
+
+    Re-use CURL object, thereby caching DNS and HTTP connections where
+    possible.
+
+commit 82772022216c1d8b4dca2d0772d5810afc2e4ad8
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Feb 4 14:29:54 2011 -0500
+
+    Release version 0.6.1.
+
+commit e47076caacdf2c60ebf00d47aa5f2f07ae33f8f3
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Feb 4 11:54:31 2011 -0500
+
+    Fix max-nonce auto-adjustment logic to actually work
+
+commit 51eb1b4ef9f71f018e83ed69ca04fb37d0c0626b
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Feb 4 11:53:51 2011 -0500
+
+    Move verbose proof-of-work/target comparison display into -D (debug)
+
+commit 98de751416740bcb48ca7504edd65ed27bafacc6
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Feb 4 02:55:55 2011 -0500
+
+    sha*.c: remove debug statement, which is redundant to hashmeter output
+
+commit e8ee4cb002405935dd0e0922073ca7f0e6fbd2c7
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Feb 3 00:54:03 2011 -0500
+
+    Add --retry-pause, to set length of pause time between failure retries
+
+commit 714c0fd7c90cdb11742f7f2c91a65357a7bf5d5a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Feb 3 00:46:55 2011 -0500
+
+    Continue scanhash, even if high 32 bits are zero.
+
+    Previously, we would stop the scan if the high 32 bits of the hash
+    were zero,
+    as a quick shortcut for testing the full hash.  If this quick test
+    succeeded,
+    we would pass the work to the server for full validation.
+
+    Change this logic to perform full validation inside minerd, so that
+    work may
+    be resumed more quickly if hash > target.
+
+commit c68ffb30dd17b32f69665af18b72687875770972
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Feb 2 18:47:04 2011 -0500
+
+    Display proof-of-work hash when one is discovered
+
+commit 453101d9e9f8b7408ca645dd174aa3e8af1d87ac
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Jan 29 23:55:11 2011 -0500
+
+    Remove "PROOF OF WORK FOUND?" debug output; redundant.
+
 commit a816470950a0a00d37cc920cda51dad51558659b
 Author: Jeff Garzik <jeff@garzik.org>
 Date:   Sat Jan 29 02:15:46 2011 -0500
