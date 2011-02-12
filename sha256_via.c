@@ -18,6 +18,7 @@ static void via_sha256(void *hash, void *buf, unsigned len)
 }
 
 bool scanhash_via(unsigned char *data_inout,
+		  const unsigned char *target,
 		  uint32_t max_nonce, unsigned long *hashes_done)
 {
 	unsigned char data[128] __attribute__((aligned(128)));
@@ -56,15 +57,7 @@ bool scanhash_via(unsigned char *data_inout,
 
 		stat_ctr++;
 
-		if (hash32[7] == 0) {
-			char *hexstr;
-
-			hexstr = bin2hex(tmp_hash, 32);
-			fprintf(stderr,
-				"DBG: found zeroes in hash:\n%s\n",
-				hexstr);
-			free(hexstr);
-
+		if ((hash32[7] == 0) && fulltest(tmp_hash, target)) {
 			/* swap nonce'd data back into original storage area;
 			 * TODO: only swap back the nonce, rather than all data
 			 */
@@ -78,8 +71,6 @@ bool scanhash_via(unsigned char *data_inout,
 		}
 
 		if (n >= max_nonce) {
-			if (opt_debug)
-				fprintf(stderr, "DBG: end of nonce range\n");
 			*hashes_done = stat_ctr;
 			return false;
 		}

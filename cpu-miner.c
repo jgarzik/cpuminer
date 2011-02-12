@@ -23,16 +23,13 @@
 #include <pthread.h>
 #include <getopt.h>
 #include <jansson.h>
+#include <curl/curl.h>
 #include "compat.h"
 #include "miner.h"
 
 #define PROGRAM_NAME		"minerd"
 #define DEF_RPC_URL		"http://127.0.0.1:8332/"
 #define DEF_RPC_USERPASS	"rpcuser:rpcpass"
-
-enum {
-	FAILURE_INTERVAL		= 30,
-};
 
 enum sha256_algos {
 	ALGO_C,			/* plain C */
@@ -58,8 +55,9 @@ static const char *algo_names[] = {
 
 bool opt_debug = false;
 bool opt_protocol = false;
-bool opt_quiet = false;
+static bool opt_quiet = false;
 static int opt_retries = 10;
+static int opt_fail_pause = 30;
 static int opt_scantime = 5;
 static const bool opt_time = true;
 static enum sha256_algos opt_algo = ALGO_C;
@@ -105,6 +103,10 @@ static struct option_help options_help[] = {
 	  "(-r N) Number of times to retry, if JSON-RPC call fails\n"
 	  "\t(default: 10; use -1 for \"never\")" },
 
+	{ "retry-pause N",
+	  "(-R N) Number of seconds to pause, between retries\n"
+	  "\t(default: 30)" },
+
 	{ "scantime N",
 	  "(-s N) Upper bound on time spent scanning current work,\n"
 	  "\tin seconds. (default: 5)" },
@@ -129,6 +131,7 @@ static struct option options[] = {
 	{ "protocol-dump", 0, NULL, 'P' },
 	{ "threads", 1, NULL, 't' },
 	{ "retries", 1, NULL, 'r' },
+	{ "retry-pause", 1, NULL, 'R' },
 	{ "scantime", 1, NULL, 's' },
 	{ "url", 1, NULL, 1001 },
 	{ "userpass", 1, NULL, 1002 },
@@ -197,18 +200,18 @@ err_out:
 	return false;
 }
 
-static void submit_work(struct work *work)
+static void submit_work(CURL *curl, struct work *work)
 {
 	char *hexstr = NULL;
 	json_t *val, *res;
 	char s[345];
 
-	printf("PROOF OF WORK FOUND?  submitting...\n");
-
 	/* build hex string */
 	hexstr = bin2hex(work->data, sizeof(work->data));
-	if (!hexstr)
+	if (!hexstr) {
+		fprintf(stderr, "submit_work OOM\n");
 		goto out;
+	}
 
 	/* build JSON-RPC request */
 	sprintf(s,
@@ -219,7 +222,7 @@ static void submit_work(struct work *work)
 		fprintf(stderr, "DBG: sending RPC call:\n%s", s);
 
 	/* issue JSON-RPC request */
-	val = json_rpc_call(rpc_url, userpass, s);
+	val = json_rpc_call(curl, rpc_url, userpass, s);
 	if (!val) {
 		fprintf(stderr, "submit_work json_rpc_call failed\n");
 		goto out;
@@ -256,17 +259,24 @@ static void *miner_thread(void *thr_id_int)
 	int failures = 0;
 	static const char *rpc_req =
 		"{\"method\": \"getwork\", \"params\": [], \"id\":0}\r\n";
+	uint32_t max_nonce = 0xffffff;
+	CURL *curl;
+
+	curl = curl_easy_init();
+	if (!curl) {
+		fprintf(stderr, "CURL initialization failed\n");
+		return NULL;
+	}
 
 	while (1) {
 		struct work work __attribute__((aligned(128)));
 		unsigned long hashes_done;
 		struct timeval tv_start, tv_end, diff;
-		uint32_t max_nonce = 0xffffff;
 		json_t *val;
 		bool rc;
 
 		/* obtain new work from bitcoin */
-		val = json_rpc_call(rpc_url, userpass, rpc_req);
+		val = json_rpc_call(curl, rpc_url, userpass, rpc_req);
 		if (!val) {
 			fprintf(stderr, "json_rpc_call failed, ");
 
@@ -277,8 +287,8 @@ static void *miner_thread(void *thr_id_int)
 
 			/* pause, then restart work loop */
 			fprintf(stderr, "retry after %d seconds\n",
-				FAILURE_INTERVAL);
-			sleep(FAILURE_INTERVAL);
+				opt_fail_pause);
+			sleep(opt_fail_pause);
 			continue;
 		}
 
@@ -294,8 +304,8 @@ static void *miner_thread(void *thr_id_int)
 
 			/* pause, then restart work loop */
 			fprintf(stderr, "retry after %d seconds\n",
-				FAILURE_INTERVAL);
-			sleep(FAILURE_INTERVAL);
+				opt_fail_pause);
+			sleep(opt_fail_pause);
 			continue;
 		}
 
@@ -308,7 +318,7 @@ static void *miner_thread(void *thr_id_int)
 		switch (opt_algo) {
 		case ALGO_C:
 			rc = scanhash_c(work.midstate, work.data + 64,
-				        work.hash1, work.hash,
+				        work.hash1, work.hash, work.target,
 					max_nonce, &hashes_done);
 			break;
 
@@ -317,6 +327,7 @@ static void *miner_thread(void *thr_id_int)
 			unsigned int rc4 =
 				ScanHash_4WaySSE2(work.midstate, work.data + 64,
 						  work.hash1, work.hash,
+						  work.target,
 						  max_nonce, &hashes_done);
 			rc = (rc4 == -1) ? false : true;
 			}
@@ -325,19 +336,20 @@ static void *miner_thread(void *thr_id_int)
 
 #ifdef WANT_VIA_PADLOCK
 		case ALGO_VIA:
-			rc = scanhash_via(work.data, max_nonce, &hashes_done);
+			rc = scanhash_via(work.data, work.target,
+					  max_nonce, &hashes_done);
 			break;
 #endif
 		case ALGO_CRYPTOPP:
 			rc = scanhash_cryptopp(work.midstate, work.data + 64,
-				        work.hash1, work.hash,
+				        work.hash1, work.hash, work.target,
 					max_nonce, &hashes_done);
 			break;
 
 #ifdef WANT_CRYPTOPP_ASM32
 		case ALGO_CRYPTOPP_ASM32:
 			rc = scanhash_asm32(work.midstate, work.data + 64,
-				        work.hash1, work.hash,
+				        work.hash1, work.hash, work.target,
 					max_nonce, &hashes_done);
 			break;
 #endif
@@ -356,21 +368,21 @@ static void *miner_thread(void *thr_id_int)
 		/* adjust max_nonce to meet target scan time */
 		if (diff.tv_sec > (opt_scantime * 2))
 			max_nonce /= 2;			/* large decrease */
-		else if (diff.tv_sec > opt_scantime)
-			max_nonce -= 1000;		/* small decrease */
-		else if (diff.tv_sec < (opt_scantime - 1))
-			max_nonce += 1000;		/* small increase */
-
-		/* catch stupidly slow cases, such as simulators */
-		if (max_nonce < 1000)			
-			max_nonce = 1000;
+		else if ((diff.tv_sec > opt_scantime) &&
+			 (max_nonce > 1500000))
+			max_nonce -= 1000000;		/* small decrease */
+		else if ((diff.tv_sec < opt_scantime) &&
+			 (max_nonce < 0xffffec76))
+			max_nonce += 100000;		/* small increase */
 
 		/* if nonce found, submit work */
 		if (rc)
-			submit_work(&work);
+			submit_work(curl, &work);
 
 		failures = 0;
 	}
+
+	curl_easy_cleanup(curl);
 
 	return NULL;
 }
@@ -422,6 +434,13 @@ static void parse_arg (int key, char *arg)
 			show_usage();
 
 		opt_retries = v;
+		break;
+	case 'R':
+		v = atoi(arg);
+		if (v < 1 || v > 9999)	/* sanity check */
+			show_usage();
+
+		opt_fail_pause = v;
 		break;
 	case 's':
 		v = atoi(arg);

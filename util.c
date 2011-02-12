@@ -80,9 +80,9 @@ static size_t upload_data_cb(void *ptr, size_t size, size_t nmemb,
 	return len;
 }
 
-json_t *json_rpc_call(const char *url, const char *userpass, const char *rpc_req)
+json_t *json_rpc_call(CURL *curl, const char *url,
+		      const char *userpass, const char *rpc_req)
 {
-	CURL *curl;
 	json_t *val, *err_val, *res_val;
 	int rc;
 	struct data_buffer all_data = { };
@@ -92,11 +92,7 @@ json_t *json_rpc_call(const char *url, const char *userpass, const char *rpc_req
 	char len_hdr[64];
 	char curl_err_str[CURL_ERROR_SIZE];
 
-	curl = curl_easy_init();
-	if (!curl) {
-		fprintf(stderr, "CURL initialization failed, aborting JSON-RPC call\n");
-		return NULL;
-	}
+	/* it is assumed that 'curl' is freshly [re]initialized at this pt */
 
 	if (opt_protocol)
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
@@ -172,13 +168,13 @@ json_t *json_rpc_call(const char *url, const char *userpass, const char *rpc_req
 
 	databuf_free(&all_data);
 	curl_slist_free_all(headers);
-	curl_easy_cleanup(curl);
+	curl_easy_reset(curl);
 	return val;
 
 err_out:
 	databuf_free(&all_data);
 	curl_slist_free_all(headers);
-	curl_easy_cleanup(curl);
+	curl_easy_reset(curl);
 	return NULL;
 }
 
@@ -255,3 +251,47 @@ timeval_subtract (
   return x->tv_sec < y->tv_sec;
 }
 
+bool fulltest(const unsigned char *hash, const unsigned char *target)
+{
+	unsigned char hash_swap[32], target_swap[32];
+	uint32_t *hash32 = (uint32_t *) hash_swap;
+	uint32_t *target32 = (uint32_t *) target_swap;
+	int i;
+	bool rc = true;
+	char *hash_str, *target_str;
+
+	swap256(hash_swap, hash);
+	swap256(target_swap, target);
+
+	for (i = 0; i < 32/4; i++) {
+		uint32_t h32tmp = swab32(hash32[i]);
+		uint32_t t32tmp = target32[i];
+
+		target32[i] = swab32(target32[i]);	/* for printing */
+
+		if (h32tmp > t32tmp) {
+			rc = false;
+			break;
+		}
+		if (h32tmp < t32tmp) {
+			rc = true;
+			break;
+		}
+	}
+
+	if (opt_debug) {
+		hash_str = bin2hex(hash_swap, 32);
+		target_str = bin2hex(target_swap, 32);
+
+		fprintf(stderr, " Proof: %s\nTarget: %s\nTrgVal? %s\n",
+			hash_str,
+			target_str,
+			rc ? "YES (hash < target)" :
+			     "no (false positive; hash > target)");
+
+		free(hash_str);
+		free(target_str);
+	}
+
+	return rc;
+}

@@ -93,6 +93,7 @@ static void runhash(void *state, const void *input, const void *init)
 /* suspiciously similar to ScanHash* from bitcoin */
 bool scanhash_cryptopp(const unsigned char *midstate, unsigned char *data,
 	        unsigned char *hash1, unsigned char *hash,
+		const unsigned char *target,
 	        uint32_t max_nonce, unsigned long *hashes_done)
 {
 	uint32_t *hash32 = (uint32_t *) hash;
@@ -109,22 +110,12 @@ bool scanhash_cryptopp(const unsigned char *midstate, unsigned char *data,
 
 		stat_ctr++;
 
-		if (hash32[7] == 0) {
-			char *hexstr;
-
-			hexstr = bin2hex(hash, 32);
-			fprintf(stderr,
-				"DBG: found zeroes in hash:\n%s\n",
-				hexstr);
-			free(hexstr);
-
+		if ((hash32[7] == 0) && fulltest(hash, target)) {
 			*hashes_done = stat_ctr;
 			return true;
 		}
 
 		if (n >= max_nonce) {
-			if (opt_debug)
-				fprintf(stderr, "DBG: end of nonce range\n");
 			*hashes_done = stat_ctr;
 			return false;
 		}
@@ -584,6 +575,7 @@ static void runhash32(void *state, const void *input, const void *init)
 /* suspiciously similar to ScanHash* from bitcoin */
 bool scanhash_asm32(const unsigned char *midstate, unsigned char *data,
 	        unsigned char *hash1, unsigned char *hash,
+		const unsigned char *target,
 	        uint32_t max_nonce, unsigned long *hashes_done)
 {
 	uint32_t *hash32 = (uint32_t *) hash;
@@ -600,14 +592,8 @@ bool scanhash_asm32(const unsigned char *midstate, unsigned char *data,
 
 		stat_ctr++;
 
-		if (hash32[7] == 0) {
-			char *hexstr;
-
-			hexstr = bin2hex(hash, 32);
-			fprintf(stderr,
-				"DBG: found zeroes in hash:\n%s\n",
-				hexstr);
-			free(hexstr);
+		if ((hash32[7] == 0) && fulltest(hash, target)) {
+			fulltest(hash, target);
 
 			*hashes_done = stat_ctr;
 			return true;
