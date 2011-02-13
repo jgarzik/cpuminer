@@ -1,3 +1,15 @@
+commit 4e622f2ac27044d2c0cbe7860ede5ca486c1659a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Feb 12 20:00:54 2011 -0500
+
+    Release version 0.7.
+
+commit b2372e70f0dc270877e25831d8b62e04881cd054
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Feb 12 19:57:50 2011 -0500
+
+    Turn off target testing for release, as some strange results appeared.
+
 commit 9f3472ad19480ad54c34a01ddffb93ee439303da
 Author: Jeff Garzik <jeff@garzik.org>
 Date:   Thu Feb 10 00:52:22 2011 -0500
