@@ -58,6 +58,7 @@ static const char *algo_names[] = {
 };
 
 bool opt_debug = false;
+bool opt_validate = false;
 bool opt_protocol = false;
 static bool opt_quiet = false;
 static int opt_retries = 10;
@@ -98,7 +99,7 @@ static struct option_help options_help[] = {
 	  "\n\tcryptopp_asm32\tCrypto++ 32-bit assembler implementation"
 #endif
 #ifdef WANT_NEON
-	  "\n\tneon\tARM NEON 4-way implementation"
+	  "\n\tneon\t\tARM NEON 4-way implementation"
 #endif
 	  },
 
@@ -107,6 +108,9 @@ static struct option_help options_help[] = {
 
 	{ "debug",
 	  "(-D) Enable debug output (default: off)" },
+
+	{ "validate",
+	  "(-V) Validate the SHA-256 algorithm chosen for correctness" },
 
 	{ "protocol-dump",
 	  "(-P) Verbose dump of protocol-level activities (default: off)" },
@@ -146,6 +150,7 @@ static struct option options[] = {
 	{ "retries", 1, NULL, 'r' },
 	{ "retry-pause", 1, NULL, 'R' },
 	{ "scantime", 1, NULL, 's' },
+	{ "validate", 0, NULL, 'V' },
 	{ "url", 1, NULL, 1001 },
 	{ "userpass", 1, NULL, 1002 },
 	{ }
@@ -272,7 +277,8 @@ static void *miner_thread(void *thr_id_int)
 	int failures = 0;
 	static const char *rpc_req =
 		"{\"method\": \"getwork\", \"params\": [], \"id\":0}\r\n";
-	uint32_t max_nonce = 0xffffff;
+	/*uint32_t max_nonce = 0xffffff;*/
+	uint32_t max_nonce = 0x0000ff;
 	CURL *curl;
 
 	curl = curl_easy_init();
@@ -323,6 +329,14 @@ static void *miner_thread(void *thr_id_int)
 		}
 
 		json_decref(val);
+
+		if (opt_validate) {
+			memset(work.midstate, 0xDE,sizeof(work.midstate));
+			memset(work.data, 0xAD, sizeof(work.data));
+			memset(work.hash1, 0xBE, sizeof(work.hash1));
+			memset(work.target, 0xFF, sizeof(work.target));
+			max_nonce = 4; /* some cores do it 4 at a time... */
+		}
 
 		hashes_done = 0;
 		gettimeofday(&tv_start, NULL);
@@ -389,6 +403,14 @@ static void *miner_thread(void *thr_id_int)
 		timeval_subtract(&diff, &tv_end, &tv_start);
 
 		hashmeter(thr_id, &diff, hashes_done);
+
+		if (opt_validate) {
+			char *hexstr = NULL;
+			hexstr = bin2hex(work.hash, sizeof(work.hash));
+			printf("Result: %s\n", hexstr);
+			curl_easy_cleanup(curl);
+			return NULL;
+		}
 
 		/* adjust max_nonce to meet target scan time */
 		if (diff.tv_sec > (opt_scantime * 2))
@@ -463,6 +485,9 @@ static void parse_arg (int key, char *arg)
 		break;
 	case 'P':
 		opt_protocol = true;
+		break;
+	case 'V':
+		opt_validate = true;
 		break;
 	case 'r':
 		v = atoi(arg);
