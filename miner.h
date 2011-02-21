@@ -11,6 +11,10 @@
 #define WANT_SSE2_4WAY 1
 #endif
 
+#ifdef __ARM_NEON__
+#define WANT_NEON 1
+#endif
+
 #if defined(__i386__) || defined(__x86_64__)
 #define WANT_VIA_PADLOCK 1
 #endif
