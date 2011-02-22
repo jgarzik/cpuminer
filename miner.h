@@ -25,6 +25,15 @@
 #include <byteswap.h>
 #endif
 
+/* Is likely/unlikely defined? */
+#ifdef __GNUC__
+#define likely(x) __builtin_expect((x),1)
+#define unlikely(x) __builtin_expect((x),0)
+#else
+#define likely(x) (x)
+#define unlikely(x) (x)
+#endif
+
 #if defined(__i386__)
 #define WANT_CRYPTOPP_ASM32
 #endif
@@ -61,36 +70,52 @@ extern bool opt_debug;
 extern bool opt_validate;
 extern bool opt_protocol;
 extern const uint32_t sha256_init_state[];
-extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
-			     const char *rpc_req);
+extern json_t *json_rpc_call(CURL * curl, const char *url,
+			     const char *userpass, const char *rpc_req);
 extern char *bin2hex(unsigned char *p, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
 extern unsigned int ScanHash_4WaySSE2(const unsigned char *pmidstate,
-	unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, unsigned long *nHashesDone);
+				      unsigned char *pdata,
+				      unsigned char *phash1,
+				      unsigned char *phash,
+				      const unsigned char *ptarget,
+				      uint32_t max_nonce,
+				      unsigned long *nHashesDone);
+
+extern unsigned int ScanHash_NEON(const unsigned char *pmidstate,
+				  unsigned char *pdata,
+				  unsigned char *phash1,
+				  unsigned char *phash,
+				  const unsigned char *ptarget,
+				  uint32_t max_nonce,
+				  unsigned long *nHashesDone);
 
 extern bool scanhash_via(unsigned char *data_inout,
-	const unsigned char *target,
-	uint32_t max_nonce, unsigned long *hashes_done);
+			 const unsigned char *target,
+			 uint32_t max_nonce, unsigned long *hashes_done);
 
 extern bool scanhash_c(const unsigned char *midstate, unsigned char *data,
-	      unsigned char *hash1, unsigned char *hash,
-	      const unsigned char *target,
-	      uint32_t max_nonce, unsigned long *hashes_done);
-extern bool scanhash_cryptopp(const unsigned char *midstate,unsigned char *data,
-	      unsigned char *hash1, unsigned char *hash,
-	      const unsigned char *target,
-	      uint32_t max_nonce, unsigned long *hashes_done);
-extern bool scanhash_asm32(const unsigned char *midstate,unsigned char *data,
-	      unsigned char *hash1, unsigned char *hash,
-	      const unsigned char *target,
-	      uint32_t max_nonce, unsigned long *hashes_done);
+		       unsigned char *hash1, unsigned char *hash,
+		       const unsigned char *target,
+		       uint32_t max_nonce, unsigned long *hashes_done);
+extern bool scanhash_cryptopp(const unsigned char *midstate,
+			      unsigned char *data, unsigned char *hash1,
+			      unsigned char *hash,
+			      const unsigned char *target,
+			      uint32_t max_nonce,
+			      unsigned long *hashes_done);
+extern bool scanhash_asm32(const unsigned char *midstate,
+			   unsigned char *data, unsigned char *hash1,
+			   unsigned char *hash,
+			   const unsigned char *target, uint32_t max_nonce,
+			   unsigned long *hashes_done);
 
 extern int
-timeval_subtract (struct timeval *result, struct timeval *x, struct timeval *y);
+timeval_subtract(struct timeval *result, struct timeval *x,
+		 struct timeval *y);
 
-extern bool fulltest(const unsigned char *hash, const unsigned char *target);
+extern bool fulltest(const unsigned char *hash,
+		     const unsigned char *target);
 
-#endif /* __MINER_H__ */
+#endif				/* __MINER_H__ */

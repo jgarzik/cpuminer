@@ -247,10 +247,7 @@ bool scanhash_c(const unsigned char *midstate, unsigned char *data,
 	uint32_t n = 0;
 	unsigned long stat_ctr = 0;
 
-	printf("0x%x\n", *nonce);
-
 	while (1) {
-		n++;
 		*nonce = n;
 
 		runhash(hash1, data, midstate);
@@ -258,15 +255,21 @@ bool scanhash_c(const unsigned char *midstate, unsigned char *data,
 
 		stat_ctr++;
 
-		if ((hash32[7] == 0) && fulltest(hash, target)) {
+		if (unlikely((hash32[7] == 0) && fulltest(hash, target))) {
 			*hashes_done = stat_ctr;
 			return true;
 		}
 
-		if (n >= max_nonce) {
+		if (likely(n >= max_nonce)) {
 			*hashes_done = stat_ctr;
 			return false;
 		}
+
+		if (unlikely(opt_validate)) {
+			*hashes_done = stat_ctr;
+		  	return true;
+		}
+		n++;
 	}
 }
 
