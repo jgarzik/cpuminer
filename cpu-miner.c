@@ -574,7 +574,7 @@ static void parse_cmdline(int argc, char *argv[])
 	int key;
 
 	while (1) {
-		key = getopt_long(argc, argv, "a:c:qDPr:s:t:h?", options, NULL);
+		key = getopt_long(argc, argv, "a:c:qDPVr:s:t:h?", options, NULL);
 		if (key < 0)
 			break;
 

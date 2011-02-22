@@ -16,7 +16,7 @@
 
 #include <arm_neon.h>
 
-#define NPAR 32
+#define NPAR 1
 /* Figure out why branch prediction doesn't work with 4.4 */
 #define unlikely(x) (x)
 
@@ -42,21 +42,21 @@ static const unsigned int sha256_consts[] = {
 };
 
 
-static inline uint32x2_t Ch(uint32x2_t b, uint32x2_t c, uint32x2_t d) {
+static inline uint32x4_t Ch(uint32x4_t b, uint32x4_t c, uint32x4_t d) {
     return (b & c) ^ (~b & d); 
     /* return vbsl_u32(c, d, b); */
 }
 
-static inline uint32x2_t Maj(uint32x2_t b, uint32x2_t c, uint32x2_t d) {
+static inline uint32x4_t Maj(uint32x4_t b, uint32x4_t c, uint32x4_t d) {
     return (b & c) ^ (b & d) ^ (c & d);
 }
 
-static __attribute__((always_inline)) uint32x2_t ROTR(uint32x2_t x, const int n) {
-    return vshl_u32(x, vdup_n_s32(n)) | vshl_u32(x, vdup_n_s32(-n));
+static __attribute__((always_inline)) uint32x4_t ROTR(uint32x4_t x, const int n) {
+    return vshrq_n_u32(x, n) | vshlq_n_u32(x, (32 - n));
 }
 
-static __attribute__((always_inline)) uint32x2_t SHR(uint32x2_t x, const int n) {
-    return vshl_u32(x, vdup_n_s32(-n));
+static __attribute__((always_inline)) uint32x4_t SHR(uint32x4_t x, const int n) {
+    return vshrq_n_u32(x, n);
 }
 
 /* SHA256 Functions */
@@ -65,13 +65,13 @@ static __attribute__((always_inline)) uint32x2_t SHR(uint32x2_t x, const int n) 
 #define SIGMA0_256(x)       (ROTR((x),  7) ^ ROTR((x), 18) ^  SHR((x),  3))
 #define SIGMA1_256(x)       (ROTR((x), 17) ^ ROTR((x), 19) ^  SHR((x), 10))
 
-#define add4(x0, x1, x2, x3) (vadd_u32(vadd_u32(x0, x1), vadd_u32(x2, x3)))
-#define add5(x0, x1, x2, x3, x4) (vadd_u32(add4(x0, x1, x2, x3), x4))
+#define add4(x0, x1, x2, x3) (vaddq_u32(vaddq_u32(x0, x1), vaddq_u32(x2, x3)))
+#define add5(x0, x1, x2, x3, x4) (vaddq_u32(add4(x0, x1, x2, x3), x4))
 
 #define SHA256ROUND(a, b, c, d, e, f, g, h, i, w)                       \
-    T1 = add5(h, BIGSIGMA1_256(e), Ch(e, f, g), vdup_n_u32(sha256_consts[i]), w);   \
-d = vadd_u32(d, T1);                                           \
-h = vadd_u32(T1, vadd_u32(BIGSIGMA0_256(a), Maj(a, b, c)));
+    T1 = add5(h, BIGSIGMA1_256(e), Ch(e, f, g), vdupq_n_u32(sha256_consts[i]), w);   \
+d = vaddq_u32(d, T1);                                           \
+h = vaddq_u32(T1, vaddq_u32(BIGSIGMA0_256(a), Maj(a, b, c)));
 
 static const unsigned int pSHA256InitState[8] =
 {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
@@ -87,15 +87,11 @@ unsigned int ScanHash_4WayNEON(const unsigned char *pmidstate, unsigned char *pd
 
     for (;;)
     {
-        uint32_t thash[9][NPAR];
+        uint32_t thash[9][NPAR] __attribute__((aligned(128)));
 	int j;
-
-	printf("0x%x\n", *nNonce_p);
 
 	nonce += NPAR;
 	*nNonce_p = nonce;
-
-	printf("0x%x\n", *nNonce_p);
 
         DoubleBlockSHA256(pdata, phash1, pmidstate, thash, pSHA256InitState);
 
@@ -105,7 +101,7 @@ unsigned int ScanHash_4WayNEON(const unsigned char *pmidstate, unsigned char *pd
             {
 		int i;
 
-                for (i = 0; i < 32/2; i++) {
+                for (i = 0; i < 32/4; i++) {
                     ((unsigned int*)phash)[i] = thash[i][j];
 		}
 
@@ -119,7 +115,7 @@ unsigned int ScanHash_4WayNEON(const unsigned char *pmidstate, unsigned char *pd
 
 	if (opt_validate) {
 	    int i;
-	    for (i = 0; i < 32/2; i++) {
+	    for (i = 0; i < 32/4; i++) {
 		((unsigned int*)phash)[i] = thash[i][0];
 	    }
 	    *nHashesDone = nonce;
@@ -144,48 +140,48 @@ static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, uint3
     unsigned int /* i, j, */ k;
 
     /* vectors used in calculation */
-    uint32x2_t w0, w1, w2, w3, w4, w5, w6, w7;
-    uint32x2_t w8, w9, w10, w11, w12, w13, w14, w15;
-    uint32x2_t T1;
-    uint32x2_t a, b, c, d, e, f, g, h;
-    uint32x2_t nonce, preNonce;
+    uint32x4_t w0, w1, w2, w3, w4, w5, w6, w7;
+    uint32x4_t w8, w9, w10, w11, w12, w13, w14, w15;
+    uint32x4_t T1;
+    uint32x4_t a, b, c, d, e, f, g, h;
+    uint32x4_t nonce, preNonce;
 
     /* nonce offset for vector */
-    uint32x2_t offset = {0x00000000, 0x00000000};
+    uint32x4_t offset = {0x00000000, 0x00000000, 0x00000000, 0x00000000};
 
 
-    preNonce = vadd_u32(vdup_n_u32(In[3]), offset);
+    preNonce = vaddq_u32(vdupq_n_u32(In[3]), offset);
 
     for(k = 0; k<NPAR; k+=2) {
-        w0 = vdup_n_u32(In[0]);
-        w1 = vdup_n_u32(In[1]);
-        w2 = vdup_n_u32(In[2]);
+        w0 = vdupq_n_u32(In[0]);
+        w1 = vdupq_n_u32(In[1]);
+        w2 = vdupq_n_u32(In[2]);
         //w3 = vdupq_n_u32(In[3]); nonce will be later hacked into the hash
-        w4 = vdup_n_u32(In[4]);
-        w5 = vdup_n_u32(In[5]);
-        w6 = vdup_n_u32(In[6]);
-        w7 = vdup_n_u32(In[7]);
-        w8 = vdup_n_u32(In[8]);
-        w9 = vdup_n_u32(In[9]);
-        w10 = vdup_n_u32(In[10]);
-        w11 = vdup_n_u32(In[11]);
-        w12 = vdup_n_u32(In[12]);
-        w13 = vdup_n_u32(In[13]);
-        w14 = vdup_n_u32(In[14]);
-        w15 = vdup_n_u32(In[15]);
+        w4 = vdupq_n_u32(In[4]);
+        w5 = vdupq_n_u32(In[5]);
+        w6 = vdupq_n_u32(In[6]);
+        w7 = vdupq_n_u32(In[7]);
+        w8 = vdupq_n_u32(In[8]);
+        w9 = vdupq_n_u32(In[9]);
+        w10 = vdupq_n_u32(In[10]);
+        w11 = vdupq_n_u32(In[11]);
+        w12 = vdupq_n_u32(In[12]);
+        w13 = vdupq_n_u32(In[13]);
+        w14 = vdupq_n_u32(In[14]);
+        w15 = vdupq_n_u32(In[15]);
 
         /* hack nonce into lowest byte of w3 */
-	nonce = vadd_u32(preNonce, vdup_n_u32(k));
+	nonce = vaddq_u32(preNonce, vdupq_n_u32(k));
         w3 = nonce;
 
-        a = vdup_n_u32(hPre[0]);
-        b = vdup_n_u32(hPre[1]);
-        c = vdup_n_u32(hPre[2]);
-        d = vdup_n_u32(hPre[3]);
-        e = vdup_n_u32(hPre[4]);
-        f = vdup_n_u32(hPre[5]);
-        g = vdup_n_u32(hPre[6]);
-        h = vdup_n_u32(hPre[7]);
+        a = vdupq_n_u32(hPre[0]);
+        b = vdupq_n_u32(hPre[1]);
+        c = vdupq_n_u32(hPre[2]);
+        d = vdupq_n_u32(hPre[3]);
+        e = vdupq_n_u32(hPre[4]);
+        f = vdupq_n_u32(hPre[5]);
+        g = vdupq_n_u32(hPre[6]);
+        h = vdupq_n_u32(hPre[7]);
 
 	/* The fun begins here */
         SHA256ROUND(a, b, c, d, e, f, g, h, 0, w0);
@@ -305,8 +301,8 @@ static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, uint3
         SHA256ROUND(b, c, d, e, f, g, h, a, 63, w15);
 
 #define store_load(x, i, dest) \
-        T1 = vdup_n_u32((hPre)[i]); \
-        dest = vadd_u32(T1, x);
+        T1 = vdupq_n_u32((hPre)[i]); \
+        dest = vaddq_u32(T1, x);
 
         store_load(a, 0, w0);
         store_load(b, 1, w1);
@@ -317,23 +313,23 @@ static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, uint3
         store_load(g, 6, w6);
         store_load(h, 7, w7);
 
-        w8 = vdup_n_u32(Pad[8]);
-        w9 = vdup_n_u32(Pad[9]);
-        w10 = vdup_n_u32(Pad[10]);
-        w11 = vdup_n_u32(Pad[11]);
-        w12 = vdup_n_u32(Pad[12]);
-        w13 = vdup_n_u32(Pad[13]);
-        w14 = vdup_n_u32(Pad[14]);
-        w15 = vdup_n_u32(Pad[15]);
+        w8 = vdupq_n_u32(Pad[8]);
+        w9 = vdupq_n_u32(Pad[9]);
+        w10 = vdupq_n_u32(Pad[10]);
+        w11 = vdupq_n_u32(Pad[11]);
+        w12 = vdupq_n_u32(Pad[12]);
+        w13 = vdupq_n_u32(Pad[13]);
+        w14 = vdupq_n_u32(Pad[14]);
+        w15 = vdupq_n_u32(Pad[15]);
 
-        a = vdup_n_u32(hInit[0]);
-        b = vdup_n_u32(hInit[1]);
-        c = vdup_n_u32(hInit[2]);
-        d = vdup_n_u32(hInit[3]);
-        e = vdup_n_u32(hInit[4]);
-        f = vdup_n_u32(hInit[5]);
-        g = vdup_n_u32(hInit[6]);
-        h = vdup_n_u32(hInit[7]);
+        a = vdupq_n_u32(hInit[0]);
+        b = vdupq_n_u32(hInit[1]);
+        c = vdupq_n_u32(hInit[2]);
+        d = vdupq_n_u32(hInit[3]);
+        e = vdupq_n_u32(hInit[4]);
+        f = vdupq_n_u32(hInit[5]);
+        g = vdupq_n_u32(hInit[6]);
+        h = vdupq_n_u32(hInit[7]);
 
         SHA256ROUND(a, b, c, d, e, f, g, h, 0, w0);
         SHA256ROUND(h, a, b, c, d, e, f, g, 1, w1);
@@ -453,8 +449,9 @@ static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, uint3
 
         /* store resulsts directly in thash */
 #define store_2(x,i)  \
-        w0 = vdup_n_u32(hInit[i]); \
-        *(uint32x2_t *)&thash[i][0+k] = vadd_u32(w0, x);
+        w0 = vdupq_n_u32(hInit[i]); \
+        vst1q_u32(&thash[i][0+k], vaddq_u32(w0, x)); \
+	printf("0x%x\n", thash[i][0+k]);
 
         store_2(a, 0);
         store_2(b, 1);
@@ -464,11 +461,9 @@ static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, uint3
         store_2(f, 5);
         store_2(g, 6);
         store_2(h, 7);
-        *(uint32x2_t *)&thash[8][0+k] = nonce;
-
-	printf("%s\n", bin2hex((char *)thash[0][0+k], 512));
+        vst1q_u32(&thash[8][0+k], nonce);
+	printf("0x%x\n", thash[8][0+k]);
     }
-
 }
 
 #endif /* WANT_NEON */
