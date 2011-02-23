@@ -111,7 +111,6 @@ unsigned int ScanHash_4WaySSE2(const unsigned char *pmidstate, unsigned char *pd
         unsigned int thash[9][NPAR] __attribute__((aligned(128)));
 	int j;
 
-	nonce += NPAR;
 	*nNonce_p = nonce;
 
         DoubleBlockSHA256(pdata, phash1, pmidstate, thash, pSHA256InitState);
@@ -132,6 +131,17 @@ unsigned int ScanHash_4WaySSE2(const unsigned char *pmidstate, unsigned char *pd
 		}
             }
         }
+
+	if (unlikely(opt_validate)) {
+		int i;
+		for (i = 0; i < 32/4; i++) {
+			((unsigned int*)phash)[i] = thash[i][0];
+		}
+		*nHashesDone = nonce;
+		return 0;
+	}
+
+	nonce += NPAR;
 
         if (nonce >= max_nonce)
         {
