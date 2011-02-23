@@ -7,6 +7,10 @@
 #include <jansson.h>
 #include <curl/curl.h>
 
+#ifdef __ARM_NEON__
+#define WANT_NEON 1
+#endif
+
 #ifdef __SSE2__
 #define WANT_SSE2_4WAY 1
 #endif
@@ -75,6 +79,11 @@ extern unsigned int ScanHash_4WaySSE2(const unsigned char *pmidstate,
 	unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
 	uint32_t max_nonce, unsigned long *nHashesDone);
+
+extern unsigned int ScanHash_NEON(const unsigned char *pmidstate,
+        unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
+        const unsigned char *ptarget,
+        uint32_t max_nonce, unsigned long *nHashesDone);
 
 extern bool scanhash_via(unsigned char *data_inout,
 	const unsigned char *target,
