@@ -1,3 +1,14 @@
+/*
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 2 of the License, or (at your option) 
+ * any later version.  See COPYING for more details.
+ *
+ * tcatm's 4-way 128-bit SSE2 SHA-256 modified to use ARM NEON
+ * Modified by: Mark Crichton <crichton@gmail.com> 0xAFEEFE80
+ * performance of intrinsics is poor on gcc 4.4, generic C is better
+ */
+
 // Copyright (c) 2010 Satoshi Nakamoto
 // Distributed under the MIT/X11 software license, see the accompanying
 // file license.txt or http://www.opensource.org/licenses/mit-license.php.
