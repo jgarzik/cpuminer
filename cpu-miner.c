@@ -287,7 +287,7 @@ static void *miner_thread(void *thr_id_int)
 		bool rc;
 
 		/* obtain new work from bitcoin */
-		if (likely(!opt_validate))
+		if (likely(!opt_validate)) {
 			val = json_rpc_call(curl, rpc_url, userpass, rpc_req);
 			if (!val) {
 				fprintf(stderr, "json_rpc_call failed, ");
@@ -391,6 +391,7 @@ static void *miner_thread(void *thr_id_int)
 				return NULL;
 			}
 			printf("Hash result: %s\n", hexstr);
+			printf("Exp. result: d4ac9a2d3724ee3263dafbd63a4533dfd9a793371709053408cf3ae8556cedfe\n");
 			curl_easy_cleanup(curl);
 			return NULL;
 		}

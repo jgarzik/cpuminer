@@ -114,7 +114,7 @@ bool scanhash_cryptopp(const unsigned char *midstate, unsigned char *data,
 			return true;
 		}
 
-		if (likely((n >= max_nonce)) {
+		if (likely(n >= max_nonce)) {
 			*hashes_done = stat_ctr;
 			return false;
 		}
