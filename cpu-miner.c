@@ -37,6 +37,7 @@ enum sha256_algos {
 	ALGO_VIA,		/* VIA padlock */
 	ALGO_CRYPTOPP,		/* Crypto++ (C) */
 	ALGO_CRYPTOPP_ASM32,	/* Crypto++ 32-bit assembly */
+	ALGO_NEON,		/* ARM NEON assembly */
 };
 
 static const char *algo_names[] = {
@@ -50,6 +51,9 @@ static const char *algo_names[] = {
 	[ALGO_CRYPTOPP]		= "cryptopp",
 #ifdef WANT_CRYPTOPP_ASM32
 	[ALGO_CRYPTOPP_ASM32]	= "cryptopp_asm32",
+#endif
+#ifdef WANT_NEON
+	[ALGO_NEON]		= "neon",
 #endif
 };
 
@@ -93,6 +97,9 @@ static struct option_help options_help[] = {
 	  "\n\tcryptopp\tCrypto++ C/C++ implementation"
 #ifdef WANT_CRYPTOPP_ASM32
 	  "\n\tcryptopp_asm32\tCrypto++ 32-bit assembler implementation"
+#endif
+#ifdef WANT_NEON
+	  "\n\tneon\t\tARM NEON assembler implementation"
 #endif
 	  },
 
@@ -351,6 +358,18 @@ static void *miner_thread(void *thr_id_int)
 			rc = (rc4 == -1) ? false : true;
 			}
 			break;
+#endif
+
+#ifdef WANT_NEON
+                case ALGO_NEON: {
+                        unsigned int rc4 =
+                                ScanHash_NEON(work.midstate, work.data + 64,
+                                              work.hash1, work.hash,
+                                              work.target,
+                                              max_nonce, &hashes_done);
+                        rc = (rc4 == -1) ? false : true;
+                        }
+                        break;
 #endif
 
 #ifdef WANT_VIA_PADLOCK
