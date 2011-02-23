@@ -102,7 +102,6 @@ bool scanhash_cryptopp(const unsigned char *midstate, unsigned char *data,
 	unsigned long stat_ctr = 0;
 
 	while (1) {
-		n++;
 		*nonce = n;
 
 		runhash(hash1, data, midstate);
@@ -110,15 +109,22 @@ bool scanhash_cryptopp(const unsigned char *midstate, unsigned char *data,
 
 		stat_ctr++;
 
-		if ((hash32[7] == 0) && fulltest(hash, target)) {
+		if (unlikely((hash32[7] == 0) && fulltest(hash, target))) {
 			*hashes_done = stat_ctr;
 			return true;
 		}
 
-		if (n >= max_nonce) {
+		if (likely((n >= max_nonce)) {
 			*hashes_done = stat_ctr;
 			return false;
 		}
+		
+		if (unlikely(opt_validate)) {
+			*hashes_done = stat_ctr;
+			return true;
+		}
+
+		n++;
 	}
 }
 
@@ -584,7 +590,6 @@ bool scanhash_asm32(const unsigned char *midstate, unsigned char *data,
 	unsigned long stat_ctr = 0;
 
 	while (1) {
-		n++;
 		*nonce = n;
 
 		runhash32(hash1, data, midstate);
@@ -592,19 +597,26 @@ bool scanhash_asm32(const unsigned char *midstate, unsigned char *data,
 
 		stat_ctr++;
 
-		if ((hash32[7] == 0) && fulltest(hash, target)) {
+		if (unlikely((hash32[7] == 0) && fulltest(hash, target))) {
 			fulltest(hash, target);
 
 			*hashes_done = stat_ctr;
 			return true;
 		}
 
-		if (n >= max_nonce) {
+		if (likely(n >= max_nonce)) {
 			if (opt_debug)
 				fprintf(stderr, "DBG: end of nonce range\n");
 			*hashes_done = stat_ctr;
 			return false;
 		}
+
+		if (unlikely(opt_validate)) {
+			*hashes_done = stat_ctr;
+			return true;
+		}
+
+		n++;
 	}
 }
 

@@ -54,6 +54,7 @@ static const char *algo_names[] = {
 };
 
 bool opt_debug = false;
+bool opt_validate = false;
 bool opt_protocol = false;
 static bool opt_quiet = false;
 static int opt_retries = 10;
@@ -104,6 +105,9 @@ static struct option_help options_help[] = {
 	{ "protocol-dump",
 	  "(-P) Verbose dump of protocol-level activities (default: off)" },
 
+	{ "validate",
+	  "(-V) Validate the selected SHA-256 engine chosen by --algo"},
+
 	{ "retries N",
 	  "(-r N) Number of times to retry, if JSON-RPC call fails\n"
 	  "\t(default: 10; use -1 for \"never\")" },
@@ -139,6 +143,7 @@ static struct option options[] = {
 	{ "retries", 1, NULL, 'r' },
 	{ "retry-pause", 1, NULL, 'R' },
 	{ "scantime", 1, NULL, 's' },
+	{ "validate", 0, NULL, 'V' },
 	{ "url", 1, NULL, 1001 },
 	{ "userpass", 1, NULL, 1002 },
 	{ }
@@ -282,40 +287,48 @@ static void *miner_thread(void *thr_id_int)
 		bool rc;
 
 		/* obtain new work from bitcoin */
-		val = json_rpc_call(curl, rpc_url, userpass, rpc_req);
-		if (!val) {
-			fprintf(stderr, "json_rpc_call failed, ");
+		if (likely(!opt_validate))
+			val = json_rpc_call(curl, rpc_url, userpass, rpc_req);
+			if (!val) {
+				fprintf(stderr, "json_rpc_call failed, ");
 
-			if ((opt_retries >= 0) && (++failures > opt_retries)) {
-				fprintf(stderr, "terminating thread\n");
-				return NULL;	/* exit thread */
+				if ((opt_retries >= 0) && (++failures > opt_retries)) {
+					fprintf(stderr, "terminating thread\n");
+					return NULL;	/* exit thread */
+				}
+
+				/* pause, then restart work loop */
+				fprintf(stderr, "retry after %d seconds\n",
+					opt_fail_pause);
+				sleep(opt_fail_pause);
+				continue;
 			}
 
-			/* pause, then restart work loop */
-			fprintf(stderr, "retry after %d seconds\n",
-				opt_fail_pause);
-			sleep(opt_fail_pause);
-			continue;
-		}
+			/* decode result into work state struct */
+			rc = work_decode(json_object_get(val, "result"), &work);
+			if (!rc) {
+				fprintf(stderr, "JSON-decode of work failed, ");
 
-		/* decode result into work state struct */
-		rc = work_decode(json_object_get(val, "result"), &work);
-		if (!rc) {
-			fprintf(stderr, "JSON-decode of work failed, ");
-
-			if ((opt_retries >= 0) && (++failures > opt_retries)) {
-				fprintf(stderr, "terminating thread\n");
+				if ((opt_retries >= 0) && (++failures > opt_retries)) {
+					fprintf(stderr, "terminating thread\n");
 				return NULL;	/* exit thread */
+				}	
+
+				/* pause, then restart work loop */
+				fprintf(stderr, "retry after %d seconds\n",
+					opt_fail_pause);
+				sleep(opt_fail_pause);
+				continue;
 			}
 
-			/* pause, then restart work loop */
-			fprintf(stderr, "retry after %d seconds\n",
-				opt_fail_pause);
-			sleep(opt_fail_pause);
-			continue;
+			json_decref(val);
+		} else {
+			memset(work.midstate, 0xDE, sizeof(work.midstate));
+			memset(work.data, 0xCA, sizeof(work.data));
+			memset(work.hash1, 0xFB, sizeof(work.hash1));
+			memset(work.target, 0xAD, sizeof(work.target));
+			max_nonce = 1;
 		}
-
-		json_decref(val);
 
 		hashes_done = 0;
 		gettimeofday(&tv_start, NULL);
@@ -368,6 +381,19 @@ static void *miner_thread(void *thr_id_int)
 		/* record scanhash elapsed time */
 		gettimeofday(&tv_end, NULL);
 		timeval_subtract(&diff, &tv_end, &tv_start);
+
+		if (opt_validate) {
+			char *hexstr = NULL;
+			hexstr = bin2hex(work.hash, sizeof(work.hash));
+			if (!hexstr) {
+				fprintf(stderr, "validate OOM\n");
+				curl_easy_cleanup(curl);
+				return NULL;
+			}
+			printf("Hash result: %s\n", hexstr);
+			curl_easy_cleanup(curl);
+			return NULL;
+		}
 
 		hashmeter(thr_id, &diff, hashes_done);
 
@@ -444,6 +470,9 @@ static void parse_arg (int key, char *arg)
 		break;
 	case 'P':
 		opt_protocol = true;
+		break;
+	case 'V':
+		opt_validate = true;
 		break;
 	case 'r':
 		v = atoi(arg);
@@ -530,7 +559,7 @@ static void parse_cmdline(int argc, char *argv[])
 	int key;
 
 	while (1) {
-		key = getopt_long(argc, argv, "a:c:qDPr:s:t:h?", options, NULL);
+		key = getopt_long(argc, argv, "a:c:qDPVr:s:t:h?", options, NULL);
 		if (key < 0)
 			break;
 
