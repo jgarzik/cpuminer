@@ -146,10 +146,10 @@ static struct option options[] = {
 };
 
 struct work {
-	/* filled by the server (but first 32 bytes of `hash1' are overwritten) */
-	unsigned char	data[128];  /* first 128 bytes of bitcoin block. the nonce is in the second 64-byte chunk (SHA256 processes 64-byte chunks) */
-	unsigned char	hash1[64];  /* used for second SHA256 round. the first 32 bytes receive the first block hash, and the final 32 bytes contain SHA256 padding */
-	unsigned char	midstate[32];  /* eight 32-bit integers. SHA256 state after processing the first 64-byte chunk */
+	/* filled by the server */
+	unsigned char	data[128];  /* start of bitcoin block (the first 6 fields) plus SHA256 padding. the nonce is in the second 64-byte chunk (SHA256 processes 64-byte chunks) */
+	unsigned char	hash1[64];  /* used for calculating the hash of the hash. the first 32 bytes are overwritten with the data hash, and the final 32 bytes contain SHA256 padding */
+	unsigned char	midstate[32];  /* SHA256 state after processing the first 64-byte chunk. the first 64-byte chunk of `data' is usually ignored */
 	unsigned char	target[32];  /* little-endian */
 
 	/* filled by the client */
