@@ -57,6 +57,7 @@ static const char *algo_names[] = {
 bool opt_debug = false;
 bool opt_protocol = false;
 static bool opt_quiet = false;
+static bool opt_randomize = false;
 static int opt_retries = 10;
 static int opt_fail_pause = 30;
 static int opt_scantime = 5;
@@ -105,6 +106,9 @@ static struct option_help options_help[] = {
 	{ "protocol-dump",
 	  "(-P) Verbose dump of protocol-level activities (default: off)" },
 
+	{ "randomize",
+	  "Randomize the time between getting new work from server (default: off)" },
+
 	{ "retries N",
 	  "(-r N) Number of times to retry, if JSON-RPC call fails\n"
 	  "\t(default: 10; use -1 for \"never\")" },
@@ -142,6 +146,7 @@ static struct option options[] = {
 	{ "scantime", 1, NULL, 's' },
 	{ "url", 1, NULL, 1001 },
 	{ "userpass", 1, NULL, 1002 },
+	{ "randomize", 0, NULL, 1003 },
 	{ }
 };
 
@@ -302,8 +307,12 @@ static void *miner_thread(void *thr_id_int)
 {
 	int thr_id = (unsigned long) thr_id_int;
 	int failures = 0;
-	uint32_t max_nonce = 0xffffff;
+	uint32_t max_nonce = 0xffffff, max_nonce2;
 	CURL *curl;
+
+	if (opt_randomize) {
+		srandom(time(0));
+	}
 
 	curl = curl_easy_init();
 	if (!curl) {
@@ -336,12 +345,18 @@ static void *miner_thread(void *thr_id_int)
 		hashes_done = 0;
 		gettimeofday(&tv_start, NULL);
 
+		if (opt_randomize) {
+			max_nonce2 = max_nonce*(1.0 + (double)random()/(RAND_MAX+1.0) - 0.5);
+		} else {
+			max_nonce2 = max_nonce;
+		}
+
 		/* scan nonces for a proof-of-work hash */
 		switch (opt_algo) {
 		case ALGO_C:
 			rc = scanhash_c(work.midstate, work.data + 64,
 				        work.hash1, work.hash, work.target,
-					max_nonce, &hashes_done);
+					max_nonce2, &hashes_done);
 			break;
 
 #ifdef WANT_SSE2_4WAY
@@ -350,7 +365,7 @@ static void *miner_thread(void *thr_id_int)
 				ScanHash_4WaySSE2(work.midstate, work.data + 64,
 						  work.hash1, work.hash,
 						  work.target,
-						  max_nonce, &hashes_done);
+						  max_nonce2, &hashes_done);
 			rc = (rc4 == -1) ? false : true;
 			}
 			break;
@@ -359,20 +374,20 @@ static void *miner_thread(void *thr_id_int)
 #ifdef WANT_VIA_PADLOCK
 		case ALGO_VIA:
 			rc = scanhash_via(work.data, work.target,
-					  max_nonce, &hashes_done);
+					  max_nonce2, &hashes_done);
 			break;
 #endif
 		case ALGO_CRYPTOPP:
 			rc = scanhash_cryptopp(work.midstate, work.data + 64,
 				        work.hash1, work.hash, work.target,
-					max_nonce, &hashes_done);
+					max_nonce2, &hashes_done);
 			break;
 
 #ifdef WANT_CRYPTOPP_ASM32
 		case ALGO_CRYPTOPP_ASM32:
 			rc = scanhash_asm32(work.midstate, work.data + 64,
 				        work.hash1, work.hash, work.target,
-					max_nonce, &hashes_done);
+					max_nonce2, &hashes_done);
 			break;
 #endif
 
@@ -503,6 +518,9 @@ static void parse_arg (int key, char *arg)
 
 		free(userpass);
 		userpass = strdup(arg);
+		break;
+	case 1003:			/* --randomize */
+		opt_randomize = true;
 		break;
 	default:
 		show_usage();
