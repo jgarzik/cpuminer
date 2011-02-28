@@ -146,12 +146,14 @@ static struct option options[] = {
 };
 
 struct work {
-	unsigned char	data[128];
-	unsigned char	hash1[64];
-	unsigned char	midstate[32];
-	unsigned char	target[32];
+	/* filled by the server (but first 32 bytes of `hash1' are overwritten) */
+	unsigned char	data[128];  /* first 128 bytes of bitcoin block. the nonce is in the second 64-byte chunk (SHA256 processes 64-byte chunks) */
+	unsigned char	hash1[64];  /* used for second SHA256 round. the first 32 bytes receive the first block hash, and the final 32 bytes contain SHA256 padding */
+	unsigned char	midstate[32];  /* eight 32-bit integers. SHA256 state after processing the first 64-byte chunk */
+	unsigned char	target[32];  /* little-endian */
 
-	unsigned char	hash[32];
+	/* filled by the client */
+	unsigned char	hash[32];  /* receives the final bitcoin block hash (the SHA256 hash of the SHA256 hash of the block) in little-endian */
 };
 
 static bool jobj_binary(const json_t *obj, const char *key,
@@ -274,15 +276,26 @@ static bool get_work(CURL *curl, struct work *work)
 static void hashmeter(int thr_id, const struct timeval *diff,
 		      unsigned long hashes_done)
 {
+	time_t t;
+	struct tm *lt;
+	char strtime[20];
 	double khashes, secs;
 
-	khashes = hashes_done / 1000.0;
-	secs = (double)diff->tv_sec + ((double)diff->tv_usec / 1000000.0);
-
-	if (!opt_quiet)
-		printf("HashMeter(%d): %lu hashes, %.2f khash/sec\n",
-		       thr_id, hashes_done,
-		       khashes / secs);
+	if (!opt_quiet) {
+		t = time(0);
+		lt = localtime(&t);
+		strftime(strtime, sizeof(strtime), "%Y-%m-%d %H:%M:%S", lt);
+		khashes = hashes_done / 1000.0;
+		secs = (double)diff->tv_sec + ((double)diff->tv_usec / 1000000.0);
+	
+		printf("%s: CPU%d: %.2f khash/sec = %lu hashes / %g sec\n",
+			strtime,
+			thr_id,
+			khashes / secs,
+			hashes_done,
+			secs
+		);
+	}
 }
 
 static void *miner_thread(void *thr_id_int)
