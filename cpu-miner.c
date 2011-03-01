@@ -57,6 +57,7 @@ static const char *algo_names[] = {
 bool opt_debug = false;
 bool opt_protocol = false;
 static bool opt_quiet = false;
+static char *opt_log = 0;
 static bool opt_randomize = false;
 static int opt_retries = 10;
 static int opt_fail_pause = 30;
@@ -65,8 +66,8 @@ static json_t *opt_config;
 static const bool opt_time = true;
 static enum sha256_algos opt_algo = ALGO_C;
 static int opt_n_threads = 1;
-static char *rpc_url;
-static char *userpass;
+static char *rpc_url = 0;
+static char *userpass = 0;
 
 
 struct option_help {
@@ -96,6 +97,9 @@ static struct option_help options_help[] = {
 	  "\n\tcryptopp_asm32\tCrypto++ 32-bit assembler implementation"
 #endif
 	  },
+
+	{ "log",
+	  "(-l FILE) Log submitted solutions (shares) to FILE (default: none)" },
 
 	{ "quiet",
 	  "(-q) Disable per-thread hashmeter output (default: off)" },
@@ -137,6 +141,7 @@ static struct option options[] = {
 	{ "help", 0, NULL, 'h' },
 	{ "algo", 1, NULL, 'a' },
 	{ "config", 1, NULL, 'c' },
+	{ "log", 1, NULL, 'l' },
 	{ "quiet", 0, NULL, 'q' },
 	{ "debug", 0, NULL, 'D' },
 	{ "protocol-dump", 0, NULL, 'P' },
@@ -251,8 +256,16 @@ static void submit_work(CURL *curl, struct work *work)
 	tm = localtime(&now);
 	strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", tm);
 
-	printf("[%s] PROOF OF WORK RESULT: %s\n",
+	printf("%s: PROOF OF WORK RESULT: %s\n",
 	       timestr, json_is_true(res) ? "true (yay!!!)" : "false (booooo)");
+
+	if (opt_log) {
+		FILE *f = fopen(opt_log,"a");
+		fprintf(f, "%s: PROOF OF WORK RESULT: %s\n",
+		        timestr, json_is_true(res) ? "true (yay!!!)" : "false (booooo)");
+		fprintf(f, "%s: DATA: %s\n", timestr, hexstr);
+		fclose(f);
+	}
 
 	json_decref(val);
 
@@ -467,6 +480,10 @@ static void parse_arg (int key, char *arg)
 		}
 		break;
 	}
+	case 'l':
+		if (opt_log) free(opt_log);
+		opt_log = strdup(arg);
+		break;
 	case 'q':
 		opt_quiet = true;
 		break;
@@ -509,14 +526,14 @@ static void parse_arg (int key, char *arg)
 		    strncmp(arg, "https://", 8))
 			show_usage();
 
-		free(rpc_url);
+		if (rpc_url) free(rpc_url);
 		rpc_url = strdup(arg);
 		break;
 	case 1002:			/* --userpass */
 		if (!strchr(arg, ':'))
 			show_usage();
 
-		free(userpass);
+		if (userpass) free(userpass);
 		userpass = strdup(arg);
 		break;
 	case 1003:			/* --randomize */
