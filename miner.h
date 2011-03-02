@@ -69,14 +69,7 @@ extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
 extern char *bin2hex(unsigned char *p, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
-extern unsigned int ScanHash_4WaySSE2(const unsigned char *pmidstate,
-	unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, unsigned long *nHashesDone);
-
-extern bool scanhash_via(unsigned char *data_inout,
-	const unsigned char *target,
-	uint32_t max_nonce, unsigned long *hashes_done);
+extern bool validate_midstate(unsigned char *data, const unsigned char *midstate);
 
 extern bool scanhash_c(const unsigned char *midstate, unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
@@ -90,6 +83,13 @@ extern bool scanhash_asm32(const unsigned char *midstate,unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
 	      const unsigned char *target,
 	      uint32_t max_nonce, unsigned long *hashes_done);
+extern unsigned int ScanHash_4WaySSE2(const unsigned char *pmidstate,
+	unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
+	const unsigned char *ptarget,
+	uint32_t max_nonce, unsigned long *nHashesDone);
+extern bool scanhash_via(unsigned char *data_inout,
+	const unsigned char *target,
+	uint32_t max_nonce, unsigned long *hashes_done);
 
 extern int
 timeval_subtract (struct timeval *result, struct timeval *x, struct timeval *y);

@@ -355,6 +355,10 @@ static void *miner_thread(void *thr_id_int)
 			continue;
 		}
 
+		if (!validate_midstate(work.data, work.midstate)) {
+			printf("SERVER PROBLEM: work.midstate does not equal SHA256 state after first 64-byte chunk\n");
+		}
+
 		hashes_done = 0;
 		gettimeofday(&tv_start, NULL);
 

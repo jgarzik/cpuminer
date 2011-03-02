@@ -236,6 +236,15 @@ const uint32_t sha256_init_state[8] = {
 	0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
 };
 
+
+extern bool validate_midstate(unsigned char *data, const unsigned char *midstate)
+{
+	unsigned char midstate2[32];
+	runhash(midstate2, data, sha256_init_state);
+	return !memcmp(midstate,midstate2,32);
+}
+
+
 /* suspiciously similar to ScanHash* from bitcoin */
 bool scanhash_c(const unsigned char *midstate, unsigned char *data,
 	        unsigned char *hash1, unsigned char *hash,
