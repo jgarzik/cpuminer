@@ -42,6 +42,29 @@ else
 	JANSSON_LIBS=-ljansson
 fi
 
+dnl Find YASM
+has_yasm=false
+AC_PATH_PROG(YASM,[yasm],[true yasm])
+if test "$YASM" = "false" ; then
+  AC_MSG_WARN([yasm is required for the x86_64 SSE2 code, but it was not found])
+fi
+
+yasmver=`yasm --version | head -1 | cut -d\  -f2`
+yamajor=`echo $yasmver | cut -d. -f1`
+yaminor=`echo $yasmver | cut -d. -f2`
+if test "$yamajor" -ge "1" ; then
+  if test "$yamajor" -eq "1" ; then
+    if test "$yaminor" -ge "1" ; then
+      AC_MSG_RESULT([Found yasm version $yasmver])
+      has_yasm=true
+    fi
+  fi
+else
+has_yasm=false
+fi
+
+AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
+
 PKG_PROG_PKG_CONFIG()
 
 LIBCURL_CHECK_CONFIG(, 7.10.1, ,
@@ -55,6 +78,7 @@ AC_CONFIG_FILES([
 	Makefile
 	compat/Makefile
 	compat/jansson/Makefile
+	x86_64/Makefile
 	])
 AC_OUTPUT
 
