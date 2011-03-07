@@ -60,6 +60,7 @@ if test "$yamajor" -ge "1" ; then
       if test "$yamini" -gt "1"; then
         AC_MSG_RESULT([yes])
         has_yasm=true
+      fi
     fi
   fi
 else
