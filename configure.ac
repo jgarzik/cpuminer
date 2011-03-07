@@ -49,17 +49,20 @@ if test "$YASM" = "false" ; then
   AC_MSG_WARN([yasm is required for the x86_64 SSE2 code, but it was not found])
 fi
 
+AC_MSG_CHECKING([if yasm version is greater than 1.1.0])
 yasmver=`yasm --version | head -1 | cut -d\  -f2`
 yamajor=`echo $yasmver | cut -d. -f1`
 yaminor=`echo $yasmver | cut -d. -f2`
 if test "$yamajor" -ge "1" ; then
   if test "$yamajor" -eq "1" ; then
     if test "$yaminor" -ge "1" ; then
-      AC_MSG_RESULT([Found yasm version $yasmver])
+      AC_MSG_RESULT([yes])
       has_yasm=true
     fi
   fi
 else
+AC_MSG_RESULT([no])
+AC_MSG_WARN([YASM version is $yasmver])
 has_yasm=false
 fi
 
