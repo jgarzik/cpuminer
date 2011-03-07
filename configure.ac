@@ -53,11 +53,13 @@ AC_MSG_CHECKING([if yasm version is greater than 1.1.0])
 yasmver=`yasm --version | head -1 | cut -d\  -f2`
 yamajor=`echo $yasmver | cut -d. -f1`
 yaminor=`echo $yasmver | cut -d. -f2`
+yamini=`echo $yasmver | cut -d. -f3`
 if test "$yamajor" -ge "1" ; then
   if test "$yamajor" -eq "1" ; then
-    if test "$yaminor" -ge "1" ; then
-      AC_MSG_RESULT([yes])
-      has_yasm=true
+    if test "$yaminor" -ge "0" ; then
+      if test "$yamini" -gt "1"; then
+        AC_MSG_RESULT([yes])
+        has_yasm=true
     fi
   fi
 else
