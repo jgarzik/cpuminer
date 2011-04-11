@@ -22,9 +22,11 @@ minerd_LDADD	= @LIBCURL@ @JANSSON_LIBS@ @PTHREAD_LIBS@
 
 if HAVE_WINDOWS
 else
+if HAVE_x86_64
 if HAS_YASM
 SUBDIRS		+= x86_64
 minerd_LDADD	+= x86_64/libx8664.a
 AM_CFLAGS	= -DHAS_YASM
+endif
 endif
 endif

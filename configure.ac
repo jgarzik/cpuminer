@@ -4,6 +4,7 @@ AC_PREREQ(2.52)
 AC_CONFIG_SRCDIR([cpu-miner.c])
 AM_INIT_AUTOMAKE([gnu])
 AC_CONFIG_HEADERS([cpuminer-config.h])
+AC_CANONICAL_SYSTEM
 
 dnl Make sure anyone changing configure.ac/Makefile.am has a clue
 AM_MAINTAINER_MODE
@@ -20,23 +21,31 @@ AC_CHECK_HEADERS(syslog.h)
 
 AC_FUNC_ALLOCA
 
-case $host in
+case $target in
   *-*-mingw*)
+    have_x86_64=false
     have_win32=true
     PTHREAD_FLAGS=""
     ;;
+  x86_64-*)
+    have_x86_64=true
+    have_win32=false
+    PTHREAD_FLAGS="-pthread"
+    ;;
   *)
+    have_x86_64=false
     have_win32=false
     PTHREAD_FLAGS="-pthread"
     ;;
 esac
 
 
-AC_CHECK_LIB(jansson, json_loads, request_jansson=false, request_jansson=true)
+request_jansson=true
 AC_CHECK_LIB(pthread, pthread_create, PTHREAD_LIBS=-lpthread)
 
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
+AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 
 if test x$request_jansson = xtrue
 then
