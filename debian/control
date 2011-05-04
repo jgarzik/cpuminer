@@ -31,6 +31,7 @@ Description: Multi-threaded CPU miner for bitcoin
  Miner have few sha256 implementation:
   * Linux kernel sha256, implemented in C.
   * tcatm's 4-way SSE2 implementation.
+  * Ufasoft SSE2_64 implementation.
   * VIA padlock implementation.
   * Crypto++ C/C++ library implementation.
   * Crypto++ 32-bit assembly library implementation.
