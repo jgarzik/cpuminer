@@ -4,6 +4,7 @@
 
 // tcatm's 4-way 128-bit SSE2 SHA-256
 
+#include "cpuminer-config.h"
 #include "miner.h"
 
 #ifdef WANT_SSE2_4WAY
@@ -40,26 +41,28 @@ static const unsigned int sha256_consts[] = {
 
 
 static inline __m128i Ch(const __m128i b, const __m128i c, const __m128i d) {
-    return (b & c) ^ (~b & d);
+    return _mm_xor_si128(_mm_and_si128(b,c),_mm_andnot_si128(b,d));
 }
 
 static inline __m128i Maj(const __m128i b, const __m128i c, const __m128i d) {
-    return (b & c) ^ (b & d) ^ (c & d);
+    return _mm_xor_si128(_mm_xor_si128(_mm_and_si128(b,c),_mm_and_si128(b,d)),_mm_and_si128(c,d));
 }
 
-static __attribute__((always_inline)) __m128i ROTR(__m128i x, const int n) {
-    return _mm_srli_epi32(x, n) | _mm_slli_epi32(x, 32 - n);
+static __attribute__((always_inline)) __m128i  ROTR(__m128i x, const int n) {
+    return _mm_or_si128(_mm_srli_epi32(x, n),_mm_slli_epi32(x, 32 - n));
 }
 
-static __attribute__((always_inline)) __m128i SHR(__m128i x, const int n) {
+static  __attribute__((always_inline))  __m128i SHR(__m128i x, const int n) {
     return _mm_srli_epi32(x, n);
 }
 
 /* SHA256 Functions */
-#define BIGSIGMA0_256(x)    (ROTR((x), 2) ^ ROTR((x), 13) ^ ROTR((x), 22))
-#define BIGSIGMA1_256(x)    (ROTR((x), 6) ^ ROTR((x), 11) ^ ROTR((x), 25))
-#define SIGMA0_256(x)       (ROTR((x), 7) ^ ROTR((x), 18) ^ SHR((x), 3))
-#define SIGMA1_256(x)       (ROTR((x), 17) ^ ROTR((x), 19) ^ SHR((x), 10))
+#define BIGSIGMA0_256(x)    (_mm_xor_si128(_mm_xor_si128(ROTR((x), 2),ROTR((x), 13)),ROTR((x), 22)))
+#define BIGSIGMA1_256(x)    (_mm_xor_si128(_mm_xor_si128(ROTR((x), 6),ROTR((x), 11)),ROTR((x), 25)))
+
+
+#define SIGMA0_256(x)       (_mm_xor_si128(_mm_xor_si128(ROTR((x), 7),ROTR((x), 18)), SHR((x), 3 )))
+#define SIGMA1_256(x)       (_mm_xor_si128(_mm_xor_si128(ROTR((x),17),ROTR((x), 19)), SHR((x), 10)))
 
 static inline unsigned int store32(const __m128i x, int i) {
     union { unsigned int ret[4]; __m128i x; } box;
@@ -98,13 +101,16 @@ static const unsigned int pSHA256InitState[8] =
 {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
 
 
-unsigned int ScanHash_4WaySSE2(const unsigned char *pmidstate, unsigned char *pdata,
+unsigned int ScanHash_4WaySSE2(int thr_id, const unsigned char *pmidstate,
+	unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
 	uint32_t max_nonce, unsigned long *nHashesDone)
 {
     unsigned int *nNonce_p = (unsigned int*)(pdata + 12);
     unsigned int nonce = 0;
+
+    work_restart[thr_id].restart = 0;
 
     for (;;)
     {
@@ -118,7 +124,7 @@ unsigned int ScanHash_4WaySSE2(const unsigned char *pmidstate, unsigned char *pd
 
         for (j = 0; j < NPAR; j++)
         {
-            if (thash[7][j] == 0)
+            if (unlikely(thash[7][j] == 0))
             {
 		int i;
 
@@ -133,7 +139,7 @@ unsigned int ScanHash_4WaySSE2(const unsigned char *pmidstate, unsigned char *pd
             }
         }
 
-        if (nonce >= max_nonce)
+        if ((nonce >= max_nonce) || work_restart[thr_id].restart)
         {
             *nHashesDone = nonce;
             return -1;
@@ -450,12 +456,16 @@ static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, unsig
         SHA256ROUND(f, g, h, a, b, c, d, e, 59, w11);
         w12 = add4(SIGMA1_256(w10), w5, SIGMA0_256(w13), w12);
         SHA256ROUND(e, f, g, h, a, b, c, d, 60, w12);
+
+	/* Skip last 3-rounds; not necessary for H==0 */
+#if 0
         w13 = add4(SIGMA1_256(w11), w6, SIGMA0_256(w14), w13);
         SHA256ROUND(d, e, f, g, h, a, b, c, 61, w13);
         w14 = add4(SIGMA1_256(w12), w7, SIGMA0_256(w15), w14);
         SHA256ROUND(c, d, e, f, g, h, a, b, 62, w14);
         w15 = add4(SIGMA1_256(w13), w8, SIGMA0_256(w0), w15);
         SHA256ROUND(b, c, d, e, f, g, h, a, 63, w15);
+#endif
 
         /* store resulsts directly in thash */
 #define store_2(x,i)  \

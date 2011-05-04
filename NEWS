@@ -1,4 +1,46 @@
 
+Version 0.8.1 - March 22, 2011
+
+- Make --user, --pass actually work
+
+- Add User-Agent HTTP header to requests, so that server operators may
+  more easily identify the miner client.
+
+- Fix minor bug in example JSON config file
+
+Version 0.8 - March 21, 2011
+
+- Support long polling: http://deepbit.net/longpolling.php
+
+- Adjust max workload based on scantime (default 5 seconds,
+  or 60 seconds for longpoll)
+
+- Standardize program output, and support syslog on Unix platforms
+
+- Suport --user/--pass options (and "user" and "pass" in config file),
+  as an alternative to the current --userpass
+
+Version 0.7.2 - March 14, 2011
+
+- Add port of ufasoft's sse2 assembly implementation (Linux only)
+  This is a substantial speed improvement on Intel CPUs.
+
+- Move all JSON-RPC I/O to separate thread.  This reduces the
+  number of HTTP connections from one-per-thread to one, reducing resource
+  usage on upstream bitcoind / pool server.
+
+Version 0.7.1 - March 2, 2011
+
+- Add support for JSON-format configuration file.  See example
+  file example-cfg.json.  Any long argument on the command line
+  may be stored in the config file.
+- Timestamp each solution found
+- Improve sha256_4way performance.  NOTE: This optimization makes
+  the 'hash' debug-print output for sha256_way incorrect.
+- Use __builtin_expect() intrinsic as compiler micro-optimization
+- Build on Intel compiler
+- HTTP library now follows HTTP redirects
+
 Version 0.7 - February 12, 2011
 
 - Re-use CURL object, thereby reuseing DNS cache and HTTP connections

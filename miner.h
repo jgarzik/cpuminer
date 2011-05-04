@@ -1,11 +1,41 @@
 #ifndef __MINER_H__
 #define __MINER_H__
 
+#include "cpuminer-config.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <sys/time.h>
+#include <pthread.h>
 #include <jansson.h>
 #include <curl/curl.h>
+
+#ifdef STDC_HEADERS
+# include <stdlib.h>
+# include <stddef.h>
+#else
+# ifdef HAVE_STDLIB_H
+#  include <stdlib.h>
+# endif
+#endif
+#ifdef HAVE_ALLOCA_H
+# include <alloca.h>
+#elif defined __GNUC__
+# define alloca __builtin_alloca
+#elif defined _AIX
+# define alloca __alloca
+#elif defined _MSC_VER
+# include <malloc.h>
+# define alloca _alloca
+#else
+# ifndef HAVE_ALLOCA
+#  ifdef  __cplusplus
+extern "C"
+#  endif
+void *alloca (size_t);
+# endif
+#endif
+
 
 #ifdef __SSE2__
 #define WANT_SSE2_4WAY 1
@@ -15,10 +45,33 @@
 #define WANT_VIA_PADLOCK 1
 #endif
 
+#if defined(__x86_64__) && defined(__SSE2__) && defined(HAS_YASM)
+#define WANT_X8664_SSE2 1
+#endif
+
 #if ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
 #define WANT_BUILTIN_BSWAP
 #else
 #include <byteswap.h>
+#endif
+
+#ifdef HAVE_SYSLOG_H
+#include <syslog.h>
+#else
+enum {
+	LOG_ERR,
+	LOG_WARNING,
+	LOG_INFO,
+	LOG_DEBUG,
+};
+#endif
+
+#if defined(__GNUC__) && (__GNUC__ > 2) && defined(__OPTIMIZE__)
+#undef unlikely
+#define unlikely(expr) (__builtin_expect((expr), 0))
+#else
+#undef unlikely
+#define unlikely(expr) (expr)
 #endif
 
 #if defined(__i386__)
@@ -28,6 +81,12 @@
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
+
+struct thr_info {
+	int		id;
+	pthread_t	pth;
+	struct thread_q	*q;
+};
 
 static inline uint32_t swab32(uint32_t v)
 {
@@ -57,35 +116,68 @@ extern bool opt_debug;
 extern bool opt_protocol;
 extern const uint32_t sha256_init_state[];
 extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
-			     const char *rpc_req);
-extern char *bin2hex(unsigned char *p, size_t len);
+			     const char *rpc_req, bool, bool);
+extern char *bin2hex(const unsigned char *p, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
-extern unsigned int ScanHash_4WaySSE2(const unsigned char *pmidstate,
+extern unsigned int ScanHash_4WaySSE2(int, const unsigned char *pmidstate,
 	unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
 	uint32_t max_nonce, unsigned long *nHashesDone);
 
-extern bool scanhash_via(unsigned char *data_inout,
+extern unsigned int scanhash_sse2_amd64(int, const unsigned char *pmidstate,
+	unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
+	const unsigned char *ptarget,
+	uint32_t max_nonce, unsigned long *nHashesDone);
+
+extern bool scanhash_via(int, unsigned char *data_inout,
 	const unsigned char *target,
 	uint32_t max_nonce, unsigned long *hashes_done);
 
-extern bool scanhash_c(const unsigned char *midstate, unsigned char *data,
+extern bool scanhash_c(int, const unsigned char *midstate, unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
 	      const unsigned char *target,
 	      uint32_t max_nonce, unsigned long *hashes_done);
-extern bool scanhash_cryptopp(const unsigned char *midstate,unsigned char *data,
+extern bool scanhash_cryptopp(int, const unsigned char *midstate,unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
 	      const unsigned char *target,
 	      uint32_t max_nonce, unsigned long *hashes_done);
-extern bool scanhash_asm32(const unsigned char *midstate,unsigned char *data,
+extern bool scanhash_asm32(int, const unsigned char *midstate,unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
 	      const unsigned char *target,
 	      uint32_t max_nonce, unsigned long *hashes_done);
+extern int scanhash_sse2_64(int, const unsigned char *pmidstate, unsigned char *pdata,
+	unsigned char *phash1, unsigned char *phash,
+	const unsigned char *ptarget,
+	uint32_t max_nonce, unsigned long *nHashesDone);
 
 extern int
 timeval_subtract (struct timeval *result, struct timeval *x, struct timeval *y);
 
 extern bool fulltest(const unsigned char *hash, const unsigned char *target);
+
+extern int opt_scantime;
+extern bool want_longpoll;
+extern bool have_longpoll;
+struct thread_q;
+
+struct work_restart {
+	volatile unsigned long	restart;
+	char			padding[128 - sizeof(unsigned long)];
+};
+
+extern pthread_mutex_t time_lock;
+extern bool use_syslog;
+extern struct thr_info *thr_info;
+extern int longpoll_thr_id;
+extern struct work_restart *work_restart;
+
+extern void applog(int prio, const char *fmt, ...);
+extern struct thread_q *tq_new(void);
+extern void tq_free(struct thread_q *tq);
+extern bool tq_push(struct thread_q *tq, void *data);
+extern void *tq_pop(struct thread_q *tq, const struct timespec *abstime);
+extern void tq_freeze(struct thread_q *tq);
+extern void tq_thaw(struct thread_q *tq);
 
 #endif /* __MINER_H__ */

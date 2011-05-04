@@ -13,10 +13,12 @@
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
- * Software Foundation; either version 2 of the License, or (at your option) 
+ * Software Foundation; either version 2 of the License, or (at your option)
  * any later version.
  *
  */
+
+#include "cpuminer-config.h"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -237,7 +239,7 @@ const uint32_t sha256_init_state[8] = {
 };
 
 /* suspiciously similar to ScanHash* from bitcoin */
-bool scanhash_c(const unsigned char *midstate, unsigned char *data,
+bool scanhash_c(int thr_id, const unsigned char *midstate, unsigned char *data,
 	        unsigned char *hash1, unsigned char *hash,
 		const unsigned char *target,
 	        uint32_t max_nonce, unsigned long *hashes_done)
@@ -246,6 +248,8 @@ bool scanhash_c(const unsigned char *midstate, unsigned char *data,
 	uint32_t *nonce = (uint32_t *)(data + 12);
 	uint32_t n = 0;
 	unsigned long stat_ctr = 0;
+
+	work_restart[thr_id].restart = 0;
 
 	while (1) {
 		n++;
@@ -256,12 +260,12 @@ bool scanhash_c(const unsigned char *midstate, unsigned char *data,
 
 		stat_ctr++;
 
-		if ((hash32[7] == 0) && fulltest(hash, target)) {
+		if (unlikely((hash32[7] == 0) && fulltest(hash, target))) {
 			*hashes_done = stat_ctr;
 			return true;
 		}
 
-		if (n >= max_nonce) {
+		if ((n >= max_nonce) || work_restart[thr_id].restart) {
 			*hashes_done = stat_ctr;
 			return false;
 		}

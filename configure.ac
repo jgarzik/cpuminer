@@ -1,5 +1,4 @@
-
-AC_INIT([cpuminer], [0.7])
+AC_INIT([cpuminer], [0.8.1])
 
 AC_PREREQ(2.52)
 AC_CONFIG_SRCDIR([cpu-miner.c])
@@ -17,6 +16,9 @@ AC_PROG_RANLIB
 
 dnl Checks for header files.
 AC_HEADER_STDC
+AC_CHECK_HEADERS(syslog.h)
+
+AC_FUNC_ALLOCA
 
 case $host in
   *-*-mingw*)
@@ -34,6 +36,7 @@ AC_CHECK_LIB(jansson, json_loads, request_jansson=false, request_jansson=true)
 AC_CHECK_LIB(pthread, pthread_create, PTHREAD_LIBS=-lpthread)
 
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
+AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 
 if test x$request_jansson = xtrue
 then
@@ -41,6 +44,41 @@ then
 else
 	JANSSON_LIBS=-ljansson
 fi
+
+dnl Find YASM
+has_yasm=false
+AC_PATH_PROG(YASM,[yasm],[true yasm])
+if test "$YASM" = "false" ; then
+  AC_MSG_WARN([yasm is required for the x86_64 SSE2 code, but it was not found])
+else
+  AC_MSG_CHECKING([if yasm version is greater than 1.0.1])
+  yasmver=`yasm --version | head -1 | cut -d\  -f2`
+  yamajor=`echo $yasmver | cut -d. -f1`
+  yaminor=`echo $yasmver | cut -d. -f2`
+  yamini=`echo $yasmver | cut -d. -f3`
+  if test "$yamajor" -ge "1" ; then
+    if test "$yamajor" -eq "1" ; then
+      if test "$yaminor" -ge "0" ; then
+        if test "$yaminor" -eq "0"; then
+          if test "$yamini" -ge "1"; then
+            has_yasm=true
+          fi
+        else
+          has_yasm=true
+        fi
+      fi
+    fi
+  else
+    has_yasm=false
+  fi
+fi
+if test "x$has_yasm" != "x" ; then
+  AC_MSG_RESULT([yes])
+else
+  AC_MSG_RESULT([no])
+fi
+
+AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
 
 PKG_PROG_PKG_CONFIG()
 
@@ -55,6 +93,7 @@ AC_CONFIG_FILES([
 	Makefile
 	compat/Makefile
 	compat/jansson/Makefile
+	x86_64/Makefile
 	])
 AC_OUTPUT
 

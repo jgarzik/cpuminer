@@ -4,7 +4,7 @@
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
- * Software Foundation; either version 2 of the License, or (at your option) 
+ * Software Foundation; either version 2 of the License, or (at your option)
  * any later version.  See COPYING for more details.
  */
 
@@ -13,10 +13,14 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
+#include <stdarg.h>
 #include <string.h>
 #include <jansson.h>
 #include <curl/curl.h>
+#include <time.h>
 #include "miner.h"
+#include "elist.h"
 
 struct data_buffer {
 	void		*buf;
@@ -28,11 +32,70 @@ struct upload_buffer {
 	size_t		len;
 };
 
+struct header_info {
+	char		*lp_path;
+};
+
+struct tq_ent {
+	void			*data;
+	struct list_head	q_node;
+};
+
+struct thread_q {
+	struct list_head	q;
+
+	bool frozen;
+
+	pthread_mutex_t		mutex;
+	pthread_cond_t		cond;
+};
+
+void applog(int prio, const char *fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+
+#ifdef HAVE_SYSLOG_H
+	if (use_syslog) {
+		vsyslog(prio, fmt, ap);
+	}
+#else
+	if (0) {}
+#endif
+	else {
+		char *f;
+		int len;
+		struct timeval tv = { };
+		struct tm tm, *tm_p;
+
+		gettimeofday(&tv, NULL);
+
+		pthread_mutex_lock(&time_lock);
+		tm_p = localtime(&tv.tv_sec);
+		memcpy(&tm, tm_p, sizeof(tm));
+		pthread_mutex_unlock(&time_lock);
+
+		len = 40 + strlen(fmt) + 2;
+		f = alloca(len);
+		sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d] %s\n",
+			tm.tm_year + 1900,
+			tm.tm_mon,
+			tm.tm_mday,
+			tm.tm_hour,
+			tm.tm_min,
+			tm.tm_sec,
+			fmt);
+		vfprintf(stderr, f, ap);	/* atomic write to stderr */
+	}
+	va_end(ap);
+}
+
 static void databuf_free(struct data_buffer *db)
 {
 	if (!db)
 		return;
-	
+
 	free(db->buf);
 
 	memset(db, 0, sizeof(*db));
@@ -80,8 +143,59 @@ static size_t upload_data_cb(void *ptr, size_t size, size_t nmemb,
 	return len;
 }
 
+static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
+{
+	struct header_info *hi = user_data;
+	size_t remlen, slen, ptrlen = size * nmemb;
+	char *rem, *val = NULL, *key = NULL;
+	void *tmp;
+
+	val = calloc(1, ptrlen);
+	key = calloc(1, ptrlen);
+	if (!key || !val)
+		goto out;
+
+	tmp = memchr(ptr, ':', ptrlen);
+	if (!tmp || (tmp == ptr))	/* skip empty keys / blanks */
+		goto out;
+	slen = tmp - ptr;
+	if ((slen + 1) == ptrlen)	/* skip key w/ no value */
+		goto out;
+	memcpy(key, ptr, slen);		/* store & nul term key */
+	key[slen] = 0;
+
+	rem = ptr + slen + 1;		/* trim value's leading whitespace */
+	remlen = ptrlen - slen - 1;
+	while ((remlen > 0) && (isspace(*rem))) {
+		remlen--;
+		rem++;
+	}
+
+	memcpy(val, rem, remlen);	/* store value, trim trailing ws */
+	val[remlen] = 0;
+	while ((*val) && (isspace(val[strlen(val) - 1]))) {
+		val[strlen(val) - 1] = 0;
+	}
+	if (!*val)			/* skip blank value */
+		goto out;
+
+	if (opt_protocol)
+		applog(LOG_DEBUG, "HTTP hdr(%s): %s", key, val);
+
+	if (!strcasecmp("X-Long-Polling", key)) {
+		hi->lp_path = val;	/* steal memory reference */
+		val = NULL;
+	}
+
+out:
+	free(key);
+	free(val);
+	return ptrlen;
+}
+
 json_t *json_rpc_call(CURL *curl, const char *url,
-		      const char *userpass, const char *rpc_req)
+		      const char *userpass, const char *rpc_req,
+		      bool longpoll_scan, bool longpoll)
 {
 	json_t *val, *err_val, *res_val;
 	int rc;
@@ -89,10 +203,16 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	struct upload_buffer upload_data;
 	json_error_t err = { };
 	struct curl_slist *headers = NULL;
-	char len_hdr[64];
+	char len_hdr[64], user_agent_hdr[128];
 	char curl_err_str[CURL_ERROR_SIZE];
+	long timeout = longpoll ? (60 * 60) : (60 * 10);
+	struct header_info hi = { };
+	bool lp_scanning = false;
 
 	/* it is assumed that 'curl' is freshly [re]initialized at this pt */
+
+	if (longpoll_scan)
+		lp_scanning = want_longpoll && !have_longpoll;
 
 	if (opt_protocol)
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
@@ -105,6 +225,12 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_READFUNCTION, upload_data_cb);
 	curl_easy_setopt(curl, CURLOPT_READDATA, &upload_data);
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
+	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
+	curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
+	if (lp_scanning) {
+		curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, resp_hdr_cb);
+		curl_easy_setopt(curl, CURLOPT_HEADERDATA, &hi);
+	}
 	if (userpass) {
 		curl_easy_setopt(curl, CURLOPT_USERPWD, userpass);
 		curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
@@ -112,35 +238,46 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_POST, 1);
 
 	if (opt_protocol)
-		printf("JSON protocol request:\n%s\n", rpc_req);
+		applog(LOG_DEBUG, "JSON protocol request:\n%s\n", rpc_req);
 
 	upload_data.buf = rpc_req;
 	upload_data.len = strlen(rpc_req);
 	sprintf(len_hdr, "Content-Length: %lu",
 		(unsigned long) upload_data.len);
+	sprintf(user_agent_hdr, "User-Agent: %s", PACKAGE_STRING);
 
 	headers = curl_slist_append(headers,
 		"Content-type: application/json");
 	headers = curl_slist_append(headers, len_hdr);
+	headers = curl_slist_append(headers, user_agent_hdr);
 	headers = curl_slist_append(headers, "Expect:"); /* disable Expect hdr*/
 
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
 	rc = curl_easy_perform(curl);
 	if (rc) {
-		fprintf(stderr, "HTTP request failed: %s\n", curl_err_str);
+		applog(LOG_ERR, "HTTP request failed: %s", curl_err_str);
 		goto err_out;
 	}
 
+	/* If X-Long-Polling was found, activate long polling */
+	if (hi.lp_path) {
+		have_longpoll = true;
+		opt_scantime = 60;
+		tq_push(thr_info[longpoll_thr_id].q, hi.lp_path);
+	} else
+		free(hi.lp_path);
+	hi.lp_path = NULL;
+
 	val = json_loads(all_data.buf, &err);
 	if (!val) {
-		fprintf(stderr, "JSON decode failed(%d): %s\n", err.line, err.text);
+		applog(LOG_ERR, "JSON decode failed(%d): %s", err.line, err.text);
 		goto err_out;
 	}
 
 	if (opt_protocol) {
 		char *s = json_dumps(val, JSON_INDENT(3));
-		printf("JSON protocol response:\n%s\n", s);
+		applog(LOG_DEBUG, "JSON protocol response:\n%s", s);
 		free(s);
 	}
 
@@ -159,10 +296,10 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		else
 			s = strdup("(unknown reason)");
 
-		fprintf(stderr, "JSON-RPC call failed: %s\n", s);
+		applog(LOG_ERR, "JSON-RPC call failed: %s", s);
 
 		free(s);
-			
+
 		goto err_out;
 	}
 
@@ -178,13 +315,13 @@ err_out:
 	return NULL;
 }
 
-char *bin2hex(unsigned char *p, size_t len)
+char *bin2hex(const unsigned char *p, size_t len)
 {
 	int i;
 	char *s = malloc((len * 2) + 1);
 	if (!s)
 		return NULL;
-	
+
 	for (i = 0; i < len; i++)
 		sprintf(s + (i * 2), "%02x", (unsigned int) p[i]);
 
@@ -198,7 +335,7 @@ bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
 		unsigned int v;
 
 		if (!hexstr[1]) {
-			fprintf(stderr, "hex2bin str truncated\n");
+			applog(LOG_ERR, "hex2bin str truncated");
 			return false;
 		}
 
@@ -207,8 +344,7 @@ bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
 		hex_byte[2] = 0;
 
 		if (sscanf(hex_byte, "%x", &v) != 1) {
-			fprintf(stderr, "hex2bin sscanf '%s' failed\n",
-				hex_byte);
+			applog(LOG_ERR, "hex2bin sscanf '%s' failed", hex_byte);
 			return false;
 		}
 
@@ -283,7 +419,7 @@ bool fulltest(const unsigned char *hash, const unsigned char *target)
 		hash_str = bin2hex(hash_swap, 32);
 		target_str = bin2hex(target_swap, 32);
 
-		fprintf(stderr, " Proof: %s\nTarget: %s\nTrgVal? %s\n",
+		applog(LOG_DEBUG, " Proof: %s\nTarget: %s\nTrgVal? %s",
 			hash_str,
 			target_str,
 			rc ? "YES (hash < target)" :
@@ -295,3 +431,117 @@ bool fulltest(const unsigned char *hash, const unsigned char *target)
 
 	return true;	/* FIXME: return rc; */
 }
+
+struct thread_q *tq_new(void)
+{
+	struct thread_q *tq;
+
+	tq = calloc(1, sizeof(*tq));
+	if (!tq)
+		return NULL;
+
+	INIT_LIST_HEAD(&tq->q);
+	pthread_mutex_init(&tq->mutex, NULL);
+	pthread_cond_init(&tq->cond, NULL);
+
+	return tq;
+}
+
+void tq_free(struct thread_q *tq)
+{
+	struct tq_ent *ent, *iter;
+
+	if (!tq)
+		return;
+
+	list_for_each_entry_safe(ent, iter, &tq->q, q_node) {
+		list_del(&ent->q_node);
+		free(ent);
+	}
+
+	pthread_cond_destroy(&tq->cond);
+	pthread_mutex_destroy(&tq->mutex);
+
+	memset(tq, 0, sizeof(*tq));	/* poison */
+	free(tq);
+}
+
+static void tq_freezethaw(struct thread_q *tq, bool frozen)
+{
+	pthread_mutex_lock(&tq->mutex);
+
+	tq->frozen = frozen;
+
+	pthread_cond_signal(&tq->cond);
+	pthread_mutex_unlock(&tq->mutex);
+}
+
+void tq_freeze(struct thread_q *tq)
+{
+	tq_freezethaw(tq, true);
+}
+
+void tq_thaw(struct thread_q *tq)
+{
+	tq_freezethaw(tq, false);
+}
+
+bool tq_push(struct thread_q *tq, void *data)
+{
+	struct tq_ent *ent;
+	bool rc = true;
+
+	ent = calloc(1, sizeof(*ent));
+	if (!ent)
+		return false;
+
+	ent->data = data;
+	INIT_LIST_HEAD(&ent->q_node);
+
+	pthread_mutex_lock(&tq->mutex);
+
+	if (!tq->frozen) {
+		list_add_tail(&ent->q_node, &tq->q);
+	} else {
+		free(ent);
+		rc = false;
+	}
+
+	pthread_cond_signal(&tq->cond);
+	pthread_mutex_unlock(&tq->mutex);
+
+	return rc;
+}
+
+void *tq_pop(struct thread_q *tq, const struct timespec *abstime)
+{
+	struct tq_ent *ent;
+	void *rval = NULL;
+	int rc;
+
+	pthread_mutex_lock(&tq->mutex);
+
+	if (!list_empty(&tq->q))
+		goto pop;
+
+	if (abstime)
+		rc = pthread_cond_timedwait(&tq->cond, &tq->mutex, abstime);
+	else
+		rc = pthread_cond_wait(&tq->cond, &tq->mutex);
+	if (rc)
+		goto out;
+	if (list_empty(&tq->q))
+		goto out;
+
+pop:
+	ent = list_entry(tq->q.next, struct tq_ent, q_node);
+	rval = ent->data;
+
+	list_del(&ent->q_node);
+	free(ent);
+
+out:
+	pthread_mutex_unlock(&tq->mutex);
+	return rval;
+}
+
