@@ -3,6 +3,7 @@ bitcoin-cpuminer (0.8.1-1) unstable; urgency=low
   * New upstream release.
   * debian/ChangeLog: updated with git-log.
   * debian/copyright: added copyright notice.
+  * debian/control: small esthetic change in Build-Depends field.
 
  -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Wed, 04 May 2011 18:03:30 -0500
 
