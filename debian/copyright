@@ -21,6 +21,14 @@ Copyright: Jean-Luc Cooke <jlcooke@certainkey.com>
            SHA224 Support Copyright 2007, Intel Corporation <jonathan.lynch@intel.com>
 License: GPL-2+
 
+File: ./sha256_sse2_amd64.c
+Copyright: Mark Crichton <crichton@gimp.org>
+License: GPL-2+
+
+File: ./x86_64/sha256_xmm_amd64.asm
+Copyright: 2011, Ufasoft <support@ufasoft.com>
+License: Public Domain
+
 Files: ./debian/*
 Copyright: 2010, Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
 License: GPL-2+
