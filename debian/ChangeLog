@@ -1,3 +1,240 @@
+commit 991a358dc9d5935a7cca96e68156e0aa595056b4
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Mar 22 14:01:32 2011 -0400
+
+    Release version 0.8.1.
+
+commit a7d9f31747a6bff71c3ea6955996d402ef72d538
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Mar 22 13:58:32 2011 -0400
+
+    Add User-Agent header to each HTTP request
+
+commit 46819af36f0ae94e69333810ad0a03f472fc6d8e
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 21 20:50:59 2011 -0400
+
+    --user/--pass fixes
+
+    Also, some newline fixes (applog callers do not need newlines
+    in strings)
+
+commit 594fe678fb2001417eddb5854c4a7d54a9c59a44
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 21 17:44:20 2011 -0400
+
+    example-cfg.json: remove extraneous commas, which broke JSON decode
+
+    Spotted by lfm
+
+commit 124abb6c4da5da871da3f7090ea0b7aba6f5d844
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 21 04:34:48 2011 -0400
+
+    Release version 0.8.
+
+commit 42cdb63f978903e5e19ae2310a011b912dfb25a1
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 21 04:28:23 2011 -0400
+
+    Update example JSON config
+
+commit 81352ca48f507286be60941611eb4d413e7f7c94
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 21 04:27:02 2011 -0400
+
+    Support --user and --pass, as alternative to --userpass
+
+commit 2fd9d54443755b82a45519f33cb0aaf4f7a1fee5
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 21 04:02:13 2011 -0400
+
+    Convert remaining [f]print to applog().
+
+    Also, remove a few superfluous printouts.
+
+commit 144cf62d7c3eed3f5412edb18b238b2c1209f4c1
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 21 03:45:26 2011 -0400
+
+    Avoid potential for div-by-zero, when calculating max-nonce
+
+commit d49d639269648394ceab175aaa8ffea876e29f4b
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 21 03:42:57 2011 -0400
+
+    cpu-miner.c: Remove newline from applog() call
+
+commit 23e9cf91f09fa3ec364b439787f768f314780b85
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sun Mar 20 22:44:25 2011 -0400
+
+    Ensure cpuminer-config.h is universally included, in *.c and *.h
+    alike.
+
+    In miner.h, this fixes an alloca-definition-related warning.
+
+    For the other files, this is simply future-proofing/precaution.
+
+commit 24afd61775b957009619e0d3a5948492bdf5539e
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Mar 18 17:24:16 2011 -0400
+
+    Introduce more standardized logging (incl. optional syslog).
+
+    Also, improve portability of alloca.
+
+commit 7a87bee999fc82a8f175bf533e59ef216575d541
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Mar 18 02:53:13 2011 -0400
+
+    Add long polling support
+
+commit 6818c6928a95af2cda225176ccc54bc6424e8103
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Mar 17 23:22:10 2011 -0400
+
+    Improve max nonce auto-adjustment with some basic algebra.
+
+commit 33e5b54928ee1e4b1bcc35a46ff44d42cb4fbe8a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Mar 17 23:19:43 2011 -0400
+
+    miner.h: pad out work_restart to max likely cache line size
+
+commit 2d49a9a5d767b85981ce73f1832e0eae06d0d52f
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Mar 17 22:02:28 2011 -0400
+
+    Introduce ability to interrupt hash scanners in the middle of
+    scanning.
+
+commit 4be41af2be1b2442161a98b9d7fbf2a61cc854f9
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 14 23:42:53 2011 -0400
+
+    Release version 0.7.2.
+
+commit 0258fae450d8f3164f5a6706a65e80e10f016528
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 14 23:36:28 2011 -0400
+
+    Fix Windows build, that broke with yasm integration
+
+commit 4f7a51e9ed4accbd1be6fad38a9bbc70531cb37f
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 14 23:17:34 2011 -0400
+
+    Move all RPC I/O to separate thread.
+
+commit cdb4cd9c8be6c828908622efdca732eff8495787
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 14 21:48:15 2011 -0400
+
+    sha256_*.c: trim trailing whitespace
+
+commit aaf46802bed75ef09d72e93b2afb6b221a40c57e
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 14 20:18:03 2011 -0400
+
+    Makefile.am: neaten minerd sources list
+
+commit aab6f57b17b97bf65860d6ae86ed4a27f00c2627
+Author: fleger <florian6.leger@laposte.net>
+Date:   Sat Mar 12 18:23:22 2011 +0100
+
+    Fixed yasm version check
+
+commit 115cbe64f65e82352228158595b129e88ef91758
+Author: fleger <florian6.leger@laposte.net>
+Date:   Sat Mar 12 18:11:33 2011 +0100
+
+    Revert "Fixed yasm version check if yasm version ≥ 1.1.0"
+
+    This reverts commit da1fd227bf2cc56c6f9a7ea42bd2c8b05f781f06.
+
+commit da1fd227bf2cc56c6f9a7ea42bd2c8b05f781f06
+Author: fleger <florian6.leger@laposte.net>
+Date:   Tue Mar 8 01:12:03 2011 -0800
+
+    Fixed yasm version check if yasm version ≥ 1.1.0
+
+commit 1989b7dab9c9c1b98445d300aafbe34cc169451a
+Author: Mark Crichton <crichton@gmail.com>
+Date:   Mon Mar 7 05:25:01 2011 -0800
+
+    Make sure we don't check for yasm version if we don't have yasm
+
+commit 6b19b15aa97d8bfba7c5feb52d857a1b51b1e6d4
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 7 00:23:12 2011 -0500
+
+    Fix warnings in sse2_64 implementation.
+
+commit 96d2287c722e4566fd30271c76869f83831e86c2
+Author: Mark Crichton <crichton@gmail.com>
+Date:   Sat Mar 5 22:22:57 2011 -0500
+
+    X86_64 SSE2 support for Linux
+
+commit 1d8b6e13a389c39f672d2bc8a68dfcfce5c04b65
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Mar 2 22:47:46 2011 -0500
+
+    Release version 0.7.1.
+
+commit d4ddd315b15fe738f4d95df08a52875a8caf7943
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Mar 2 22:06:25 2011 -0500
+
+    Make CURL follow redirects.
+
+    Suggested by prcarter.
+
+commit ef91bd59e2befdb4be7321593fe8dc8f1250080e
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Mar 2 22:03:11 2011 -0500
+
+    sha256_4way: skip last 3 rounds.
+
+    Pointed out by several people, including Raulo.
+
+commit a27e69aec53806df3534ddb6e7e22165dbfb2f5b
+Author: Raulo <p987341@gmail.com>
+Date:   Mon Feb 21 21:41:19 2011 +0100
+
+    Changes to make the 4-way code compile on Intel Compiler
+
+commit 4a7f3f70b5628cb804ca4f46cf51651a1a42507f
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Feb 17 01:58:53 2011 -0500
+
+    Show date/time when proof-of-work is found.
+
+commit 1083e15c47539133a0e5075bb3d9f2b7741633f3
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Feb 17 01:22:55 2011 -0500
+
+    Mark hash success as unlikely, using __builtin_expect() intrinsic
+
+commit f0bdc0b6f9f19c603f5e34332fa0d4e5bb3ea973
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Feb 17 01:21:37 2011 -0500
+
+    example-cfg.json: improve comments
+
+commit fa7e80b8e57aca08255c402d744c833329688e5a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Feb 17 01:21:16 2011 -0500
+
+    Extract get-work logic into separate function.
+
+commit 6d2882937f8b2a5291ae68ae9ea985ad5271d0fb
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sun Feb 13 03:04:02 2011 -0500
+
+    Add support for JSON-format configuration file
+
 commit 4e622f2ac27044d2c0cbe7860ede5ca486c1659a
 Author: Jeff Garzik <jeff@garzik.org>
 Date:   Sat Feb 12 20:00:54 2011 -0500
