@@ -5,6 +5,7 @@ bitcoin-cpuminer (0.8.1-1) unstable; urgency=low
   * debian/copyright: added copyright notice.
   * debian/control: small esthetic change in Build-Depends field.
   * debian/control: added "Ufasoft SSE2_64 implementation" in Description field.
+  * debian/examples: added "example-cfg.json" file in examples.
 
  -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Wed, 04 May 2011 18:03:30 -0500
 
