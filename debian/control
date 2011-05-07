@@ -5,6 +5,7 @@ Maintainer: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
 Build-Depends: debhelper (>= 5),
  autoconf (>= 2.5),
  automake (>= 1.7),
+ txt2man,
  libcurl4-dev,
 Standards-Version: 3.7.2
 Vcs-Git: git://github.com/jgarzik/cpuminer.git

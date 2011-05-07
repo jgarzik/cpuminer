@@ -7,6 +7,7 @@ bitcoin-cpuminer (0.8.1-1) unstable; urgency=low
   * debian/control: added "Ufasoft SSE2_64 implementation" in Description field.
   * debian/examples: added "example-cfg.json" file in examples.
   * debian/rules: delete new missing files in clean section.
+  * debian/minerd.1: removed, now the manpage is created in the build process.
 
  -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Wed, 04 May 2011 18:03:30 -0500
 

@@ -39,6 +39,7 @@ build-stamp: configure-stamp
 	# Add here commands to compile the package.
 	$(MAKE)
 	#docbook-to-man debian/bitcoin-cpuminer.sgml > bitcoin-cpuminer.1
+	./minerd -h 2>&1 | txt2man -s 1 -t minerd > debian/minerd.1
 
 	touch $@
 
@@ -49,6 +50,9 @@ clean:
 
 	# Add here commands to clean up after the build process.
 	[ ! -f Makefile ] || $(MAKE) distclean
+
+	# delete debian temp files
+	rm -f debian/minerd.1
 
 	# delete missing files
 	rm -f INSTALL Makefile.in aclocal.m4
