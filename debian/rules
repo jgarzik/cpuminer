@@ -55,6 +55,7 @@ clean:
 	rm -f compat/Makefile.in compat/jansson/Makefile.in
 	rm -f compile configure cpuminer-config.* depcomp
 	rm -f install-sh missing
+	rm -f x86_64/Makefile.in
 
 	dh_clean 
 
