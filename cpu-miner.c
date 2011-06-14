@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2010 Jeff Garzik
  *
@@ -36,6 +35,13 @@
 
 #ifdef __linux /* Linux specific policy and affinity management */
 #include <sched.h>
+#ifndef SCHED_IDLE
+#define SCHED_IDLE 5
+#endif
+
+#ifndef SCHED_BATCH
+#define SCHED_BATCH 3
+#endif
 static inline void drop_policy(void)
 {
 	struct sched_param param;
