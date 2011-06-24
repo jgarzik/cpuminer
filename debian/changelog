@@ -1,3 +1,10 @@
+bitcoin-cpuminer (1.0.2-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/ChangeLog: updated with git-log.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 24 Jun 2011 09:15:00 +0200
+
 bitcoin-cpuminer (1.0.1-1) unstable; urgency=low
 
   * New upstream release.

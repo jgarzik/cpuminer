@@ -1,3 +1,58 @@
+commit 602e31b96c9b94ed8e4acaa010622cb1aad2bd5e
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Jun 14 02:40:24 2011 -0400
+
+    Version 1.0.2.
+
+commit 2a7ac1bce7167b967daa4f344f1d67bb1933ab17
+Author: ckolivas <kernel@kolivas.org>
+Date:   Tue Jun 14 14:09:10 2011 +1000
+
+    Cope with older linux kernel headers that don't have the newer scheduling policies defined.
+
+commit 994c700ff4b029ce693a57e53c6870ec4acce907
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Jun 9 03:47:07 2011 -0400
+
+    Fix number-of-threads init logic on Windows
+
+commit 0091c4e128e216a88ed068c750e05d89fcbddc52
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Jun 8 22:30:10 2011 -0400
+
+    only read processor count via sysconf on non-Windows platforms
+
+commit 8a832eeab524bbad160adb7c27acb370d6adedff
+Author: ckolivas <kernel@kolivas.org>
+Date:   Thu Jun 9 11:45:06 2011 +1000
+
+    Linux + x86_64 optimisations.
+    Add likely() macro.
+    Optimise a few obvious code paths with likely/unlikely.
+    Change algo to sse2_amd64 by default.
+    Move priority change to worker threads only.
+    Detect number of CPUs and set default number of threads == CPUs.
+    Add scheduling policy change to worker threads to SCHED_IDLE first and fallback to SCHED_BATCH on linux.
+    Don't error when failing to set priority.
+    Add CPU affinity and bind worker threads to CPUs when number of threads is a multiple of number of CPUs.
+    Update NEWS with changes.
+
+commit 80ea56ac884324eff8d2add703b4c84b66c298aa
+Author: Christian Ludwig <chrissicool@chrissicool.net>
+Date:   Wed Jun 8 23:12:07 2011 +0200
+
+    configure.ac: Beautify yasm test output
+
+commit 17e4e132f552421557cc013559c874f45e0e68f2
+Author: Christian Ludwig <chrissicool@chrissicool.net>
+Date:   Wed Jun 8 23:09:21 2011 +0200
+
+    Fix libcurl include path
+
+    Fix the include path for libcurl, if it was installed in a location
+    where gcc does not look by default. The variable is declared in
+    the LIBCURL_CHECK_CONFIG m4 macro.
+
 commit f2e4ff0e509f69404aa11f5232d8f63110383f03
 Author: Jeff Garzik <jeff@garzik.org>
 Date:   Sat May 14 22:48:31 2011 -0400
