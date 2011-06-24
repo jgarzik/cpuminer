@@ -14,7 +14,7 @@
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DESC=bitcoin-cpuminer
 NAME=bitcoin-cpuminer
-DAEMON=/usr/bin/minerd
+DAEMON=/usr/sbin/minerd
 DAEMON_ARGS=""
 PIDFILE=/var/run/$NAME.pid
 SCRIPTNAME=/etc/init.d/$NAME
