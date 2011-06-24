@@ -1,3 +1,18 @@
+commit f2e4ff0e509f69404aa11f5232d8f63110383f03
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat May 14 22:48:31 2011 -0400
+
+    Version 1.0.1.
+
+commit 180b99f2d922a4575773c2c90eb7d37092e17f7c
+Author: Glenn Francis Murray <glenn@gfm.cc>
+Date:   Wed May 11 04:41:11 2011 +1000
+
+    OSX Support
+
+    Derived from xorg source
+    http://cgit.freedesktop.org/xorg/xserver/tree/GL/glx/glxbyteorder.h?id=cdf6b15f039c4905d8d54152153b0a3ecd7aba55;id2=415e49b940bba2d08870db410ebb47d2add5d836
+
 commit 16cddaf3004c2f73a8880dce36c3a4c714bc82ef
 Author: Jeff Garzik <jeff@garzik.org>
 Date:   Mon May 9 22:13:34 2011 -0400
