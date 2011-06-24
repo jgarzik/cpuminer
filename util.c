@@ -22,6 +22,12 @@
 #include "miner.h"
 #include "elist.h"
 
+#if JANSSON_MAJOR_VERSION >= 2
+#define JSON_LOADS(str, err_ptr) json_loads((str), 0, (err_ptr))
+#else
+#define JSON_LOADS(str, err_ptr) json_loads((str), (err_ptr))
+#endif
+
 struct data_buffer {
 	void		*buf;
 	size_t		len;
@@ -80,7 +86,7 @@ void applog(int prio, const char *fmt, ...)
 		f = alloca(len);
 		sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d] %s\n",
 			tm.tm_year + 1900,
-			tm.tm_mon,
+			tm.tm_mon + 1,
 			tm.tm_mday,
 			tm.tm_hour,
 			tm.tm_min,
@@ -269,7 +275,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		free(hi.lp_path);
 	hi.lp_path = NULL;
 
-	val = json_loads(all_data.buf, &err);
+	val = JSON_LOADS(all_data.buf, &err);
 	if (!val) {
 		applog(LOG_ERR, "JSON decode failed(%d): %s", err.line, err.text);
 		goto err_out;
