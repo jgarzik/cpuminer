@@ -115,6 +115,7 @@ bool use_syslog = false;
 static bool opt_quiet = false;
 static int opt_retries = 10;
 static int opt_fail_pause = 30;
+static char *pidfile = NULL;
 int opt_scantime = 5;
 static json_t *opt_config;
 static const bool opt_time = true;
@@ -183,6 +184,9 @@ static struct option_help options_help[] = {
 	{ "protocol-dump",
 	  "(-P) Verbose dump of protocol-level activities (default: off)" },
 
+	{ "pid-file FILE",
+	  "Write my process ID to a file (default: off)" },
+
 	{ "retries N",
 	  "(-r N) Number of times to retry, if JSON-RPC call fails\n"
 	  "\t(default: 10; use -1 for \"never\")" },
@@ -230,6 +234,7 @@ static struct option options[] = {
 	{ "help", 0, NULL, 'h' },
 	{ "no-longpoll", 0, NULL, 1003 },
 	{ "pass", 1, NULL, 'p' },
+	{ "pid-file", 1, NULL, 1005 },
 	{ "protocol-dump", 0, NULL, 'P' },
 	{ "quiet", 0, NULL, 'q' },
 	{ "threads", 1, NULL, 't' },
@@ -868,6 +873,9 @@ static void parse_arg (int key, char *arg)
 	case 1004:
 		use_syslog = true;
 		break;
+	case 1005:
+		pidfile = strdup(arg);
+		break;
 	default:
 		show_usage();
 	}
@@ -969,6 +977,15 @@ int main (int argc, char *argv[])
 	if (use_syslog)
 		openlog("cpuminer", LOG_PID, LOG_USER);
 #endif
+
+	if (pidfile) {
+		FILE *pf = fopen(pidfile, "w");
+		if (pf) {
+			(void) fprintf(pf, "%d\n", getpid());
+			(void) fclose(pf);
+		} else
+			perror("open pid-file");
+	}
 
 	work_restart = calloc(opt_n_threads, sizeof(*work_restart));
 	if (!work_restart)
