@@ -2,8 +2,9 @@
 # You might want to replace this with one of your own addresses. :-P
 ADDRESS=1G2dz821NoqXwnohUFGFLZLfy8No6Efrs6
 #
-# TODO: auto-select the best algorithm.
-ALGORITHM=c
+# the sha256 algorithm to use.
+# Default is cryptopp_asm32 on i386, sse2_64 on amd64,
+# the miner's default (c) otherwise.
 #ALGORITHM=sse2_64
 #
-DAEMON_ARGS="--url http://mining.eligius.st:8337 --userpass $ADDRESS:x --algo $ALGORITHM"
+DAEMON_ARGS="--url http://mining.eligius.st:8337 --userpass $ADDRESS:x"
