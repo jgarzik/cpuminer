@@ -1,6 +1,7 @@
 #!/usr/bin/make -f
 # -*- makefile -*-
-# Sample debian/rules that uses debhelper.
+# Based on the sample debian/rules that uses debhelper.
+#
 # This file was originally written by Joey Hess and Craig Small.
 # As a special exception, when this file is copied by dh-make into a
 # dh-make output file, you may use that output file without restriction.
@@ -8,8 +9,6 @@
 
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
-
-
 
 
 CFLAGS = -Wall -g
@@ -26,7 +25,6 @@ Makefile configure: Makefile.am configure.ac
 configure: configure-stamp
 configure-stamp: Makefile configure
 	dh_testdir
-	# Add here commands to configure the package.
 
 	./configure --prefix=/usr
 	touch configure-stamp
@@ -37,7 +35,6 @@ build: build-stamp
 build-stamp: configure-stamp 
 	dh_testdir
 
-	# Add here commands to compile the package.
 	$(MAKE)
 	#docbook-to-man debian/bitcoin-cpuminer.sgml > bitcoin-cpuminer.1
 	./minerd -h 2>&1 | txt2man -s 1 -t minerd > debian/minerd.1
@@ -73,11 +70,9 @@ install: build
 	# Add here commands to install the package into debian/bitcoin-cpuminer.
 	$(MAKE) DESTDIR=$(CURDIR)/debian/bitcoin-cpuminer install
 
-# Build architecture-independent files here.
 binary-indep: build install
 # We have nothing to do by default.
 
-# Build architecture-dependent files here.
 binary-arch: build install
 	dh_testdir
 	dh_testroot
