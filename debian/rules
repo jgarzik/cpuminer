@@ -20,14 +20,15 @@ else
 	CFLAGS += -O2
 endif
 
+Makefile configure: Makefile.am configure.ac
+	./autogen.sh
+
 configure: configure-stamp
-configure-stamp:
+configure-stamp: Makefile configure
 	dh_testdir
 	# Add here commands to configure the package.
 
-	./autogen.sh
-	CFLAGS="$(CFLAGS) -msse2" ./configure --prefix=/usr
-
+	./configure --prefix=/usr
 	touch configure-stamp
 
 
