@@ -73,6 +73,7 @@ static const char *algo_names[] = {
 };
 
 bool opt_debug = false;
+bool opt_daemon = false;
 bool opt_protocol = false;
 bool want_longpoll = true;
 bool have_longpoll = false;
@@ -129,6 +130,11 @@ static struct option_help options_help[] = {
 	{ "quiet",
 	  "(-q) Disable per-thread hashmeter output (default: off)" },
 
+#ifdef HAVE_DAEMON
+	{ "daemon",
+	  "(-d) Run in the background (default: off)" },
+#endif
+
 	{ "debug",
 	  "(-D) Enable debug output (default: off)" },
 
@@ -178,6 +184,9 @@ static struct option_help options_help[] = {
 static struct option options[] = {
 	{ "algo", 1, NULL, 'a' },
 	{ "config", 1, NULL, 'c' },
+#ifdef HAVE_DAEMON
+	{ "daemon", 0, NULL, 'd' },
+#endif
 	{ "debug", 0, NULL, 'D' },
 	{ "help", 0, NULL, 'h' },
 	{ "no-longpoll", 0, NULL, 1003 },
@@ -740,8 +749,8 @@ static void parse_arg (int key, char *arg)
 		}
 		break;
 	}
-	case 'q':
-		opt_quiet = true;
+	case 'd':
+		opt_daemon = true;
 		break;
 	case 'D':
 		opt_debug = true;
@@ -752,6 +761,9 @@ static void parse_arg (int key, char *arg)
 		break;
 	case 'P':
 		opt_protocol = true;
+		break;
+	case 'q':
+		opt_quiet = true;
 		break;
 	case 'r':
 		v = atoi(arg);
@@ -848,7 +860,7 @@ static void parse_cmdline(int argc, char *argv[])
 	int key;
 
 	while (1) {
-		key = getopt_long(argc, argv, "a:c:qDPr:s:t:h?", options, NULL);
+		key = getopt_long(argc, argv, "a:c:dDPqr:s:t:h?", options, NULL);
 		if (key < 0)
 			break;
 
@@ -880,6 +892,19 @@ int main (int argc, char *argv[])
 	}
 
 	pthread_mutex_init(&time_lock, NULL);
+
+#ifdef HAVE_DAEMON
+	if (opt_daemon) {
+		if (daemon(0,0)) {
+			perror("daemon");
+			/* If this doesn't work, we may still be in the foreground.
+			   That may cause system boot to hang.
+			   Not good.
+			 */
+			return 1;
+		}
+	}
+#endif
 
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog)

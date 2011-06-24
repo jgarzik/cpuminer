@@ -20,6 +20,7 @@ AC_HEADER_STDC
 AC_CHECK_HEADERS(syslog.h)
 
 AC_FUNC_ALLOCA
+AC_CHECK_FUNCS(daemon)
 
 case $target in
   *-*-mingw*)
