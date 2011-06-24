@@ -24,3 +24,10 @@ config.sub
 
 mingw32-config.cache
 
+/*-stamp
+debian/*.log
+debian/*.substvars
+debian/*.debhelper
+debian/files
+debian/minerd.1
+debian/bitcoin-cpuminer
