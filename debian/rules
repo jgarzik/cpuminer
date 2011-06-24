@@ -22,7 +22,6 @@ endif
 Makefile configure: Makefile.am configure.ac
 	./autogen.sh
 
-configure: configure-stamp
 configure-stamp: Makefile configure
 	dh_testdir
 
