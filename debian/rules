@@ -86,7 +86,7 @@ binary-arch: build install
 #	dh_installpam
 #	dh_installmime
 #	dh_python
-#	dh_installinit
+	dh_installinit
 #	dh_installcron
 #	dh_installinfo
 	dh_installman debian/minerd.1

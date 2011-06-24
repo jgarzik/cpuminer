@@ -1,0 +1,9 @@
+#
+# You might want to replace this with one of your own addresses. :-P
+ADDRESS=1G2dz821NoqXwnohUFGFLZLfy8No6Efrs6
+#
+# TODO: auto-select the best algorithm.
+ALGORITHM=c
+#ALGORITHM=sse2_64
+#
+DAEMON_ARGS="--url http://mining.eligius.st:8337 --userpass $ADDRESS:x --algo $ALGORITHM"
