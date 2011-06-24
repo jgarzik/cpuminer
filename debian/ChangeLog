@@ -1,3 +1,113 @@
+commit 16cddaf3004c2f73a8880dce36c3a4c714bc82ef
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon May 9 22:13:34 2011 -0400
+
+    Version 1.0.
+
+commit 6a3b05e6504e1438e598156531a6ea58e20c0c4a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon May 9 22:10:16 2011 -0400
+
+    jansson 2.x compatibility
+
+commit 0f5e87f1f5c8f59cf930c473530740eed43be395
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Fri May 6 19:31:11 2011 -0500
+
+    debian/minerd.1: removed, now the manpage is created in the build process.
+
+    Signed-off-by: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+
+commit 77627cbd7ecdd2218972eb80a3e4f8952e8520b8
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Fri May 6 19:23:39 2011 -0500
+
+    debian/rules: delete new missing files in clean section.
+
+    Signed-off-by: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+
+commit f289883aa745de12b184e1d55a35a6356cfe41a0
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Thu May 5 01:47:22 2011 -0500
+
+    debian/examples: added "example-cfg.json" file in examples.
+
+    Signed-off-by: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+
+commit 9a153ea94ed800fb994d715e948248a1524a8ef6
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Wed May 4 18:36:09 2011 -0500
+
+    debian/control: added "Ufasoft SSE2_64 implementation" in Description field.
+
+    Signed-off-by: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+
+commit 3fd586df0325d59948d5c4fa3b73b2e279eb39fa
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Wed May 4 18:28:21 2011 -0500
+
+    debian/control: small esthetic change in Build-Depends field.
+
+    Signed-off-by: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+
+commit 2fe08ee3bc2056a365b53192bec508faa3168b12
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Wed May 4 18:05:57 2011 -0500
+
+    updated debian/changelog.
+
+    Signed-off-by: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+
+commit fb3f29d865984fec5206b5cbffd16163f923c57c
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Wed May 4 17:52:13 2011 -0500
+
+    debian/copyright: added copyright notice.
+
+    Signed-off-by: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+
+commit 43415c6648bcaff9ef706335dda33cdc1cd5285c
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Wed May 4 17:41:14 2011 -0500
+
+    debian/ChangeLog: updated with git-log.
+
+    Signed-off-by: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+
+commit a30015400773117df6ed01be8ca4d640ceddfca2
+Merge: 86fd911 991a358
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Wed May 4 17:36:09 2011 -0500
+
+    Merge branch 'upstream' into debian
+
+commit 7ff1280bbbd1feb28ce350e2878a4e65fe94627a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Apr 11 17:32:25 2011 -0400
+
+    util: correct off-by-one in month display
+
+commit a9a2840d8198e45a990519431aa26586bbac8932
+Author: fleger <florian6.leger@laposte.net>
+Date:   Mon Apr 11 13:04:29 2011 -0400
+
+    Proper platform detection.
+
+    Use target instead of host.
+    Fix compilation for non win32 and non x86_64 platforms.
+
+commit 1a16f2ae63fa1fad8d3069db100149eb6d236d82
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Apr 7 01:57:28 2011 -0400
+
+    configure.ac: improve has_yasm test
+
+commit 69529c38594f7bd56b50b9effed5a45125ccba3e
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Mar 24 14:09:49 2011 -0400
+
+    Support full URL, in X-Long-Polling header
+
 commit 991a358dc9d5935a7cca96e68156e0aa595056b4
 Author: Jeff Garzik <jeff@garzik.org>
 Date:   Tue Mar 22 14:01:32 2011 -0400
