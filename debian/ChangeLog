@@ -1,0 +1,1032 @@
+commit 602e31b96c9b94ed8e4acaa010622cb1aad2bd5e
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Jun 14 02:40:24 2011 -0400
+
+    Version 1.0.2.
+
+commit 2a7ac1bce7167b967daa4f344f1d67bb1933ab17
+Author: ckolivas <kernel@kolivas.org>
+Date:   Tue Jun 14 14:09:10 2011 +1000
+
+    Cope with older linux kernel headers that don't have the newer scheduling policies defined.
+
+commit 994c700ff4b029ce693a57e53c6870ec4acce907
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Jun 9 03:47:07 2011 -0400
+
+    Fix number-of-threads init logic on Windows
+
+commit 0091c4e128e216a88ed068c750e05d89fcbddc52
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Jun 8 22:30:10 2011 -0400
+
+    only read processor count via sysconf on non-Windows platforms
+
+commit 8a832eeab524bbad160adb7c27acb370d6adedff
+Author: ckolivas <kernel@kolivas.org>
+Date:   Thu Jun 9 11:45:06 2011 +1000
+
+    Linux + x86_64 optimisations.
+    Add likely() macro.
+    Optimise a few obvious code paths with likely/unlikely.
+    Change algo to sse2_amd64 by default.
+    Move priority change to worker threads only.
+    Detect number of CPUs and set default number of threads == CPUs.
+    Add scheduling policy change to worker threads to SCHED_IDLE first and fallback to SCHED_BATCH on linux.
+    Don't error when failing to set priority.
+    Add CPU affinity and bind worker threads to CPUs when number of threads is a multiple of number of CPUs.
+    Update NEWS with changes.
+
+commit 80ea56ac884324eff8d2add703b4c84b66c298aa
+Author: Christian Ludwig <chrissicool@chrissicool.net>
+Date:   Wed Jun 8 23:12:07 2011 +0200
+
+    configure.ac: Beautify yasm test output
+
+commit 17e4e132f552421557cc013559c874f45e0e68f2
+Author: Christian Ludwig <chrissicool@chrissicool.net>
+Date:   Wed Jun 8 23:09:21 2011 +0200
+
+    Fix libcurl include path
+
+    Fix the include path for libcurl, if it was installed in a location
+    where gcc does not look by default. The variable is declared in
+    the LIBCURL_CHECK_CONFIG m4 macro.
+
+commit f2e4ff0e509f69404aa11f5232d8f63110383f03
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat May 14 22:48:31 2011 -0400
+
+    Version 1.0.1.
+
+commit 180b99f2d922a4575773c2c90eb7d37092e17f7c
+Author: Glenn Francis Murray <glenn@gfm.cc>
+Date:   Wed May 11 04:41:11 2011 +1000
+
+    OSX Support
+
+    Derived from xorg source
+    http://cgit.freedesktop.org/xorg/xserver/tree/GL/glx/glxbyteorder.h?id=cdf6b15f039c4905d8d54152153b0a3ecd7aba55;id2=415e49b940bba2d08870db410ebb47d2add5d836
+
+commit 16cddaf3004c2f73a8880dce36c3a4c714bc82ef
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon May 9 22:13:34 2011 -0400
+
+    Version 1.0.
+
+commit 6a3b05e6504e1438e598156531a6ea58e20c0c4a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon May 9 22:10:16 2011 -0400
+
+    jansson 2.x compatibility
+
+commit 0f5e87f1f5c8f59cf930c473530740eed43be395
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Fri May 6 19:31:11 2011 -0500
+
+    debian/minerd.1: removed, now the manpage is created in the build process.
+
+    Signed-off-by: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+
+commit 77627cbd7ecdd2218972eb80a3e4f8952e8520b8
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Fri May 6 19:23:39 2011 -0500
+
+    debian/rules: delete new missing files in clean section.
+
+    Signed-off-by: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+
+commit f289883aa745de12b184e1d55a35a6356cfe41a0
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Thu May 5 01:47:22 2011 -0500
+
+    debian/examples: added "example-cfg.json" file in examples.
+
+    Signed-off-by: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+
+commit 9a153ea94ed800fb994d715e948248a1524a8ef6
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Wed May 4 18:36:09 2011 -0500
+
+    debian/control: added "Ufasoft SSE2_64 implementation" in Description field.
+
+    Signed-off-by: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+
+commit 3fd586df0325d59948d5c4fa3b73b2e279eb39fa
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Wed May 4 18:28:21 2011 -0500
+
+    debian/control: small esthetic change in Build-Depends field.
+
+    Signed-off-by: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+
+commit 2fe08ee3bc2056a365b53192bec508faa3168b12
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Wed May 4 18:05:57 2011 -0500
+
+    updated debian/changelog.
+
+    Signed-off-by: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+
+commit fb3f29d865984fec5206b5cbffd16163f923c57c
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Wed May 4 17:52:13 2011 -0500
+
+    debian/copyright: added copyright notice.
+
+    Signed-off-by: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+
+commit 43415c6648bcaff9ef706335dda33cdc1cd5285c
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Wed May 4 17:41:14 2011 -0500
+
+    debian/ChangeLog: updated with git-log.
+
+    Signed-off-by: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+
+commit a30015400773117df6ed01be8ca4d640ceddfca2
+Merge: 86fd911 991a358
+Author: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Date:   Wed May 4 17:36:09 2011 -0500
+
+    Merge branch 'upstream' into debian
+
+commit 7ff1280bbbd1feb28ce350e2878a4e65fe94627a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Apr 11 17:32:25 2011 -0400
+
+    util: correct off-by-one in month display
+
+commit a9a2840d8198e45a990519431aa26586bbac8932
+Author: fleger <florian6.leger@laposte.net>
+Date:   Mon Apr 11 13:04:29 2011 -0400
+
+    Proper platform detection.
+
+    Use target instead of host.
+    Fix compilation for non win32 and non x86_64 platforms.
+
+commit 1a16f2ae63fa1fad8d3069db100149eb6d236d82
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Apr 7 01:57:28 2011 -0400
+
+    configure.ac: improve has_yasm test
+
+commit 69529c38594f7bd56b50b9effed5a45125ccba3e
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Mar 24 14:09:49 2011 -0400
+
+    Support full URL, in X-Long-Polling header
+
+commit 991a358dc9d5935a7cca96e68156e0aa595056b4
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Mar 22 14:01:32 2011 -0400
+
+    Release version 0.8.1.
+
+commit a7d9f31747a6bff71c3ea6955996d402ef72d538
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Mar 22 13:58:32 2011 -0400
+
+    Add User-Agent header to each HTTP request
+
+commit 46819af36f0ae94e69333810ad0a03f472fc6d8e
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 21 20:50:59 2011 -0400
+
+    --user/--pass fixes
+
+    Also, some newline fixes (applog callers do not need newlines
+    in strings)
+
+commit 594fe678fb2001417eddb5854c4a7d54a9c59a44
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 21 17:44:20 2011 -0400
+
+    example-cfg.json: remove extraneous commas, which broke JSON decode
+
+    Spotted by lfm
+
+commit 124abb6c4da5da871da3f7090ea0b7aba6f5d844
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 21 04:34:48 2011 -0400
+
+    Release version 0.8.
+
+commit 42cdb63f978903e5e19ae2310a011b912dfb25a1
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 21 04:28:23 2011 -0400
+
+    Update example JSON config
+
+commit 81352ca48f507286be60941611eb4d413e7f7c94
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 21 04:27:02 2011 -0400
+
+    Support --user and --pass, as alternative to --userpass
+
+commit 2fd9d54443755b82a45519f33cb0aaf4f7a1fee5
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 21 04:02:13 2011 -0400
+
+    Convert remaining [f]print to applog().
+
+    Also, remove a few superfluous printouts.
+
+commit 144cf62d7c3eed3f5412edb18b238b2c1209f4c1
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 21 03:45:26 2011 -0400
+
+    Avoid potential for div-by-zero, when calculating max-nonce
+
+commit d49d639269648394ceab175aaa8ffea876e29f4b
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 21 03:42:57 2011 -0400
+
+    cpu-miner.c: Remove newline from applog() call
+
+commit 23e9cf91f09fa3ec364b439787f768f314780b85
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sun Mar 20 22:44:25 2011 -0400
+
+    Ensure cpuminer-config.h is universally included, in *.c and *.h
+    alike.
+
+    In miner.h, this fixes an alloca-definition-related warning.
+
+    For the other files, this is simply future-proofing/precaution.
+
+commit 24afd61775b957009619e0d3a5948492bdf5539e
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Mar 18 17:24:16 2011 -0400
+
+    Introduce more standardized logging (incl. optional syslog).
+
+    Also, improve portability of alloca.
+
+commit 7a87bee999fc82a8f175bf533e59ef216575d541
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Mar 18 02:53:13 2011 -0400
+
+    Add long polling support
+
+commit 6818c6928a95af2cda225176ccc54bc6424e8103
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Mar 17 23:22:10 2011 -0400
+
+    Improve max nonce auto-adjustment with some basic algebra.
+
+commit 33e5b54928ee1e4b1bcc35a46ff44d42cb4fbe8a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Mar 17 23:19:43 2011 -0400
+
+    miner.h: pad out work_restart to max likely cache line size
+
+commit 2d49a9a5d767b85981ce73f1832e0eae06d0d52f
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Mar 17 22:02:28 2011 -0400
+
+    Introduce ability to interrupt hash scanners in the middle of
+    scanning.
+
+commit 4be41af2be1b2442161a98b9d7fbf2a61cc854f9
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 14 23:42:53 2011 -0400
+
+    Release version 0.7.2.
+
+commit 0258fae450d8f3164f5a6706a65e80e10f016528
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 14 23:36:28 2011 -0400
+
+    Fix Windows build, that broke with yasm integration
+
+commit 4f7a51e9ed4accbd1be6fad38a9bbc70531cb37f
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 14 23:17:34 2011 -0400
+
+    Move all RPC I/O to separate thread.
+
+commit cdb4cd9c8be6c828908622efdca732eff8495787
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 14 21:48:15 2011 -0400
+
+    sha256_*.c: trim trailing whitespace
+
+commit aaf46802bed75ef09d72e93b2afb6b221a40c57e
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 14 20:18:03 2011 -0400
+
+    Makefile.am: neaten minerd sources list
+
+commit aab6f57b17b97bf65860d6ae86ed4a27f00c2627
+Author: fleger <florian6.leger@laposte.net>
+Date:   Sat Mar 12 18:23:22 2011 +0100
+
+    Fixed yasm version check
+
+commit 115cbe64f65e82352228158595b129e88ef91758
+Author: fleger <florian6.leger@laposte.net>
+Date:   Sat Mar 12 18:11:33 2011 +0100
+
+    Revert "Fixed yasm version check if yasm version ≥ 1.1.0"
+
+    This reverts commit da1fd227bf2cc56c6f9a7ea42bd2c8b05f781f06.
+
+commit da1fd227bf2cc56c6f9a7ea42bd2c8b05f781f06
+Author: fleger <florian6.leger@laposte.net>
+Date:   Tue Mar 8 01:12:03 2011 -0800
+
+    Fixed yasm version check if yasm version ≥ 1.1.0
+
+commit 1989b7dab9c9c1b98445d300aafbe34cc169451a
+Author: Mark Crichton <crichton@gmail.com>
+Date:   Mon Mar 7 05:25:01 2011 -0800
+
+    Make sure we don't check for yasm version if we don't have yasm
+
+commit 6b19b15aa97d8bfba7c5feb52d857a1b51b1e6d4
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Mar 7 00:23:12 2011 -0500
+
+    Fix warnings in sse2_64 implementation.
+
+commit 96d2287c722e4566fd30271c76869f83831e86c2
+Author: Mark Crichton <crichton@gmail.com>
+Date:   Sat Mar 5 22:22:57 2011 -0500
+
+    X86_64 SSE2 support for Linux
+
+commit 1d8b6e13a389c39f672d2bc8a68dfcfce5c04b65
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Mar 2 22:47:46 2011 -0500
+
+    Release version 0.7.1.
+
+commit d4ddd315b15fe738f4d95df08a52875a8caf7943
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Mar 2 22:06:25 2011 -0500
+
+    Make CURL follow redirects.
+
+    Suggested by prcarter.
+
+commit ef91bd59e2befdb4be7321593fe8dc8f1250080e
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Mar 2 22:03:11 2011 -0500
+
+    sha256_4way: skip last 3 rounds.
+
+    Pointed out by several people, including Raulo.
+
+commit a27e69aec53806df3534ddb6e7e22165dbfb2f5b
+Author: Raulo <p987341@gmail.com>
+Date:   Mon Feb 21 21:41:19 2011 +0100
+
+    Changes to make the 4-way code compile on Intel Compiler
+
+commit 4a7f3f70b5628cb804ca4f46cf51651a1a42507f
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Feb 17 01:58:53 2011 -0500
+
+    Show date/time when proof-of-work is found.
+
+commit 1083e15c47539133a0e5075bb3d9f2b7741633f3
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Feb 17 01:22:55 2011 -0500
+
+    Mark hash success as unlikely, using __builtin_expect() intrinsic
+
+commit f0bdc0b6f9f19c603f5e34332fa0d4e5bb3ea973
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Feb 17 01:21:37 2011 -0500
+
+    example-cfg.json: improve comments
+
+commit fa7e80b8e57aca08255c402d744c833329688e5a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Feb 17 01:21:16 2011 -0500
+
+    Extract get-work logic into separate function.
+
+commit 6d2882937f8b2a5291ae68ae9ea985ad5271d0fb
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sun Feb 13 03:04:02 2011 -0500
+
+    Add support for JSON-format configuration file
+
+commit 4e622f2ac27044d2c0cbe7860ede5ca486c1659a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Feb 12 20:00:54 2011 -0500
+
+    Release version 0.7.
+
+commit b2372e70f0dc270877e25831d8b62e04881cd054
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Feb 12 19:57:50 2011 -0500
+
+    Turn off target testing for release, as some strange results appeared.
+
+commit 9f3472ad19480ad54c34a01ddffb93ee439303da
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Feb 10 00:52:22 2011 -0500
+
+    Use bswap_32 from byteswap.h, if __builtin_bswap() is not available
+
+commit c0935a94899bc7261bc98b17a52d7c11b005fde4
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Feb 10 00:41:44 2011 -0500
+
+    Re-use CURL object, thereby caching DNS and HTTP connections where
+    possible.
+
+commit 82772022216c1d8b4dca2d0772d5810afc2e4ad8
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Feb 4 14:29:54 2011 -0500
+
+    Release version 0.6.1.
+
+commit e47076caacdf2c60ebf00d47aa5f2f07ae33f8f3
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Feb 4 11:54:31 2011 -0500
+
+    Fix max-nonce auto-adjustment logic to actually work
+
+commit 51eb1b4ef9f71f018e83ed69ca04fb37d0c0626b
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Feb 4 11:53:51 2011 -0500
+
+    Move verbose proof-of-work/target comparison display into -D (debug)
+
+commit 98de751416740bcb48ca7504edd65ed27bafacc6
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Feb 4 02:55:55 2011 -0500
+
+    sha*.c: remove debug statement, which is redundant to hashmeter output
+
+commit e8ee4cb002405935dd0e0922073ca7f0e6fbd2c7
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Feb 3 00:54:03 2011 -0500
+
+    Add --retry-pause, to set length of pause time between failure retries
+
+commit 714c0fd7c90cdb11742f7f2c91a65357a7bf5d5a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Feb 3 00:46:55 2011 -0500
+
+    Continue scanhash, even if high 32 bits are zero.
+
+    Previously, we would stop the scan if the high 32 bits of the hash
+    were zero,
+    as a quick shortcut for testing the full hash.  If this quick test
+    succeeded,
+    we would pass the work to the server for full validation.
+
+    Change this logic to perform full validation inside minerd, so that
+    work may
+    be resumed more quickly if hash > target.
+
+commit c68ffb30dd17b32f69665af18b72687875770972
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Feb 2 18:47:04 2011 -0500
+
+    Display proof-of-work hash when one is discovered
+
+commit 453101d9e9f8b7408ca645dd174aa3e8af1d87ac
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Jan 29 23:55:11 2011 -0500
+
+    Remove "PROOF OF WORK FOUND?" debug output; redundant.
+
+commit a816470950a0a00d37cc920cda51dad51558659b
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Jan 29 02:15:46 2011 -0500
+
+    Release version 0.6.
+
+commit f889476bbd35b4d1667e58522666688bef1f9a89
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Jan 29 01:14:12 2011 -0500
+
+    Dynamically adjust time spent hashing current work unit, to meet
+    target
+
+commit 0b677407076a55c6a758d1414fade617abd552e5
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Jan 29 00:56:24 2011 -0500
+
+    Pass max-nonce as arg to each sha256 algo.
+
+    Should be an equivalent transformation, with no behavior changes.
+
+commit f570ffcf75764398c9682c310ad7420acd7593c2
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Jan 29 00:47:48 2011 -0500
+
+    Code movement: move second hash time sampling to main miner loop
+
+commit a2967993586cdfe32bc6c61513a449c900820613
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Jan 29 00:41:27 2011 -0500
+
+    Replace ___constant_swab32() with gcc's __builtin_bswap32
+
+    http://www.bitcoin.org/smf/index.php?topic=1925.msg34827#msg34827
+
+    Credit: lfm
+
+commit 8504cf48031a98a4f76f0602098e000f369be704
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Jan 29 00:36:32 2011 -0500
+
+    sha256_4way minor optimizations
+
+    http://www.bitcoin.org/smf/index.php?topic=820.msg40022#msg40022
+
+    Credit: BeeCee1
+
+commit e41171424ab1c4430f78f81b08797ab79e8ddd9a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Jan 29 00:28:19 2011 -0500
+
+    Fix non-working short options -q and -r N, by listing them in
+    optstring.
+
+commit fd19172c5028d0f8b521a433ea8be3993ed9a9e8
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Jan 20 02:32:11 2011 -0500
+
+    README: mention CFLAGS on *nix builds
+
+commit fc4ed179e8f657eb5486d12857d6612a0c3160a5
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Dec 28 22:38:57 2010 -0500
+
+    Release version 0.5.
+
+commit 16006f9037973e72c1cc7c4556ae9ec2c4c0248f
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Dec 28 21:10:41 2010 -0500
+
+    Rather than sleep-loop, main thread waits for all threads to exit.
+
+commit 2f9a6deef91afd4c0ef67dc332e39b4fdfb4d3b4
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Dec 28 17:13:59 2010 -0500
+
+    Improve CURL HTTP request error diagnostics.
+
+commit 9e5a173c3845fb7b5d316b0455352a08847b8c23
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Dec 28 15:22:53 2010 -0500
+
+    Improve JSON-RPC result/error checking, and improve error diagnostic
+    output.
+
+commit 872211caada9a42a5de31d3dacf3eab7eba5e34a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Dec 27 02:13:15 2010 -0500
+
+    Add --quiet option, to disable hashmeter output.
+
+commit 724fe3742c09ca26834f4e76995868a14ac365d7
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Dec 27 00:34:23 2010 -0500
+
+    Release version 0.3.3.
+
+commit 21e56a25c4be7bccd00b7f365afa726a4236914c
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Dec 27 00:32:48 2010 -0500
+
+    sha256_cryptopp asm: byteswap input words
+
+commit 970e74c07d194d2eeba55874ed9ba9b7492b64cf
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sun Dec 26 23:37:58 2010 -0500
+
+    Move 32-bit swap code into miner.h, for sharing.
+
+commit ae4cc6fc392e375d8b7c1d9e722bf5163afe42cc
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Dec 23 20:23:13 2010 -0500
+
+    Release version 0.3.2.
+
+commit d88648dd3952f4ea2f9aad135710e9f106fe85c4
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Dec 23 20:21:00 2010 -0500
+
+    sha256_via: ensure that found nonce is copied back into output
+    data buffer
+
+    Also, some minor cleanups, removing unused args.
+
+commit 309d1bdc16de5267aee5b13791907c93b69c8be6
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sun Dec 19 21:47:41 2010 -0500
+
+    Release version 0.3.1.
+
+commit d363a1d68d26ea6a82426f65845edb69121a9d57
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sun Dec 19 21:37:30 2010 -0500
+
+    sha256_via: ensure proper data area is fully checksummed
+
+commit ee592d0a60f187a3e9ba5b3c1f793b2d19eb0eb0
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Dec 18 22:22:06 2010 -0500
+
+    Handle temporary JSON failures (due to server reboot, etc.)
+
+commit 4c8d703551f13a951f254ba49e396663ca5838d4
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Dec 18 16:42:40 2010 -0500
+
+    README: update win32 build insns
+
+commit 857ba8f6cc6929e5da92c38bc74d7bec8f56ecd6
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Dec 18 16:31:28 2010 -0500
+
+    Release version 0.3.
+
+commit 0ee24c00ceaea805c0c7222a13733e4030331ac5
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Dec 18 16:29:07 2010 -0500
+
+    sha256_4way: work around gcc 4.5.x bug by always inlining ROTR and SHR
+
+commit ce1c9a8aca8b5fa43a3bcf577b1897e5e6a5cf3d
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Dec 6 20:21:22 2010 -0500
+
+    Display version on minerd --help usage output.
+
+commit f1fcd76ba7514003135f3d76ef2308b86b754507
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Dec 6 20:14:58 2010 -0500
+
+    sha256_cryptopp: Add crypto++ 32-bit assembly implementation
+
+commit 1a1a018627d11ac7475f0c27e2cbdb7f248314f2
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Dec 6 02:30:57 2010 -0500
+
+    Release version 0.2.2.
+
+    Remove 'experimental' marker from VIA padlock implementation.
+
+commit 8ca6ffa8a92ed50de916fbbc95c9c6900bd71ef8
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Dec 6 00:59:59 2010 -0500
+
+    sha256_4way: do not include unnecessary headers, when !4way
+
+    Reported by lfm
+
+commit 6b5fb469cc04f81249cff4db604738c80a6a2590
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Dec 6 00:57:48 2010 -0500
+
+    sha256_via: align tmp_hash1 to 128, to avoid stack clobber
+
+    Reported by lfm
+
+commit 276dcdbcec044b44835eacd16982badce3ad4d87
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sun Dec 5 23:18:18 2010 -0500
+
+    Avoid null deref in command line arg processing.
+
+    Reported by lfm.
+
+commit 18d3ab876c5c2b77c56b436bcf7f7507ec451455
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Nov 29 12:27:11 2010 -0500
+
+    Release version 0.2.1.
+
+commit 145e5fe141857c0757fdb5bb6909583aa67691b1
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Mon Nov 29 12:21:03 2010 -0500
+
+    submit_work: increase string buffer, to avoid overflow
+
+commit 74bb196296f8c56fd8925856ed59f05aa3850f9b
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sun Nov 28 20:16:22 2010 -0500
+
+    Add Crypto++ sha256 implementation (C only, ASM elided for now)
+
+commit 339ddf4d757e17687d18d59e8ded57a71f186121
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 04:31:32 2010 -0500
+
+    Move sha256_generic into its own .o build output.  Const-ify midstate
+    param.
+
+commit ad3fda8aba5f3f1f4820a20a925c6387347876f9
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 03:56:47 2010 -0500
+
+    Release version 0.2.
+
+commit 4c47553c856183d16d4b9a22490bc419b9036109
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 03:50:52 2010 -0500
+
+    Clean up multi-algorithm selection and display
+
+commit 6288d943abe9418164da5d5e5dc97e0065e1fa82
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 03:50:12 2010 -0500
+
+    sha256_4way: patch proper nonce into data block
+
+commit eeea340b17302c3b82d29a7d2f50238cd1b24af4
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 03:45:47 2010 -0500
+
+    sha256_via: add further comments on byte-swapping work
+
+commit 4da2e4fbe25e0053a155d026121d645dc660f549
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 01:59:03 2010 -0500
+
+    miner.h: include sys/time.h for struct timeval definition
+
+commit e2eeaaf75bc19c759565dac8184655e8f3f1830e
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 01:29:56 2010 -0500
+
+    Add experimental (read: probably broken) VIA padlock support.
+
+commit 86eb37d631e704768cc4f9684b79fc00e67b384b
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 00:46:59 2010 -0500
+
+    Improve and modularize compile-time CPU detection.
+
+    Ideally, we should move this to autoconf.
+
+commit 500759cea12cc08abf5af2bdb1bab1eff72d8542
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Sat Nov 27 00:12:28 2010 -0500
+
+    s/__SSE__/__SSE2__/
+
+commit a7518360addc6d3365c8dc4895614f98e084535d
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 23:32:29 2010 -0500
+
+    Windows build tweaks.
+
+commit 2f2bf745c462ae282e5c6cdccb6c68bff05ee85c
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 23:16:38 2010 -0500
+
+    Note that 4way is experimental
+
+commit eed9b3c7df021d3229a4f212548075084913cc1b
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 23:15:38 2010 -0500
+
+    sha256_4way: perform 16m hashes, not 64k, per invocation
+
+commit 35ea649d976b938f09f383bbc580872aaa5c61eb
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 23:12:24 2010 -0500
+
+    Improve hash performance statistics.
+
+commit a50201eb2142f6ea7ffe451c87a341ef158be84e
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 20:15:07 2010 -0500
+
+    Improve --help output.  Mention --help in README.
+
+commit 099b6b065e29abe4da02c1271883963b2957224d
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 19:43:54 2010 -0500
+
+    Drop all Windows DLL in same dir as minerd.exe
+
+commit 1f5074381f9e9bf96236ae50e27863b098856c84
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 19:12:22 2010 -0500
+
+    Correct -a command line help.
+
+commit c639149977837c26c0f9c50352ffebd95d519456
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 19:04:48 2010 -0500
+
+    Add tcatm's 4way SSE2 sha256 implementation.
+
+commit d2fded613578c03a6290c86384e5ca320ed55efb
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 18:13:16 2010 -0500
+
+    README: add win32 installer instructions
+
+commit 7c6014c60b5f99dce0fbbd8f595beebf523e85f0
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 18:01:25 2010 -0500
+
+    Add Windows installer creation script, mknsis.sh.
+
+commit 6f30fc1d87b513591c93c254212be23735cfa9ff
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 16:38:16 2010 -0500
+
+    Release version 0.1.2.
+
+commit 7f98b6a2bb0c31f48159af23383f60634b8769c5
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 16:35:54 2010 -0500
+
+    README: update dependency list and build instructions
+
+commit 0a333110f7c7228a2e2d4f57814979392df192c3
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 16:28:12 2010 -0500
+
+    Build on Windows using mingw32.
+
+commit 4575851ea331ea85946c30421541a493c6659445
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 16:13:32 2010 -0500
+
+    Build jansson 1.3 in-tree, if not present on system.
+
+commit 750deb7a9912af13a83f737753fac24dc4dc5bd8
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 15:52:06 2010 -0500
+
+    Makefile.am: add compat.h, to correct 'make distcheck' failures
+
+commit 352bab2109d491639b9571211b6f59ddeda0e304
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 15:50:36 2010 -0500
+
+    Introduce compat.h, for Win32 builds
+
+commit b7cc9b68ad0df14e976fa02e5eaa51149aac2414
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 15:46:11 2010 -0500
+
+    Replace argp with getopt_long
+
+commit 59f1fb2ec87b4a8e3d6608b405b6aa649b89db95
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Fri Nov 26 15:20:54 2010 -0500
+
+    Link with pthreads lib, if present.  Remove GNU-specific asprintf
+    usage.
+
+commit 5d1a45294b4dcc1ca7e1e2c1243ee4904f0f53fe
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Nov 25 04:04:30 2010 -0500
+
+    code movement: move submit_work() above hot path
+
+commit 945be82ea15854bd6ecb24e04f6157b9c2c2b040
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Nov 25 04:03:59 2010 -0500
+
+    Move utility routines to util.c.
+
+commit 822cf2cc450b1bd643d1362c6d6f4950b24ddf76
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Nov 25 03:51:04 2010 -0500
+
+    sha256: Remove unused include arpa/inet.h
+
+commit e4c4b3fe5f701aa4d154e4e651f1e3e34d35b001
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Nov 25 01:27:19 2010 -0500
+
+    scanhash micro-optimizations
+
+    * don't bother returning nonce, we only need success/fail boolean
+    * don't needlessly read nonce pointer data, for each loop
+
+commit 1032fec15b036b5f1be1b30f174deb21d377c22a
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Nov 25 01:16:34 2010 -0500
+
+    Allocate work struct once, on stack, rather than alloc+free for
+    each getwork.
+
+commit a614823fa7891bef6bfa3e4b44f40a22ce557cef
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Nov 25 01:02:53 2010 -0500
+
+    Remove unused OpenSSL dependency.
+
+    Also, turn a few strings into #define'd constants.
+
+commit 23cd22a5a539f8d831faa3b376ea33cba73a222b
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Nov 25 00:49:39 2010 -0500
+
+    RPC URL, username and password become arguments,
+    rather than compile-time constants.
+
+commit 67d3c91317522eb70b8987b91aa0e87339ac1ae8
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Thu Nov 25 00:36:40 2010 -0500
+
+    Small cleanups and comment additions.  Don't sleep after proof of
+    work found.
+
+commit ea6c1126ec2837461c1869d93d83877d7d40a2b8
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 19:50:46 2010 -0500
+
+    Add GPLv2 header.
+
+commit 82fff8f4cf6625f0d1ccdee4dab8018fa3804cd8
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 19:34:59 2010 -0500
+
+    Do not build sha256_generic module separate from cpu-miner.c.
+    Version 0.1.1.
+
+commit 702e2ac8119943ded0e95a77b3e9c63f7311f717
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 19:31:12 2010 -0500
+
+    Convert over to autotools.  Release version 0.1.
+
+commit e33abcdbe4a811b99c90c81f44e4a0641e426e1c
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 18:45:56 2010 -0500
+
+    sha256: note about bitcoin input data
+
+commit 19b51e360050443be2e950b7cfe8758bd969f53d
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 18:25:06 2010 -0500
+
+    Clean up protocol debugging output, and other cleanups.
+
+commit b7201e9deca1f9600b683c9ac0467c1056512bf1
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 18:24:12 2010 -0500
+
+    sha256: Assume that input is already big endian.
+
+commit 5b0ab3cf792eb0f4e1eb8ef7e652772b3205ac54
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 15:39:37 2010 -0500
+
+    Remove byte reversing in submit_work()
+
+commit 89a05600baf704b7c68e612b3536e92772bedcf3
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 05:55:56 2010 -0500
+
+    Code movement.  Update stats counter more frequently.
+
+commit 5b6e9a92f1f9ad2c96c5c3b670b0ad4e026a9e9c
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 03:36:53 2010 -0500
+
+    Add command line parsing, and multiple threads.
+
+commit 45a29ac9973e3cb8d188abd6053a5c95433db2ab
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 02:11:59 2010 -0500
+
+    Add timing info.  Remove BIGNUM PoW checks.
+
+commit 666af32046b550fa0de407e4b052a3980219bf3b
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Wed Nov 24 01:19:47 2010 -0500
+
+    Clean up proof-of-work checking,
+    attempting to address find-solution-too-fast problem.
+
+commit 16b535e2dd9075956c9ad47f2193fadf19a781b6
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Nov 23 23:54:37 2010 -0500
+
+    Add some code comments.
+
+commit 9bc3649e9190a7ba847d56ffeab1cbbae4481f2c
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Nov 23 23:43:45 2010 -0500
+
+    Add README and license info.
+
+commit 9599867d8b9ddd909ea3dc37679b34cab5de5674
+Author: Jeff Garzik <jeff@garzik.org>
+Date:   Tue Nov 23 23:33:20 2010 -0500
+
+    Initial revision of CPU miner.
+
+    NOTE: non-functional (incorrectly thinks it finds solution, too
+    quickly)

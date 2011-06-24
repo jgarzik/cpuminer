@@ -1,0 +1,38 @@
+Source: bitcoin-cpuminer
+Section: net
+Priority: optional
+Maintainer: Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+Build-Depends: debhelper (>= 5),
+ autoconf (>= 2.5),
+ automake (>= 1.7),
+ txt2man,
+ libcurl4-dev,
+Standards-Version: 3.7.2
+Vcs-Git: git://github.com/jgarzik/cpuminer.git
+Vcs-browser: https://github.com/jgarzik/cpuminer
+Homepage: http://www.bitcoin.org/smf/index.php?topic=1925.0
+
+Package: bitcoin-cpuminer
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Multi-threaded CPU miner for bitcoin
+ Bitcoin is a peer-to-peer digital currency. Peer-to-peer (P2P) means that
+ there is no central authority to issue new money or keep track of
+ transactions.
+ .
+ Instead, these tasks are managed collectively by the nodes of the network.
+ More information about bitcoin: http://www.bitcoin.org
+ .
+ This package contain miner that contribute your idle CPU time to the bitcoin
+ network and may generate some coins for you.
+ .
+ This miner works on CPU and communicates with bitcoin or bitcoind via JSON-RPC
+ interface.
+ .
+ Miner have few sha256 implementation:
+  * Linux kernel sha256, implemented in C.
+  * tcatm's 4-way SSE2 implementation.
+  * Ufasoft SSE2_64 implementation.
+  * VIA padlock implementation.
+  * Crypto++ C/C++ library implementation.
+  * Crypto++ 32-bit assembly library implementation.

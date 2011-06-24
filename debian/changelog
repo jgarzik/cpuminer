@@ -1,0 +1,112 @@
+bitcoin-cpuminer (1.0.2-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/ChangeLog: updated with git-log.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 24 Jun 2011 09:15:00 +0200
+
+bitcoin-cpuminer (1.0.1-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/ChangeLog: updated with git-log.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 24 Jun 2011 09:10:00 +0200
+
+bitcoin-cpuminer (1.0-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/ChangeLog: updated with git-log.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 24 Jun 2011 09:05:00 +0200
+
+bitcoin-cpuminer (0.8.1-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/ChangeLog: updated with git-log.
+  * debian/copyright: added copyright notice.
+  * debian/control: small esthetic change in Build-Depends field.
+  * debian/control: added "Ufasoft SSE2_64 implementation" in Description field.
+  * debian/examples: added "example-cfg.json" file in examples.
+  * debian/rules: delete new missing files in clean section.
+  * debian/minerd.1: removed, now the manpage is created in the build process.
+
+ -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Wed, 04 May 2011 18:03:30 -0500
+
+bitcoin-cpuminer (0.7-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/minerd.1: updated with small changes using txt2man.
+  * debian/ChangeLog: updated with git-log.
+
+ -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Sat, 12 Feb 2011 22:48:29 -0600
+
+bitcoin-cpuminer (0.6.1.git20110209-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/minerd.1: updated manpage with txt2man.
+  * debian/ChangeLog: updated with git-log.
+
+ -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Fri, 11 Feb 2011 20:58:20 -0600
+
+bitcoin-cpuminer (0.6-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/minerd.1: updated with last help info using txt2man.
+  * rename "debian/ChangeLog.1" to "debian/ChangeLog".
+  * debian/ChangeLog.1: updated with git-log.
+
+ -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Fri, 11 Feb 2011 18:39:10 -0600
+
+bitcoin-cpuminer (0.5-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/ChangeLog.1: updated with last output from "git-log".
+  * debian/copyright: added missing debian package license.
+  * debian/control: updated package description, small change in crypto++ comment.
+  * debian/minerd.1: updated manpage with txt2man.
+
+ -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Thu, 06 Jan 2011 00:08:52 -0600
+
+bitcoin-cpuminer (0.3.3-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/ChangeLog.1: updated with the last output of "git-log".
+
+ -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Mon, 27 Dec 2010 18:07:21 -0600
+
+bitcoin-cpuminer (0.3.2-2) unstable; urgency=low
+
+  * debian/control: fixed lintian warning
+    "possible-unindented-list-in-extended-description".
+  * debian/rules: removed cross compile code.
+
+ -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Sun, 26 Dec 2010 16:56:18 -0600
+
+bitcoin-cpuminer (0.3.2-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/ChangeLog.1: updated with the last output of "git-log".
+  * debian/minerd.1: updated with the last output of "minerd -h".
+  * debian/control: updated full description.
+  * debian/copyright: added missing copyright.
+  * debian/rules: first try to use cross compile.
+  * debian/watch: added to update the source code by uscan from github.
+
+ -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Fri, 24 Dec 2010 18:51:23 -0600
+
+bitcoin-cpuminer (0.2.1-2) unstable; urgency=low
+
+  * debian/control: updated short and full description, thanks to adv
+    (bitcoin forum user).
+  * debian/rules: undo binary rename.
+  * renamed "bitcoin-cpuminer" manpage to "minerd".
+  * moved "ChangeLog" file to "debian/ChangeLog.1".
+  * restored from source "ChangeLog" file.
+
+ -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Wed, 22 Dec 2010 23:59:52 -0600
+
+bitcoin-cpuminer (0.2.1-1) unstable; urgency=low
+
+  * Initial Release.
+
+ -- Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>  Thu,  2 Dec 2010 21:20:20 -0600
