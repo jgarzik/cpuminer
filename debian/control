@@ -14,7 +14,7 @@ Homepage: http://www.bitcoin.org/smf/index.php?topic=1925.0
 
 Package: bitcoin-cpuminer
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, adduser
 Description: Multi-threaded CPU miner for bitcoin
  Bitcoin is a peer-to-peer digital currency. Peer-to-peer (P2P) means that
  there is no central authority to issue new money or keep track of
