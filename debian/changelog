@@ -1,3 +1,10 @@
+bitcoin-cpuminer (1.0.2-3) maverick; urgency=low
+
+  * Add default argument for retries.
+  * Fix setting number of threads.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 25 Jun 2011 12:38:07 +0200
+
 bitcoin-cpuminer (1.0.2-2) unstable; urgency=low
 
   * Added init file, default file.

@@ -20,6 +20,7 @@ PIDFILE=/var/run/bitcoin/minerd.pid
 SCRIPTNAME=/etc/init.d/bitcoin-cpuminer
 
 THREADS=""
+RETRIES="-1"
 
 # Exit if the package is not installed
 [ -x $DAEMON ] || exit 0
@@ -56,6 +57,9 @@ do_start()
 			ALGORITHM=sse2_64
 		fi
 	fi
+	if [ -n "$THREADS" ] ; then
+		THREADS="--threads $THREADS"
+	fi
 	if [ -n "$ALGORITHM" ] ; then
 		ALGORITHM="--algo $ALGORITHM"
 	fi
@@ -63,7 +67,7 @@ do_start()
 	start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
 		|| return 1
 	start-stop-daemon --start --quiet --user $USER --exec $DAEMON -- \
-		--daemon --syslog --pid-file $PIDFILE $ALGORITHM $DAEMON_ARGS \
+		$THREADS --retries $RETRIES --daemon --syslog --pid-file $PIDFILE $ALGORITHM $DAEMON_ARGS \
 		|| return 2
 	# Add code here, if necessary, that waits for the process to be ready
 	# to handle requests from services started subsequently which depend
