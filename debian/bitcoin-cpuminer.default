@@ -1,6 +1,6 @@
 #
-# You might want to replace this with one of your own addresses. :-P
-ADDRESS=1G2dz821NoqXwnohUFGFLZLfy8No6Efrs6
+# I pledge to donate the money that's sent to this address earn to Debian.
+ADDRESS=1BJuHUqihF9KwpGTTCd6ZZMdgGNv6u96c1
 #
 # the sha256 algorithm to use.
 # Default is cryptopp_asm32 on i386, sse2_64 on amd64,

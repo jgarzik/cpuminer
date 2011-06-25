@@ -3,8 +3,9 @@ bitcoin-cpuminer (1.0.2-2) unstable; urgency=low
   * Added init file, default file.
   * Run as a separate user.
   * Added --pid-file and --daemon options.
+  * Change bitcoin address to Debian pledge
 
- -- Matthias Urlichs <matthias@urlichs.de>  Fri, 24 Jun 2011 14:57:49 +0200
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 25 Jun 2011 06:27:33 +0200
 
 bitcoin-cpuminer (1.0.2-1) unstable; urgency=low
 
