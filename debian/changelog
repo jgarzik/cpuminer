@@ -1,4 +1,4 @@
-bitcoin-cpuminer (1.0.2-3) maverick; urgency=low
+bitcoin-cpuminer (1.0.2-4) unstable; urgency=low
 
   * Add default argument for retries.
   * Fix setting number of threads.
