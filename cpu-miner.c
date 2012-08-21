@@ -585,7 +585,7 @@ static void *miner_thread(void *userdata)
 		switch (opt_algo) {
 		case ALGO_C:
 			rc = scanhash_c(thr_id, work.midstate, work.data + 64,
-				        work.hash1, work.hash, work.target,
+				        work.hash, work.target,
 					max_nonce, &hashes_done);
 			break;
 
@@ -621,7 +621,7 @@ static void *miner_thread(void *userdata)
 #endif
 		case ALGO_CRYPTOPP:
 			rc = scanhash_cryptopp(thr_id, work.midstate, work.data + 64,
-				        work.hash1, work.hash, work.target,
+				        work.hash, work.target,
 					max_nonce, &hashes_done);
 			break;
 

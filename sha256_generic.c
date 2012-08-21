@@ -240,8 +240,7 @@ const uint32_t sha256_init_state[8] = {
 
 /* suspiciously similar to ScanHash* from bitcoin */
 bool scanhash_c(int thr_id, const unsigned char *midstate, unsigned char *data,
-	        unsigned char *hash1, unsigned char *hash,
-		const unsigned char *target,
+	        unsigned char *hash, const unsigned char *target,
 	        uint32_t max_nonce, unsigned long *hashes_done)
 {
 	uint32_t *hash32 = (uint32_t *) hash;
@@ -252,6 +251,8 @@ bool scanhash_c(int thr_id, const unsigned char *midstate, unsigned char *data,
 	work_restart[thr_id].restart = 0;
 
 	while (1) {
+		unsigned char hash1[32];
+
 		n++;
 		*nonce = n;
 

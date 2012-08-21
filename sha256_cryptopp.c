@@ -94,8 +94,7 @@ static void runhash(void *state, const void *input, const void *init)
 
 /* suspiciously similar to ScanHash* from bitcoin */
 bool scanhash_cryptopp(int thr_id, const unsigned char *midstate,
-		unsigned char *data,
-	        unsigned char *hash1, unsigned char *hash,
+		unsigned char *data, unsigned char *hash,
 		const unsigned char *target,
 	        uint32_t max_nonce, unsigned long *hashes_done)
 {
@@ -107,6 +106,8 @@ bool scanhash_cryptopp(int thr_id, const unsigned char *midstate,
 	work_restart[thr_id].restart = 0;
 
 	while (1) {
+		unsigned char hash1[32];
+
 		n++;
 		*nonce = n;
 
@@ -579,8 +580,7 @@ static void runhash32(void *state, const void *input, const void *init)
 
 /* suspiciously similar to ScanHash* from bitcoin */
 bool scanhash_asm32(int thr_id, const unsigned char *midstate,
-		unsigned char *data,
-	        unsigned char *hash1, unsigned char *hash,
+		unsigned char *data, unsigned char *hash,
 		const unsigned char *target,
 	        uint32_t max_nonce, unsigned long *hashes_done)
 {
@@ -592,6 +592,8 @@ bool scanhash_asm32(int thr_id, const unsigned char *midstate,
 	work_restart[thr_id].restart = 0;
 
 	while (1) {
+		unsigned char hash1[32];
+
 		n++;
 		*nonce = n;
 
