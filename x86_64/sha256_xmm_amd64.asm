@@ -144,12 +144,11 @@ LAB_LOOP:
 	movdqa	xmm3, xmm4	; d = c
 	movdqa	xmm2, xmm4	; c
 	pand	xmm2, xmm5	; b & c
-	pand	xmm4, xmm7	; a & c
-	pand	xmm1, xmm7	; a & b
-	pxor	xmm1, xmm4
+	pxor	xmm1, xmm4	; b ^ c
+	pand	xmm1, xmm7	; a & (b ^ c)
+	pxor	xmm1, xmm2	; (a & (b ^ c)) ^ (b & c)
 	movdqa	xmm4, xmm5	; c = b
 	movdqa	xmm5, xmm7	; b = a
-	pxor	xmm1, xmm2	; (a & c) ^ (a & d) ^ (c & d)
 	paddd	xmm6, xmm1	; t1 + ((a & c) ^ (a & d) ^ (c & d))
 		
 	movdqa	xmm2, xmm7

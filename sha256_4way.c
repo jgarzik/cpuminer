@@ -45,7 +45,7 @@ static inline __m128i Ch(const __m128i b, const __m128i c, const __m128i d) {
 }
 
 static inline __m128i Maj(const __m128i b, const __m128i c, const __m128i d) {
-    return _mm_xor_si128(_mm_xor_si128(_mm_and_si128(b,c),_mm_and_si128(b,d)),_mm_and_si128(c,d));
+    return _mm_xor_si128(_mm_and_si128(b,_mm_xor_si128(c,d)),_mm_and_si128(c,d));
 }
 
 static __attribute__((always_inline)) __m128i  ROTR(__m128i x, const int n) {
