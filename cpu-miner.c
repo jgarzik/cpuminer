@@ -628,7 +628,7 @@ static void *miner_thread(void *userdata)
 #ifdef WANT_CRYPTOPP_ASM32
 		case ALGO_CRYPTOPP_ASM32:
 			rc = scanhash_asm32(thr_id, work.midstate, work.data + 64,
-				        work.hash1, work.hash, work.target,
+				        work.hash, work.target,
 					max_nonce, &hashes_done);
 			break;
 #endif
