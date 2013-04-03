@@ -603,8 +603,6 @@ bool scanhash_asm32(int thr_id, const unsigned char *midstate,
 		stat_ctr++;
 
 		if (unlikely((hash32[7] == 0) && fulltest(hash, target))) {
-			fulltest(hash, target);
-
 			*hashes_done = stat_ctr;
 			return true;
 		}
