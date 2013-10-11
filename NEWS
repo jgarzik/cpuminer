@@ -1,3 +1,74 @@
+Version 3.5.1 - 11th October 2013
+
+- Avoid calling get_statline_before on exit to avoid trying to use it on drivers
+in an indeterminate state.
+- Avoid calling get_statline on exit.
+- Drop logging level for failed to connect to stratum to verbose mode only since
+we hit it regularly.
+- Use fractional hashrate return values in bitfury_scanhash to minimise the
+number of times we return 0 based on hashrate so far to further damp out
+displayed hashrate.
+- Check for presence of driver name in DRIVER_COUNT_FOUND to prevent strcmp on a
+null pointer when a driver is not built in.
+- CMR allow sending flash and clock commands
+- Kill off threads that have failed using hash_sole_work instead of just
+disabling them.
+- Make the bf1 getinfo size a macro
+- Failing to add_cgpu in bitfury should be a terminal failure.
+- Check return values when attempting to open a BF1 device and set the msg size
+as a macro.
+- Display errors on failed usb read and write and consider sequential IO errors
+a permanent failure.
+- Use libusb's own error name function instead of hand coding the error names.
+- Limit ms_tdiff to 1 hour as a sanity check.
+- Try switching pools if for some reason we end up with only idle pools and have
+ended up current_pool set to an idle one.
+- Check a pool is stable for >5 mins before switching back to it.
+- Prevent overflows in us_tdiff and ms_tdiff.
+- Change second initialise message on bitfury verbose mode.
+- Submitting an ntime offset nonce needs to be done on a copy of the work
+instead of the original so abstract out shared components as much as possible,
+minimising strdups in copy_work and make submit_work_async work take copied
+work, cleaning up code in the process.
+- Provide a way for drivers to submit work that it has internally rolled the
+ntime value by returning the amount it has ntime rolled to be added.
+- Typo in configure.ac
+- Remove unmaintained broken ztex driver.
+- Icarus CMR2 detect FPGA setup
+- Icarus - use a data structure for I/O rather than magic numbers
+- klondike correct cvtKlnToC() temperature calculation
+- klondike - correct 1st reply debug based on define
+- klondike - debug dump structured replies
+- klondike - avoid division by zero if maxcount is unexpectedly zero
+- klondike store and report errorcount and noise
+- klondike - fix chipstats api stats buffer overrun with 16 chips
+- klondike add new nonecount only once
+- klondike - report mh/s based on nonces found + put old estimate into API stats
+- klondike use a memcpy
+- klondike fix bracket tabs indenting
+- api.c missing Klondike from ASIC list
+- Add 2nd CMR to 01-cgminer.rules
+- Add Klondike to 01-cgminer.rules
+- Klondike to main directory
+- Klondike consistent code spacing
+- Klondike update driver code to current git
+- update firmware for 16 chips, add dist files
+- beta final 0.3.0 release
+- updated firmware, IOC method
+- prevent nonces when not state W
+- added driver config option support
+- fixes for 300 MHz, fix K1 parts list
+- update driver, docs
+- update firmware & utils
+- updated cgminer driver for 3.3.1
+- update firmware and driver, create new cgminer fork
+- update klondike driver
+- add cgminer driver file as-is
+- Get statistics on how long usb reads and writes wait on the devlock.
+- Display stats regarding locking delays in API.
+- Disable bitfury device thread on it disappearing.
+
+
 Version 3.5.0 - 29th September 2013
 
 - Add magic init sequence required on BF1 devices to get them mining on windows.
