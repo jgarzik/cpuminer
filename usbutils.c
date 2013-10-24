@@ -48,6 +48,7 @@
 #define BFLSC_TIMEOUT_MS 999
 #define BITFORCE_TIMEOUT_MS 999
 #define BITFURY_TIMEOUT_MS 999
+#define DRILLBIT_TIMEOUT_MS 999
 #define MODMINER_TIMEOUT_MS 999
 #define AVALON_TIMEOUT_MS 999
 #define KLONDIKE_TIMEOUT_MS 999
@@ -56,6 +57,7 @@
 #define BFLSC_TIMEOUT_MS 300
 #define BITFORCE_TIMEOUT_MS 200
 #define BITFURY_TIMEOUT_MS 100
+#define DRILLBIT_TIMEOUT_MS 200
 #define MODMINER_TIMEOUT_MS 100
 #define AVALON_TIMEOUT_MS 200
 #define KLONDIKE_TIMEOUT_MS 200
@@ -103,19 +105,38 @@ static struct usb_intinfo bfl_ints[] = {
 #endif
 
 #ifdef USE_BITFURY
-static struct usb_epinfo bfu0_epinfos[] = {
+// Bitfury BF1
+static struct usb_epinfo bf1_int_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	8,	EPI(2), 0, 0, 0 }
 };
 
-static struct usb_epinfo bfu1_epinfos[] = {
+static struct usb_epinfo bf1_bulk_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPI(3), 0, 0, 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPO(4), 0, 0, 0 }
 };
 
 /* Default to interface 1 */
-static struct usb_intinfo bfu_ints[] = {
-	USB_EPS(1,  bfu1_epinfos),
-	USB_EPS(0,  bfu0_epinfos)
+static struct usb_intinfo bf1_ints[] = {
+	USB_EPS(1,  bf1_bulk_epinfos),
+	USB_EPS(0,  bf1_int_epinfos)
+};
+#endif
+
+#ifdef USE_DRILLBIT
+// Drillbit Bitfury devices
+static struct usb_epinfo drillbit_int_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	8,	EPI(3), 0, 0, 0 }
+};
+
+static struct usb_epinfo drillbit_bulk_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPI(1), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPO(2), 0, 0, 0 }
+};
+
+/* Default to interface 1 */
+static struct usb_intinfo drillbit_ints[] = {
+	USB_EPS(1,  drillbit_bulk_epinfos),
+	USB_EPS(0,  drillbit_int_epinfos)
 };
 #endif
 
@@ -266,7 +287,22 @@ static struct usb_find_devices find_dev[] = {
 		.latency = LATENCY_UNUSED,
 		.iManufacturer = "BPMC",
 		.iProduct = "Bitfury BF1",
-		INTINFO(bfu_ints)
+		INTINFO(bf1_ints)
+	},
+#endif
+#ifdef USE_DRILLBIT
+	{
+		.drv = DRIVER_drillbit,
+		.name = "Drillbit",
+		.ident = IDENT_DRB,
+		.idVendor = 0x03eb,
+		.idProduct = 0x2404,
+		.config = 1,
+		.timeout = DRILLBIT_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		.iManufacturer = "Drillbit Systems",
+		.iProduct = NULL, /* Can be Thumb or Eight, same driver */
+		INTINFO(drillbit_ints)
 	},
 #endif
 #ifdef USE_MODMINER
@@ -3110,6 +3146,7 @@ void usb_cleanup()
 			case DRIVER_bflsc:
 			case DRIVER_bitforce:
 			case DRIVER_bitfury:
+                        case DRIVER_drillbit:
 			case DRIVER_modminer:
 			case DRIVER_icarus:
 			case DRIVER_avalon:

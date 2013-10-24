@@ -239,7 +239,8 @@ static inline int fsync (int fd)
 	DRIVER_ADD_COMMAND(bflsc) \
 	DRIVER_ADD_COMMAND(bitfury) \
 	DRIVER_ADD_COMMAND(avalon) \
-	DRIVER_ADD_COMMAND(klondike)
+	DRIVER_ADD_COMMAND(klondike) \
+        DRIVER_ADD_COMMAND(drillbit)
 
 #define DRIVER_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(opencl) \

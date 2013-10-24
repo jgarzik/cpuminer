@@ -80,6 +80,10 @@ if HAS_BITFURY
 cgminer_SOURCES += driver-bitfury.c driver-bitfury.h
 endif
 
+if HAS_DRILLBIT
+cgminer_SOURCES += driver-drillbit.c driver-drillbit.h
+endif
+
 if HAS_ICARUS
 cgminer_SOURCES += driver-icarus.c
 endif

@@ -245,15 +245,27 @@ AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
 bitfury="no"
 
 AC_ARG_ENABLE([bitfury],
-	[AC_HELP_STRING([--enable-bitfury],[Compile support for BitFury ASICs (default disabled)])],
+	[AC_HELP_STRING([--enable-bitfury],[Compile support for BitFury BF1 (default disabled)])],
 	[bitfury=$enableval]
 	)
 if test "x$bitfury" = xyes; then
-	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if BitFury support is wanted])
+	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if BitFury BF1 support is wanted])
 fi
 AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
 
-icarus="no"
+drillbit="no"
+
+AC_ARG_ENABLE([drillbit],
+	[AC_HELP_STRING([--enable-drillbit],[Compile support for Drillbit BitFury ASICs (default disabled)])],
+	[drillbit=$enableval]
+	)
+if test "x$drillbit" = xyes; then
+	AC_DEFINE([USE_DRILLBIT], [1], [Defined to 1 if Drillbit BitFury support is wanted])
+fi
+AM_CONDITIONAL([HAS_DRILLBIT], [test x$drillbit = xyes])
+
+
+Icarus="no"
 
 AC_ARG_ENABLE([icarus],
 	[AC_HELP_STRING([--enable-icarus],[Compile support for Icarus (default disabled)])],
@@ -321,7 +333,7 @@ else
 	])
 fi
 
-if test x$avalon$bitforce$bitfury$modminer$bflsc$icarus$klondike != xnonononononono; then
+if test x$avalon$bitforce$bitfury$drillbit$modminer$bflsc$icarus$klondike != xnononononononono; then
 	want_usbutils=true
 else
 	want_usbutils=false
@@ -493,14 +505,14 @@ if test "x$opencl" != xno; then
 
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
-		if test "x$avalon$bitforce$bitfury$icarus$modminer$bflsc$klondike" = xnonononononono; then
+		if test "x$avalon$bitforce$bitfury$drillbit$icarus$modminer$bflsc$klondike" = xnononononononono; then
 			AC_MSG_ERROR([No mining configured in])
 		fi
 		echo "  scrypt...............: Disabled (needs OpenCL)"
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
-	if test "x$avalon$bitforce$bitfury$icarus$modminer$bflsc$klondike" = xnonononononono; then
+	if test "x$avalon$bitforce$bitfury$drillbit$icarus$modminer$bflsc$klondike" = xnononononononono; then
 		AC_MSG_ERROR([No mining configured in])
 	fi
 	echo "  scrypt...............: Disabled (needs OpenCL)"
@@ -536,10 +548,17 @@ else
 fi
 
 if test "x$bitfury" = xyes; then
-	echo "  BitFury.ASICs........: Enabled"
+	echo "  BitFury.BF1........: Enabled"
 else
-	echo "  BitFury.ASICs........: Disabled"
+	echo "  BitFury.BF1........: Disabled"
 fi
+
+if test "x$drillbit" = xyes; then
+	echo "  Drillbit.BitFury........: Enabled"
+else
+	echo "  Drillbit.BitFury........: Disabled"
+fi
+
 
 if test "x$icarus" = xyes; then
 	echo "  Icarus.FPGAs.........: Enabled"
