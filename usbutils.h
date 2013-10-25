@@ -344,7 +344,8 @@ struct cg_usb_info {
 	USB_ADD_COMMAND(C_BF_FLUSH, "BFFlush") \
 	USB_ADD_COMMAND(C_BF_IFLUSH, "BFInterruptFlush") \
 	USB_ADD_COMMAND(C_BF_IDENTIFY, "BFIdentify") \
-	USB_ADD_COMMAND(C_BF_DETECTCHIPS, "BFDetectChips")
+	USB_ADD_COMMAND(C_BF_DETECTCHIPS, "BFDetectChips") \
+	USB_ADD_COMMAND(C_BF_CONFIG, "BFConfig")
 
 /* Create usb_cmds enum from USB_PARSE_COMMANDS macro */
 enum usb_cmds {

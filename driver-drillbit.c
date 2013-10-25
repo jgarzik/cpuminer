@@ -46,9 +46,9 @@ typedef struct __attribute__((packed))
 typedef struct __attribute__((packed))
 {
   uint8_t core_voltage; // Set to flags defined above
-  uint8_t use_external_clock; // Only applicable to boards with external clocks
   uint8_t int_clock_level; // Clock level (30-48 without divider), see asic.c for details
   uint8_t clock_div2;      // Apply the /2 clock divider (both internal and external)
+  uint8_t use_ext_clock; // Ignored on boards without external clocks
   uint16_t ext_clock_freq;
 } BoardConfig;
 
@@ -59,6 +59,14 @@ typedef struct __attribute__((packed)) Identity
     uint32_t serial;
     uint8_t num_chips;
 } Identity;
+
+static const BoardConfig DEFAULT_CONFIG = {
+ core_voltage: CONFIG_CORE_085V,
+ use_ext_clock: 0,
+ int_clock_level: 40,
+ clock_div2: 0,
+ ext_clock_freq: 200
+};
 
 /* Return a pointer to the chip_info structure for a given chip id, or NULL otherwise */
 static struct drillbit_chip_info *find_chip(struct drillbit_info *info, uint16_t chip_id) {
@@ -216,6 +224,21 @@ static bool drillbit_reset(struct cgpu_info *drillbit)
 	return true;
 }
 
+static void drillbit_send_config(struct cgpu_info *drillbit, const BoardConfig *config)
+{
+  char cmd;
+  int amount;
+  applog(LOG_INFO, "Sending board configuration voltage=%d use_ext_clock=%d int_clock_level=%d clock_div2=%d ext_clock_freq=%d",
+         config->core_voltage, config->use_ext_clock, config->int_clock_level,
+         config->clock_div2, config->ext_clock_freq);
+  cmd = 'C';
+  usb_write(drillbit, &cmd, 1, &amount, C_BF_REQWORK);
+  usb_write(drillbit, (void *)config, sizeof(config), &amount, C_BF_CONFIG);
+
+  /* Expect a single 'W' byte as acknowledgement */
+  usb_read_simple_response(drillbit, 'C', C_BF_CONFIG); // TODO: verify response
+}
+
 static bool drillbit_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *drillbit;
@@ -261,8 +284,7 @@ static bool drillbit_detect_one(struct libusb_device *dev, struct usb_find_devic
 
 	update_usb_stats(drillbit);
 
-        
-
+        drillbit_send_config(drillbit, &DEFAULT_CONFIG);
 
 	applog(LOG_INFO, "%s %d: Successfully initialised %s",
 	       drillbit->drv->name, drillbit->device_id, drillbit->device_path);
@@ -352,7 +374,7 @@ static bool check_for_results(struct thr_info *thr)
 
     if(!usb_read_fixed_size(drillbit, &response, sizeof(WorkResult), TIMEOUT, C_BF_GETRES)) {
       applog(LOG_ERR, "Failed to read response data packet idx %d count %d", j, result_count);
-      return false;
+      return 0;
     }
 
     if (unlikely(thr->work_restart))
