@@ -344,7 +344,7 @@ static bool drillbit_checkresults(struct thr_info *thr, struct work *work, uint3
 
 // Check and submit back any pending work results from firmware,
 // returns number of successful results found
-static bool check_for_results(struct thr_info *thr)
+static int check_for_results(struct thr_info *thr)
 {
   struct cgpu_info *drillbit = thr->cgpu;
   struct drillbit_info *info = drillbit->device_data;
@@ -504,7 +504,7 @@ cascade:
 		       drillbit->drv->name, drillbit->device_id);
 		return -1;
 	}
-	return (uint64_t)result_count * 0xffffffffULL;
+	return 0xffffffffULL * result_count;
 }
 
 static struct api_data *drillbit_api_stats(struct cgpu_info *cgpu)
