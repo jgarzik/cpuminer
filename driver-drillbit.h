@@ -13,7 +13,7 @@
 #include "miner.h"
 #include "usbutils.h"
 
-#define WORK_HISTORY_LEN 8
+#define WORK_HISTORY_LEN 2
 
 struct drillbit_chip_info;
 
@@ -25,13 +25,13 @@ struct drillbit_info {
   uint32_t serial;
   uint8_t num_chips;
   struct drillbit_chip_info *chips;
-  struct timeval tv_start;
 };
 
 struct drillbit_chip_info {
   uint16_t chip_id;
   struct work *current_work[WORK_HISTORY_LEN];
   bool has_work;
+  struct timeval tv_start;
 };
 
 #endif /* BITFURY_H */

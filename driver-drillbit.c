@@ -356,9 +356,7 @@ static bool check_for_results(struct thr_info *thr)
     chip->has_work = false;
   }
 
-
  cleanup:
-  bitfury_empty_buffer(bitfury);
   return successful_results;
 }
 
@@ -368,7 +366,7 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 	struct cgpu_info *bitfury = thr->cgpu;
 	struct drillbit_info *info = bitfury->device_data;
         struct drillbit_chip_info *chip;
-	struct timeval tv_now;
+	struct timeval tv_now, tv_start;
 	int amount, i, j;
 	int ms_diff;
         uint8_t cmd;
@@ -379,9 +377,11 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
         result_count = 0;
 
         chip = NULL;
-	cgtime(&info->tv_start);
+	cgtime(&tv_start);
         ms_diff = TIMEOUT;
-        while(chip == NULL) { // wait for a free chip to open up
+
+        // wait for a free chip to send back a result
+        while(chip == NULL) {
           result_count += check_for_results(thr);
           for(i = 0; i < info->num_chips; i++) {
             if(!info->chips[i].has_work) {
@@ -391,35 +391,34 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
           }
 
           cgtime(&tv_now);
-          ms_diff = ms_tdiff(&tv_now, &info->tv_start);
+          ms_diff = ms_tdiff(&tv_now, &tv_start);
           if(ms_diff > TIMEOUT) {
             applog(LOG_ERR, "Timed out waiting for any results to come back from ASICs.");
-            goto cascade;
+            break;
           }
         }
 
-        if(!chip) {
-          return 0;
+        // check for any chips that have timed out on sending results
+        cgtime(&tv_now);
+        for(i = 0; i < info->num_chips; i++) {
+          if(!info->chips[i].has_work)
+            continue;
+          ms_diff = ms_tdiff(&tv_now, &info->chips[i].tv_start);
+          if(ms_diff > TIMEOUT) {
+            applog(LOG_ERR, "Timing out unresponsive ASIC %d", info->chips[i].chip_id);
+            info->chips[i].has_work = false;
+            chip = &info->chips[i];
+          }
+        }
+
+        if(chip == NULL) {
+          goto cascade;
         }
 
         applog(LOG_DEBUG, "Sending work to chip_id %d", chip->chip_id);
         request.chip_id = chip->chip_id;
 	memcpy(&request.midstate, work->midstate, 32);
 	memcpy(&request.data, work->data + 64, 12);
-
-        /*
-        tmp = bin2hex(work->midstate, 32);
-        applog(LOG_DEBUG, "Midstate %s", tmp);
-        free(tmp);
-        tmp = bin2hex(work->data+64, 12);
-        applog(LOG_DEBUG, "Data %s", tmp);
-        free(tmp);*/
-
-        applog(LOG_DEBUG, "Data %x %x %x", *((uint32_t*)(work->data+64)),
-               *((uint32_t*)(work->data+64+4)), *((uint32_t*)(work->data+64+8)));
-
-        uint32_t *data = request.data;
-        applog(LOG_DEBUG, "Data in request %x %x %x", data[0],data[1],data[2]);
 
 	/* Send work to cgminer */
         cmd = 'W';
@@ -439,10 +438,11 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
         for(i = 0; i < WORK_HISTORY_LEN-1; i++)
           chip->current_work[i] = chip->current_work[i+1];
         chip->current_work[WORK_HISTORY_LEN-1] = copy_work(work);
+        cgtime(&chip->tv_start);
         applog(LOG_DEBUG, "assigned new current_work=%p", chip->current_work[WORK_HISTORY_LEN-1]);
 
-        bitfury_empty_buffer(bitfury);
 cascade:
+        bitfury_empty_buffer(bitfury);
 	work->blk.nonce = 0xffffffff;
 
 	if (unlikely(bitfury->usbinfo.nodev)) {
