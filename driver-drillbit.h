@@ -27,10 +27,16 @@ struct drillbit_info {
   struct drillbit_chip_info *chips;
 };
 
+enum drillbit_chip_state {
+  IDLE,            /* Has no work */
+  WORKING_NOQUEUED, /* Has current work but nothing queued as "next work" */
+  WORKING_QUEUED   /* Has current work and a piece of work queued for after that */
+};
+
 struct drillbit_chip_info {
   uint16_t chip_id;
   struct work *current_work[WORK_HISTORY_LEN];
-  bool has_work;
+  enum drillbit_chip_state state;
   struct timeval tv_start;
 };
 

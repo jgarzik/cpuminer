@@ -17,7 +17,7 @@
 #define TIMEOUT 2000
 #define MAX_RESULTS 16 // max results from a single chip
 
-/* Request and response structs */
+/* Request and response structsfor firmware */
 
 typedef struct __attribute__((packed))
 {
@@ -30,12 +30,13 @@ typedef struct __attribute__((packed))
 {
   uint16_t chip_id;
   uint8_t num_nonces;
+  uint8_t is_idle;
   uint32_t nonce[MAX_RESULTS];
 } WorkResult;
 
 typedef struct __attribute__((packed)) Identity
 {
-    uint8_t version;
+    uint8_t protocol_version;
     uint8_t product[8];
     uint32_t serial;
     uint8_t num_chips;
@@ -176,7 +177,7 @@ static bool bitfury_getinfo(struct cgpu_info *bitfury, struct drillbit_info *inf
 		       bitfury->drv->name, bitfury->device_id, amount, sizeof(Identity));
 		return false;
 	}
-	info->version = identity.version;
+	info->version = identity.protocol_version;
 	memcpy(&info->product, identity.product, sizeof(identity.product));
         info->serial = identity.serial;
         info->num_chips = identity.num_chips;
@@ -306,7 +307,7 @@ static bool check_for_results(struct thr_info *thr)
   struct drillbit_chip_info *chip;
   char cmd;
   int amount, i, j, k;
-  int successful_results;
+  int successful_results, found;
   uint32_t result_count;
   WorkResult response;
 
@@ -316,6 +317,7 @@ static bool check_for_results(struct thr_info *thr)
   cmd = 'E';
   usb_write(bitfury, &cmd, 1, &amount, C_BF_GETRES);
 
+  // Receive count for work results
   if(!usb_read_fixed_size(bitfury, &result_count, sizeof(result_count), TIMEOUT, C_BF_GETRES)) {
     applog(LOG_ERR, "Got no response to request for work results");
     return false;
@@ -323,6 +325,7 @@ static bool check_for_results(struct thr_info *thr)
   if(result_count)
     applog(LOG_DEBUG, "Result count %d",result_count);
 
+  // Receive work results (0 or more)
   for(j = 0; j < result_count; j++) {
 
     if(!usb_read_fixed_size(bitfury, &response, sizeof(WorkResult), TIMEOUT, C_BF_GETRES)) {
@@ -332,28 +335,33 @@ static bool check_for_results(struct thr_info *thr)
 
     if (unlikely(thr->work_restart))
       goto cleanup;
-    // Receive work results (0 or more, with a terminating final dummy result)
-    applog(LOG_DEBUG, "Got response packet chip_id %d nonces %d", response.chip_id, response.num_nonces);
+    applog(LOG_DEBUG, "Got response packet chip_id %d nonces %d is_idle %d", response.chip_id, response.num_nonces, response.is_idle);
     chip = find_chip(info, response.chip_id);
     if(!chip) {
       applog(LOG_ERR, "Got work result for unknown chip id %d", response.chip_id);
       continue;
     }
-    if(!chip->has_work) {
+    if(chip->state == IDLE) {
       applog(LOG_WARNING, "Got spurious work results for idle ASIC %d", response.chip_id);
     }
     for(i = 0; i < response.num_nonces; i++) {
-      applog(LOG_DEBUG, "Checking nonce 0x%x",response.nonce[i]);
+      found = false;
       for(k = 0; k < WORK_HISTORY_LEN; k++) {
-        applog(LOG_DEBUG, "k=%d current_work=%p", k, chip->current_work[k]);
         if (chip->current_work[k] && bitfury_checkresults(thr, chip->current_work[k], response.nonce[i])) {
           successful_results++;
-          applog(LOG_INFO, "Found nonce!");
+          found = true;
           break;
         }
       }
+      if(!found && chip->state != IDLE) {
+        /* all nonces we got back from this chip were invalid */
+        inc_hw_errors(thr);
+      }
     }
-    chip->has_work = false;
+    if(chip->state == WORKING_QUEUED && !response.is_idle)
+      chip->state = WORKING_NOQUEUED; // Time to queue up another piece of "next work"
+    else
+      chip->state = IDLE; // Uh-oh, we're totally out of work for this ASIC!
   }
 
  cleanup:
@@ -380,11 +388,11 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 	cgtime(&tv_start);
         ms_diff = TIMEOUT;
 
-        // wait for a free chip to send back a result
+        // check for results, repeat if necessry until we see a free chip
         while(chip == NULL) {
           result_count += check_for_results(thr);
           for(i = 0; i < info->num_chips; i++) {
-            if(!info->chips[i].has_work) {
+            if(info->chips[i].state != WORKING_QUEUED) {
               chip = &info->chips[i];
               break;
             }
@@ -401,12 +409,12 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
         // check for any chips that have timed out on sending results
         cgtime(&tv_now);
         for(i = 0; i < info->num_chips; i++) {
-          if(!info->chips[i].has_work)
+          if(info->chips[i].state == IDLE)
             continue;
           ms_diff = ms_tdiff(&tv_now, &info->chips[i].tv_start);
           if(ms_diff > TIMEOUT) {
             applog(LOG_ERR, "Timing out unresponsive ASIC %d", info->chips[i].chip_id);
-            info->chips[i].has_work = false;
+            info->chips[i].state = IDLE;
             chip = &info->chips[i];
           }
         }
@@ -430,7 +438,10 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 
         /* Expect a single 'W' byte as acknowledgement */
         usb_read_simple_response(bitfury, 'W', C_BF_REQWORK); // TODO: verify response
-        chip->has_work = true;
+        if(chip->state == WORKING_NOQUEUED)
+          chip->state = WORKING_QUEUED;
+        else
+          chip->state = WORKING_NOQUEUED;
 
         // Read into work history
         if(chip->current_work[0])
@@ -439,7 +450,6 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
           chip->current_work[i] = chip->current_work[i+1];
         chip->current_work[WORK_HISTORY_LEN-1] = copy_work(work);
         cgtime(&chip->tv_start);
-        applog(LOG_DEBUG, "assigned new current_work=%p", chip->current_work[WORK_HISTORY_LEN-1]);
 
 cascade:
         bitfury_empty_buffer(bitfury);
@@ -450,7 +460,7 @@ cascade:
 		       bitfury->drv->name, bitfury->device_id);
 		return -1;
 	}
-	return result_count * 0xffffffffULL;
+	return (uint64_t)result_count * 0xffffffffULL;
 }
 
 static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
