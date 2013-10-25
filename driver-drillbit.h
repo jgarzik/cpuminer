@@ -13,7 +13,7 @@
 #include "miner.h"
 #include "usbutils.h"
 
-#define WORK_HISTORY_LEN 2
+#define WORK_HISTORY_LEN 4
 
 struct drillbit_chip_info;
 

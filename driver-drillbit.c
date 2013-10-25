@@ -34,6 +34,24 @@ typedef struct __attribute__((packed))
   uint32_t nonce[MAX_RESULTS];
 } WorkResult;
 
+#define CONFIG_PW1 (1<<0)
+#define CONFIG_PW2 (1<<1)
+
+// Possible core voltage settings on PW1 & PW2
+#define CONFIG_CORE_065V 0
+#define CONFIG_CORE_075V CONFIG_PW2
+#define CONFIG_CORE_085V CONFIG_PW1
+#define CONFIG_CORE_095V (CONFIG_PW1|CONFIG_PW2)
+
+typedef struct __attribute__((packed))
+{
+  uint8_t core_voltage; // Set to flags defined above
+  uint8_t use_external_clock; // Only applicable to boards with external clocks
+  uint8_t int_clock_level; // Clock level (30-48 without divider), see asic.c for details
+  uint8_t clock_div2;      // Apply the /2 clock divider (both internal and external)
+  uint16_t ext_clock_freq;
+} BoardConfig;
+
 typedef struct __attribute__((packed)) Identity
 {
     uint8_t protocol_version;
@@ -53,7 +71,7 @@ static struct drillbit_chip_info *find_chip(struct drillbit_info *info, uint16_t
 }
 
 /* Read a fixed size buffer back from USB, returns true on success */
-static bool usb_read_fixed_size(struct cgpu_info *bitfury, void *result, size_t result_size, int timeout, enum usb_cmds command_name) {
+static bool usb_read_fixed_size(struct cgpu_info *drillbit, void *result, size_t result_size, int timeout, enum usb_cmds command_name) {
   uint8_t *buf[result_size];
   char *hex;
   int count;
@@ -62,7 +80,7 @@ static bool usb_read_fixed_size(struct cgpu_info *bitfury, void *result, size_t 
   amount = 1;
   count = 0;
   while(amount > 0 && count < result_size) { // TODO: decrement timeout appropriately
-    usb_read_once_timeout(bitfury, (char *)&buf[count], result_size-count, &amount, timeout, command_name);
+    usb_read_once_timeout(drillbit, (char *)&buf[count], result_size-count, &amount, timeout, command_name);
     count += amount;
   }
   if(amount > 0) {
@@ -78,30 +96,30 @@ static bool usb_read_fixed_size(struct cgpu_info *bitfury, void *result, size_t 
   return false;
 }
 
-static bool usb_read_simple_response(struct cgpu_info *bitfury, char command, enum usb_cmds command_name);
+static bool usb_read_simple_response(struct cgpu_info *drillbit, char command, enum usb_cmds command_name);
 
 /* Write a simple one-byte command and expect a simple one-byte response
    Returns true on success
 */
-static bool usb_send_simple_command(struct cgpu_info *bitfury, char command, enum usb_cmds command_name) {
+static bool usb_send_simple_command(struct cgpu_info *drillbit, char command, enum usb_cmds command_name) {
   int amount;
-  usb_write(bitfury, &command, 1, &amount, C_BF_REQWORK);
+  usb_write(drillbit, &command, 1, &amount, C_BF_REQWORK);
   if(amount != 1) {
     applog(LOG_ERR, "Failed to write command %c",command);
     return false;
   }
-  return usb_read_simple_response(bitfury, command, command_name);
+  return usb_read_simple_response(drillbit, command, command_name);
 }
 
 
 /* Read a simple single-byte response and check it matches the correct command character
    Return true on success
 */
-static bool usb_read_simple_response(struct cgpu_info *bitfury, char command, enum usb_cmds command_name) {
+static bool usb_read_simple_response(struct cgpu_info *drillbit, char command, enum usb_cmds command_name) {
   int amount;
   char response;
   /* Expect a single byte, matching the command, as acknowledgement */
-  usb_read_once_timeout(bitfury, &response, 1, &amount, TIMEOUT, C_BF_GETRES);
+  usb_read_once_timeout(drillbit, &response, 1, &amount, TIMEOUT, C_BF_GETRES);
   if(amount != 1) {
     applog(LOG_ERR, "Got no response to command %c",command);
     return false;
@@ -113,68 +131,68 @@ static bool usb_read_simple_response(struct cgpu_info *bitfury, char command, en
   return true;
 }
 
-static void bitfury_empty_buffer(struct cgpu_info *bitfury)
+static void drillbit_empty_buffer(struct cgpu_info *drillbit)
 {
 	char buf[512];
 	int amount;
 
 	do {
-		usb_read_once(bitfury, buf, 512, &amount, C_BF_FLUSH);
+		usb_read_once(drillbit, buf, 512, &amount, C_BF_FLUSH);
 	} while (amount);
 }
 
-static void bitfury_open(struct cgpu_info *bitfury)
+static void drillbit_open(struct cgpu_info *drillbit)
 {
 	uint32_t buf[2];
 
-	bitfury_empty_buffer(bitfury);
+	drillbit_empty_buffer(drillbit);
 	/* Magic sequence to reset device only really needed for windows but
 	 * harmless on linux. */
         /*
 	buf[0] = 0x80250000;
 	buf[1] = 0x00000800;
-	usb_transfer(bitfury, 0, 9, 1, 0, C_BF_RESET);
-	usb_transfer(bitfury, 0x21, 0x22, 0, 0, C_BF_OPEN);
-	usb_transfer_data(bitfury, 0x21, 0x20, 0x0000, 0, buf, 7, C_BF_INIT);
+	usb_transfer(drillbit, 0, 9, 1, 0, C_BF_RESET);
+	usb_transfer(drillbit, 0x21, 0x22, 0, 0, C_BF_OPEN);
+	usb_transfer_data(drillbit, 0x21, 0x20, 0x0000, 0, buf, 7, C_BF_INIT);
         */
 }
 
-static void bitfury_close(struct cgpu_info *bitfury)
+static void drillbit_close(struct cgpu_info *drillbit)
 {
-  struct drillbit_info *info = bitfury->device_data;
-  bitfury_empty_buffer(bitfury);
+  struct drillbit_info *info = drillbit->device_data;
+  drillbit_empty_buffer(drillbit);
   if(info->chips)
     free(info->chips);
 }
 
-static void bitfury_identify(struct cgpu_info *bitfury)
+static void drillbit_identify(struct cgpu_info *drillbit)
 {
 	int amount;
 
-        usb_send_simple_command(bitfury, 'L', C_BF_IDENTIFY);
+        usb_send_simple_command(drillbit, 'L', C_BF_IDENTIFY);
 }
 
-static bool bitfury_getinfo(struct cgpu_info *bitfury, struct drillbit_info *info)
+static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *info)
 {
 	int amount, err;
         Identity identity;
 
-	err = usb_write(bitfury, "I", 1, &amount, C_BF_REQINFO);
+	err = usb_write(drillbit, "I", 1, &amount, C_BF_REQINFO);
 	if (err) {
 		applog(LOG_INFO, "%s %d: Failed to write REQINFO",
-		       bitfury->drv->name, bitfury->device_id);
+		       drillbit->drv->name, drillbit->device_id);
 		return false;
 	}
         // can't call usb_read_fixed_size here as stats not initialised
-	err = usb_read(bitfury, (void *)&identity, sizeof(Identity), &amount, C_BF_GETINFO);
+	err = usb_read(drillbit, (void *)&identity, sizeof(Identity), &amount, C_BF_GETINFO);
 	if (err) {
 		applog(LOG_INFO, "%s %d: Failed to read GETINFO",
-		       bitfury->drv->name, bitfury->device_id);
+		       drillbit->drv->name, drillbit->device_id);
 		return false;
 	}
 	if (amount != sizeof(Identity)) {
 		applog(LOG_INFO, "%s %d: Getinfo received %d bytes instead of %lu",
-		       bitfury->drv->name, bitfury->device_id, amount, sizeof(Identity));
+		       drillbit->drv->name, drillbit->device_id, amount, sizeof(Identity));
 		return false;
 	}
 	info->version = identity.protocol_version;
@@ -182,54 +200,54 @@ static bool bitfury_getinfo(struct cgpu_info *bitfury, struct drillbit_info *inf
         info->serial = identity.serial;
         info->num_chips = identity.num_chips;
 
-	applog(LOG_INFO, "%s %d: Getinfo returned version %d, product %s serial %08x num_chips %d", bitfury->drv->name,
-	       bitfury->device_id, info->version, info->product, info->serial, info->num_chips);
-	bitfury_empty_buffer(bitfury);
+	applog(LOG_INFO, "%s %d: Getinfo returned version %d, product %s serial %08x num_chips %d", drillbit->drv->name,
+	       drillbit->device_id, info->version, info->product, info->serial, info->num_chips);
+	drillbit_empty_buffer(drillbit);
 	return true;
 }
 
-static bool bitfury_reset(struct cgpu_info *bitfury)
+static bool drillbit_reset(struct cgpu_info *drillbit)
 {
 	int amount, err;
-        if(!usb_send_simple_command(bitfury, 'R', C_BF_REQRESET))
+        if(!usb_send_simple_command(drillbit, 'R', C_BF_REQRESET))
           return false;
         
-	bitfury_empty_buffer(bitfury);
+	drillbit_empty_buffer(drillbit);
 	return true;
 }
 
-static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
+static bool drillbit_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
-	struct cgpu_info *bitfury;
+	struct cgpu_info *drillbit;
 	struct drillbit_info *info;
         int i;
 
-	bitfury = usb_alloc_cgpu(&bitfury_drv, 1);
+	drillbit = usb_alloc_cgpu(&drillbit_drv, 1);
 
-	if (!usb_init(bitfury, dev, found))
+	if (!usb_init(drillbit, dev, found))
 		goto out;
-	applog(LOG_INFO, "%s %d: Found at %s", bitfury->drv->name,
-	       bitfury->device_id, bitfury->device_path);
+	applog(LOG_INFO, "%s %d: Found at %s", drillbit->drv->name,
+	       drillbit->device_id, drillbit->device_path);
 
 	info = calloc(sizeof(struct drillbit_info), 1);
 	if (!info)
-		quit(1, "Failed to calloc info in bitfury_detect_one");
-	bitfury->device_data = info;
+		quit(1, "Failed to calloc info in drillbit_detect_one");
+	drillbit->device_data = info;
 
-	usb_buffer_enable(bitfury);
+	usb_buffer_enable(drillbit);
 
-	bitfury_open(bitfury);
+	drillbit_open(drillbit);
 
 	/* Send getinfo request */
-	if (!bitfury_getinfo(bitfury, info))
+	if (!drillbit_getinfo(drillbit, info))
 		goto out_close;
 
 	/* Send reset request */
-	if (!bitfury_reset(bitfury))
+	if (!drillbit_reset(drillbit))
 		goto out_close;
 
-	bitfury_identify(bitfury);
-	bitfury_empty_buffer(bitfury);
+	drillbit_identify(drillbit);
+	drillbit_empty_buffer(drillbit);
 
         /* TODO: Add detection for actual chip ids based on command/response,
            not prefill assumption about chip layout based on info structure */
@@ -238,25 +256,29 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
           info->chips[i].chip_id = i;
         }
 
-	if (!add_cgpu(bitfury))
+	if (!add_cgpu(drillbit))
 		goto out_close;
 
-	update_usb_stats(bitfury);
+	update_usb_stats(drillbit);
+
+        
+
+
 	applog(LOG_INFO, "%s %d: Successfully initialised %s",
-	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
+	       drillbit->drv->name, drillbit->device_id, drillbit->device_path);
 
 	return true;
 out_close:
-	bitfury_close(bitfury);
-	usb_uninit(bitfury);
+	drillbit_close(drillbit);
+	usb_uninit(drillbit);
 out:
-	bitfury = usb_free_cgpu(bitfury);
+	drillbit = usb_free_cgpu(drillbit);
 	return false;
 }
 
-static void bitfury_detect(bool __maybe_unused hotplug)
+static void drillbit_detect(bool __maybe_unused hotplug)
 {
-	usb_detect(&bitfury_drv, bitfury_detect_one);
+	usb_detect(&drillbit_drv, drillbit_detect_one);
 }
 
 static uint32_t decnonce(uint32_t in)
@@ -284,7 +306,7 @@ static uint32_t decnonce(uint32_t in)
 #define BT_OFFSETS 3
 const uint32_t bf_offsets[] = {-0x800000, 0, -0x400000};
 
-static bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32_t nonce)
+static bool drillbit_checkresults(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	int i;
 
@@ -302,8 +324,8 @@ static bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32
 // returns number of successful results found
 static bool check_for_results(struct thr_info *thr)
 {
-  struct cgpu_info *bitfury = thr->cgpu;
-  struct drillbit_info *info = bitfury->device_data;
+  struct cgpu_info *drillbit = thr->cgpu;
+  struct drillbit_info *info = drillbit->device_data;
   struct drillbit_chip_info *chip;
   char cmd;
   int amount, i, j, k;
@@ -315,10 +337,10 @@ static bool check_for_results(struct thr_info *thr)
 
   // Send request for completed work
   cmd = 'E';
-  usb_write(bitfury, &cmd, 1, &amount, C_BF_GETRES);
+  usb_write(drillbit, &cmd, 1, &amount, C_BF_GETRES);
 
   // Receive count for work results
-  if(!usb_read_fixed_size(bitfury, &result_count, sizeof(result_count), TIMEOUT, C_BF_GETRES)) {
+  if(!usb_read_fixed_size(drillbit, &result_count, sizeof(result_count), TIMEOUT, C_BF_GETRES)) {
     applog(LOG_ERR, "Got no response to request for work results");
     return false;
   }
@@ -328,7 +350,7 @@ static bool check_for_results(struct thr_info *thr)
   // Receive work results (0 or more)
   for(j = 0; j < result_count; j++) {
 
-    if(!usb_read_fixed_size(bitfury, &response, sizeof(WorkResult), TIMEOUT, C_BF_GETRES)) {
+    if(!usb_read_fixed_size(drillbit, &response, sizeof(WorkResult), TIMEOUT, C_BF_GETRES)) {
       applog(LOG_ERR, "Failed to read response data packet idx %d count %d", j, result_count);
       return false;
     }
@@ -347,7 +369,7 @@ static bool check_for_results(struct thr_info *thr)
     for(i = 0; i < response.num_nonces; i++) {
       found = false;
       for(k = 0; k < WORK_HISTORY_LEN; k++) {
-        if (chip->current_work[k] && bitfury_checkresults(thr, chip->current_work[k], response.nonce[i])) {
+        if (chip->current_work[k] && drillbit_checkresults(thr, chip->current_work[k], response.nonce[i])) {
           successful_results++;
           found = true;
           break;
@@ -368,11 +390,11 @@ static bool check_for_results(struct thr_info *thr)
   return successful_results;
 }
 
-static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
+static int64_t drillbit_scanhash(struct thr_info *thr, struct work *work,
 				int64_t __maybe_unused max_nonce)
 {
-	struct cgpu_info *bitfury = thr->cgpu;
-	struct drillbit_info *info = bitfury->device_data;
+	struct cgpu_info *drillbit = thr->cgpu;
+	struct drillbit_info *info = drillbit->device_data;
         struct drillbit_chip_info *chip;
 	struct timeval tv_now, tv_start;
 	int amount, i, j;
@@ -430,14 +452,14 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 
 	/* Send work to cgminer */
         cmd = 'W';
-	usb_write(bitfury, &cmd, 1, &amount, C_BF_REQWORK);
-	usb_write(bitfury, (void *)&request, sizeof(request), &amount, C_BF_REQWORK);
+	usb_write(drillbit, &cmd, 1, &amount, C_BF_REQWORK);
+	usb_write(drillbit, (void *)&request, sizeof(request), &amount, C_BF_REQWORK);
 
 	if (unlikely(thr->work_restart))
 		goto cascade;
 
         /* Expect a single 'W' byte as acknowledgement */
-        usb_read_simple_response(bitfury, 'W', C_BF_REQWORK); // TODO: verify response
+        usb_read_simple_response(drillbit, 'W', C_BF_REQWORK); // TODO: verify response
         if(chip->state == WORKING_NOQUEUED)
           chip->state = WORKING_QUEUED;
         else
@@ -452,18 +474,18 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
         cgtime(&chip->tv_start);
 
 cascade:
-        bitfury_empty_buffer(bitfury);
+        drillbit_empty_buffer(drillbit);
 	work->blk.nonce = 0xffffffff;
 
-	if (unlikely(bitfury->usbinfo.nodev)) {
+	if (unlikely(drillbit->usbinfo.nodev)) {
 		applog(LOG_WARNING, "%s %d: Device disappeared, disabling thread",
-		       bitfury->drv->name, bitfury->device_id);
+		       drillbit->drv->name, drillbit->device_id);
 		return -1;
 	}
 	return (uint64_t)result_count * 0xffffffffULL;
 }
 
-static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
+static struct api_data *drillbit_api_stats(struct cgpu_info *cgpu)
 {
 	struct drillbit_info *info = cgpu->device_data;
 	struct api_data *root = NULL;
@@ -479,29 +501,29 @@ static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
-static void bitfury_init(struct cgpu_info  *bitfury)
+static void drillbit_init(struct cgpu_info  *drillbit)
 {
-	bitfury_close(bitfury);
-	bitfury_open(bitfury);
-	bitfury_reset(bitfury);
+	drillbit_close(drillbit);
+	drillbit_open(drillbit);
+	drillbit_reset(drillbit);
 }
 
-static void bitfury_shutdown(struct thr_info *thr)
+static void drillbit_shutdown(struct thr_info *thr)
 {
-	struct cgpu_info *bitfury = thr->cgpu;
+	struct cgpu_info *drillbit = thr->cgpu;
 
-	bitfury_close(bitfury);
+	drillbit_close(drillbit);
 }
 
 /* Currently hardcoded to BF1 devices */
-struct device_drv bitfury_drv = {
+struct device_drv drillbit_drv = {
 	.drv_id = DRIVER_drillbit,
 	.dname = "Drillbit",
 	.name = "Drillbit",
-	.drv_detect = bitfury_detect,
-	.scanhash = bitfury_scanhash,
-	.get_api_stats = bitfury_api_stats,
-	.reinit_device = bitfury_init,
-	.thread_shutdown = bitfury_shutdown,
-	.identify_device = bitfury_identify
+	.drv_detect = drillbit_detect,
+	.scanhash = drillbit_scanhash,
+	.get_api_stats = drillbit_api_stats,
+	.reinit_device = drillbit_init,
+	.thread_shutdown = drillbit_shutdown,
+	.identify_device = drillbit_identify
 };
