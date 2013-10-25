@@ -584,6 +584,16 @@ char *get_proxy(char *url, struct pool *pool)
 	return url;
 }
 
+/* Adequate size s==len*2 + 1 must be alloced to use this variant */
+void __bin2hex(char *s, const unsigned char *p, size_t len)
+{
+	int i;
+
+	for (i = 0; i < (int)len; i++)
+		sprintf(s + (i * 2), "%02x", (unsigned int)p[i]);
+
+}
+
 /* Returns a malloced array string of a binary value of arbitrary length. The
  * array is rounded up to a 4 byte size to appease architectures that need
  * aligned array  sizes */
@@ -591,7 +601,6 @@ char *bin2hex(const unsigned char *p, size_t len)
 {
 	ssize_t slen;
 	char *s;
-	int i;
 
 	slen = len * 2 + 1;
 	if (slen % 4)
@@ -600,8 +609,7 @@ char *bin2hex(const unsigned char *p, size_t len)
 	if (unlikely(!s))
 		quithere(1, "Failed to calloc");
 
-	for (i = 0; i < (int)len; i++)
-		sprintf(s + (i * 2), "%02x", (unsigned int)p[i]);
+	__bin2hex(s, p, len);
 
 	return s;
 }
@@ -873,6 +881,14 @@ void ms_to_timespec(struct timespec *spec, int64_t ms)
 	spec->tv_nsec = tvdiv.rem * 1000000;
 }
 
+void ms_to_timeval(struct timeval *val, int64_t ms)
+{
+	lldiv_t tvdiv = lldiv(ms, 1000);
+
+	val->tv_sec = tvdiv.quot;
+	val->tv_usec = tvdiv.rem * 1000;
+}
+
 void timeraddspec(struct timespec *a, const struct timespec *b)
 {
 	a->tv_sec += b->tv_sec;
@@ -883,20 +899,9 @@ void timeraddspec(struct timespec *a, const struct timespec *b)
 	}
 }
 
-static int timespec_to_ms(struct timespec *ts)
+static int __maybe_unused timespec_to_ms(struct timespec *ts)
 {
 	return ts->tv_sec * 1000 + ts->tv_nsec / 1000000;
-}
-
-/* Subtracts b from a and stores it in res. */
-void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
-{
-	res->tv_sec = a->tv_sec - b->tv_sec;
-	res->tv_nsec = a->tv_nsec - b->tv_nsec;
-	if (res->tv_nsec < 0) {
-		res->tv_nsec += 1000000000;
-		res->tv_sec--;
-	}
 }
 
 /* Subtract b from a */
@@ -908,23 +913,6 @@ static void __maybe_unused timersubspec(struct timespec *a, const struct timespe
 		a->tv_nsec += 1000000000;
 		a->tv_sec--;
 	}
-}
-
-static void __maybe_unused cgsleep_spec(struct timespec *ts_diff, const struct timespec *ts_start)
-{
-	struct timespec now;
-
-	timeraddspec(ts_diff, ts_start);
-	cgtimer_time(&now);
-	timersubspec(ts_diff, &now);
-	if (unlikely(ts_diff->tv_sec < 0))
-		return;
-	nanosleep(ts_diff, NULL);
-}
-
-int cgtimer_to_ms(cgtimer_t *cgt)
-{
-	return timespec_to_ms(cgt);
 }
 
 /* These are cgminer specific sleep functions that use an absolute nanosecond
@@ -960,18 +948,26 @@ void cgtime(struct timeval *tv)
 	tv->tv_usec = lidiv.rem / 10;
 }
 
-void cgtimer_time(cgtimer_t *ts_start)
-{
-	lldiv_t lidiv;;
-
-	decius_time(&lidiv);
-	ts_start->tv_sec = lidiv.quot;
-	ts_start->tv_nsec = lidiv.quot * 100;
-}
 #else /* WIN32 */
 void cgtime(struct timeval *tv)
 {
 	gettimeofday(tv, NULL);
+}
+
+int cgtimer_to_ms(cgtimer_t *cgt)
+{
+	return timespec_to_ms(cgt);
+}
+
+/* Subtracts b from a and stores it in res. */
+void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
+{
+	res->tv_sec = a->tv_sec - b->tv_sec;
+	res->tv_nsec = a->tv_nsec - b->tv_nsec;
+	if (res->tv_nsec < 0) {
+		res->tv_nsec += 1000000000;
+		res->tv_sec--;
+	}
 }
 #endif /* WIN32 */
 
@@ -1035,6 +1031,84 @@ void cgtimer_time(cgtimer_t *ts_start)
 	ts_start->tv_nsec = tv->tv_usec * 1000;
 }
 #endif /* __MACH__ */
+
+#ifdef WIN32
+/* For windows we use the SystemTime stored as a LARGE_INTEGER as the cgtimer_t
+ * typedef, allowing us to have sub-microsecond resolution for times, do simple
+ * arithmetic for timer calculations, and use windows' own hTimers to get
+ * accurate absolute timeouts. */
+int cgtimer_to_ms(cgtimer_t *cgt)
+{
+	return (int)(cgt->QuadPart / 10000LL);
+}
+
+/* Subtracts b from a and stores it in res. */
+void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
+{
+	res->QuadPart = a->QuadPart - b->QuadPart;
+}
+
+/* Note that cgtimer time is NOT offset by the unix epoch since we use absolute
+ * timeouts with hTimers. */
+void cgtimer_time(cgtimer_t *ts_start)
+{
+	FILETIME ft;
+
+	GetSystemTimeAsFileTime(&ft);
+	ts_start->LowPart = ft.dwLowDateTime;
+	ts_start->HighPart = ft.dwHighDateTime;
+}
+
+static void liSleep(LARGE_INTEGER *li, int timeout)
+{
+	HANDLE hTimer = CreateWaitableTimer(NULL, TRUE, NULL);
+	DWORD ret;
+
+	if (unlikely(!hTimer))
+		quit(1, "Failed to create hTimer in liSleep");
+	ret = SetWaitableTimer(hTimer, li, 0, NULL, NULL, 0);
+	if (unlikely(!ret))
+		quit(1, "Failed to SetWaitableTimer in liSleep");
+	/* We still use a timeout as a sanity check in case the system time
+	 * is changed while we're running */
+	ret = WaitForSingleObject(hTimer, timeout);
+	if (unlikely(ret != WAIT_OBJECT_0 && ret != WAIT_TIMEOUT))
+		quit(1, "Failed to WaitForSingleObject in liSleep");
+	CloseHandle(hTimer);
+}
+
+void cgsleep_ms_r(cgtimer_t *ts_start, int ms)
+{
+	LARGE_INTEGER li;
+
+	li.QuadPart = ts_start->QuadPart + (int64_t)ms * 10000LL;
+	liSleep(&li, ms);
+}
+
+void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
+{
+	LARGE_INTEGER li;
+	int ms;
+
+	li.QuadPart = ts_start->QuadPart + us * 10LL;
+	ms = us / 1000;
+	if (!ms)
+		ms = 1;
+	liSleep(&li, ms);
+}
+#else /* WIN32 */
+static void cgsleep_spec(struct timespec *ts_diff, const struct timespec *ts_start)
+{
+	struct timespec now;
+
+	timeraddspec(ts_diff, ts_start);
+	cgtimer_time(&now);
+	timersubspec(ts_diff, &now);
+	if (unlikely(ts_diff->tv_sec < 0))
+		return;
+	nanosleep(ts_diff, NULL);
+}
+
 void cgsleep_ms_r(cgtimer_t *ts_start, int ms)
 {
 	struct timespec ts_diff;
@@ -1050,6 +1124,7 @@ void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
 	us_to_timespec(&ts_diff, us);
 	cgsleep_spec(&ts_diff, ts_start);
 }
+#endif /* WIN32 */
 #endif /* CLOCK_MONOTONIC */
 
 void cgsleep_ms(int ms)
@@ -1081,8 +1156,9 @@ double us_tdiff(struct timeval *end, struct timeval *start)
 /* Returns the milliseconds difference between end and start times */
 int ms_tdiff(struct timeval *end, struct timeval *start)
 {
-	if (unlikely(end->tv_sec - start->tv_sec > 60))
-		return 60000;
+	/* Like us_tdiff, limit to 1 hour. */
+	if (unlikely(end->tv_sec - start->tv_sec > 3600))
+		return 3600000;
 	return (end->tv_sec - start->tv_sec) * 1000 + (end->tv_usec - start->tv_usec) / 1000;
 }
 
@@ -1534,6 +1610,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->getwork_requested++;
 	total_getworks++;
 	ret = true;
+	if (pool == current_pool())
+		opt_work_update = true;
 out:
 	return ret;
 }
@@ -2005,7 +2083,7 @@ static bool setup_stratum_socket(struct pool *pool)
 		break;
 	}
 	if (p == NULL) {
-		applog(LOG_NOTICE, "Failed to connect to stratum on %s:%s",
+		applog(LOG_INFO, "Failed to connect to stratum on %s:%s",
 		       sockaddr_url, sockaddr_port);
 		freeaddrinfo(servinfo);
 		return false;
@@ -2393,10 +2471,35 @@ void _cgsem_wait(cgsem_t *cgsem, const char *file, const char *func, const int l
 		applog(LOG_WARNING, "Failed to read errno=%d" IN_FMT_FFL, errno, file, func, line);
 }
 
-void _cgsem_destroy(cgsem_t *cgsem)
+void cgsem_destroy(cgsem_t *cgsem)
 {
 	close(cgsem->pipefd[1]);
 	close(cgsem->pipefd[0]);
+}
+
+/* This is similar to sem_timedwait but takes a millisecond value */
+int _cgsem_mswait(cgsem_t *cgsem, int ms, const char *file, const char *func, const int line)
+{
+	struct timeval timeout;
+	int ret, fd;
+	fd_set rd;
+	char buf;
+
+	fd = cgsem->pipefd[0];
+	FD_ZERO(&rd);
+	FD_SET(fd, &rd);
+	ms_to_timeval(&timeout, ms);
+	ret = select(fd + 1, &rd, NULL, NULL, &timeout);
+
+	if (ret > 0) {
+		ret = read(fd, &buf, 1);
+		return 0;
+	}
+	if (likely(!ret))
+		return ETIMEDOUT;
+	quitfrom(1, file, func, line, "Failed to sem_timedwait errno=%d cgsem=0x%p", errno, cgsem);
+	/* We don't reach here */
+	return 0;
 }
 #else
 void _cgsem_init(cgsem_t *cgsem, const char *file, const char *func, const int line)
@@ -2418,8 +2521,72 @@ void _cgsem_wait(cgsem_t *cgsem, const char *file, const char *func, const int l
 		quitfrom(1, file, func, line, "Failed to sem_wait errno=%d cgsem=0x%p", errno, cgsem);
 }
 
-void _cgsem_destroy(cgsem_t *cgsem)
+int _cgsem_mswait(cgsem_t *cgsem, int ms, const char *file, const char *func, const int line)
+{
+	struct timespec abs_timeout, ts_now;
+	struct timeval tv_now;
+	int ret;
+
+	cgtime(&tv_now);
+	timeval_to_spec(&ts_now, &tv_now);
+	ms_to_timespec(&abs_timeout, ms);
+	timeraddspec(&abs_timeout, &ts_now);
+	ret = sem_timedwait(cgsem, &abs_timeout);
+
+	if (ret) {
+		if (likely(sock_timeout()))
+			return ETIMEDOUT;
+		quitfrom(1, file, func, line, "Failed to sem_timedwait errno=%d cgsem=0x%p", errno, cgsem);
+	}
+	return 0;
+}
+
+void cgsem_destroy(cgsem_t *cgsem)
 {
 	sem_destroy(cgsem);
 }
 #endif
+
+/* Provide a completion_timeout helper function for unreliable functions that
+ * may die due to driver issues etc that time out if the function fails and
+ * can then reliably return. */
+struct cg_completion {
+	cgsem_t cgsem;
+	void (*fn)(void *fnarg);
+	void *fnarg;
+};
+
+void *completion_thread(void *arg)
+{
+	struct cg_completion *cgc = (struct cg_completion *)arg;
+
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+	cgc->fn(cgc->fnarg);
+	cgsem_post(&cgc->cgsem);
+
+	return NULL;
+}
+
+bool cg_completion_timeout(void *fn, void *fnarg, int timeout)
+{
+	struct cg_completion *cgc;
+	pthread_t pthread;
+	bool ret = false;
+
+	cgc = malloc(sizeof(struct cg_completion));
+	if (unlikely(!cgc))
+		return ret;
+	cgsem_init(&cgc->cgsem);
+	cgc->fn = fn;
+	cgc->fnarg = fnarg;
+
+	pthread_create(&pthread, NULL, completion_thread, (void *)cgc);
+
+	ret = cgsem_mswait(&cgc->cgsem, timeout);
+	if (!ret) {
+		pthread_join(pthread, NULL);
+		free(cgc);
+	} else
+		pthread_cancel(pthread);
+	return !ret;
+}

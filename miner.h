@@ -364,7 +364,10 @@ struct device_drv {
 	 * the main loop that it should not add any further work to the table.
 	 */
 	bool (*queue_full)(struct cgpu_info *);
+	/* Tell the driver of a block change */
 	void (*flush_work)(struct cgpu_info *);
+	/* Tell the driver of an updated work template for eg. stratum */
+	void (*update_work)(struct cgpu_info *);
 
 	void (*hw_error)(struct thr_info *);
 	void (*thread_shutdown)(struct thr_info *);
@@ -473,12 +476,6 @@ struct cgpu_info {
 #endif
 #ifdef USE_USBUTILS
 	struct cg_usb_info usbinfo;
-	int usb_bulk_writes;
-	int usb_bulk_reads;
-	int usb_wlock_total_wait;
-	int usb_rlock_total_wait;
-	int usb_wlock_max_wait;
-	int usb_rlock_max_wait;
 #endif
 #ifdef USE_MODMINER
 	char fpgaid;
@@ -581,6 +578,7 @@ struct cgpu_info {
 
 	pthread_rwlock_t qlock;
 	struct work *queued_work;
+	struct work *unqueued_work;
 	unsigned int queued_count;
 
 	bool shutdown;
@@ -617,6 +615,7 @@ struct thr_info {
 	double	rolling;
 
 	bool	work_restart;
+	bool	work_update;
 };
 
 struct string_elist {
@@ -744,74 +743,143 @@ endian_flip128(void __maybe_unused *dest_p, const void __maybe_unused *src_p)
 
 extern void _quit(int status);
 
-#define mutex_lock(_lock) _mutex_lock(_lock, __FILE__, __func__, __LINE__) 
-#define mutex_unlock_noyield(_lock) _mutex_unlock_noyield(_lock, __FILE__, __func__, __LINE__) 
-#define wr_lock(_lock) _wr_lock(_lock, __FILE__, __func__, __LINE__) 
-#define rd_lock(_lock) _rd_lock(_lock, __FILE__, __func__, __LINE__) 
-#define rw_unlock(_lock) _rw_unlock(_lock, __FILE__, __func__, __LINE__) 
-#define mutex_init(_lock) _mutex_init(_lock, __FILE__, __func__, __LINE__) 
-#define rwlock_init(_lock) _rwlock_init(_lock, __FILE__, __func__, __LINE__) 
+/*
+ * Set this to non-zero to enable lock tracking
+ * Use the API lockstats command to see the locking status on stderr
+ *  i.e. in your log file if you 2> log.log - but not on the screen
+ * API lockstats is privilidged but will always exist and will return
+ *	success if LOCK_TRACKING is enabled and warning if disabled
+ * In production code, this should never be enabled since it will slow down all locking
+ * So, e.g. use it to track down a deadlock - after a reproducable deadlock occurs
+ * ... Of course if the API code itself deadlocks, it wont help :)
+ */
+#define LOCK_TRACKING 0
+
+#if LOCK_TRACKING
+enum cglock_typ {
+	CGLOCK_MUTEX,
+	CGLOCK_RW,
+	CGLOCK_UNKNOWN
+};
+
+extern uint64_t api_getlock(void *lock, const char *file, const char *func, const int line);
+extern void api_gotlock(uint64_t id, void *lock, const char *file, const char *func, const int line);
+extern uint64_t api_trylock(void *lock, const char *file, const char *func, const int line);
+extern void api_didlock(uint64_t id, int ret, void *lock, const char *file, const char *func, const int line);
+extern void api_gunlock(void *lock, const char *file, const char *func, const int line);
+extern void api_initlock(void *lock, enum cglock_typ typ, const char *file, const char *func, const int line);
+
+#define GETLOCK(_lock, _file, _func, _line) uint64_t _id1 = api_getlock((void *)(_lock), _file, _func, _line)
+#define GOTLOCK(_lock, _file, _func, _line) api_gotlock(_id1, (void *)(_lock), _file, _func, _line)
+#define TRYLOCK(_lock, _file, _func, _line) uint64_t _id2 = api_trylock((void *)(_lock), _file, _func, _line)
+#define DIDLOCK(_ret, _lock, _file, _func, _line) api_didlock(_id2, _ret, (void *)(_lock), _file, _func, _line)
+#define GUNLOCK(_lock, _file, _func, _line) api_gunlock((void *)(_lock), _file, _func, _line)
+#define INITLOCK(_lock, _typ, _file, _func, _line) api_initlock((void *)(_lock), _typ, _file, _func, _line)
+#else
+#define GETLOCK(_lock, _file, _func, _line)
+#define GOTLOCK(_lock, _file, _func, _line)
+#define TRYLOCK(_lock, _file, _func, _line)
+#define DIDLOCK(_ret, _lock, _file, _func, _line)
+#define GUNLOCK(_lock, _file, _func, _line)
+#define INITLOCK(_typ, _lock, _file, _func, _line)
+#endif
+
+#define mutex_lock(_lock) _mutex_lock(_lock, __FILE__, __func__, __LINE__)
+#define mutex_unlock_noyield(_lock) _mutex_unlock_noyield(_lock, __FILE__, __func__, __LINE__)
+#define mutex_unlock(_lock) _mutex_unlock(_lock, __FILE__, __func__, __LINE__)
+#define mutex_trylock(_lock) _mutex_trylock(_lock, __FILE__, __func__, __LINE__)
+#define wr_lock(_lock) _wr_lock(_lock, __FILE__, __func__, __LINE__)
+#define rd_lock(_lock) _rd_lock(_lock, __FILE__, __func__, __LINE__)
+#define rw_unlock(_lock) _rw_unlock(_lock, __FILE__, __func__, __LINE__)
+#define rd_unlock_noyield(_lock) _rd_unlock_noyield(_lock, __FILE__, __func__, __LINE__)
+#define wr_unlock_noyield(_lock) _wr_unlock_noyield(_lock, __FILE__, __func__, __LINE__)
+#define rd_unlock(_lock) _rd_unlock(_lock, __FILE__, __func__, __LINE__)
+#define wr_unlock(_lock) _wr_unlock(_lock, __FILE__, __func__, __LINE__)
+#define mutex_init(_lock) _mutex_init(_lock, __FILE__, __func__, __LINE__)
+#define rwlock_init(_lock) _rwlock_init(_lock, __FILE__, __func__, __LINE__)
+#define cglock_init(_lock) _cglock_init(_lock, __FILE__, __func__, __LINE__)
+#define cg_rlock(_lock) _cg_rlock(_lock, __FILE__, __func__, __LINE__)
+#define cg_ilock(_lock) _cg_ilock(_lock, __FILE__, __func__, __LINE__)
+#define cg_ulock(_lock) _cg_ulock(_lock, __FILE__, __func__, __LINE__)
+#define cg_wlock(_lock) _cg_wlock(_lock, __FILE__, __func__, __LINE__)
+#define cg_dwlock(_lock) _cg_dwlock(_lock, __FILE__, __func__, __LINE__)
+#define cg_dwilock(_lock) _cg_dwilock(_lock, __FILE__, __func__, __LINE__)
+#define cg_dlock(_lock) _cg_dlock(_lock, __FILE__, __func__, __LINE__)
+#define cg_runlock(_lock) _cg_runlock(_lock, __FILE__, __func__, __LINE__)
+#define cg_ruwlock(_lock) _cg_ruwlock(_lock, __FILE__, __func__, __LINE__)
+#define cg_wunlock(_lock) _cg_wunlock(_lock, __FILE__, __func__, __LINE__)
 
 static inline void _mutex_lock(pthread_mutex_t *lock, const char *file, const char *func, const int line)
 {
+	GETLOCK(lock, file, func, line);
 	if (unlikely(pthread_mutex_lock(lock)))
 		quitfrom(1, file, func, line, "WTF MUTEX ERROR ON LOCK! errno=%d", errno);
+	GOTLOCK(lock, file, func, line);
 }
 
 static inline void _mutex_unlock_noyield(pthread_mutex_t *lock, const char *file, const char *func, const int line)
 {
 	if (unlikely(pthread_mutex_unlock(lock)))
 		quitfrom(1, file, func, line, "WTF MUTEX ERROR ON UNLOCK! errno=%d", errno);
+	GUNLOCK(lock, file, func, line);
 }
 
-static inline void mutex_unlock(pthread_mutex_t *lock)
+static inline void _mutex_unlock(pthread_mutex_t *lock, const char *file, const char *func, const int line)
 {
-	mutex_unlock_noyield(lock);
+	_mutex_unlock_noyield(lock, file, func, line);
 	sched_yield();
 }
 
-static inline int mutex_trylock(pthread_mutex_t *lock)
+static inline int _mutex_trylock(pthread_mutex_t *lock, __maybe_unused const char *file, __maybe_unused const char *func, __maybe_unused const int line)
 {
-	return pthread_mutex_trylock(lock);
+	TRYLOCK(lock, file, func, line);
+	int ret = pthread_mutex_trylock(lock);
+	DIDLOCK(ret, lock, file, func, line);
+	return ret;
 }
 
 static inline void _wr_lock(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
+	GETLOCK(lock, file, func, line);
 	if (unlikely(pthread_rwlock_wrlock(lock)))
 		quitfrom(1, file, func, line, "WTF WRLOCK ERROR ON LOCK! errno=%d", errno);
+	GOTLOCK(lock, file, func, line);
 }
 
 static inline void _rd_lock(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
+	GETLOCK(lock, file, func, line);
 	if (unlikely(pthread_rwlock_rdlock(lock)))
 		quitfrom(1, file, func, line, "WTF RDLOCK ERROR ON LOCK! errno=%d", errno);
+	GOTLOCK(lock, file, func, line);
 }
 
 static inline void _rw_unlock(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
 	if (unlikely(pthread_rwlock_unlock(lock)))
 		quitfrom(1, file, func, line, "WTF RWLOCK ERROR ON UNLOCK! errno=%d", errno);
+	GUNLOCK(lock, file, func, line);
 }
 
-static inline void rd_unlock_noyield(pthread_rwlock_t *lock)
+static inline void _rd_unlock_noyield(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
-	rw_unlock(lock);
+	_rw_unlock(lock, file, func, line);
 }
 
-static inline void wr_unlock_noyield(pthread_rwlock_t *lock)
+static inline void _wr_unlock_noyield(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
-	rw_unlock(lock);
+	_rw_unlock(lock, file, func, line);
 }
 
-static inline void rd_unlock(pthread_rwlock_t *lock)
+static inline void _rd_unlock(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
-	rw_unlock(lock);
+	_rw_unlock(lock, file, func, line);
 	sched_yield();
 }
 
-static inline void wr_unlock(pthread_rwlock_t *lock)
+static inline void _wr_unlock(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
-	rw_unlock(lock);
+	_rw_unlock(lock, file, func, line);
 	sched_yield();
 }
 
@@ -819,86 +887,106 @@ static inline void _mutex_init(pthread_mutex_t *lock, const char *file, const ch
 {
 	if (unlikely(pthread_mutex_init(lock, NULL)))
 		quitfrom(1, file, func, line, "Failed to pthread_mutex_init errno=%d", errno);
+	INITLOCK(lock, CGLOCK_MUTEX, file, func, line);
+}
+
+static inline void mutex_destroy(pthread_mutex_t *lock)
+{
+	/* Ignore return code. This only invalidates the mutex on linux but
+	 * releases resources on windows. */
+	pthread_mutex_destroy(lock);
 }
 
 static inline void _rwlock_init(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
 	if (unlikely(pthread_rwlock_init(lock, NULL)))
 		quitfrom(1, file, func, line, "Failed to pthread_rwlock_init errno=%d", errno);
+	INITLOCK(lock, CGLOCK_RW, file, func, line);
 }
 
-/* cgminer locks, a write biased variant of rwlocks */
-struct cglock {
-	pthread_mutex_t mutex;
-	pthread_rwlock_t rwlock;
-};
-
-typedef struct cglock cglock_t;
-
-static inline void cglock_init(cglock_t *lock)
+static inline void rwlock_destroy(pthread_rwlock_t *lock)
 {
-	mutex_init(&lock->mutex);
-	rwlock_init(&lock->rwlock);
+	pthread_rwlock_destroy(lock);
+}
+
+static inline void _cglock_init(cglock_t *lock, const char *file, const char *func, const int line)
+{
+	_mutex_init(&lock->mutex, file, func, line);
+	_rwlock_init(&lock->rwlock, file, func, line);
+}
+
+static inline void cglock_destroy(cglock_t *lock)
+{
+	rwlock_destroy(&lock->rwlock);
+	mutex_destroy(&lock->mutex);
 }
 
 /* Read lock variant of cglock. Cannot be promoted. */
-static inline void cg_rlock(cglock_t *lock)
+static inline void _cg_rlock(cglock_t *lock, const char *file, const char *func, const int line)
 {
-	mutex_lock(&lock->mutex);
-	rd_lock(&lock->rwlock);
-	mutex_unlock_noyield(&lock->mutex);
+	_mutex_lock(&lock->mutex, file, func, line);
+	_rd_lock(&lock->rwlock, file, func, line);
+	_mutex_unlock_noyield(&lock->mutex, file, func, line);
 }
 
 /* Intermediate variant of cglock - behaves as a read lock but can be promoted
  * to a write lock or demoted to read lock. */
-static inline void cg_ilock(cglock_t *lock)
+static inline void _cg_ilock(cglock_t *lock, const char *file, const char *func, const int line)
 {
-	mutex_lock(&lock->mutex);
+	_mutex_lock(&lock->mutex, file, func, line);
 }
 
 /* Upgrade intermediate variant to a write lock */
-static inline void cg_ulock(cglock_t *lock)
+static inline void _cg_ulock(cglock_t *lock, const char *file, const char *func, const int line)
 {
-	wr_lock(&lock->rwlock);
+	_wr_lock(&lock->rwlock, file, func, line);
 }
 
 /* Write lock variant of cglock */
-static inline void cg_wlock(cglock_t *lock)
+static inline void _cg_wlock(cglock_t *lock, const char *file, const char *func, const int line)
 {
-	mutex_lock(&lock->mutex);
-	wr_lock(&lock->rwlock);
+	_mutex_lock(&lock->mutex, file, func, line);
+	_wr_lock(&lock->rwlock, file, func, line);
 }
 
 /* Downgrade write variant to a read lock */
-static inline void cg_dwlock(cglock_t *lock)
+static inline void _cg_dwlock(cglock_t *lock, const char *file, const char *func, const int line)
 {
-	wr_unlock_noyield(&lock->rwlock);
-	rd_lock(&lock->rwlock);
-	mutex_unlock_noyield(&lock->mutex);
+	_wr_unlock_noyield(&lock->rwlock, file, func, line);
+	_rd_lock(&lock->rwlock, file, func, line);
+	_mutex_unlock_noyield(&lock->mutex, file, func, line);
 }
 
 /* Demote a write variant to an intermediate variant */
-static inline void cg_dwilock(cglock_t *lock)
+static inline void _cg_dwilock(cglock_t *lock, const char *file, const char *func, const int line)
 {
-	wr_unlock(&lock->rwlock);
+	_wr_unlock(&lock->rwlock, file, func, line);
 }
 
 /* Downgrade intermediate variant to a read lock */
-static inline void cg_dlock(cglock_t *lock)
+static inline void _cg_dlock(cglock_t *lock, const char *file, const char *func, const int line)
 {
-	rd_lock(&lock->rwlock);
-	mutex_unlock_noyield(&lock->mutex);
+	_rd_lock(&lock->rwlock, file, func, line);
+	_mutex_unlock_noyield(&lock->mutex, file, func, line);
 }
 
-static inline void cg_runlock(cglock_t *lock)
+static inline void _cg_runlock(cglock_t *lock, const char *file, const char *func, const int line)
 {
-	rd_unlock(&lock->rwlock);
+	_rd_unlock(&lock->rwlock, file, func, line);
 }
 
-static inline void cg_wunlock(cglock_t *lock)
+/* This drops the read lock and grabs a write lock. It does NOT protect data
+ * between the two locks! */
+static inline void _cg_ruwlock(cglock_t *lock, const char *file, const char *func, const int line)
 {
-	wr_unlock_noyield(&lock->rwlock);
-	mutex_unlock(&lock->mutex);
+	_rd_unlock_noyield(&lock->rwlock, file, func, line);
+	_cg_wlock(lock, file, func, line);
+}
+
+static inline void _cg_wunlock(cglock_t *lock, const char *file, const char *func, const int line)
+{
+	_wr_unlock_noyield(&lock->rwlock, file, func, line);
+	_mutex_unlock(&lock->mutex, file, func, line);
 }
 
 struct pool;
@@ -906,6 +994,7 @@ struct pool;
 #define API_MCAST_CODE "FTW"
 #define API_MCAST_ADDR "224.0.0.75"
 
+extern bool opt_work_update;
 extern bool opt_protocol;
 extern bool have_longpoll;
 extern char *opt_kernel_path;
@@ -949,6 +1038,10 @@ extern bool opt_bfl_noncerange;
 #endif
 extern int swork_id;
 
+#if LOCK_TRACKING
+extern pthread_mutex_t lockstat_lock;
+#endif
+
 extern pthread_rwlock_t netacc_lock;
 
 extern const uint32_t sha256_init_state[];
@@ -959,6 +1052,7 @@ extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
 #endif
 extern const char *proxytype(proxytypes_t proxytype);
 extern char *get_proxy(char *url, struct pool *pool);
+extern void __bin2hex(char *s, const unsigned char *p, size_t len);
 extern char *bin2hex(const unsigned char *p, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
@@ -1071,6 +1165,7 @@ extern struct pool **pools;
 extern struct strategies strategies[];
 extern enum pool_strategy pool_strategy;
 extern int opt_rotate_period;
+extern double total_rolling;
 extern double total_mhashes_done;
 extern unsigned int new_blocks;
 extern unsigned int found_blocks;
@@ -1295,6 +1390,7 @@ struct work {
 	unsigned char	hash2[32];
 
 	int		rolls;
+	int		drv_rolllimit; /* How much the driver can roll ntime */
 
 	dev_blk_ctx	blk;
 
@@ -1311,7 +1407,6 @@ struct work {
 	bool		stale;
 	bool		mandatory;
 	bool		block;
-	bool		queued;
 
 	bool		stratum;
 	char 		*job_id;
@@ -1335,6 +1430,8 @@ struct work {
 	int		subid;
 	// Allow devices to flag work for their own purposes
 	bool		devflag;
+	// Allow devices to timestamp work for their own purposes
+	struct timeval	tv_stamp;
 
 	struct timeval	tv_getwork;
 	struct timeval	tv_getwork_reply;
@@ -1391,12 +1488,15 @@ extern void submit_tested_work(struct thr_info *thr, struct work *work);
 extern bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern bool submit_noffset_nonce(struct thr_info *thr, struct work *work, uint32_t nonce,
 			  int noffset);
+extern struct work *get_work(struct thr_info *thr, const int thr_id);
 extern struct work *get_queued(struct cgpu_info *cgpu);
 extern struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *clone_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
+extern void __work_completed(struct cgpu_info *cgpu, struct work *work);
 extern void work_completed(struct cgpu_info *cgpu, struct work *work);
 extern struct work *take_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
+extern void hash_driver_work(struct thr_info *mythr);
 extern void hash_queued_work(struct thr_info *mythr);
 extern void _wlog(const char *str);
 extern void _wlogprint(const char *str);

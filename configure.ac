@@ -1,8 +1,8 @@
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [3])
-m4_define([v_min], [5])
-m4_define([v_mic], [0])
+m4_define([v_min], [6])
+m4_define([v_mic], [4])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
 m4_define([lt_rev], m4_eval(v_maj + v_min))
@@ -135,10 +135,10 @@ if test -n "$CGMINER_SDK"; then
 	LDFLAGS="-L$CGMINER_SDK/lib/$target $LDFLAGS"
 fi
 
-opencl="yes"
+opencl="no"
 
 AC_ARG_ENABLE([opencl],
-	[AC_HELP_STRING([--disable-opencl],[Override detection and disable building with opencl])],
+	[AC_HELP_STRING([--enable-opencl],[Enable support for GPU mining with opencl])],
 	[opencl=$enableval]
 	)
 if test "x$opencl" != xno; then
@@ -171,6 +171,7 @@ else
 	OPENCL_FLAGS=""
 	OPENCL_LIBS=""
 fi
+AM_CONDITIONAL([HAS_OPENCL], [test x$opencl = xyes])
 
 has_winpthread=false
 if test "x$have_win32" = xtrue; then
@@ -345,22 +346,44 @@ AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 
-AC_CONFIG_SUBDIRS([compat/libusb-1.0])
 if test "x$want_usbutils" != xfalse; then
+	dlibusb="no"
 	AC_DEFINE([USE_USBUTILS], [1], [Defined to 1 if usbutils support required])
-	LIBUSB_LIBS="compat/libusb-1.0/libusb/.libs/libusb-1.0.a"
-	if test "x$have_linux" = "xtrue"; then
-		PKG_CHECK_MODULES([UDEV], [libudev], LIBUSB_LIBS+=" -ludev", [AC_MSG_ERROR([Missing required libudev dev])])
-	fi
-	if test "x$have_darwin" = "xtrue"; then
-		LIBUSB_LIBS+=" -lobjc"
-		LDFLAGS+=" -framework CoreFoundation -framework IOKit"
+	AC_ARG_WITH([system-libusb],
+		[AC_HELP_STRING([--with-system-libusb],[Compile against dynamic system libusb (default use included static libusb)])],
+		[dlibusb=$withval]
+	)
+
+	if test "x$dlibusb" != xno; then
+		case $target in
+			*-*-freebsd*)
+				LIBUSB_LIBS="-lusb"
+				LIBUSB_CFLAGS=""
+				AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])
+				;;
+			*)
+				PKG_CHECK_MODULES(LIBUSB, libusb-1.0, [AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])], [AC_MSG_ERROR([Could not find usb library - please install libusb-1.0])])
+				;;
+		esac
+	else
+		AC_CONFIG_SUBDIRS([compat/libusb-1.0])
+		LIBUSB_LIBS="compat/libusb-1.0/libusb/.libs/libusb-1.0.a"
+		if test "x$have_linux" = "xtrue"; then
+			LIBUSB_LIBS+=" -ludev"
+		fi
+		if test "x$have_darwin" = "xtrue"; then
+			LIBUSB_LIBS+=" -lobjc"
+			LDFLAGS+=" -framework CoreFoundation -framework IOKit"
+		fi
 	fi
 else
 	LIBUSB_LIBS=""
 fi
 
-JANSSON_LIBS="compat/jansson/libjansson.a"
+AM_CONDITIONAL([WANT_STATIC_LIBUSB], [test x$dlibusb = xno])
+
+AC_CONFIG_SUBDIRS([compat/jansson-2.5])
+JANSSON_LIBS="compat/jansson-2.5/src/.libs/libjansson.a"
 
 PKG_PROG_PKG_CONFIG()
 
@@ -467,7 +490,6 @@ AC_SUBST(ADL_CPPFLAGS)
 AC_CONFIG_FILES([
 	Makefile
 	compat/Makefile
-	compat/jansson/Makefile
 	ccan/Makefile
 	lib/Makefile
 	])

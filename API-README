@@ -277,13 +277,13 @@ The list of requests - a (*) means it requires privileged access - and replies:
                none           There is no reply section just the STATUS section
                               stating the results of the identify request
                               This is only available if PGA mining is enabled
-                              and currently only BFL singles support this
-                              command
+                              and currently only BFL singles and Cairnsmore1's
+                              with the appropriate firmware support this command
                               On a BFL single it will flash the led on the front
                               of the device for appoximately 4s
-                              All other non BFL PGA devices will return a
+                              All other non BFL,ICA PGA devices will return a
                               warning status message stating that they dont
-                              support it
+                              support it. Non-CMR ICAs will ignore the command.
                               This adds a 4s delay to the BFL share being
                               processed so you may get a message stating that
                               procssing took longer than 7000ms if the request
@@ -364,6 +364,7 @@ The list of requests - a (*) means it requires privileged access - and replies:
 
                               The current options are:
                                MMQ opt=clock val=160 to 230 (a multiple of 2)
+                               CMR opt=clock val=100 to 220
 
  zero|Which,true/false (*)
                none           There is no reply section just the STATUS section
@@ -433,8 +434,14 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               help message about the options available
 
                               The current options are:
-                               AVA+BTB opt=freq val=256 to 450 - chip frequency
-                               BTB opt=millivolts val=1000 to 1310 - corevoltage
+                               AVA+BTB opt=freq val=256 to 1024 - chip frequency
+                               BTB opt=millivolts val=1000 to 1400 - corevoltage
+
+ lockstats (*) none           There is no reply section just the STATUS section
+                              stating the results of the request
+                              A warning reply means lock stats are not compiled
+                              into cgminer
+                              The API writes all the lock stats to stderr
 
 When you enable, disable or restart a GPU, PGA or ASC, you will also get
 Thread messages in the cgminer status window
@@ -489,6 +496,23 @@ miner.php - an example web page to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V1.32 (cgminer v3.6.5)
+
+Modified API commands:
+ 'devs' 'gpu' 'pga' and 'asc' - add 'Device Elapsed'
+
+---------
+
+API V1.31 (cgminer v3.6.3)
+
+Added API command:
+ 'lockstats' - display cgminer dev lock stats if compiled in
+
+Modified API command:
+ 'summary' - add 'MHS %ds' (where %d is the log interval)
+
+---------
 
 API V1.30 (cgminer v3.4.3)
 
@@ -1039,8 +1063,8 @@ It will be superceded by myminer.php
 
 ---------
 
-The example.php above also shows how to define more that one rig to
-be shown my miner.php
+The example myminer.php above also shows how to define more that one rig
+to be shown my miner.php
 
 Each rig string is 2 or 3 values seperated by colons ':'
 They are simply an IP address or host name, followed by the
@@ -1613,7 +1637,7 @@ You can only see fields listed in 'group' and 'calc'
 
 A 'calc' is formatted as: 'Field' => 'function'
 The current list of operations available for 'calc' are:
-'sum', 'avg', 'min', 'max', 'lo', 'hi', 'coount', 'any'
+'sum', 'avg', 'min', 'max', 'lo', 'hi', 'count', 'any'
 The first 4 are as expected - the numerical sum, average, minimum or maximum
 'lo' is the first string of the list, sorted ignoring case
 'hi' is the last string of the list, sorted ignoring case
@@ -1631,7 +1655,7 @@ in this case is the average difficulty of each share submitted
 
 THERE IS A SECURITY RISK WITH HOW GEN WORKS
 It simply replaces all the variables with their values and then requests PHP
-the execute the formula - thus if a field value returned from a cgminer API
+to execute the formula - thus if a field value returned from a cgminer API
 request contained PHP code, it could be executed by your web server
 Of course cgminer doesn't do this, but if you do not control the cgminer that
 returns the data in the API calls, someone could modify cgminer to return a
