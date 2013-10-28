@@ -47,6 +47,10 @@
 /* Keep core disabled for no longer than 15 minutes */
 #define CORE_DISA_PERIOD_US	(15 * 60 * 1000000)
 
+/* DP = Disable Policy */
+bool opt_knc_DP_checkworkid = false;
+bool opt_knc_DP_disable_permanently = false;
+
 struct spidev_context {
 	int fd;
 	uint32_t speed;
@@ -494,8 +498,11 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 						knc->hwerr_work_id[cidx] = 0xFFFFFFFF;
 					}
 				} else  {
-					if ((cidx < (int)sizeof(knc->hwerrs)) &&
-					    (knc->hwerr_work_id[cidx] != rxbuf->responses[i].work_id)) {
+					bool process_hwerr = (cidx < (int)sizeof(knc->hwerrs));
+					if (process_hwerr && opt_knc_DP_checkworkid &&
+					    (knc->hwerr_work_id[cidx] == rxbuf->responses[i].work_id))
+						process_hwerr = false;
+					if (process_hwerr) {
 						knc->hwerr_work_id[cidx] = rxbuf->responses[i].work_id;
 						if (++(knc->hwerrs[cidx]) >= HW_ERR_LIMIT) {
 						    struct core_disa_data *core;
@@ -505,7 +512,8 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 						    core->asic = rxbuf->responses[i].asic;
 						    core->core = rxbuf->responses[i].core;
 						    disable_core(core->asic, core->core);
-						    if (++(knc->disa_cnt[cidx]) >= DISA_ERR_LIMIT) {
+						    if (opt_knc_DP_disable_permanently &&
+							(++(knc->disa_cnt[cidx]) >= DISA_ERR_LIMIT)) {
 							    applog(LOG_WARNING,
 			"KnC: core %u-%u was disabled permanently", core->asic, core->core);
 						    } else {
