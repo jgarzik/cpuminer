@@ -82,14 +82,20 @@ static struct drillbit_chip_info *find_chip(struct drillbit_info *info, uint16_t
 static bool usb_read_fixed_size(struct cgpu_info *drillbit, void *result, size_t result_size, int timeout, enum usb_cmds command_name) {
   uint8_t *buf[result_size];
   char *hex;
-  int count;
+  int count, ms_left;
+  struct timeval tv_now, tv_start;
   int amount;
+
+  cgtime(&tv_start);
+  ms_left = TIMEOUT;
 
   amount = 1;
   count = 0;
-  while(amount > 0 && count < result_size) { // TODO: decrement timeout appropriately
-    usb_read_once_timeout(drillbit, (char *)&buf[count], result_size-count, &amount, timeout, command_name);
+  while(amount > 0 && count < result_size && ms_left > 0) {
+    usb_read_once_timeout(drillbit, (char *)&buf[count], result_size-count, &amount, ms_left, command_name);
     count += amount;
+    cgtime(&tv_now);
+    ms_left = timeout - ms_tdiff(&tv_now, &tv_start);
   }
   if(amount > 0) {
     memcpy(result, buf, result_size);
@@ -235,7 +241,7 @@ static void drillbit_send_config(struct cgpu_info *drillbit, const BoardConfig *
   usb_write(drillbit, &cmd, 1, &amount, C_BF_REQWORK);
   usb_write(drillbit, (void *)config, sizeof(config), &amount, C_BF_CONFIG);
 
-  /* Expect a single 'W' byte as acknowledgement */
+  /* Expect a single 'C' byte as acknowledgement */
   usb_read_simple_response(drillbit, 'C', C_BF_CONFIG); // TODO: verify response
 }
 
@@ -481,7 +487,7 @@ static int64_t drillbit_scanhash(struct thr_info *thr, struct work *work,
 		goto cascade;
 
         /* Expect a single 'W' byte as acknowledgement */
-        usb_read_simple_response(drillbit, 'W', C_BF_REQWORK); // TODO: verify response
+        usb_read_simple_response(drillbit, 'W', C_BF_REQWORK);
         if(chip->state == WORKING_NOQUEUED)
           chip->state = WORKING_QUEUED;
         else
