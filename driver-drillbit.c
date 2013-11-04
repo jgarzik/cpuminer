@@ -60,7 +60,8 @@ typedef struct __attribute__((packed)) Identity
     uint8_t num_chips;
 } Identity;
 
-static const BoardConfig DEFAULT_CONFIG = {
+/* Comparatively modest default settings */
+static BoardConfig drillbit_config = {
  core_voltage: CONFIG_CORE_085V,
  use_ext_clock: 0,
  int_clock_level: 40,
@@ -242,11 +243,85 @@ static void drillbit_send_config(struct cgpu_info *drillbit, const BoardConfig *
   usb_read_simple_response(drillbit, 'C', C_BF_CONFIG); // TODO: verify response
 }
 
+static bool drillbit_parse_options()
+{
+  /* Read configuration options (currently global not per-ASIC or per-board) */
+  if (opt_drillbit_options != NULL) {
+    int count, freq, clockdiv, voltage;
+    char clksrc[4];
+
+    count = sscanf(opt_drillbit_options, "%3s:%d:%d:%d",
+                   clksrc, &freq, &clockdiv, &voltage);
+
+    if(count < 2) {
+      applog(LOG_ERR, "Failed to parse drillbit-options. Invalid options string: '%s'", opt_drillbit_options);
+      return false;
+    }
+
+    if(count > 2 && clockdiv != 1 && clockdiv != 2) {
+      applog(LOG_ERR, "drillbit-options: Invalid clock divider value %d. Valid values are 1 & 2.", clockdiv);
+      return false;
+    }
+    drillbit_config.clock_div2 = count > 2 && clockdiv == 2;
+
+    if(!strcmp("int",clksrc)) {
+      drillbit_config.use_ext_clock = 0;
+      if(freq < 0 || freq > 63) {
+        applog(LOG_ERR, "drillbit-options: Invalid internal oscillator level %d. Recommended range is %s for this clock divider (possible is 0-63)", freq, drillbit_config.clock_div2 ? "48-57":"30-48");
+        return false;
+      }
+      if(drillbit_config.clock_div2 && (freq < 48 || freq > 57)) {
+        applog(LOG_WARNING, "drillbit-options: Internal oscillator level %d outside recommended range 48-57.", freq);
+      }
+      if(!drillbit_config.clock_div2 && (freq < 30 || freq > 48)) {
+        applog(LOG_WARNING, "drillbit-options: Internal oscillator level %d outside recommended range 30-48.", freq);
+      }
+      drillbit_config.int_clock_level = freq;
+    }
+    else if (!strcmp("ext", clksrc)) {
+      drillbit_config.use_ext_clock = 1;
+      drillbit_config.ext_clock_freq = freq;
+      if(freq < 80 || freq > 230) {
+        applog(LOG_WARNING, "drillbit-options: Warning: recommended external clock frequencies are 80-230MHz. Value %d may produce unexpected results.", freq);
+      }
+    }
+    else {
+      applog(LOG_ERR, "drillbit-options: Invalid clock source. Valid choices are int, ext.");
+      return false;
+    }
+
+    if(count > 3) {
+      switch(voltage) {
+      case 650:
+        voltage = CONFIG_CORE_065V;
+        break;
+      case 750:
+        voltage = CONFIG_CORE_075V;
+        break;
+      case 850:
+        voltage = CONFIG_CORE_085V;
+        break;
+      case 950:
+        voltage = CONFIG_CORE_095V;
+        break;
+      default:
+        applog(LOG_ERR, "drillbit-options: Invalid core voltage %d. Valid values 650,750,850,950mV)", voltage);
+        return false;
+      }
+      drillbit_config.core_voltage = voltage;
+    }
+  }
+  return true;
+}
+
 static bool drillbit_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *drillbit;
 	struct drillbit_info *info;
         int i;
+
+        if (!drillbit_parse_options())
+          return; // Bit of a hack doing this here, should do it somewhere else
 
 	drillbit = usb_alloc_cgpu(&drillbit_drv, 1);
 
@@ -287,7 +362,7 @@ static bool drillbit_detect_one(struct libusb_device *dev, struct usb_find_devic
 
 	update_usb_stats(drillbit);
 
-        drillbit_send_config(drillbit, &DEFAULT_CONFIG);
+        drillbit_send_config(drillbit, &drillbit_config);
 
 	applog(LOG_INFO, "%s %d: Successfully initialised %s",
 	       drillbit->drv->name, drillbit->device_id, drillbit->device_path);
@@ -376,7 +451,7 @@ static int check_for_results(struct thr_info *thr)
   for(j = 0; j < result_count; j++) {
 
     if(!usb_read_fixed_size(drillbit, &response, sizeof(WorkResult), TIMEOUT, C_BF_GETRES)) {
-      applog(LOG_ERR, "Failed to read response data packet idx %d count %d", j, result_count);
+      applog(LOG_ERR, "Failed to read response data packet idx %d count 0x%x", j, result_count);
       return 0;
     }
 
@@ -526,7 +601,7 @@ static struct api_data *drillbit_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
-static void drillbit_init(struct cgpu_info  *drillbit)
+static void drillbit_reinit(struct cgpu_info  *drillbit)
 {
 	drillbit_close(drillbit);
 	drillbit_open(drillbit);
@@ -548,7 +623,7 @@ struct device_drv drillbit_drv = {
 	.drv_detect = drillbit_detect,
 	.scanhash = drillbit_scanhash,
 	.get_api_stats = drillbit_api_stats,
-	.reinit_device = drillbit_init,
+	.reinit_device = drillbit_reinit,
 	.thread_shutdown = drillbit_shutdown,
-	.identify_device = drillbit_identify
+	.identify_device = drillbit_identify,
 };

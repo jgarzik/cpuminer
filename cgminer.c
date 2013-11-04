@@ -171,6 +171,9 @@ char *opt_avalon_options = NULL;
 #ifdef USE_KLONDIKE
 char *opt_klondike_options = NULL;
 #endif
+#ifdef USE_DRILLBIT
+char *opt_drillbit_options = NULL;
+#endif
 #ifdef USE_USBUTILS
 char *opt_usb_select = NULL;
 int opt_usbdump = -1;
@@ -1047,6 +1050,15 @@ static char *set_klondike_options(const char *arg)
 }
 #endif
 
+#ifdef USE_DRILLBIT
+static char *set_drillbit_options(const char *arg)
+{
+	opt_set_charp(arg, &opt_drillbit_options);
+
+	return NULL;
+}
+#endif
+
 #ifdef USE_USBUTILS
 static char *set_usb_select(const char *arg)
 {
@@ -1260,6 +1272,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--klondike-options",
 		     set_klondike_options, NULL, NULL,
 		     "Set klondike options clock:temp1:temp2:fan"),
+#endif
+#ifdef USE_DRILLBIT
+        OPT_WITH_ARG("--drillbit-options",
+                     set_drillbit_options, NULL, NULL,
+                     "Set drillbit options <int|ext>:clock[:clock_divider][:voltage]"),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
@@ -1594,6 +1611,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_BITFURY
 		"bitfury "
+#endif
+#ifdef USE_DRILLBIT
+                "drillbit "
 #endif
 #ifdef HAVE_OPENCL
 		"GPU "
@@ -4527,6 +4547,10 @@ void write_config(FILE *fcfg)
 #ifdef USE_KLONDIKE
 	if (opt_klondike_options)
 		fprintf(fcfg, ",\n\"klondike-options\" : \"%s\"", json_escape(opt_icarus_options));
+#endif
+#ifdef USE_DRILLBIT
+        if (opt_drillbit_options)
+                fprintf(fcfg, ",\n\"drillbit-options\" : \"%s\"", json_escape(opt_drillbit_options));
 #endif
 #ifdef USE_USBUTILS
 	if (opt_usb_select)

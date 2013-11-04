@@ -1027,6 +1027,9 @@ extern char *opt_avalon_options;
 #ifdef USE_KLONDIKE
 extern char *opt_klondike_options;
 #endif
+#ifdef USE_DRILLBIT
+extern char *opt_drillbit_options;
+#endif
 #ifdef USE_USBUTILS
 extern char *opt_usb_select;
 extern int opt_usbdump;
