@@ -384,7 +384,7 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 				    struct spi_rx_t *rxbuf)
 {
 	struct knc_state *knc = cgpu->device_data;
-	int submitted, successful, i, num_sent;
+	int submitted, completed, i, num_sent;
 	int next_read_q, next_read_a;
 	struct timeval now;
 	struct work *work;
@@ -430,7 +430,7 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 
 	/* check for completed works and calculated nonces */
 	gettimeofday(&now, NULL);
-	successful = 0;
+	completed = 0;
 
 	for (i = 0; i < (int)MAX_RESPONSES_IN_BATCH; ++i) {
 		if ((rxbuf->responses[i].type != RESPONSE_TYPE_NONCE_FOUND) &&
@@ -493,7 +493,6 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 						knc->disa_cnt[cidx] = 0;
 						knc->hwerr_work_id[cidx] = 0xFFFFFFFF;
 					}
-					successful++;
 				} else  {
 					if ((cidx < (int)sizeof(knc->hwerrs)) &&
 					    (knc->hwerr_work_id[cidx] != rxbuf->responses[i].work_id)) {
@@ -531,9 +530,10 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 			       sizeof(struct active_work));
 		}
 		knc->active_fifo[knc->read_a].work = NULL;
+		++completed;
 	}
 
-	return ((uint64_t)successful) * 0x100000000UL;
+	return ((uint64_t)completed) * 0x100000000UL;
 }
 
 /* Send flush command via SPI */
