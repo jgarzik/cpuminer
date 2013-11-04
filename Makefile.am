@@ -1,10 +1,10 @@
 
 ACLOCAL_AMFLAGS = -I m4
 
-JANSSON_INCLUDES= -I$(top_srcdir)/compat/jansson-2.5/src
+JANSSON_INCLUDES= -I$(top_builddir)/compat/jansson-2.5/src -I$(top_srcdir)/compat/jansson-2.5/src
 
 if WANT_USBUTILS
-USBUTILS_INCLUDES = -I$(top_srcdir)/compat/libusb-1.0/libusb
+USBUTILS_INCLUDES = -I$(top_builddir)/compat/libusb-1.0/libusb -I$(top_srcdir)/compat/libusb-1.0/libusb
 else
 USBUTILS_INCLUDES =
 endif
@@ -59,7 +59,6 @@ endif
 
 endif
 
-
 if NEED_FPGAUTILS
 cgminer_SOURCES += fpgautils.c fpgautils.h
 endif
@@ -68,12 +67,25 @@ if WANT_USBUTILS
 cgminer_SOURCES += usbutils.c usbutils.h
 endif
 
+# Device drivers
+if HAS_AVALON
+cgminer_SOURCES += driver-avalon.c driver-avalon.h
+endif
+
+if HAS_KNC
+cgminer_SOURCES += driver-knc-spi-fpga.c
+endif
+
 if HAS_BFLSC
 cgminer_SOURCES += driver-bflsc.c driver-bflsc.h
 endif
 
 if HAS_BITFORCE
 cgminer_SOURCES += driver-bitforce.c
+endif
+
+if HAS_HASHFAST
+cgminer_SOURCES += driver-hashfast.c driver-hashfast.h hf_protocol.h
 endif
 
 if HAS_BITFURY
@@ -86,10 +98,6 @@ endif
 
 if HAS_ICARUS
 cgminer_SOURCES += driver-icarus.c
-endif
-
-if HAS_AVALON
-cgminer_SOURCES += driver-avalon.c driver-avalon.h
 endif
 
 if HAS_KLONDIKE

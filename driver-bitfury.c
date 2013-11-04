@@ -38,12 +38,12 @@ static int bitfury_open(struct cgpu_info *bitfury)
 	 * harmless on linux. */
 	buf[0] = 0x80250000;
 	buf[1] = 0x00000800;
-	err = usb_transfer(bitfury, 0, 9, 1, 0, C_BF1_RESET);
+	err = usb_transfer(bitfury, 0, 9, 1, 0, C_ATMEL_RESET);
 	if (!err)
-		err = usb_transfer(bitfury, 0x21, 0x22, 0, 0, C_BF1_OPEN);
+		err = usb_transfer(bitfury, 0x21, 0x22, 0, 0, C_ATMEL_OPEN);
 	if (!err) {
 		err = usb_transfer_data(bitfury, 0x21, 0x20, 0x0000, 0, buf,
-					BF1MSGSIZE, C_BF1_INIT);
+					BF1MSGSIZE, C_ATMEL_INIT);
 	}
 
 	if (err < 0) {
@@ -145,8 +145,6 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 	/* This does not artificially raise hashrate, it simply allows the
 	 * hashrate to adapt quickly on starting. */
 	info->total_nonces = 1;
-
-	usb_buffer_enable(bitfury);
 
 	if (!bitfury_open(bitfury))
 		goto out_close;

@@ -1,8 +1,8 @@
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [3])
-m4_define([v_min], [6])
-m4_define([v_mic], [4])
+m4_define([v_min], [7])
+m4_define([v_mic], [0])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
 m4_define([lt_rev], m4_eval(v_maj + v_min))
@@ -221,6 +221,28 @@ fi
 
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 
+avalon="no"
+
+AC_ARG_ENABLE([avalon],
+	[AC_HELP_STRING([--enable-avalon],[Compile support for Avalon (default disabled)])],
+	[avalon=$enableval]
+	)
+if test "x$avalon" = xyes; then
+	AC_DEFINE([USE_AVALON], [1], [Defined to 1 if Avalon support is wanted])
+fi
+AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
+
+knc="no"
+
+AC_ARG_ENABLE([knc],
+	[AC_HELP_STRING([--enable-knc],[Compile support for KnC miners (default disabled)])],
+	[knc=$enableval]
+	)
+if test "x$knc" = xyes; then
+	AC_DEFINE([USE_KNC], [1], [Defined to 1 if KnC miner support is wanted])
+fi
+AM_CONDITIONAL([HAS_KNC], [test x$knc = xyes])
+
 bflsc="no"
 
 AC_ARG_ENABLE([bflsc],
@@ -265,8 +287,18 @@ if test "x$drillbit" = xyes; then
 fi
 AM_CONDITIONAL([HAS_DRILLBIT], [test x$drillbit = xyes])
 
+hashfast="no"
 
-Icarus="no"
+AC_ARG_ENABLE([hashfast],
+	[AC_HELP_STRING([--enable-hashfast],[Compile support for Hashfast (default disabled)])],
+	[hashfast=$enableval]
+	)
+if test "x$hashfast" = xyes; then
+	AC_DEFINE([USE_HASHFAST], [1], [Defined to 1 if Hashfast support is wanted])
+fi
+AM_CONDITIONAL([HAS_HASHFAST], [test x$hashfast = xyes])
+
+icarus="no"
 
 AC_ARG_ENABLE([icarus],
 	[AC_HELP_STRING([--enable-icarus],[Compile support for Icarus (default disabled)])],
@@ -276,17 +308,6 @@ if test "x$icarus" = xyes; then
 	AC_DEFINE([USE_ICARUS], [1], [Defined to 1 if Icarus support is wanted])
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
-
-avalon="no"
-
-AC_ARG_ENABLE([avalon],
-	[AC_HELP_STRING([--enable-avalon],[Compile support for Avalon (default disabled)])],
-	[avalon=$enableval]
-	)
-if test "x$avalon" = xyes; then
-	AC_DEFINE([USE_AVALON], [1], [Defined to 1 if Avalon support is wanted])
-fi
-AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
 klondike="no"
 
@@ -334,7 +355,7 @@ else
 	])
 fi
 
-if test x$avalon$bitforce$bitfury$drillbit$modminer$bflsc$icarus$klondike != xnononononononono; then
+if test x$avalon$bitforce$bitfury$modminer$bflsc$icarus$hashfast$klondike$drillbit != xnonononononononono; then
 	want_usbutils=true
 else
 	want_usbutils=false
@@ -527,14 +548,14 @@ if test "x$opencl" != xno; then
 
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
-		if test "x$avalon$bitforce$bitfury$drillbit$icarus$modminer$bflsc$klondike" = xnononononononono; then
+		if test "x$avalon$bitforce$bitfury$icarus$modminer$bflsc$hashfast$klondike$knc$drillbit" = xnononononononononono; then
 			AC_MSG_ERROR([No mining configured in])
 		fi
 		echo "  scrypt...............: Disabled (needs OpenCL)"
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
-	if test "x$avalon$bitforce$bitfury$drillbit$icarus$modminer$bflsc$klondike" = xnononononononono; then
+	if test "x$avalon$bitforce$bitfury$icarus$modminer$bflsc$hashfast$klondike$knc$drillbit" = xnononononononononono; then
 		AC_MSG_ERROR([No mining configured in])
 	fi
 	echo "  scrypt...............: Disabled (needs OpenCL)"
@@ -563,6 +584,12 @@ else
 	echo "  BFL.ASICs............: Disabled"
 fi
 
+if test "x$knc" = xyes; then
+	echo "  KnC.ASICs............: Enabled"
+else
+	echo "  KnC.ASICs............: Disabled"
+fi
+
 if test "x$bitforce" = xyes; then
 	echo "  BitForce.FPGAs.......: Enabled"
 else
@@ -581,11 +608,16 @@ else
 	echo "  Drillbit.BitFury........: Disabled"
 fi
 
+if test "x$hashfast" = xyes; then
+	echo "  Hashfast.ASICs.......: Enabled"
+else
+	echo "  Hashfast.ASICs.......: Disabled"
+fi
 
 if test "x$icarus" = xyes; then
-	echo "  Icarus.FPGAs.........: Enabled"
+	echo "  Icarus.ASICs/FPGAs...: Enabled"
 else
-	echo "  Icarus.FPGAs.........: Disabled"
+	echo "  Icarus.ASICs/FPGAs...: Disabled"
 fi
 
 if test "x$klondike" = xyes; then

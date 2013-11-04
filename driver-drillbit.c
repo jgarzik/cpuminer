@@ -335,8 +335,6 @@ static bool drillbit_detect_one(struct libusb_device *dev, struct usb_find_devic
 		quit(1, "Failed to calloc info in drillbit_detect_one");
 	drillbit->device_data = info;
 
-	usb_buffer_enable(drillbit);
-
 	drillbit_open(drillbit);
 
 	/* Send getinfo request */
