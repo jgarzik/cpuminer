@@ -80,33 +80,30 @@ static struct drillbit_chip_info *find_chip(struct drillbit_info *info, uint16_t
 
 /* Read a fixed size buffer back from USB, returns true on success */
 static bool usb_read_fixed_size(struct cgpu_info *drillbit, void *result, size_t result_size, int timeout, enum usb_cmds command_name) {
-  uint8_t *buf[result_size];
+  uint8_t *res = (uint8_t *)result;
   char *hex;
   int count, ms_left;
   struct timeval tv_now, tv_start;
   int amount;
 
   cgtime(&tv_start);
-  ms_left = TIMEOUT;
+  ms_left = timeout;
 
   amount = 1;
   count = 0;
-  while(amount > 0 && count < result_size && ms_left > 0) {
-    usb_read_once_timeout(drillbit, (char *)&buf[count], result_size-count, &amount, ms_left, command_name);
+  while(count < result_size && ms_left > 0) {
+    usb_read_once_timeout(drillbit, &res[count], result_size-count, &amount, ms_left, command_name);
     count += amount;
     cgtime(&tv_now);
     ms_left = timeout - ms_tdiff(&tv_now, &tv_start);
   }
-  if(amount > 0) {
-    memcpy(result, buf, result_size);
+  if(count == result_size) {
     return true;
   }
-  if(count > 0) {
-    applog(LOG_ERR, "Read incomplete fixed size packet - got %d bytes / %lu", count, result_size);
-    hex = bin2hex(result, count);
-    applog(LOG_DEBUG, "%s", hex);
-    free(hex);
-  }
+  applog(LOG_ERR, "Read incomplete fixed size packet - got %d bytes / %lu (timeout %d)", count, result_size, timeout);
+  hex = bin2hex(res, count);
+  applog(LOG_DEBUG, "%s", hex);
+  free(hex);
   return false;
 }
 
