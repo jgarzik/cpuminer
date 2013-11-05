@@ -1,5 +1,8 @@
+
 /*
  * Copyright 2013 Con Kolivas
+ * Copyright 2013 Angus Gratton
+ * Copyright 2013 James Nichols
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -19,20 +22,26 @@
 
 /* Request and response structsfor firmware */
 
-typedef struct __attribute__((packed))
+typedef struct
 {
   uint16_t chip_id;
   uint8_t midstate[32];
   uint8_t data[12];
 } WorkRequest;
 
-typedef struct __attribute__((packed))
+#define SZ_SERIALISED_WORKREQUEST 46
+static void serialise_work_request(uint8_t *buf, uint16_t chip_id, const struct work *wr);
+
+typedef struct
 {
   uint16_t chip_id;
   uint8_t num_nonces;
   uint8_t is_idle;
   uint32_t nonce[MAX_RESULTS];
 } WorkResult;
+
+#define SZ_SERIALISED_WORKRESULT (4+4*MAX_RESULTS)
+static void deserialise_work_result(WorkResult *work_result, const uint8_t *buf);
 
 #define CONFIG_PW1 (1<<0)
 #define CONFIG_PW2 (1<<1)
@@ -43,7 +52,7 @@ typedef struct __attribute__((packed))
 #define CONFIG_CORE_085V CONFIG_PW1
 #define CONFIG_CORE_095V (CONFIG_PW1|CONFIG_PW2)
 
-typedef struct __attribute__((packed))
+typedef struct
 {
   uint8_t core_voltage; // Set to flags defined above
   uint8_t int_clock_level; // Clock level (30-48 without divider), see asic.c for details
@@ -52,13 +61,20 @@ typedef struct __attribute__((packed))
   uint16_t ext_clock_freq;
 } BoardConfig;
 
-typedef struct __attribute__((packed)) Identity
+#define SZ_SERIALISED_BOARDCONFIG 6
+static void serialise_board_config(uint8_t *buf, const BoardConfig *boardconfig);
+
+typedef struct
 {
     uint8_t protocol_version;
     uint8_t product[8];
     uint32_t serial;
     uint8_t num_chips;
+    uint16_t capabilities;
 } Identity;
+
+#define SZ_SERIALISED_IDENTITY 16
+static void deserialise_identity(Identity *identity, const uint8_t *buf);
 
 /* Comparatively modest default settings */
 static BoardConfig drillbit_config = {
@@ -187,8 +203,10 @@ static void drillbit_identify(struct cgpu_info *drillbit)
 static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *info)
 {
 	int amount, err;
+        uint8_t buf[SZ_SERIALISED_IDENTITY];
         Identity identity;
 
+	drillbit_empty_buffer(drillbit);
 	err = usb_write(drillbit, "I", 1, &amount, C_BF_REQINFO);
 	if (err) {
 		applog(LOG_INFO, "%s %d: Failed to write REQINFO",
@@ -196,17 +214,19 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
 		return false;
 	}
         // can't call usb_read_fixed_size here as stats not initialised
-	err = usb_read(drillbit, (void *)&identity, sizeof(Identity), &amount, C_BF_GETINFO);
+	err = usb_read(drillbit, buf, SZ_SERIALISED_IDENTITY, &amount, C_BF_GETINFO);
 	if (err) {
 		applog(LOG_INFO, "%s %d: Failed to read GETINFO",
 		       drillbit->drv->name, drillbit->device_id);
 		return false;
 	}
-	if (amount != sizeof(Identity)) {
+	if (amount != SZ_SERIALISED_IDENTITY) {
 		applog(LOG_INFO, "%s %d: Getinfo received %d bytes instead of %lu",
 		       drillbit->drv->name, drillbit->device_id, amount, sizeof(Identity));
 		return false;
 	}
+        deserialise_identity(&identity, buf);
+
 	info->version = identity.protocol_version;
 	memcpy(&info->product, identity.product, sizeof(identity.product));
         info->serial = identity.serial;
@@ -232,12 +252,15 @@ static void drillbit_send_config(struct cgpu_info *drillbit, const BoardConfig *
 {
   char cmd;
   int amount;
+  uint8_t buf[SZ_SERIALISED_BOARDCONFIG];
   applog(LOG_INFO, "Sending board configuration voltage=%d use_ext_clock=%d int_clock_level=%d clock_div2=%d ext_clock_freq=%d",
          config->core_voltage, config->use_ext_clock, config->int_clock_level,
          config->clock_div2, config->ext_clock_freq);
   cmd = 'C';
   usb_write(drillbit, &cmd, 1, &amount, C_BF_REQWORK);
-  usb_write(drillbit, (void *)config, sizeof(config), &amount, C_BF_CONFIG);
+
+  serialise_board_config(buf, config);
+  usb_write(drillbit, buf, SZ_SERIALISED_BOARDCONFIG, &amount, C_BF_CONFIG);
 
   /* Expect a single 'C' byte as acknowledgement */
   usb_read_simple_response(drillbit, 'C', C_BF_CONFIG); // TODO: verify response
@@ -429,6 +452,7 @@ static int check_for_results(struct thr_info *thr)
   int amount, i, j, k;
   int successful_results, found;
   uint32_t result_count;
+  uint8_t buf[SZ_SERIALISED_WORKRESULT];
   WorkResult response;
 
   successful_results = 0;
@@ -448,10 +472,11 @@ static int check_for_results(struct thr_info *thr)
   // Receive work results (0 or more)
   for(j = 0; j < result_count; j++) {
 
-    if(!usb_read_fixed_size(drillbit, &response, sizeof(WorkResult), TIMEOUT, C_BF_GETRES)) {
+    if(!usb_read_fixed_size(drillbit, buf, SZ_SERIALISED_WORKRESULT, TIMEOUT, C_BF_GETRES)) {
       applog(LOG_ERR, "Failed to read response data packet idx %d count 0x%x", j, result_count);
       return 0;
     }
+    deserialise_work_result(&response, buf);
 
     if (unlikely(thr->work_restart))
       goto cleanup;
@@ -499,7 +524,7 @@ static int64_t drillbit_scanhash(struct thr_info *thr, struct work *work,
 	int ms_diff;
         uint8_t cmd;
         int result_count;
-        WorkRequest request;
+        uint8_t buf[SZ_SERIALISED_WORKREQUEST];
         char *tmp;
 
         result_count = 0;
@@ -544,14 +569,12 @@ static int64_t drillbit_scanhash(struct thr_info *thr, struct work *work,
         }
 
         applog(LOG_DEBUG, "Sending work to chip_id %d", chip->chip_id);
-        request.chip_id = chip->chip_id;
-	memcpy(&request.midstate, work->midstate, 32);
-	memcpy(&request.data, work->data + 64, 12);
+        serialise_work_request(buf, chip->chip_id, work);
 
 	/* Send work to cgminer */
         cmd = 'W';
 	usb_write(drillbit, &cmd, 1, &amount, C_BF_REQWORK);
-	usb_write(drillbit, (void *)&request, sizeof(request), &amount, C_BF_REQWORK);
+	usb_write(drillbit, buf, SZ_SERIALISED_WORKREQUEST, &amount, C_BF_REQWORK);
 
 	if (unlikely(thr->work_restart))
 		goto cascade;
@@ -625,3 +648,57 @@ struct device_drv drillbit_drv = {
 	.thread_shutdown = drillbit_shutdown,
 	.identify_device = drillbit_identify,
 };
+
+
+/* Structure serialisation/deserialisation */
+
+#define SERIALISE(FIELD) do {                    \
+    memcpy(&buf[offset], &FIELD, sizeof(FIELD)); \
+    offset += sizeof(FIELD);                     \
+  } while(0)
+
+#define DESERIALISE(FIELD) do {                   \
+    memcpy(&FIELD, &buf[offset], sizeof(FIELD));  \
+    offset += sizeof(FIELD);                      \
+  } while(0)
+
+static void serialise_work_request(uint8_t *buf, uint16_t chip_id, const struct work *work)
+{
+  size_t offset = 0;
+  SERIALISE(chip_id);
+  memcpy(&buf[offset], work->midstate, 32);
+  offset += 32;
+  memcpy(&buf[offset], work->data + 64, 12);
+  //offset += 12;
+}
+
+static void deserialise_work_result(WorkResult *wr, const uint8_t *buf)
+{
+  int i;
+  size_t offset = 0;
+  DESERIALISE(wr->chip_id);
+  DESERIALISE(wr->num_nonces);
+  DESERIALISE(wr->is_idle);
+  for(i = 0; i < MAX_RESULTS; i++)
+    DESERIALISE(wr->nonce[i]);
+}
+
+static void serialise_board_config(uint8_t *buf, const BoardConfig *bc)
+{
+  size_t offset = 0;
+  SERIALISE(bc->core_voltage);
+  SERIALISE(bc->int_clock_level);
+  SERIALISE(bc->clock_div2);
+  SERIALISE(bc->use_ext_clock);
+  SERIALISE(bc->ext_clock_freq);
+}
+
+static void deserialise_identity(Identity *id, const uint8_t *buf)
+{
+  size_t offset = 0;
+  DESERIALISE(id->protocol_version);
+  DESERIALISE(id->product);
+  DESERIALISE(id->serial);
+  DESERIALISE(id->num_chips);
+  DESERIALISE(id->capabilities);
+}
