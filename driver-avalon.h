@@ -65,9 +65,7 @@
 
 #define AVALON_FTDI_READSIZE 510
 #define AVALON_READBUF_SIZE 8192
-#define AVALON_RESET_TIMEOUT 100
-#define AVALON_READ_TIMEOUT 18 /* Enough to only half fill the buffer */
-#define AVALON_LATENCY 1
+#define AVALON_LATENCY 16 /* This is basically the ftdi default anyway */
 
 struct avalon_task {
 	uint8_t reset		:1;
@@ -145,9 +143,11 @@ struct avalon_info {
 	pthread_t write_thr;
 	pthread_mutex_t lock;
 	pthread_mutex_t qlock;
-	pthread_cond_t qcond;
-	int nonces;
+	cgsem_t qsem;
+	cgtimer_t cgsent;
+	int send_delay;
 
+	int nonces;
 	int auto_queued;
 	int auto_nonces;
 	int auto_hw;

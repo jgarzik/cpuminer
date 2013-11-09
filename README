@@ -104,6 +104,9 @@ If building from git:
 	autoconf
 	automake
 
+If building on Red Hat:
+        sudo yum install autoconf automake autoreconf libtool openssl-compat-bitcoin-devel.x86_64 \
+                         curl libcurl libcurl-devel openssh
 
 CGMiner specific configuration options:
   --enable-opencl         Enable support for GPU mining with opencl
@@ -798,12 +801,6 @@ done to find them. If you are mining at 8 difficulty, then you would expect on
 average to find one 8 difficulty share, per 8 single difficulty shares found.
 However, the number is actually random and converges over time, it is an average,
 not an exact value, thus you may find more or less than the expected average.
-
-Q: Why do the scrypt diffs not match with the current difficulty target?
-A: The current scrypt block difficulty is expressed in terms of how many
-multiples of the BTC difficulty it currently is (eg 28) whereas the shares of
-"difficulty 1" are actually 65536 times smaller than the BTC ones. The diff
-expressed by cgminer is as multiples of difficulty 1 shares.
 
 Q: Can I make a donation in litecoin?
 A: Yes, see SCRYPT-README for the address, but the author prefers bitcoin if

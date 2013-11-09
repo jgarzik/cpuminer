@@ -199,7 +199,6 @@ bool opt_bfl_noncerange;
 struct thr_info *control_thr;
 struct thr_info **mining_thr;
 static int gwsched_thr_id;
-static int stage_thr_id;
 static int watchpool_thr_id;
 static int watchdog_thr_id;
 #ifdef HAVE_CURSES
@@ -438,12 +437,17 @@ static void applog_and_exit(const char *fmt, ...)
 static pthread_mutex_t sharelog_lock;
 static FILE *sharelog_file = NULL;
 
+static struct thr_info *__get_thread(int thr_id)
+{
+	return mining_thr[thr_id];
+}
+
 struct thr_info *get_thread(int thr_id)
 {
 	struct thr_info *thr;
 
 	rd_lock(&mining_thr_lock);
-	thr = mining_thr[thr_id];
+	thr = __get_thread(thr_id);
 	rd_unlock(&mining_thr_lock);
 
 	return thr;
@@ -2715,25 +2719,6 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	}
 }
 
-#ifdef HAVE_LIBCURL
-static void text_print_status(int thr_id)
-{
-	struct cgpu_info *cgpu;
-	char logline[256];
-
-	cgpu = get_thr_cgpu(thr_id);
-	if (cgpu) {
-		get_statline(logline, sizeof(logline), cgpu);
-		printf("%s\n", logline);
-	}
-}
-
-static void print_status(int thr_id)
-{
-	if (!curses_active)
-		text_print_status(thr_id);
-}
-
 static void show_hash(struct work *work, char *hashshow)
 {
 	unsigned char rhash[32];
@@ -2753,6 +2738,25 @@ static void show_hash(struct work *work, char *hashshow)
 	suffix_string(work->share_diff, diffdisp, sizeof (diffdisp), 0);
 	snprintf(hashshow, 64, "%08lx Diff %s/%d%s", h32, diffdisp, intdiff,
 		 work->block? " BLOCK!" : "");
+}
+
+#ifdef HAVE_LIBCURL
+static void text_print_status(int thr_id)
+{
+	struct cgpu_info *cgpu;
+	char logline[256];
+
+	cgpu = get_thr_cgpu(thr_id);
+	if (cgpu) {
+		get_statline(logline, sizeof(logline), cgpu);
+		printf("%s\n", logline);
+	}
+}
+
+static void print_status(int thr_id)
+{
+	if (!curses_active)
+		text_print_status(thr_id);
 }
 
 static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
@@ -2884,8 +2888,8 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 			snprintf(worktime, sizeof(worktime),
 				" <-%08lx.%08lx M:%c D:%1.*f G:%02d:%02d:%02d:%1.3f %s (%1.3f) W:%1.3f (%1.3f) S:%1.3f R:%02d:%02d:%02d",
-				(unsigned long)swab32(*(uint32_t *)&(work->data[opt_scrypt ? 32 : 28])),
-				(unsigned long)swab32(*(uint32_t *)&(work->data[opt_scrypt ? 28 : 24])),
+				(unsigned long)be32toh(*(uint32_t *)&(work->data[opt_scrypt ? 32 : 28])),
+				(unsigned long)be32toh(*(uint32_t *)&(work->data[opt_scrypt ? 28 : 24])),
 				work->getwork_mode, diffplaces, work->work_difficulty,
 				tm_getwork.tm_hour, tm_getwork.tm_min,
 				tm_getwork.tm_sec, getwork_time, workclone,
@@ -3316,11 +3320,7 @@ static void __kill_work(void)
 
 	cg_completion_timeout(&kill_mining, NULL, 3000);
 
-	forcelog(LOG_DEBUG, "Killing off stage thread");
 	/* Stop the others */
-	thr = &control_thr[stage_thr_id];
-	kill_timeout(thr);
-
 	forcelog(LOG_DEBUG, "Killing off API thread");
 	thr = &control_thr[api_thr_id];
 	kill_timeout(thr);
@@ -4027,6 +4027,8 @@ static void restart_threads(void)
 	rd_lock(&mining_thr_lock);
 	for (i = 0; i < mining_threads; i++) {
 		cgpu = mining_thr[i]->cgpu;
+		if (unlikely(!cgpu))
+			continue;
 		mining_thr[i]->work_restart = true;
 		flush_queue(cgpu);
 		cgpu->drv->flush_work(cgpu);
@@ -4113,7 +4115,7 @@ static void set_blockdiff(const struct work *work)
 {
 	uint8_t pow = work->data[72];
 	int powdiff = (8 * (0x1d - 3)) - (8 * (pow - 3));
-	uint32_t diff32 = swab32(*((uint32_t *)(work->data + 72))) & 0x00FFFFFF;
+	uint32_t diff32 = be32toh(*((uint32_t *)(work->data + 72))) & 0x00FFFFFF;
 	double numerator = 0xFFFFULL << powdiff;
 	double ddiff = numerator / (double)diff32;
 
@@ -4261,42 +4263,6 @@ static bool hash_push(struct work *work)
 	mutex_unlock(stgd_lock);
 
 	return rc;
-}
-
-static void *stage_thread(void *userdata)
-{
-	struct thr_info *mythr = userdata;
-	bool ok = true;
-
-	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-
-	RenameThread("stage");
-
-	while (ok) {
-		struct work *work = NULL;
-
-		applog(LOG_DEBUG, "Popping work to stage thread");
-
-		work = tq_pop(mythr->q, NULL);
-		if (unlikely(!work)) {
-			applog(LOG_ERR, "Failed to tq_pop in stage_thread");
-			ok = false;
-			break;
-		}
-		work->work_block = work_block;
-
-		test_work_current(work);
-
-		applog(LOG_DEBUG, "Pushing work to getwork queue");
-
-		if (unlikely(!hash_push(work))) {
-			applog(LOG_WARNING, "Failed to hash_push in stage_thread");
-			continue;
-		}
-	}
-
-	tq_freeze(mythr->q);
-	return NULL;
 }
 
 static void stage_work(struct work *work)
@@ -5582,8 +5548,7 @@ static void *stratum_rthread(void *userdata)
 
 		if (!parse_method(pool, s) && !parse_stratum_response(pool, s))
 			applog(LOG_INFO, "Unknown stratum msg: %s", s);
-		free(s);
-		if (pool->swork.clean) {
+		else if (pool->swork.clean) {
 			struct work *work = make_work();
 
 			/* Generate a single work item to update the current
@@ -5596,6 +5561,7 @@ static void *stratum_rthread(void *userdata)
 			test_work_current(work);
 			free_work(work);
 		}
+		free(s);
 	}
 
 out:
@@ -5872,7 +5838,7 @@ retry_stratum:
 			calc_diff(work, 0);
 			applog(LOG_DEBUG, "Pushing pooltest work to base pool");
 
-			tq_push(control_thr[stage_thr_id].q, work);
+			stage_work(work);
 			total_getworks++;
 			pool->getwork_requested++;
 			ret = true;
@@ -6527,14 +6493,39 @@ static void hash_sole_work(struct thr_info *mythr)
 static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct device_drv *drv, const int thr_id)
 {
 	do {
-		wr_lock(&cgpu->qlock);
-		if (!cgpu->unqueued_work)
-			cgpu->unqueued_work = get_work(mythr, thr_id);
-		wr_unlock(&cgpu->qlock);
+		bool need_work;
+
+		/* Do this lockless just to know if we need more unqueued work. */
+		need_work = (!cgpu->unqueued_work);
+
+		/* get_work is a blocking function so do it outside of lock
+		 * to prevent deadlocks with other locks. */
+		if (need_work) {
+			struct work *work = get_work(mythr, thr_id);
+
+			wr_lock(&cgpu->qlock);
+			/* Check we haven't grabbed work somehow between
+			 * checking and picking up the lock. */
+			if (likely(!cgpu->unqueued_work))
+				cgpu->unqueued_work = work;
+			else
+				need_work = false;
+			wr_unlock(&cgpu->qlock);
+
+			if (unlikely(!need_work))
+				discard_work(work);
+		}
 		/* The queue_full function should be used by the driver to
 		 * actually place work items on the physical device if it
 		 * does have a queue. */
 	} while (!drv->queue_full(cgpu));
+}
+
+/* Add a work item to a cgpu's queued hashlist */
+void __add_queued(struct cgpu_info *cgpu, struct work *work)
+{
+	cgpu->queued_count++;
+	HASH_ADD_INT(cgpu->queued_work, id, work);
 }
 
 /* This function is for retrieving one work item from the unqueued pointer and
@@ -6547,11 +6538,27 @@ struct work *get_queued(struct cgpu_info *cgpu)
 	wr_lock(&cgpu->qlock);
 	if (cgpu->unqueued_work) {
 		work = cgpu->unqueued_work;
-		HASH_ADD_INT(cgpu->queued_work, id, work);
+		__add_queued(cgpu, work);
 		cgpu->unqueued_work = NULL;
 	}
 	wr_unlock(&cgpu->qlock);
 
+	return work;
+}
+
+void add_queued(struct cgpu_info *cgpu, struct work *work)
+{
+	wr_lock(&cgpu->qlock);
+	__add_queued(cgpu, work);
+	wr_unlock(&cgpu->qlock);
+}
+
+/* Get fresh work and add it to cgpu's queued hashlist */
+struct work *get_queue_work(struct thr_info *thr, struct cgpu_info *cgpu, int thr_id)
+{
+	struct work *work = get_work(thr, thr_id);
+
+	add_queued(cgpu, work);
 	return work;
 }
 
@@ -6671,17 +6678,21 @@ void hash_queued_work(struct thr_info *mythr)
 		struct timeval diff;
 		int64_t hashes;
 
-		mythr->work_restart = mythr->work_update = false;
+		mythr->work_update = false;
 
 		fill_queue(mythr, cgpu, drv, thr_id);
 
 		hashes = drv->scanwork(mythr);
 
+		/* Reset the bool here in case the driver looks for it
+		 * synchronously in the scanwork loop. */
+		mythr->work_restart = false;
+
 		if (unlikely(hashes == -1 )) {
 			applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
 			cgpu->deven = DEV_DISABLED;
 			dev_error(cgpu, REASON_THREAD_ZERO_HASH);
-			mt_disable(mythr, thr_id, drv);
+			break;
 		}
 
 		hashes_done += hashes;
@@ -6720,15 +6731,19 @@ void hash_driver_work(struct thr_info *mythr)
 		struct timeval diff;
 		int64_t hashes;
 
-		mythr->work_restart = mythr->work_update = false;
+		mythr->work_update = false;
 
 		hashes = drv->scanwork(mythr);
+
+		/* Reset the bool here in case the driver looks for it
+		 * synchronously in the scanwork loop. */
+		mythr->work_restart = false;
 
 		if (unlikely(hashes == -1 )) {
 			applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
 			cgpu->deven = DEV_DISABLED;
 			dev_error(cgpu, REASON_THREAD_ZERO_HASH);
-			mt_disable(mythr, thr_id, drv);
+			break;
 		}
 
 		hashes_done += hashes;
@@ -7852,7 +7867,7 @@ struct device_drv *copy_drv(struct device_drv *drv)
 }
 
 #ifdef USE_USBUTILS
-static void hotplug_process()
+static void hotplug_process(void)
 {
 	struct thr_info *thr;
 	int i, j;
@@ -7870,7 +7885,6 @@ static void hotplug_process()
 
 	wr_lock(&mining_thr_lock);
 	mining_thr = realloc(mining_thr, sizeof(thr) * (mining_threads + new_threads + 1));
-	wr_unlock(&mining_thr_lock);
 
 	if (!mining_thr)
 		quit(1, "Failed to hotplug realloc mining_thr");
@@ -7889,7 +7903,7 @@ static void hotplug_process()
 		cgtime(&(cgpu->dev_start_tv));
 
 		for (j = 0; j < cgpu->threads; ++j) {
-			thr = get_thread(mining_threads);
+			thr = __get_thread(mining_threads);
 			thr->id = mining_threads;
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
@@ -7914,6 +7928,7 @@ static void hotplug_process()
 		total_devices++;
 		applog(LOG_WARNING, "Hotplug: %s added %s %i", cgpu->drv->dname, cgpu->drv->name, cgpu->device_id);
 	}
+	wr_unlock(&mining_thr_lock);
 
 	adjust_mostdevs();
 	switch_logsize(true);
@@ -8035,8 +8050,6 @@ int main(int argc, char *argv[])
 		initial_args[i] = strdup(argv[i]);
 	initial_args[argc] = NULL;
 
-	initialise_usb();
-
 	mutex_init(&hash_lock);
 	mutex_init(&console_lock);
 	cglock_init(&control_lock);
@@ -8059,6 +8072,8 @@ int main(int argc, char *argv[])
 
 	if (unlikely(pthread_cond_init(&gws_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init gws_cond");
+
+	initialise_usb();
 
 	snprintf(packagename, sizeof(packagename), "%s %s", PACKAGE, VERSION);
 
@@ -8165,7 +8180,7 @@ int main(int argc, char *argv[])
 	if (opt_scantime < 0)
 		opt_scantime = opt_scrypt ? 30 : 60;
 
-	total_control_threads = 9;
+	total_control_threads = 8;
 	control_thr = calloc(total_control_threads, sizeof(*thr));
 	if (!control_thr)
 		quit(1, "Failed to calloc control_thr");
@@ -8299,16 +8314,6 @@ int main(int argc, char *argv[])
 			quit(1, "Failed to calloc mining_thr[%d]", i);
 	}
 
-	stage_thr_id = 2;
-	thr = &control_thr[stage_thr_id];
-	thr->q = tq_new();
-	if (!thr->q)
-		quit(1, "Failed to tq_new");
-	/* start stage thread */
-	if (thr_info_create(thr, NULL, stage_thread, thr))
-		quit(1, "stage thread create failed");
-	pthread_detach(thr->pth);
-
 	/* Create a unique get work queue */
 	getq = tq_new();
 	if (!getq)
@@ -8413,14 +8418,14 @@ begin_bench:
 	cgtime(&total_tv_start);
 	cgtime(&total_tv_end);
 
-	watchpool_thr_id = 3;
+	watchpool_thr_id = 2;
 	thr = &control_thr[watchpool_thr_id];
 	/* start watchpool thread */
 	if (thr_info_create(thr, NULL, watchpool_thread, NULL))
 		quit(1, "watchpool thread create failed");
 	pthread_detach(thr->pth);
 
-	watchdog_thr_id = 4;
+	watchdog_thr_id = 3;
 	thr = &control_thr[watchdog_thr_id];
 	/* start watchdog thread */
 	if (thr_info_create(thr, NULL, watchdog_thread, NULL))
@@ -8429,7 +8434,7 @@ begin_bench:
 
 #ifdef HAVE_OPENCL
 	/* Create reinit gpu thread */
-	gpur_thr_id = 5;
+	gpur_thr_id = 4;
 	thr = &control_thr[gpur_thr_id];
 	thr->q = tq_new();
 	if (!thr->q)
@@ -8439,14 +8444,14 @@ begin_bench:
 #endif	
 
 	/* Create API socket thread */
-	api_thr_id = 6;
+	api_thr_id = 5;
 	thr = &control_thr[api_thr_id];
 	if (thr_info_create(thr, NULL, api_thread, thr))
 		quit(1, "API thread create failed");
 
 #ifdef USE_USBUTILS
 	if (!opt_scrypt) {
-		hotplug_thr_id = 7;
+		hotplug_thr_id = 6;
 		thr = &control_thr[hotplug_thr_id];
 		if (thr_info_create(thr, NULL, hotplug_thread, thr))
 			quit(1, "hotplug thread create failed");
@@ -8458,7 +8463,7 @@ begin_bench:
 	/* Create curses input thread for keyboard input. Create this last so
 	 * that we know all threads are created since this can call kill_work
 	 * to try and shut down all previous threads. */
-	input_thr_id = 8;
+	input_thr_id = 7;
 	thr = &control_thr[input_thr_id];
 	if (thr_info_create(thr, NULL, input_thread, thr))
 		quit(1, "input thread create failed");
@@ -8466,8 +8471,8 @@ begin_bench:
 #endif
 
 	/* Just to be sure */
-	if (total_control_threads != 9)
-		quit(1, "incorrect total_control_threads (%d) should be 9", total_control_threads);
+	if (total_control_threads != 8)
+		quit(1, "incorrect total_control_threads (%d) should be 8", total_control_threads);
 
 	/* Once everything is set up, main() becomes the getwork scheduler */
 	while (42) {
