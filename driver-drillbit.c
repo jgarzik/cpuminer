@@ -377,6 +377,7 @@ static bool drillbit_detect_one(struct libusb_device *dev, struct usb_find_devic
         for(i = 0; i < info->num_chips; i++) {
           info->chips[i].chip_id = i;
         }
+        cgtime(&info->tv_lastchipinfo);
 
 	if (!add_cgpu(drillbit))
 		goto out_close;
@@ -493,6 +494,7 @@ static int check_for_results(struct thr_info *thr)
       found = false;
       for(k = 0; k < WORK_HISTORY_LEN; k++) {
         if (chip->current_work[k] && drillbit_checkresults(thr, chip->current_work[k], response.nonce[i])) {
+          chip->success_count++;
           successful_results++;
           found = true;
           break;
@@ -501,6 +503,7 @@ static int check_for_results(struct thr_info *thr)
       if(!found && chip->state != IDLE) {
         /* all nonces we got back from this chip were invalid */
         inc_hw_errors(thr);
+        chip->error_count++;
       }
     }
     if(chip->state == WORKING_QUEUED && !response.is_idle)
@@ -524,7 +527,7 @@ static int64_t drillbit_scanhash(struct thr_info *thr, struct work *work,
 	int ms_diff;
         uint8_t cmd;
         int result_count;
-        uint8_t buf[SZ_SERIALISED_WORKREQUEST];
+        uint8_t buf[200]; // also larger than SZ_SERIALISED_WORKREQUEST
         char *tmp;
 
         result_count = 0;
@@ -560,6 +563,7 @@ static int64_t drillbit_scanhash(struct thr_info *thr, struct work *work,
           if(ms_diff > TIMEOUT) {
             applog(LOG_ERR, "Timing out unresponsive ASIC %d", info->chips[i].chip_id);
             info->chips[i].state = IDLE;
+            info->chips[i].timeout_count++;
             chip = &info->chips[i];
           }
         }
@@ -593,6 +597,28 @@ static int64_t drillbit_scanhash(struct thr_info *thr, struct work *work,
           chip->current_work[i] = chip->current_work[i+1];
         chip->current_work[WORK_HISTORY_LEN-1] = copy_work(work);
         cgtime(&chip->tv_start);
+
+        /* Print a per-chip info line every 30 seconds */
+        cgtime(&tv_now);
+        if(opt_log_level <= LOG_INFO && ms_tdiff(&tv_now, &info->tv_lastchipinfo) > 30000) {
+          /* TODO: this output line may get truncated (max debug is 256 bytes) once we get more
+             chips in a single device
+          */
+          amount = sprintf(buf, "%s %d: S/E/T", drillbit->drv->name, drillbit->device_id);
+          for(i = 0; i < info->num_chips; i++) {
+            chip= &info->chips[i];
+            j = snprintf(buf+amount, sizeof(buf)-amount, " %d:%d/%d/%d",
+                         chip->chip_id, chip->success_count, chip->error_count,
+                         chip->timeout_count);
+            if(j < 0)
+              break;
+            amount += j;
+            if(amount >= sizeof(buf))
+               break;
+          }
+          applog(LOG_INFO, "%s", buf);
+          cgtime(&info->tv_lastchipinfo);
+        }
 
 cascade:
         drillbit_empty_buffer(drillbit);

@@ -25,6 +25,7 @@ struct drillbit_info {
   uint32_t serial;
   uint8_t num_chips;
   struct drillbit_chip_info *chips;
+  struct timeval tv_lastchipinfo;
 };
 
 enum drillbit_chip_state {
@@ -38,6 +39,9 @@ struct drillbit_chip_info {
   struct work *current_work[WORK_HISTORY_LEN];
   enum drillbit_chip_state state;
   struct timeval tv_start;
+  uint32_t success_count;
+  uint32_t error_count;
+  uint32_t timeout_count;
 };
 
 #endif /* BITFURY_H */
