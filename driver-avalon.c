@@ -307,6 +307,8 @@ static bool avalon_decode_nonce(struct thr_info *thr, struct cgpu_info *avalon,
 	info = avalon->device_data;
 	info->matching_work[work->subid]++;
 	nonce = htole32(ar->nonce);
+	if (info->asic == 55)
+		nonce -= 0xc0;
 	applog(LOG_DEBUG, "Avalon: nonce = %0x08x", nonce);
 	return submit_nonce(thr, work, nonce);
 }
