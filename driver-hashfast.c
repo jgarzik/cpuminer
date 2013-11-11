@@ -429,13 +429,14 @@ static bool hfa_detect_one_usb(libusb_device *dev, struct usb_find_devices *foun
 		return false;
 	}
 
-	add_cgpu(hashfast);
-
 	if (!hfa_detect_common(hashfast)) {
 		usb_uninit(hashfast);
 		hashfast = usb_free_cgpu(hashfast);
 		return false;
 	}
+	if (!add_cgpu(hashfast))
+		return false;
+
 	return true;
 }
 
