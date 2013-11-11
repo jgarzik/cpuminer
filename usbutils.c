@@ -191,6 +191,20 @@ static struct usb_epinfo kln_epinfos[] = {
 static struct usb_intinfo kln_ints[] = {
 	USB_EPS(0, kln_epinfos)
 };
+
+static struct usb_epinfo kli0_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT, 8,	EPI(1), 0, 0 }
+};
+
+static struct usb_epinfo kli1_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(2), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
+};
+
+static struct usb_intinfo kli_ints[] = {
+	USB_EPS(1, kli1_epinfos),
+	USB_EPS(0, kli0_epinfos)
+};
 #endif
 
 #ifdef USE_ICARUS
@@ -383,6 +397,16 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = KLONDIKE_TIMEOUT_MS,
 		.latency = 10,
 		INTINFO(kln_ints) },
+	{
+		.drv = DRIVER_klondike,
+		.name = "KLI",
+		.ident = IDENT_KLN,
+		.idVendor = 0x04D8,
+		.idProduct = 0xF60A,
+		.config = 1,
+		.timeout = KLONDIKE_TIMEOUT_MS,
+		.latency = 10,
+		INTINFO(kli_ints) },
 #endif
 #ifdef USE_ICARUS
 	{
