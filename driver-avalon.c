@@ -291,14 +291,29 @@ static inline bool avalon_cts(char c)
 
 static int avalon_read(struct cgpu_info *avalon, char *buf, size_t bufsize, int ep)
 {
-	int err, amount;
+	size_t total = 0, readsize = bufsize + 2;
+	char readbuf[AVALON_READBUF_SIZE];
+	int err, amount, ofs = 2, cp;
 
-	err = usb_read_once(avalon, buf, bufsize, &amount, ep);
+	err = usb_read_once(avalon, readbuf, readsize, &amount, ep);
 	applog(LOG_DEBUG, "%s%i: Get avalon read got err %d",
 	       avalon->drv->name, avalon->device_id, err);
-	if (unlikely(err && err != LIBUSB_ERROR_TIMEOUT))
-		amount = -1;
-	return amount;
+
+	if (amount < 2)
+		goto out;
+
+	/* The first 2 of every 64 bytes are status on FTDIRL */
+	while (amount > 2) {
+		cp = amount - 2;
+		if (cp > 62)
+			cp = 62;
+		memcpy(&buf[total], &readbuf[ofs], cp);
+		total += cp;
+		amount -= cp + 2;
+		ofs += 64;
+	}
+out:
+	return total;
 }
 
 static int avalon_reset(struct cgpu_info *avalon, bool initial)
@@ -761,7 +776,9 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 				 &asic_count, &timeout, &frequency,
 				 (usb_ident(avalon) == IDENT_BBF && opt_bitburner_fury_options != NULL) ? opt_bitburner_fury_options : opt_avalon_options);
 
-	avalon->usbdev->usb_type = USB_TYPE_FTDI;
+	/* Even though this is an FTDI type chip, we want to do the parsing
+	 * all ourselves so set it to std usb type */
+	avalon->usbdev->usb_type = USB_TYPE_STD;
 
 	/* We have a real Avalon! */
 	avalon_initialise(avalon);
