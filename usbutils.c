@@ -2419,8 +2419,8 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	struct usb_transfer ut;
 	unsigned char endpoint;
 	int err, errn;
-	/* End of transfer and zero length packet required */
-	bool eot = false, zlp = false;
+	/* Zero length packet required */
+	bool zlp = false;
 #if DO_USB_STATS
 	struct timeval tv_start, tv_finish;
 #endif
@@ -2440,11 +2440,6 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	usb_epinfo = &(cgpu->usbdev->found->intinfos[intinfo].epinfos[epinfo]);
 	endpoint = usb_epinfo->ep;
 
-	if (length > usb_epinfo->wMaxPacketSize)
-		length = usb_epinfo->wMaxPacketSize;
-	else if (length == usb_epinfo->wMaxPacketSize)
-		eot = true;
-
 	/* Avoid any async transfers during shutdown to allow the polling
 	 * thread to be shut down after all existing transfers are complete */
 	if (unlikely(cgpu->shutdown))
@@ -2457,7 +2452,9 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 		/* If this is the last packet in a transfer and is the length
 		 * of the wMaxPacketSize then we need to send a zero length
 		 * packet to let the device know it's the end of the message.*/
-		if (eot)
+		if (length > usb_epinfo->wMaxPacketSize)
+			length = usb_epinfo->wMaxPacketSize;
+		else if (length == usb_epinfo->wMaxPacketSize)
 			zlp = true;
 #ifndef WIN32
 		/* Windows doesn't support this flag so we emulate it below */
