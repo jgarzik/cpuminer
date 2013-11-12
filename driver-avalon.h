@@ -65,7 +65,8 @@
 
 #define AVALON_FTDI_READSIZE 510
 #define AVALON_READBUF_SIZE 8192
-#define AVALON_LATENCY 16 /* This is basically the ftdi default anyway */
+/* Set latency to just less than full 64 byte packet size at 115200 baud */
+#define AVALON_LATENCY 4
 
 struct avalon_task {
 	uint8_t reset		:1;
