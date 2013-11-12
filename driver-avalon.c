@@ -576,7 +576,8 @@ static void avalon_idle(struct cgpu_info *avalon, struct avalon_info *info)
 		avalon_init_task(&at, 0, 0, info->fan_pwm, info->timeout,
 				 info->asic_count, info->miner_count, 1, 1,
 				 info->frequency);
-		avalon_send_task(&at, avalon, info);
+		if (avalon_send_task(&at, avalon, info) == AVA_SEND_ERROR)
+			break;
 	}
 	applog(LOG_WARNING, "%s%i: Idling %d miners", avalon->drv->name, avalon->device_id, i);
 	wait_avalon_ready(avalon);
