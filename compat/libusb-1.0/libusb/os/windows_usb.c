@@ -2388,20 +2388,8 @@ static int winusb_configure_endpoints(struct libusb_device_handle *dev_handle, i
 			PIPE_TRANSFER_TIMEOUT, sizeof(ULONG), &timeout)) {
 			usbi_dbg("failed to set PIPE_TRANSFER_TIMEOUT for control endpoint %02X", endpoint_address);
 		}
-		if (i == -1) continue;	// Other policies don't apply to control endpoint
-		policy = false;
-		if (!WinUsb_SetPipePolicy(winusb_handle, endpoint_address,
-			SHORT_PACKET_TERMINATE, sizeof(UCHAR), &policy)) {
-			usbi_dbg("failed to disable SHORT_PACKET_TERMINATE for endpoint %02X", endpoint_address);
-		}
-		if (!WinUsb_SetPipePolicy(winusb_handle, endpoint_address,
-			IGNORE_SHORT_PACKETS, sizeof(UCHAR), &policy)) {
-			usbi_dbg("failed to disable IGNORE_SHORT_PACKETS for endpoint %02X", endpoint_address);
-		}
-		if (!WinUsb_SetPipePolicy(winusb_handle, endpoint_address,
-			ALLOW_PARTIAL_READS, sizeof(UCHAR), &policy)) {
-			usbi_dbg("failed to disable ALLOW_PARTIAL_READS for endpoint %02X", endpoint_address);
-		}
+		if (i == -1)
+			continue;	// Other policies don't apply to control endpoint
 		policy = true;
 		if (!WinUsb_SetPipePolicy(winusb_handle, endpoint_address,
 			AUTO_CLEAR_STALL, sizeof(UCHAR), &policy)) {
