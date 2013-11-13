@@ -126,26 +126,13 @@ static bool bitfury_reset(struct cgpu_info *bitfury)
 	return true;
 }
 
-static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
+static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
-	struct cgpu_info *bitfury;
-	struct bitfury_info *info;
+	return false;
+}
 
-	bitfury = usb_alloc_cgpu(&bitfury_drv, 1);
-
-	if (!usb_init(bitfury, dev, found))
-		goto out;
-	applog(LOG_INFO, "%s %d: Found at %s", bitfury->drv->name,
-	       bitfury->device_id, bitfury->device_path);
-
-	info = calloc(sizeof(struct bitfury_info), 1);
-	if (!info)
-		quit(1, "Failed to calloc info in bitfury_detect_one");
-	bitfury->device_data = info;
-	/* This does not artificially raise hashrate, it simply allows the
-	 * hashrate to adapt quickly on starting. */
-	info->total_nonces = 1;
-
+static bool bf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
 	if (!bitfury_open(bitfury))
 		goto out_close;
 
@@ -166,13 +153,55 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 	update_usb_stats(bitfury);
 	applog(LOG_INFO, "%s %d: Successfully initialised %s",
 	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
+
+	/* This does not artificially raise hashrate, it simply allows the
+	 * hashrate to adapt quickly on starting. */
+	info->total_nonces = 1;
+
 	return true;
 out_close:
 	bitfury_close(bitfury);
-	usb_uninit(bitfury);
-out:
-	bitfury = usb_free_cgpu(bitfury);
 	return false;
+}
+
+static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
+{
+	struct cgpu_info *bitfury;
+	struct bitfury_info *info;
+	enum sub_ident ident;
+	bool ret = false;
+
+	bitfury = usb_alloc_cgpu(&bitfury_drv, 1);
+
+	if (!usb_init(bitfury, dev, found))
+		goto out;
+	applog(LOG_INFO, "%s %d: Found at %s", bitfury->drv->name,
+	       bitfury->device_id, bitfury->device_path);
+
+	info = calloc(sizeof(struct bitfury_info), 1);
+	if (!info)
+		quit(1, "Failed to calloc info in bitfury_detect_one");
+	bitfury->device_data = info;
+	ident = usb_ident(bitfury);
+	switch (ident) {
+		case IDENT_BF1:
+			ret = bf1_detect_one(bitfury, info);
+			break;
+		case IDENT_BXF:
+			ret = bxf_detect_one(bitfury, info);
+			break;
+		default:
+			applog(LOG_INFO, "%s %d: Unrecognised bitfury device",
+			       bitfury->drv->name, bitfury->device_id);
+			break;
+	}
+
+	if (!ret) {
+		usb_uninit(bitfury);
+out:
+		bitfury = usb_free_cgpu(bitfury);
+	}
+	return ret;
 }
 
 static void bitfury_detect(bool __maybe_unused hotplug)

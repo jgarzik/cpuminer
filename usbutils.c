@@ -313,7 +313,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRIVER_bitfury,
 		.name = "BF1",
-		.ident = IDENT_BFU,
+		.ident = IDENT_BF1,
 		.idVendor = 0x03eb,
 		.idProduct = 0x204b,
 		.config = 1,
@@ -321,6 +321,19 @@ static struct usb_find_devices find_dev[] = {
 		.latency = LATENCY_UNUSED,
 		//.iManufacturer = "BPMC",
 		.iProduct = "Bitfury BF1",
+		INTINFO(bfu_ints)
+	},
+	{
+		.drv = DRIVER_bitfury,
+		.name = "BXF",
+		.ident = IDENT_BXF,
+		.idVendor = 0x198c,
+		.idProduct = 0xb1f1,
+		.config = 1,
+		.timeout = BITFURY_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		//.iManufacturer = something,
+		// .iProduct = something,
 		INTINFO(bfu_ints)
 	},
 #endif
