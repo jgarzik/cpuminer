@@ -1822,9 +1822,6 @@ static int windows_submit_transfer(struct usbi_transfer *itransfer)
 		return submit_control_transfer(itransfer);
 	case LIBUSB_TRANSFER_TYPE_BULK:
 	case LIBUSB_TRANSFER_TYPE_INTERRUPT:
-		if (IS_XFEROUT(transfer) &&
-		    transfer->flags & LIBUSB_TRANSFER_ADD_ZERO_PACKET)
-			return LIBUSB_ERROR_NOT_SUPPORTED;
 		return submit_bulk_transfer(itransfer);
 	case LIBUSB_TRANSFER_TYPE_ISOCHRONOUS:
 		return submit_iso_transfer(itransfer);
@@ -2649,6 +2646,7 @@ static int winusb_submit_bulk_transfer(struct usbi_transfer *itransfer)
 	bool ret;
 	int current_interface;
 	struct winfd wfd;
+	ULONG enable = 1;
 
 	CHECK_WINUSB_AVAILABLE;
 
@@ -2671,9 +2669,11 @@ static int winusb_submit_bulk_transfer(struct usbi_transfer *itransfer)
 	}
 
 	if (IS_XFERIN(transfer)) {
-		usbi_dbg("reading %d bytes", transfer->length);
+		ret = WinUsb_SetPipePolicy(wfd.handle, transfer->endpoint, AUTO_CLEAR_STALL, sizeof(ULONG), &enable);
 		ret = WinUsb_ReadPipe(wfd.handle, transfer->endpoint, transfer->buffer, transfer->length, NULL, wfd.overlapped);
 	} else {
+		if (transfer->flags & LIBUSB_TRANSFER_ADD_ZERO_PACKET)
+			ret = WinUsb_SetPipePolicy(wfd.handle, transfer->endpoint, SHORT_PACKET_TERMINATE, sizeof(ULONG), &enable);
 		usbi_dbg("writing %d bytes", transfer->length);
 		ret = WinUsb_WritePipe(wfd.handle, transfer->endpoint, transfer->buffer, transfer->length, NULL, wfd.overlapped);
 	}
