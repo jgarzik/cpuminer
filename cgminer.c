@@ -5503,7 +5503,7 @@ retry_stratum:
 	}
 
 	/* Probe for GBT support on first pass */
-	if (!pool->probed && !opt_fix_protocol) {
+	if (!pool->probed) {
 		applog(LOG_DEBUG, "Probing for GBT support");
 		val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
 				    gbt_req, true, false, &rolltime, pool, false);
