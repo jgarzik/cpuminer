@@ -2646,7 +2646,8 @@ static int winusb_submit_bulk_transfer(struct usbi_transfer *itransfer)
 	bool ret;
 	int current_interface;
 	struct winfd wfd;
-	ULONG enable = 1;
+	ULONG ppolicy = sizeof(UCHAR);
+	UCHAR policy;
 
 	CHECK_WINUSB_AVAILABLE;
 
@@ -2669,11 +2670,20 @@ static int winusb_submit_bulk_transfer(struct usbi_transfer *itransfer)
 	}
 
 	if (IS_XFERIN(transfer)) {
-		ret = WinUsb_SetPipePolicy(wfd.handle, transfer->endpoint, AUTO_CLEAR_STALL, sizeof(ULONG), &enable);
+		WinUsb_GetPipePolicy(wfd.handle, transfer->endpoint, AUTO_CLEAR_STALL, &ppolicy, &policy);
+		if (!policy) {
+			policy = TRUE;
+			WinUsb_SetPipePolicy(wfd.handle, transfer->endpoint, AUTO_CLEAR_STALL, ppolicy, &policy);
+		}
 		ret = WinUsb_ReadPipe(wfd.handle, transfer->endpoint, transfer->buffer, transfer->length, NULL, wfd.overlapped);
 	} else {
-		if (transfer->flags & LIBUSB_TRANSFER_ADD_ZERO_PACKET)
-			ret = WinUsb_SetPipePolicy(wfd.handle, transfer->endpoint, SHORT_PACKET_TERMINATE, sizeof(ULONG), &enable);
+		if (transfer->flags & LIBUSB_TRANSFER_ADD_ZERO_PACKET) {
+			WinUsb_GetPipePolicy(wfd.handle, transfer->endpoint, SHORT_PACKET_TERMINATE, &ppolicy, &policy);
+			if (!policy) {
+				policy = TRUE;
+				WinUsb_SetPipePolicy(wfd.handle, transfer->endpoint, SHORT_PACKET_TERMINATE, ppolicy, &policy);
+			}
+		}
 		usbi_dbg("writing %d bytes", transfer->length);
 		ret = WinUsb_WritePipe(wfd.handle, transfer->endpoint, transfer->buffer, transfer->length, NULL, wfd.overlapped);
 	}
