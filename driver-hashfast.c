@@ -206,11 +206,11 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	struct hf_usb_init_header usb_init, *hu = &usb_init;
 	struct hf_usb_init_base *db;
         struct hf_usb_init_options *ho;
+	int retries = 0, i;
 	char buf[1024];
 	struct hf_header *h = (struct hf_header *)buf;
 	uint8_t hcrc;
 	bool ret;
-	int i;
 
         // XXX Following items need to be defaults with command-line overrides
 	info->hash_clock_rate = 550;	// Hash clock rate in Mhz
@@ -260,7 +260,9 @@ tryagain:
 		applog(LOG_WARNING, "HFA %d: OP_USB_INIT: Tossing packet, valid but unexpected type %d",
                         hashfast->device_id, h->operation_code);
 		hfa_get_data(hashfast, buf, h->data_length);
-		goto tryagain;
+		if (retries++ < 3)
+			goto tryagain;
+		return false;
 	}
 
 	applog(LOG_DEBUG, "HFA %d: Good reply to OP_USB_INIT", hashfast->device_id);
@@ -429,9 +431,15 @@ static bool hfa_detect_one_usb(libusb_device *dev, struct usb_find_devices *foun
 		return false;
 	}
 
-	add_cgpu(hashfast);
+	if (!hfa_detect_common(hashfast)) {
+		usb_uninit(hashfast);
+		hashfast = usb_free_cgpu(hashfast);
+		return false;
+	}
+	if (!add_cgpu(hashfast))
+		return false;
 
-	return hfa_detect_common(hashfast);
+	return true;
 }
 
 static void hfa_detect(bool hotplug)
