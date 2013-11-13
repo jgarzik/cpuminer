@@ -1625,9 +1625,13 @@ uint64_t api_trylock(void *lock, const char *file, const char *func, const int l
 	LOCKINFO *info;
 	uint64_t id;
 
+	locklock();
+
 	info = findlock(lock, CGLOCK_UNKNOWN, file, func, linenum);
 	id = lock_id++;
 	addgettry(info, id, file, func, linenum, false);
+
+	lockunlock();
 
 	return id;
 }
