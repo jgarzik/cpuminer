@@ -18,7 +18,7 @@
 #define BF1MSGSIZE 7
 #define BF1INFOSIZE 14
 
-static void bitfury_empty_buffer(struct cgpu_info *bitfury)
+static void bf1_empty_buffer(struct cgpu_info *bitfury)
 {
 	char buf[512];
 	int amount;
@@ -28,12 +28,12 @@ static void bitfury_empty_buffer(struct cgpu_info *bitfury)
 	} while (amount);
 }
 
-static int bitfury_open(struct cgpu_info *bitfury)
+static bool bf1_open(struct cgpu_info *bitfury)
 {
 	uint32_t buf[2];
 	int err;
 
-	bitfury_empty_buffer(bitfury);
+	bf1_empty_buffer(bitfury);
 	/* Magic sequence to reset device only really needed for windows but
 	 * harmless on linux. */
 	buf[0] = 0x80250000;
@@ -53,16 +53,30 @@ static int bitfury_open(struct cgpu_info *bitfury)
 	return (err == BF1MSGSIZE);
 }
 
-static void bitfury_close(struct cgpu_info *bitfury)
+static void bf1_close(struct cgpu_info *bitfury)
 {
-	bitfury_empty_buffer(bitfury);
+	bf1_empty_buffer(bitfury);
 }
 
-static void bitfury_identify(struct cgpu_info *bitfury)
+static void bf1_identify(struct cgpu_info *bitfury)
 {
 	int amount;
 
 	usb_write(bitfury, "L", 1, &amount, C_BF1_IDENTIFY);
+}
+
+static void bitfury_identify(struct cgpu_info *bitfury)
+{
+	struct bitfury_info *info = bitfury->device_data;
+
+	switch(info->ident) {
+		case IDENT_BF1:
+			bf1_identify(bitfury);
+			break;
+		case IDENT_BXF:
+		default:
+			break;
+	}
 }
 
 static bool bf1_getinfo(struct cgpu_info *bitfury, struct bitfury_info *info)
@@ -93,7 +107,7 @@ static bool bf1_getinfo(struct cgpu_info *bitfury, struct bitfury_info *info)
 
 	applog(LOG_INFO, "%s %d: Getinfo returned version %d, product %s serial %08x", bitfury->drv->name,
 	       bitfury->device_id, info->version, info->product, info->serial);
-	bitfury_empty_buffer(bitfury);
+	bf1_empty_buffer(bitfury);
 	return true;
 }
 
@@ -122,22 +136,8 @@ static bool bf1_reset(struct cgpu_info *bitfury)
 	}
 	applog(LOG_DEBUG, "%s %d: Getreset returned %s", bitfury->drv->name,
 	       bitfury->device_id, buf);
-	bitfury_empty_buffer(bitfury);
+	bf1_empty_buffer(bitfury);
 	return true;
-}
-
-static bool bitfury_reset(struct cgpu_info *bitfury)
-{
-	struct bitfury_info *info = bitfury->device_data;
-
-	switch(info->ident) {
-		case IDENT_BF1:
-			return bf1_reset(bitfury);
-			break;
-		case IDENT_BXF:
-		default:
-			return true;
-	}
 }
 
 static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
@@ -147,7 +147,7 @@ static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 
 static bool bf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
-	if (!bitfury_open(bitfury))
+	if (!bf1_open(bitfury))
 		goto out_close;
 
 	/* Send getinfo request */
@@ -158,8 +158,8 @@ static bool bf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	if (!bf1_reset(bitfury))
 		goto out_close;
 
-	bitfury_identify(bitfury);
-	bitfury_empty_buffer(bitfury);
+	bf1_identify(bitfury);
+	bf1_empty_buffer(bitfury);
 
 	if (!add_cgpu(bitfury))
 		quit(1, "Failed to add_cgpu in bitfury_detect_one");
@@ -174,7 +174,7 @@ static bool bf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 
 	return true;
 out_close:
-	bitfury_close(bitfury);
+	bf1_close(bitfury);
 	return false;
 }
 
@@ -419,18 +419,40 @@ static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
-static void bitfury_init(struct cgpu_info  *bitfury)
+static void bf1_init(struct cgpu_info *bitfury)
 {
-	bitfury_close(bitfury);
-	bitfury_open(bitfury);
-	bitfury_reset(bitfury);
+	bf1_close(bitfury);
+	bf1_open(bitfury);
+	bf1_reset(bitfury);
+}
+
+static void bitfury_init(struct cgpu_info *bitfury)
+{
+	struct bitfury_info *info = bitfury->device_data;
+
+	switch(info->ident) {
+		case IDENT_BF1:
+			bf1_init(bitfury);
+			break;
+		case IDENT_BXF:
+		default:
+			break;
+	}
 }
 
 static void bitfury_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *bitfury = thr->cgpu;
+	struct bitfury_info *info = bitfury->device_data;
 
-	bitfury_close(bitfury);
+	switch(info->ident) {
+		case IDENT_BF1:
+			bf1_close(bitfury);
+			break;
+		case IDENT_BXF:
+		default:
+			break;
+	}
 }
 
 /* Currently hardcoded to BF1 devices */
