@@ -719,6 +719,7 @@ static void io_free()
 		do {
 			io_next = io_list->next;
 
+			free(io_list->io_data->ptr);
 			free(io_list->io_data);
 			free(io_list);
 
@@ -4395,6 +4396,7 @@ void api(int api_thr_id)
 
 	if (!opt_api_listen) {
 		applog(LOG_DEBUG, "API not running%s", UNAVAILABLE);
+		free(apisock);
 		return;
 	}
 
@@ -4412,6 +4414,7 @@ void api(int api_thr_id)
 
 		if (ips == 0) {
 			applog(LOG_WARNING, "API not running (no valid IPs specified)%s", UNAVAILABLE);
+			free(apisock);
 			return;
 		}
 	}
@@ -4423,6 +4426,7 @@ void api(int api_thr_id)
 	*apisock = socket(AF_INET, SOCK_STREAM, 0);
 	if (*apisock == INVSOCK) {
 		applog(LOG_ERR, "API1 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
+		free(apisock);
 		return;
 	}
 
@@ -4434,6 +4438,7 @@ void api(int api_thr_id)
 		serv.sin_addr.s_addr = inet_addr(localaddr);
 		if (serv.sin_addr.s_addr == (in_addr_t)INVINETADDR) {
 			applog(LOG_ERR, "API2 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
+			free(apisock);
 			return;
 		}
 	}
@@ -4472,12 +4477,14 @@ void api(int api_thr_id)
 
 	if (bound == 0) {
 		applog(LOG_ERR, "API bind to port %d failed (%s)%s", port, binderror, UNAVAILABLE);
+		free(apisock);
 		return;
 	}
 
 	if (SOCKETFAIL(listen(*apisock, QUEUE))) {
 		applog(LOG_ERR, "API3 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
 		CLOSESOCKET(*apisock);
+		free(apisock);
 		return;
 	}
 
@@ -4614,6 +4621,8 @@ die:
 	;
 	pthread_cleanup_pop(true);
 
+	free(apisock);
+	
 	if (opt_debug)
 		applog(LOG_DEBUG, "API: terminating due to: %s",
 				do_a_quit ? "QUIT" : (do_a_restart ? "RESTART" : (bye ? "BYE" : "UNKNOWN!")));
