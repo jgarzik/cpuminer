@@ -34,6 +34,7 @@ struct bitfury_info {
 	double temperature;
 	int work_id; // Current work->subid
 	int no_matching_work;
+	bool can_roll;
 };
 
 #endif /* BITFURY_H */

@@ -514,6 +514,44 @@ out:
 	return ret;
 }
 
+static int64_t bxf_scan(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	struct work *work, *tmp;
+	int64_t ret;
+	int work_id;
+
+	/* If we're using work that can't be ntime rolled, send new work every
+	 * loop through bxf_scan. The device will not abort it instantly unless
+	 * the prevhash has changed. This is a problem with getwork work since
+	 * it may be impossible to prevent it working on ntime rolled work. */
+	if (!info->can_roll) {
+		bxf_update_work(bitfury, info);
+		cgsleep_ms(500);
+	} else
+		cgsleep_ms(3000);
+
+	mutex_lock(&info->lock);
+	ret = (int64_t)info->nonces * 0xffffffff;
+	info->nonces = 0;
+	work_id = info->work_id;
+	mutex_unlock(&info->lock);
+
+	/* Keep no more than the last 5 work items in the hashlist */
+	wr_lock(&bitfury->qlock);
+	HASH_ITER(hh, bitfury->queued_work, work, tmp) {
+		if (work->subid + 5 < work_id)
+			__work_completed(bitfury, work);
+	}
+	wr_unlock(&bitfury->qlock);
+
+	if (unlikely(bitfury->usbinfo.nodev)) {
+		applog(LOG_WARNING, "%s %d: Device disappeared, disabling thread",
+		       bitfury->drv->name, bitfury->device_id);
+		ret = -1;
+	}
+	return ret;
+}
+
 static int64_t bitfury_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *bitfury = thr->cgpu;
@@ -524,6 +562,8 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 			return bf1_scan(thr, bitfury, info);
 			break;
 		case IDENT_BXF:
+			return bxf_scan(bitfury, info);
+			break;
 		default:
 			return 0;
 	}
@@ -553,6 +593,7 @@ static void bxf_update_work(struct cgpu_info *bitfury, struct bitfury_info *info
 
 	mutex_lock(&info->lock);
 	work->subid = ++info->work_id;
+	info->can_roll = !!work->drv_rolllimit;
 	mutex_unlock(&info->lock);
 
 	bxf_send_work(bitfury, work);
