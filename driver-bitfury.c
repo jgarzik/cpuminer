@@ -232,6 +232,18 @@ static void bitfury_detect(bool __maybe_unused hotplug)
 	usb_detect(&bitfury_drv, bitfury_detect_one);
 }
 
+static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *info, char *buf)
+{
+	uint32_t nonce, timestamp;
+	unsigned int workid;
+
+	if (!sscanf(&buf[7], "%08x %u %08x", &nonce, &workid, &timestamp)) {
+		applog(LOG_WARNING, "%s %d: Failed to parse submit response",
+		       bitfury->drv->name, bitfury->device_id);
+		return;
+	}
+}
+
 static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info, char *buf)
 {
 	unsigned int temp;
@@ -282,7 +294,9 @@ static void *bxf_get_results(void *userdata)
 				break;
 			continue;
 		}
-		if (!strncmp(buf, "temp", 4))
+		if (!strncmp(buf, "submit", 6))
+			parse_bxf_submit(bitfury, info, buf);
+		else if (!strncmp(buf, "temp", 4))
 			parse_bxf_temp(bitfury, info, buf);
 	}
 out:
