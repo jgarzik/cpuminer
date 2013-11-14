@@ -246,18 +246,33 @@ static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info,
 	mutex_unlock(&info->lock);
 }
 
+static void bxf_update_work(struct cgpu_info *bitfury, struct bitfury_info *info);
+
 static void *bxf_get_results(void *userdata)
 {
 	struct cgpu_info *bitfury = userdata;
 	struct bitfury_info *info = bitfury->device_data;
-	char threadname[24];
+	char threadname[24], buf[512];
+	int err, amount, len;
 
 	snprintf(threadname, 24, "bxf_recv/%d", bitfury->device_id);
 
-	while (likely(!bitfury->shutdown)) {
-		int err, amount;
-		char buf[512];
+	/* We operate the device at lowest diff since it's not a lot of results
+	 * to process and gives us a better indicator of the nonce return rate
+	 * and hardware errors. */
+	sprintf(buf, "target ffffffff\n");
+	len = strlen(buf);
+	err = usb_write(bitfury, buf, len, &amount, C_BXF_TARGET);
+	if (!err || amount != len) {
+		applog(LOG_WARNING, "%s %d: Error %d sending work sent %d of %d", bitfury->drv->name,
+		       bitfury->device_id, err, amount, len);
+		goto out;
+	}
+	/* Read thread sends the first work item to get the device started
+	 * since it will roll ntime and make work itself from there on. */
+	bxf_update_work(bitfury, info);
 
+	while (likely(!bitfury->shutdown)) {
 		if (unlikely(bitfury->usbinfo.nodev))
 			break;
 
@@ -270,6 +285,7 @@ static void *bxf_get_results(void *userdata)
 		if (!strncmp(buf, "temp", 4))
 			parse_bxf_temp(bitfury, info, buf);
 	}
+out:
 	return NULL;
 }
 
@@ -483,7 +499,7 @@ static void bxf_send_work(struct cgpu_info *bitfury, struct work *work)
 	sprintf(buf, "work %s %d\n", hexwork, work->subid);
 	len = strlen(buf);
 	err = usb_write(bitfury, buf, len, &amount, C_BXF_WORK);
-	if (err) {
+	if (err || amount != len) {
 		applog(LOG_WARNING, "%s %d: Error %d sending work sent %d of %d", bitfury->drv->name,
 		       bitfury->device_id, err, amount, len);
 	}
