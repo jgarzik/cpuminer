@@ -33,6 +33,7 @@ struct bitfury_info {
 	pthread_t read_thr;
 	double temperature;
 	int work_id; // Current work->subid
+	int no_matching_work;
 };
 
 #endif /* BITFURY_H */

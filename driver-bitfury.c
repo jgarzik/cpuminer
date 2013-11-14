@@ -234,6 +234,8 @@ static void bitfury_detect(bool __maybe_unused hotplug)
 
 static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *info, char *buf)
 {
+	struct work *match_work = NULL, *work = NULL;
+	struct thr_info *thr = info->thr;
 	uint32_t nonce, timestamp;
 	unsigned int workid;
 
@@ -242,6 +244,29 @@ static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *inf
 		       bitfury->drv->name, bitfury->device_id);
 		return;
 	}
+
+	rd_lock(&bitfury->qlock);
+	HASH_FIND_INT(bitfury->queued_work, &workid, match_work);
+	if (match_work)
+		work = copy_work(match_work);
+	rd_unlock(&bitfury->qlock);
+
+	if (!work) {
+		applog(LOG_INFO, "%s %d: No matching work", bitfury->drv->name, bitfury->device_id);
+
+		mutex_lock(&info->lock);
+		info->no_matching_work++;
+		mutex_unlock(&info->lock);
+
+		return;
+	}
+	set_work_ntime(work, timestamp);
+	if (submit_nonce(thr, work, nonce)) {
+		mutex_lock(&info->lock);
+		info->nonces++;
+		mutex_unlock(&info->lock);
+	}
+	free_work(work);
 }
 
 static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info, char *buf)
