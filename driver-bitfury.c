@@ -182,7 +182,7 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 	if (!info)
 		quit(1, "Failed to calloc info in bitfury_detect_one");
 	bitfury->device_data = info;
-	ident = usb_ident(bitfury);
+	info->ident = ident = usb_ident(bitfury);
 	switch (ident) {
 		case IDENT_BF1:
 			ret = bf1_detect_one(bitfury, info);
@@ -197,6 +197,7 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 	}
 
 	if (!ret) {
+		free(info);
 		usb_uninit(bitfury);
 out:
 		bitfury = usb_free_cgpu(bitfury);

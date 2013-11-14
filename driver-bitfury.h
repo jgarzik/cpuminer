@@ -15,6 +15,7 @@
 
 struct bitfury_info {
 	struct cgpu_info *base_cgpu;
+	enum sub_ident ident;
 	uint8_t version;
 	char product[8];
 	uint32_t serial;
