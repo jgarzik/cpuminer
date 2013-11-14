@@ -65,7 +65,7 @@ static void bitfury_identify(struct cgpu_info *bitfury)
 	usb_write(bitfury, "L", 1, &amount, C_BF1_IDENTIFY);
 }
 
-static bool bitfury_getinfo(struct cgpu_info *bitfury, struct bitfury_info *info)
+static bool bf1_getinfo(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	int amount, err;
 	char buf[16];
@@ -151,7 +151,7 @@ static bool bf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 		goto out_close;
 
 	/* Send getinfo request */
-	if (!bitfury_getinfo(bitfury, info))
+	if (!bf1_getinfo(bitfury, info))
 		goto out_close;
 
 	/* Send reset request */
@@ -264,10 +264,9 @@ static bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32
 	return false;
 }
 
-static int64_t bitfury_scanwork(struct thr_info *thr)
+static int64_t bf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
+			struct bitfury_info *info)
 {
-	struct cgpu_info *bitfury = thr->cgpu;
-	struct bitfury_info *info = bitfury->device_data;
 	int amount, i, aged = 0, total = 0, ms_diff;
 	struct work *work, *tmp;
 	struct timeval tv_now;
@@ -384,6 +383,21 @@ out:
 		ret = -1;
 	}
 	return ret;
+}
+
+static int64_t bitfury_scanwork(struct thr_info *thr)
+{
+	struct cgpu_info *bitfury = thr->cgpu;
+	struct bitfury_info *info = bitfury->device_data;
+
+	switch(info->ident) {
+		case IDENT_BF1:
+			return bf1_scan(thr, bitfury, info);
+			break;
+		case IDENT_BXF:
+		default:
+			return 0;
+	}
 }
 
 static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
