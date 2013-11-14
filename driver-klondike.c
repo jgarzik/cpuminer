@@ -1129,26 +1129,28 @@ static void klondike_flush_work(struct cgpu_info *klncgpu)
 	KLINE kline;
 	int slaves, dev;
 
-	wr_lock(&(klninfo->stat_lock));
-	klninfo->block_seq++;
-	slaves = klninfo->status[0].kline.ws.slavecount;
-	wr_unlock(&(klninfo->stat_lock));
+	if (klninfo->initialised) {
+		wr_lock(&(klninfo->stat_lock));
+		klninfo->block_seq++;
+		slaves = klninfo->status[0].kline.ws.slavecount;
+		wr_unlock(&(klninfo->stat_lock));
 
-	applog(LOG_DEBUG, "%s%i: flushing work",
-			  klncgpu->drv->name, klncgpu->device_id);
-	zero_kline(&kline);
-	kline.hd.cmd = KLN_CMD_ABORT;
-	for (dev = 0; dev <= slaves; dev++) {
-		kline.hd.dev = dev;
-		kitem = SendCmdGetReply(klncgpu, &kline, KSENDHD(0));
-		if (kitem != NULL) {
-			wr_lock(&(klninfo->stat_lock));
-			memcpy((void *)&(klninfo->status[dev]),
-				kitem,
-				sizeof(klninfo->status[dev]));
-			klninfo->jobque[dev].flushed = true;
-			wr_unlock(&(klninfo->stat_lock));
-			kitem = release_kitem(klncgpu, kitem);
+		applog(LOG_DEBUG, "%s%i: flushing work",
+				  klncgpu->drv->name, klncgpu->device_id);
+		zero_kline(&kline);
+		kline.hd.cmd = KLN_CMD_ABORT;
+		for (dev = 0; dev <= slaves; dev++) {
+			kline.hd.dev = dev;
+			kitem = SendCmdGetReply(klncgpu, &kline, KSENDHD(0));
+			if (kitem != NULL) {
+				wr_lock(&(klninfo->stat_lock));
+				memcpy((void *)&(klninfo->status[dev]),
+					kitem,
+					sizeof(klninfo->status[dev]));
+				klninfo->jobque[dev].flushed = true;
+				wr_unlock(&(klninfo->stat_lock));
+				kitem = release_kitem(klncgpu, kitem);
+			}
 		}
 	}
 }
@@ -1432,7 +1434,8 @@ static void get_klondike_statline_before(char *buf, size_t siz, struct cgpu_info
 	}
 	rd_unlock(&(klninfo->stat_lock));
 	fan /= slaves + 1;
-	fan *= 100/255;
+	//fan *= 100/255; // <-- You can't do this because int 100 / int 255 == 0
+        fan = 100 * fan / 255;
 	if (fan > 99) // short on screen space
 		fan = 99;
 	clock /= slaves + 1;

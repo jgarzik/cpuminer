@@ -622,7 +622,6 @@ static int64_t drillbit_scanhash(struct thr_info *thr, struct work *work,
 
 cascade:
         drillbit_empty_buffer(drillbit);
-	work->blk.nonce = 0xffffffff;
 
 	if (unlikely(drillbit->usbinfo.nodev)) {
 		applog(LOG_WARNING, "%s %d: Device disappeared, disabling thread",
