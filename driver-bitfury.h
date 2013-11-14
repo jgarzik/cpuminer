@@ -30,6 +30,7 @@ struct bitfury_info {
 	/* BXF specific data */
 	pthread_mutex_t lock;
 	pthread_t read_thr;
+	double temperature;
 };
 
 #endif /* BITFURY_H */

@@ -232,6 +232,20 @@ static void bitfury_detect(bool __maybe_unused hotplug)
 	usb_detect(&bitfury_drv, bitfury_detect_one);
 }
 
+static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info, char *buf)
+{
+	unsigned int temp;
+
+	if (!sscanf(&buf[5], "%u", &temp)) {
+		applog(LOG_INFO, "%s %d: Failed to parse temperature",
+		       bitfury->drv->name, bitfury->device_id);
+		return;
+	}
+	mutex_lock(&info->lock);
+	info->temperature = (double)temp / 10;
+	mutex_unlock(&info->lock);
+}
+
 static void *bxf_get_results(void *userdata)
 {
 	struct cgpu_info *bitfury = userdata;
@@ -253,6 +267,8 @@ static void *bxf_get_results(void *userdata)
 				break;
 			continue;
 		}
+		if (!strncmp(buf, "temp", 4))
+			parse_bxf_temp(bitfury, info, buf);
 	}
 	return NULL;
 }
