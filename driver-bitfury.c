@@ -323,6 +323,10 @@ static void *bxf_get_results(void *userdata)
 			parse_bxf_submit(bitfury, info, buf);
 		else if (!strncmp(buf, "temp", 4))
 			parse_bxf_temp(bitfury, info, buf);
+		else {
+			applog(LOG_DEBUG, "%s %d: Unrecognised string %s",
+			       bitfury->drv->name, bitfury->device_id, buf);
+		}
 	}
 out:
 	return NULL;
