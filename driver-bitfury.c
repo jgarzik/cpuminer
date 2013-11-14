@@ -97,7 +97,7 @@ static bool bitfury_getinfo(struct cgpu_info *bitfury, struct bitfury_info *info
 	return true;
 }
 
-static bool bitfury_reset(struct cgpu_info *bitfury)
+static bool bf1_reset(struct cgpu_info *bitfury)
 {
 	int amount, err;
 	char buf[16];
@@ -126,6 +126,20 @@ static bool bitfury_reset(struct cgpu_info *bitfury)
 	return true;
 }
 
+static bool bitfury_reset(struct cgpu_info *bitfury)
+{
+	struct bitfury_info *info = bitfury->device_data;
+
+	switch(info->ident) {
+		case IDENT_BF1:
+			return bf1_reset(bitfury);
+			break;
+		case IDENT_BXF:
+		default:
+			return true;
+	}
+}
+
 static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	return false;
@@ -141,7 +155,7 @@ static bool bf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 		goto out_close;
 
 	/* Send reset request */
-	if (!bitfury_reset(bitfury))
+	if (!bf1_reset(bitfury))
 		goto out_close;
 
 	bitfury_identify(bitfury);
