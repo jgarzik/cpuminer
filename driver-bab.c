@@ -17,7 +17,8 @@
 #include "sha2.h"
 
 /*
- * Tested on RPi running Raspbian with BlackArrow BitFury V1 16 chip GPIO board
+ * Tested on RPi running both Raspbian and Arch
+ *  with BlackArrow BitFury V1 16 chip GPIO board
  */
 
 #ifndef LINUX
