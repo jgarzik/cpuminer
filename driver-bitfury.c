@@ -239,7 +239,7 @@ static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *inf
 	uint32_t nonce, timestamp;
 	unsigned int workid;
 
-	if (!sscanf(&buf[7], "%08x %u %08x", &nonce, &workid, &timestamp)) {
+	if (!sscanf(&buf[7], "%x %x %x", &nonce, &workid, &timestamp)) {
 		applog(LOG_WARNING, "%s %d: Failed to parse submit response",
 		       bitfury->drv->name, bitfury->device_id);
 		return;
@@ -579,7 +579,7 @@ static void bxf_send_work(struct cgpu_info *bitfury, struct work *work)
 	int err, amount, len;
 
 	__bin2hex(hexwork, work->data, 76);
-	sprintf(buf, "work %s %d\n", hexwork, work->subid);
+	sprintf(buf, "work %s %x\n", hexwork, work->subid);
 	len = strlen(buf);
 	err = usb_write(bitfury, buf, len, &amount, C_BXF_WORK);
 	if (err || amount != len) {
