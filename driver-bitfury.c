@@ -232,6 +232,54 @@ static void bitfury_detect(bool __maybe_unused hotplug)
 	usb_detect(&bitfury_drv, bitfury_detect_one);
 }
 
+static void *bxf_get_results(void *userdata)
+{
+	struct cgpu_info *bitfury = userdata;
+	struct bitfury_info *info = bitfury->device_data;
+	char threadname[24];
+
+	snprintf(threadname, 24, "bxf_recv/%d", bitfury->device_id);
+
+	while (likely(!bitfury->shutdown)) {
+		int err, amount;
+		char buf[512];
+
+		if (unlikely(bitfury->usbinfo.nodev))
+			break;
+
+		err = usb_read_nl(bitfury, buf, 512, &amount, C_BXF_READ);
+		if (err) {
+			if (err != LIBUSB_ERROR_TIMEOUT)
+				break;
+			continue;
+		}
+	}
+	return NULL;
+}
+
+static bool bxf_prepare(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	mutex_init(&info->lock);
+	if (pthread_create(&info->read_thr, NULL, bxf_get_results, (void *)bitfury))
+		quit(1, "Failed to create bxf read_thr");
+	return true;
+}
+
+static bool bitfury_prepare(struct thr_info *thr)
+{
+	struct cgpu_info *bitfury = thr->cgpu;
+	struct bitfury_info *info = bitfury->device_data;
+
+	switch(info->ident) {
+		case IDENT_BXF:
+			return bxf_prepare(bitfury, info);
+			break;
+		case IDENT_BF1:
+		default:
+			return true;
+	}
+}
+
 static uint32_t decnonce(uint32_t in)
 {
 	uint32_t out;
@@ -448,6 +496,12 @@ static void bitfury_init(struct cgpu_info *bitfury)
 	}
 }
 
+static void bxf_close(struct bitfury_info *info)
+{
+	pthread_join(info->read_thr, NULL);
+	mutex_destroy(&info->lock);
+}
+
 static void bitfury_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *bitfury = thr->cgpu;
@@ -458,6 +512,8 @@ static void bitfury_shutdown(struct thr_info *thr)
 			bf1_close(bitfury);
 			break;
 		case IDENT_BXF:
+			bxf_close(info);
+			break;
 		default:
 			break;
 	}
@@ -469,6 +525,7 @@ struct device_drv bitfury_drv = {
 	.dname = "bitfury",
 	.name = "BF1",
 	.drv_detect = bitfury_detect,
+	.thread_prepare = bitfury_prepare,
 	.hash_work = &hash_driver_work,
 	.scanwork = bitfury_scanwork,
 	.get_api_stats = bitfury_api_stats,

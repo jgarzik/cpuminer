@@ -26,6 +26,10 @@ struct bitfury_info {
 	char product[8];
 	uint32_t serial;
 	struct timeval tv_start;
+
+	/* BXF specific data */
+	pthread_mutex_t lock;
+	pthread_t read_thr;
 };
 
 #endif /* BITFURY_H */
