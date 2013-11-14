@@ -687,6 +687,21 @@ static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
 	return NULL;
 }
 
+static void bitfury_get_statline_before(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
+{
+	struct bitfury_info *info = cgpu->device_data;
+
+	switch(info->ident) {
+		case IDENT_BXF:
+			tailsprintf(buf, bufsiz, "%3.1fC    | ", info->temperature);
+			break;
+		case IDENT_BF1:
+		default:
+			tailsprintf(buf, bufsiz, "        | ");
+			break;
+	}
+}
+
 static void bf1_init(struct cgpu_info *bitfury)
 {
 	bf1_close(bitfury);
@@ -743,6 +758,7 @@ struct device_drv bitfury_drv = {
 	.flush_work = bitfury_flush_work,
 	.update_work = bitfury_update_work,
 	.get_api_stats = bitfury_api_stats,
+	.get_statline_before = bitfury_get_statline_before,
 	.reinit_device = bitfury_init,
 	.thread_shutdown = bitfury_shutdown,
 	.identify_device = bitfury_identify
