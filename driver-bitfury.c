@@ -142,7 +142,15 @@ static bool bf1_reset(struct cgpu_info *bitfury)
 
 static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
-	return false;
+	if (!add_cgpu(bitfury))
+		quit(1, "Failed to add_cgpu in bxf_detect_one");
+
+	update_usb_stats(bitfury);
+	applog(LOG_INFO, "%s %d: Successfully initialised %s",
+	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
+
+	/* FIXME Do some testing here */
+	return true;
 }
 
 static bool bf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
@@ -162,7 +170,7 @@ static bool bf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	bf1_empty_buffer(bitfury);
 
 	if (!add_cgpu(bitfury))
-		quit(1, "Failed to add_cgpu in bitfury_detect_one");
+		quit(1, "Failed to add_cgpu in bf1_detect_one");
 
 	update_usb_stats(bitfury);
 	applog(LOG_INFO, "%s %d: Successfully initialised %s",
