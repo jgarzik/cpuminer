@@ -258,6 +258,7 @@ static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *inf
 		info->no_matching_work++;
 		mutex_unlock(&info->lock);
 
+		inc_hw_errors(thr);
 		return;
 	}
 	set_work_ntime(work, timestamp);
