@@ -286,6 +286,8 @@ static bool bitfury_prepare(struct thr_info *thr)
 	struct cgpu_info *bitfury = thr->cgpu;
 	struct bitfury_info *info = bitfury->device_data;
 
+	info->thr = thr;
+
 	switch(info->ident) {
 		case IDENT_BXF:
 			return bxf_prepare(bitfury, info);
@@ -472,6 +474,61 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 	}
 }
 
+static void bxf_send_work(struct cgpu_info *bitfury, struct work *work)
+{
+	char buf[512], hexwork[156];
+	int err, amount, len;
+
+	__bin2hex(hexwork, work->data, 76);
+	sprintf(buf, "work %s %d\n", hexwork, work->subid);
+	len = strlen(buf);
+	err = usb_write(bitfury, buf, len, &amount, C_BXF_WORK);
+	if (err) {
+		applog(LOG_WARNING, "%s %d: Error %d sending work sent %d of %d", bitfury->drv->name,
+		       bitfury->device_id, err, amount, len);
+	}
+}
+
+static void bxf_update_work(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	struct thr_info *thr = info->thr;
+	struct work *work;
+
+	work = get_queue_work(thr, bitfury, thr->id);
+
+	mutex_lock(&info->lock);
+	work->subid = ++info->work_id;
+	mutex_unlock(&info->lock);
+
+	bxf_send_work(bitfury, work);
+}
+
+static void bitfury_flush_work(struct cgpu_info *bitfury)
+{
+	struct bitfury_info *info = bitfury->device_data;
+
+	switch(info->ident) {
+		case IDENT_BXF:
+			bxf_update_work(bitfury, info);
+		case IDENT_BF1:
+		default:
+			break;
+	}
+}
+
+static void bitfury_update_work(struct cgpu_info *bitfury)
+{
+	struct bitfury_info *info = bitfury->device_data;
+
+	switch(info->ident) {
+		case IDENT_BXF:
+			bxf_update_work(bitfury, info);
+		case IDENT_BF1:
+		default:
+			break;
+	}
+}
+
 static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
 {
 	struct bitfury_info *info = cgpu->device_data;
@@ -544,6 +601,8 @@ struct device_drv bitfury_drv = {
 	.thread_prepare = bitfury_prepare,
 	.hash_work = &hash_driver_work,
 	.scanwork = bitfury_scanwork,
+	.flush_work = bitfury_flush_work,
+	.update_work = bitfury_update_work,
 	.get_api_stats = bitfury_api_stats,
 	.reinit_device = bitfury_init,
 	.thread_shutdown = bitfury_shutdown,

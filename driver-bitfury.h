@@ -15,6 +15,7 @@
 
 struct bitfury_info {
 	struct cgpu_info *base_cgpu;
+	struct thr_info *thr;
 	enum sub_ident ident;
 	int nonces;
 	int total_nonces;
@@ -31,6 +32,7 @@ struct bitfury_info {
 	pthread_mutex_t lock;
 	pthread_t read_thr;
 	double temperature;
+	int work_id; // Current work->subid
 };
 
 #endif /* BITFURY_H */
