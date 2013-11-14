@@ -150,6 +150,9 @@ static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
 
 	/* FIXME Do some testing here */
+
+	info->total_nonces = 5;
+
 	return true;
 }
 
@@ -398,6 +401,23 @@ static bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32
 	return false;
 }
 
+static int64_t bitfury_rate(struct bitfury_info *info)
+{
+	double nonce_rate;
+	bool ret = 0;
+
+	info->cycles++;
+	info->total_nonces += info->nonces;
+	info->saved_nonces += info->nonces;
+	info->nonces = 0;
+	nonce_rate = (double)info->total_nonces / (double)info->cycles;
+	if (info->saved_nonces >= nonce_rate) {
+		info->saved_nonces -= nonce_rate;
+		ret = (double)0xffffffff * nonce_rate;
+	}
+	return ret;
+}
+
 static int64_t bf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 			struct bitfury_info *info)
 {
@@ -405,7 +425,6 @@ static int64_t bf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 	char readbuf[512], buf[45];
 	struct work *work, *tmp;
 	struct timeval tv_now;
-	double nonce_rate;
 	int64_t ret = 0;
 
 	work = get_queue_work(thr, bitfury, thr->id);
@@ -501,15 +520,7 @@ out:
 		       bitfury->device_id, aged);
 	}
 
-	info->cycles++;
-	info->total_nonces += info->nonces;
-	info->saved_nonces += info->nonces;
-	info->nonces = 0;
-	nonce_rate = (double)info->total_nonces / (double)info->cycles;
-	if (info->saved_nonces >= nonce_rate) {
-		info->saved_nonces -= nonce_rate;
-		ret = (double)0xffffffff * nonce_rate;
-	}
+	ret = bitfury_rate(info);
 
 	if (unlikely(bitfury->usbinfo.nodev)) {
 		applog(LOG_WARNING, "%s %d: Device disappeared, disabling thread",
@@ -536,8 +547,7 @@ static int64_t bxf_scan(struct cgpu_info *bitfury, struct bitfury_info *info)
 		cgsleep_ms(3000);
 
 	mutex_lock(&info->lock);
-	ret = (int64_t)info->nonces * 0xffffffff;
-	info->nonces = 0;
+	ret = bitfury_rate(info);
 	work_id = info->work_id;
 	mutex_unlock(&info->lock);
 
@@ -630,9 +640,8 @@ static void bitfury_update_work(struct cgpu_info *bitfury)
 	}
 }
 
-static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
+static struct api_data *bf1_api_stats(struct bitfury_info *info)
 {
-	struct bitfury_info *info = cgpu->device_data;
 	struct api_data *root = NULL;
 	double nonce_rate;
 	char serial[16];
@@ -647,6 +656,35 @@ static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
 	root = api_add_double(root, "NonceRate", &nonce_rate, true);
 
 	return root;
+}
+
+static struct api_data *bxf_api_stats(struct bitfury_info *info)
+{
+	struct api_data *root = NULL;
+	double nonce_rate;
+
+	nonce_rate = (double)info->total_nonces / (double)info->cycles;
+	root = api_add_double(root, "NonceRate", &nonce_rate, true);
+	root = api_add_int(root, "NoMatchingWork", &info->no_matching_work, false);
+
+	return root;
+}
+
+static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
+{
+	struct bitfury_info *info = cgpu->device_data;
+
+	switch(info->ident) {
+		case IDENT_BF1:
+			return bf1_api_stats(info);
+			break;
+		case IDENT_BXF:
+			return bxf_api_stats(info);
+			break;
+		default:
+			break;
+	}
+	return NULL;
 }
 
 static void bf1_init(struct cgpu_info *bitfury)
