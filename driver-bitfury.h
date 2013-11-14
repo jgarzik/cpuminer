@@ -16,14 +16,15 @@
 struct bitfury_info {
 	struct cgpu_info *base_cgpu;
 	enum sub_ident ident;
-	uint8_t version;
-	char product[8];
-	uint32_t serial;
-	char buf[512];
 	int nonces;
 	int total_nonces;
 	double saved_nonces;
 	int cycles;
+
+	/* BF1 specific data */
+	uint8_t version;
+	char product[8];
+	uint32_t serial;
 	struct timeval tv_start;
 };
 

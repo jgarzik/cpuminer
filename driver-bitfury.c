@@ -276,11 +276,11 @@ static int64_t bf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 			struct bitfury_info *info)
 {
 	int amount, i, aged = 0, total = 0, ms_diff;
+	char readbuf[512], buf[45];
 	struct work *work, *tmp;
 	struct timeval tv_now;
 	double nonce_rate;
 	int64_t ret = 0;
-	char buf[45];
 
 	work = get_queue_work(thr, bitfury, thr->id);
 	if (unlikely(thr->work_restart)) {
@@ -298,7 +298,7 @@ static int64_t bf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 	cgtime(&tv_now);
 	ms_diff = 600 - ms_tdiff(&tv_now, &info->tv_start);
 	if (ms_diff > 0) {
-		usb_read_timeout_cancellable(bitfury, info->buf, 512, &amount, ms_diff,
+		usb_read_timeout_cancellable(bitfury, readbuf, 512, &amount, ms_diff,
 					     C_BF1_GETRES);
 		total += amount;
 	}
@@ -310,11 +310,11 @@ static int64_t bf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 	/* If a work restart was sent, just empty the buffer. */
 	if (unlikely(ms_diff < 10 || thr->work_restart))
 		ms_diff = 10;
-	usb_read_once_timeout_cancellable(bitfury, info->buf + total, BF1MSGSIZE,
+	usb_read_once_timeout_cancellable(bitfury, readbuf + total, BF1MSGSIZE,
 					  &amount, ms_diff, C_BF1_GETRES);
 	total += amount;
 	while (amount) {
-		usb_read_once_timeout(bitfury, info->buf + total, 512, &amount, 10,
+		usb_read_once_timeout(bitfury, readbuf + total, 512, &amount, 10,
 				      C_BF1_GETRES);
 		total += amount;
 	};
@@ -339,7 +339,7 @@ out:
 		uint32_t nonce;
 
 		/* Ignore state & switched data in results for now. */
-		memcpy(&nonce, info->buf + i + 3, 4);
+		memcpy(&nonce, readbuf + i + 3, 4);
 		nonce = decnonce(nonce);
 
 		rd_lock(&bitfury->qlock);
