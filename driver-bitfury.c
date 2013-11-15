@@ -155,6 +155,20 @@ static bool bxf_send_msg(struct cgpu_info *bitfury, char *buf, enum usb_cmds cmd
 	return true;
 }
 
+/* Returns the amount received only if we receive a full message, otherwise
+ * it returns the err value. */
+static int bxf_recv_msg(struct cgpu_info *bitfury, char *buf)
+{
+	int err, amount;
+
+	err = usb_read_nl(bitfury, buf, 512, &amount, C_BXF_READ);
+	if (amount)
+		applog(LOG_DEBUG, "%s %d: Received %s", bitfury->drv->name, bitfury->device_id, buf);
+	if (!err)
+		return amount;
+	return err;
+}
+
 static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	if (!add_cgpu(bitfury))
@@ -333,18 +347,20 @@ static void *bxf_get_results(void *userdata)
 	bxf_update_work(bitfury, info);
 
 	while (likely(!bitfury->shutdown)) {
-		int err, amount;
+		int err;
 
 		if (unlikely(bitfury->usbinfo.nodev))
 			break;
 
-		err = usb_read_nl(bitfury, buf, 512, &amount, C_BXF_READ);
-		if (err) {
+		err = bxf_recv_msg(bitfury, buf);
+		if (err < 0) {
 			if (err != LIBUSB_ERROR_TIMEOUT)
 				break;
 			continue;
 		}
-		applog(LOG_DEBUG, "%s %d: Received %s", bitfury->drv->name, bitfury->device_id, buf);
+		if (!err)
+			continue;
+
 		if (!strncmp(buf, "submit", 6))
 			parse_bxf_submit(bitfury, info, buf);
 		else if (!strncmp(buf, "temp", 4))
