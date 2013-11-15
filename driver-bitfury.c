@@ -169,8 +169,53 @@ static int bxf_recv_msg(struct cgpu_info *bitfury, char *buf)
 	return err;
 }
 
+/* Keep reading till the first timeout or error */
+static void bxf_clear_buffer(struct cgpu_info *bitfury)
+{
+	int err, retries = 0;
+	char buf[512];
+
+	do {
+		err = bxf_recv_msg(bitfury, buf);
+		usb_buffer_clear(bitfury);
+		if (err < 0)
+			break;
+	} while (retries++ < 10);
+}
+
 static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
+	int err, retries = 0;
+	char buf[512];
+
+	sprintf(buf, "flush\n");
+	if (!bxf_send_msg(bitfury, buf, C_BXF_FLUSH))
+		return false;
+
+	bxf_clear_buffer(bitfury);
+
+	sprintf(buf, "version\n");
+	if (!bxf_send_msg(bitfury, buf, C_BXF_VERSION))
+		return false;
+
+	do {
+		err = bxf_recv_msg(bitfury, buf);
+		if (err < 0 && err != LIBUSB_ERROR_TIMEOUT)
+			return false;
+		if (err > 0 && !strncmp(buf, "version", 7)) {
+			sscanf(&buf[8], "%d.%d rev %d chips %d", &info->ver_major,
+			       &info->ver_minor, &info->hw_rev, &info->chips);
+			applog(LOG_INFO, "%s %d: Version %d.%d rev %d chips %d",
+			       bitfury->drv->name, bitfury->device_id, info->ver_major,
+			       info->ver_minor, info->hw_rev, info->chips);
+			break;
+		}
+		/* Keep parsing if the buffer is full without counting it as
+		 * a retry. */
+		if (usb_buffer_size(bitfury))
+			continue;
+	} while (retries++ < 10);
+
 	if (!add_cgpu(bitfury))
 		quit(1, "Failed to add_cgpu in bxf_detect_one");
 

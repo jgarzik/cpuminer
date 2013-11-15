@@ -36,6 +36,10 @@ struct bitfury_info {
 	int work_id; // Current work->subid
 	int no_matching_work;
 	bool can_roll;
+	int ver_major;
+	int ver_minor;
+	int hw_rev;
+	int chips;
 };
 
 #endif /* BITFURY_H */
