@@ -237,10 +237,10 @@ static void bitfury_detect(bool __maybe_unused hotplug)
 
 static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *info, char *buf)
 {
-	struct work *match_work = NULL, *work = NULL;
+	struct work *match_work, *tmp, *work = NULL;
 	struct thr_info *thr = info->thr;
 	uint32_t nonce, timestamp;
-	unsigned int workid;
+	int workid;
 
 	if (!sscanf(&buf[7], "%x %x %x", &nonce, &workid, &timestamp)) {
 		applog(LOG_WARNING, "%s %d: Failed to parse submit response",
@@ -248,13 +248,16 @@ static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *inf
 		return;
 	}
 
-	applog(LOG_DEBUG, "%s %d: Parsed nonce %u workid %u timestamp %u",
+	applog(LOG_DEBUG, "%s %d: Parsed nonce %u workid %d timestamp %u",
 	       bitfury->drv->name, bitfury->device_id, nonce, workid, timestamp);
 
 	rd_lock(&bitfury->qlock);
-	HASH_FIND_INT(bitfury->queued_work, &workid, match_work);
-	if (match_work)
-		work = copy_work(match_work);
+	HASH_ITER(hh, bitfury->queued_work, match_work, tmp) {
+		if (match_work->subid == workid) {
+			work = copy_work(match_work);
+			break;
+		}
+	}
 	rd_unlock(&bitfury->qlock);
 
 	if (!work) {
