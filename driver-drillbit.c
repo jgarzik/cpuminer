@@ -109,7 +109,7 @@ static bool usb_read_fixed_size(struct cgpu_info *drillbit, void *result, size_t
   amount = 1;
   count = 0;
   while(count < result_size && ms_left > 0) {
-    usb_read_once_timeout(drillbit, &res[count], result_size-count, &amount, ms_left, command_name);
+    usb_read_timeout(drillbit, &res[count], result_size-count, &amount, ms_left, command_name);
     count += amount;
     cgtime(&tv_now);
     ms_left = timeout - ms_tdiff(&tv_now, &tv_start);
@@ -147,7 +147,7 @@ static bool usb_read_simple_response(struct cgpu_info *drillbit, char command, e
   int amount;
   char response;
   /* Expect a single byte, matching the command, as acknowledgement */
-  usb_read_once_timeout(drillbit, &response, 1, &amount, TIMEOUT, C_BF_GETRES);
+  usb_read_timeout(drillbit, &response, 1, &amount, TIMEOUT, C_BF_GETRES);
   if(amount != 1) {
     applog(LOG_ERR, "Got no response to command %c",command);
     return false;
@@ -165,7 +165,7 @@ static void drillbit_empty_buffer(struct cgpu_info *drillbit)
 	int amount;
 
 	do {
-		usb_read_once(drillbit, buf, 512, &amount, C_BF_FLUSH);
+          usb_read_timeout(drillbit, buf, 512, &amount, 5, C_BF_FLUSH);
 	} while (amount);
 }
 
@@ -214,7 +214,7 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
 		return false;
 	}
         // can't call usb_read_fixed_size here as stats not initialised
-	err = usb_read(drillbit, buf, SZ_SERIALISED_IDENTITY, &amount, C_BF_GETINFO);
+	err = usb_read_timeout(drillbit, buf, SZ_SERIALISED_IDENTITY, &amount, 1000, C_BF_GETINFO);
 	if (err) {
 		applog(LOG_INFO, "%s %d: Failed to read GETINFO",
 		       drillbit->drv->name, drillbit->device_id);
