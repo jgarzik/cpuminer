@@ -516,12 +516,12 @@ static int check_for_results(struct thr_info *thr)
   return successful_results;
 }
 
-static int64_t drillbit_scanhash(struct thr_info *thr, struct work *work,
-				int64_t __maybe_unused max_nonce)
+static int64_t drillbit_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *drillbit = thr->cgpu;
 	struct drillbit_info *info = drillbit->device_data;
-        struct drillbit_chip_info *chip;
+        struct work *work;
+        struct drillbit_chip_info *chip = NULL;
 	struct timeval tv_now, tv_start;
 	int amount, i, j;
 	int ms_diff;
@@ -530,28 +530,13 @@ static int64_t drillbit_scanhash(struct thr_info *thr, struct work *work,
         uint8_t buf[200]; // also larger than SZ_SERIALISED_WORKREQUEST
         char *tmp;
 
-        result_count = 0;
-
-        chip = NULL;
-	cgtime(&tv_start);
-        ms_diff = TIMEOUT;
-
-        // check for results, repeat if necessry until we see a free chip
-        while(chip == NULL) {
-          result_count += check_for_results(thr);
-          for(i = 0; i < info->num_chips; i++) {
-            if(info->chips[i].state != WORKING_QUEUED) {
-              chip = &info->chips[i];
-              break;
-            }
-          }
-
-          cgtime(&tv_now);
-          ms_diff = ms_tdiff(&tv_now, &tv_start);
-          if(ms_diff > TIMEOUT) {
-            applog(LOG_ERR, "Timed out waiting for any results to come back from ASICs.");
-            break;
-          }
+        // check for outstanding results
+        result_count = check_for_results(thr);
+        for(i = 0; i < info->num_chips; i++) {
+                if(info->chips[i].state != WORKING_QUEUED) {
+                        chip = &info->chips[i];
+                        break;
+                }
         }
 
         // check for any chips that have timed out on sending results
@@ -568,9 +553,16 @@ static int64_t drillbit_scanhash(struct thr_info *thr, struct work *work,
           }
         }
 
-        if(chip == NULL) {
+        if(chip == NULL) { // nothing available to send work to!
           goto cascade;
         }
+
+        /* Get some new work for the chip */
+	work = get_queue_work(thr, drillbit, thr->id);
+	if (unlikely(thr->work_restart)) {
+		work_completed(drillbit, work);
+		goto cascade;
+	}
 
         applog(LOG_DEBUG, "Sending work to chip_id %d", chip->chip_id);
         serialise_work_request(buf, chip->chip_id, work);
@@ -592,7 +584,7 @@ static int64_t drillbit_scanhash(struct thr_info *thr, struct work *work,
 
         // Read into work history
         if(chip->current_work[0])
-          free_work(chip->current_work[0]);
+          work_completed(drillbit, chip->current_work[0]);
         for(i = 0; i < WORK_HISTORY_LEN-1; i++)
           chip->current_work[i] = chip->current_work[i+1];
         chip->current_work[WORK_HISTORY_LEN-1] = copy_work(work);
@@ -667,7 +659,8 @@ struct device_drv drillbit_drv = {
 	.dname = "Drillbit",
 	.name = "Drillbit",
 	.drv_detect = drillbit_detect,
-	.scanhash = drillbit_scanhash,
+        .hash_work = &hash_driver_work,
+	.scanwork = drillbit_scanwork,
 	.get_api_stats = drillbit_api_stats,
 	.reinit_device = drillbit_reinit,
 	.thread_shutdown = drillbit_shutdown,
