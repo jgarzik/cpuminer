@@ -3880,6 +3880,8 @@ static void restart_threads(void)
 		cgpu = mining_thr[i]->cgpu;
 		if (unlikely(!cgpu))
 			continue;
+		if (cgpu->deven != DEV_ENABLED)
+			continue;
 		mining_thr[i]->work_restart = true;
 		flush_queue(cgpu);
 		cgpu->drv->flush_work(cgpu);
