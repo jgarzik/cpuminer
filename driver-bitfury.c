@@ -629,13 +629,7 @@ static int64_t bxf_scan(struct cgpu_info *bitfury, struct bitfury_info *info)
 	int64_t ret;
 	int work_id;
 
-	/* If we're using work that can't be ntime rolled, send new work every
-	 * loop through bxf_scan. The device will not abort it instantly unless
-	 * the prevhash has changed. This is a problem with getwork work since
-	 * it may be impossible to prevent it working on ntime rolled work. */
-	if (!info->can_roll)
-		bxf_update_work(bitfury, info);
-	cgsleep_ms(600);
+	cgsleep_ms(1200);
 
 	mutex_lock(&info->lock);
 	ret = bitfury_rate(info);
@@ -675,6 +669,14 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 	}
 }
 
+static void bxf_send_maxroll(struct cgpu_info *bitfury, int maxroll)
+{
+	char buf[20];
+
+	sprintf(buf, "maxroll %d\n", maxroll);
+	bxf_send_msg(bitfury, buf, C_BXF_MAXROLL);
+}
+
 static bool bxf_send_work(struct cgpu_info *bitfury, struct work *work)
 {
 	char buf[512], hexwork[156];
@@ -690,10 +692,13 @@ static void bxf_update_work(struct cgpu_info *bitfury, struct bitfury_info *info
 	struct work *work;
 
 	work = get_queue_work(thr, bitfury, thr->id);
+	if (work->drv_rolllimit != info->maxroll) {
+		info->maxroll = work->drv_rolllimit;
+		bxf_send_maxroll(bitfury, info->maxroll);
+	}
 
 	mutex_lock(&info->lock);
 	work->subid = ++info->work_id;
-	info->can_roll = !!work->drv_rolllimit;
 	mutex_unlock(&info->lock);
 
 	bxf_send_work(bitfury, work);

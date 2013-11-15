@@ -35,7 +35,7 @@ struct bitfury_info {
 	double temperature;
 	int work_id; // Current work->subid
 	int no_matching_work;
-	bool can_roll;
+	int maxroll; // Last maxroll sent to device
 	int ver_major;
 	int ver_minor;
 	int hw_rev;
