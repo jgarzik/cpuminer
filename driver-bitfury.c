@@ -248,6 +248,9 @@ static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *inf
 		return;
 	}
 
+	applog(LOG_DEBUG, "%s %d: Parsed nonce %u workid %u timestamp %u",
+	       bitfury->drv->name, bitfury->device_id, nonce, workid, timestamp);
+
 	rd_lock(&bitfury->qlock);
 	HASH_FIND_INT(bitfury->queued_work, &workid, match_work);
 	if (match_work)
@@ -303,8 +306,9 @@ static void *bxf_get_results(void *userdata)
 	 * and hardware errors. */
 	sprintf(buf, "target ffffffff\n");
 	len = strlen(buf);
+	applog(LOG_DEBUG, "%s %d: Sending %s", bitfury->drv->name, bitfury->device_id, buf);
 	err = usb_write(bitfury, buf, len, &amount, C_BXF_TARGET);
-	if (!err || amount != len) {
+	if (err || amount != len) {
 		applog(LOG_WARNING, "%s %d: Error %d sending work sent %d of %d", bitfury->drv->name,
 		       bitfury->device_id, err, amount, len);
 		goto out;
@@ -323,6 +327,7 @@ static void *bxf_get_results(void *userdata)
 				break;
 			continue;
 		}
+		applog(LOG_DEBUG, "%s %d: Received %s", bitfury->drv->name, bitfury->device_id, buf);
 		if (!strncmp(buf, "submit", 6))
 			parse_bxf_submit(bitfury, info, buf);
 		else if (!strncmp(buf, "temp", 4))
@@ -592,6 +597,7 @@ static void bxf_send_work(struct cgpu_info *bitfury, struct work *work)
 	__bin2hex(hexwork, work->data, 76);
 	sprintf(buf, "work %s %x\n", hexwork, work->subid);
 	len = strlen(buf);
+	applog(LOG_DEBUG, "%s %d: Sending %s", bitfury->drv->name, bitfury->device_id, buf);
 	err = usb_write(bitfury, buf, len, &amount, C_BXF_WORK);
 	if (err || amount != len) {
 		applog(LOG_WARNING, "%s %d: Error %d sending work sent %d of %d", bitfury->drv->name,
