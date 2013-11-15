@@ -399,6 +399,7 @@ static void *bxf_get_results(void *userdata)
 	bxf_update_work(bitfury, info);
 
 	while (likely(!bitfury->shutdown)) {
+		char *msg;
 		int err;
 
 		if (unlikely(bitfury->usbinfo.nodev))
@@ -413,14 +414,18 @@ static void *bxf_get_results(void *userdata)
 		if (!err)
 			continue;
 
-		if (!strncmp(buf, "submit", 6))
-			parse_bxf_submit(bitfury, info, buf);
-		else if (!strncmp(buf, "temp", 4))
-			parse_bxf_temp(bitfury, info, buf);
-		else {
-			applog(LOG_DEBUG, "%s %d: Unrecognised string %s",
-			       bitfury->drv->name, bitfury->device_id, buf);
+		msg = strstr(buf, "submit");
+		if (msg) {
+			parse_bxf_submit(bitfury, info, msg);
+			continue;
 		}
+		msg = strstr(buf, "temp");
+		if (msg) {
+			parse_bxf_temp(bitfury, info, msg);
+			continue;
+		}
+		applog(LOG_DEBUG, "%s %d: Unrecognised string %s",
+		       bitfury->drv->name, bitfury->device_id, buf);
 	}
 out:
 	return NULL;
