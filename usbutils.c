@@ -139,6 +139,20 @@ static struct usb_intinfo bfu_ints[] = {
 	USB_EPS(1,  bfu1_epinfos),
 	USB_EPS(0,  bfu0_epinfos)
 };
+
+static struct usb_epinfo bxf0_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	8,	EPI(1), 0, 0 }
+};
+
+static struct usb_epinfo bxf1_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(2), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
+};
+
+static struct usb_intinfo bxf_ints[] = {
+	USB_EPS(1,  bxf1_epinfos),
+	USB_EPS(0,  bxf0_epinfos)
+};
 #endif
 
 #ifdef USE_HASHFAST
@@ -332,9 +346,9 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.timeout = BITFURY_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
-		//.iManufacturer = something,
-		// .iProduct = something,
-		INTINFO(bfu_ints)
+		.iManufacturer = "c-scape",
+		.iProduct = "bi?fury",
+		INTINFO(bxf_ints)
 	},
 #endif
 #ifdef USE_MODMINER
