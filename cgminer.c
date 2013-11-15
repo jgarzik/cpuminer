@@ -3866,7 +3866,7 @@ static void restart_threads(void)
 {
 	struct pool *cp = current_pool();
 	struct cgpu_info *cgpu;
-	int i;
+	int i, mt;
 
 	/* Artificially set the lagging flag to avoid pool not providing work
 	 * fast enough  messages after every long poll */
@@ -3876,7 +3876,10 @@ static void restart_threads(void)
 	discard_stale();
 
 	rd_lock(&mining_thr_lock);
-	for (i = 0; i < mining_threads; i++) {
+	mt = mining_threads;
+	rd_unlock(&mining_thr_lock);
+
+	for (i = 0; i < mt; i++) {
 		cgpu = mining_thr[i]->cgpu;
 		if (unlikely(!cgpu))
 			continue;
@@ -3886,7 +3889,6 @@ static void restart_threads(void)
 		flush_queue(cgpu);
 		cgpu->drv->flush_work(cgpu);
 	}
-	rd_unlock(&mining_thr_lock);
 
 	mutex_lock(&restart_lock);
 	pthread_cond_broadcast(&restart_cond);
