@@ -231,6 +231,8 @@ static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
 
 	info->total_nonces = 1;
+	/* This unsets it to make sure it gets set on the first pass */
+	info->maxroll = -1;
 
 	return true;
 }
@@ -379,6 +381,20 @@ static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info,
 
 static void bxf_update_work(struct cgpu_info *bitfury, struct bitfury_info *info);
 
+static void parse_bxf_needwork(struct cgpu_info *bitfury, struct bitfury_info *info,
+			       char *buf)
+{
+	int needed;
+
+	if (!sscanf(&buf[9], "%d", &needed)) {
+		applog(LOG_INFO, "%s %d: Failed to parse needwork",
+		       bitfury->drv->name, bitfury->device_id);
+		return;
+	}
+	while (needed-- > 0)
+		bxf_update_work(bitfury, info);
+}
+
 static void *bxf_get_results(void *userdata)
 {
 	struct cgpu_info *bitfury = userdata;
@@ -396,6 +412,7 @@ static void *bxf_get_results(void *userdata)
 
 	/* Read thread sends the first work item to get the device started
 	 * since it will roll ntime and make work itself from there on. */
+	bxf_update_work(bitfury, info);
 	bxf_update_work(bitfury, info);
 
 	while (likely(!bitfury->shutdown)) {
@@ -422,6 +439,11 @@ static void *bxf_get_results(void *userdata)
 		msg = strstr(buf, "temp");
 		if (msg) {
 			parse_bxf_temp(bitfury, info, msg);
+			continue;
+		}
+		msg = strstr(buf, "needwork");
+		if (msg) {
+			parse_bxf_needwork(bitfury, info, msg);
 			continue;
 		}
 		applog(LOG_DEBUG, "%s %d: Unrecognised string %s",
@@ -634,7 +656,8 @@ static int64_t bxf_scan(struct cgpu_info *bitfury, struct bitfury_info *info)
 	int64_t ret;
 	int work_id;
 
-	cgsleep_ms(1200);
+	bxf_update_work(bitfury, info);
+	cgsleep_ms(600);
 
 	mutex_lock(&info->lock);
 	ret = bitfury_rate(info);
@@ -716,6 +739,7 @@ static void bitfury_flush_work(struct cgpu_info *bitfury)
 	switch(info->ident) {
 		case IDENT_BXF:
 			bxf_send_flush(bitfury);
+			bxf_update_work(bitfury, info);
 			bxf_update_work(bitfury, info);
 		case IDENT_BF1:
 		default:
