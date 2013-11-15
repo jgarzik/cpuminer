@@ -183,13 +183,20 @@ static void bxf_clear_buffer(struct cgpu_info *bitfury)
 	} while (retries++ < 10);
 }
 
+static bool bxf_send_flush(struct cgpu_info *bitfury)
+{
+	char buf[8];
+
+	sprintf(buf, "flush\n");
+	return bxf_send_msg(bitfury, buf, C_BXF_FLUSH);
+}
+
 static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	int err, retries = 0;
 	char buf[512];
 
-	sprintf(buf, "flush\n");
-	if (!bxf_send_msg(bitfury, buf, C_BXF_FLUSH))
+	if (!bxf_send_flush(bitfury))
 		return false;
 
 	bxf_clear_buffer(bitfury);
@@ -698,6 +705,7 @@ static void bitfury_flush_work(struct cgpu_info *bitfury)
 
 	switch(info->ident) {
 		case IDENT_BXF:
+			bxf_send_flush(bitfury);
 			bxf_update_work(bitfury, info);
 		case IDENT_BF1:
 		default:
