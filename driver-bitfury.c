@@ -149,9 +149,7 @@ static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	applog(LOG_INFO, "%s %d: Successfully initialised %s",
 	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
 
-	/* FIXME Do some testing here */
-
-	info->total_nonces = 5;
+	info->total_nonces = 1;
 
 	return true;
 }
@@ -261,6 +259,10 @@ static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *inf
 	rd_unlock(&bitfury->qlock);
 
 	if (!work) {
+		/* Discard first results from any previous run */
+		if (unlikely(!info->valid))
+			return;
+
 		applog(LOG_INFO, "%s %d: No matching work", bitfury->drv->name, bitfury->device_id);
 
 		mutex_lock(&info->lock);
@@ -270,6 +272,7 @@ static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *inf
 		inc_hw_errors(thr);
 		return;
 	}
+	info->valid = true;
 	set_work_ntime(work, timestamp);
 	if (submit_nonce(thr, work, nonce)) {
 		mutex_lock(&info->lock);
@@ -412,7 +415,7 @@ static bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32
 static int64_t bitfury_rate(struct bitfury_info *info)
 {
 	double nonce_rate;
-	bool ret = 0;
+	int64_t ret = 0;
 
 	info->cycles++;
 	info->total_nonces += info->nonces;
@@ -505,8 +508,11 @@ out:
 		}
 		rd_unlock(&bitfury->qlock);
 
-		if (!found)
-			inc_hw_errors(thr);
+		if (!found) {
+			if (likely(info->valid))
+				inc_hw_errors(thr);
+		} else
+			info->valid = true;
 	}
 
 	cgtime(&tv_now);
@@ -548,11 +554,9 @@ static int64_t bxf_scan(struct cgpu_info *bitfury, struct bitfury_info *info)
 	 * loop through bxf_scan. The device will not abort it instantly unless
 	 * the prevhash has changed. This is a problem with getwork work since
 	 * it may be impossible to prevent it working on ntime rolled work. */
-	if (!info->can_roll) {
+	if (!info->can_roll)
 		bxf_update_work(bitfury, info);
-		cgsleep_ms(500);
-	} else
-		cgsleep_ms(3000);
+	cgsleep_ms(600);
 
 	mutex_lock(&info->lock);
 	ret = bitfury_rate(info);
@@ -702,7 +706,7 @@ static void bitfury_get_statline_before(char *buf, size_t bufsiz, struct cgpu_in
 
 	switch(info->ident) {
 		case IDENT_BXF:
-			tailsprintf(buf, bufsiz, "%3.1fC    | ", info->temperature);
+			tailsprintf(buf, bufsiz, "%3.1fC   | ", info->temperature);
 			break;
 		case IDENT_BF1:
 		default:

@@ -21,6 +21,7 @@ struct bitfury_info {
 	int total_nonces;
 	double saved_nonces;
 	int cycles;
+	bool valid; /* Set on first valid data being found */
 
 	/* BF1 specific data */
 	uint8_t version;
