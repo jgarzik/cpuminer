@@ -140,6 +140,21 @@ static bool bf1_reset(struct cgpu_info *bitfury)
 	return true;
 }
 
+static bool bxf_send_msg(struct cgpu_info *bitfury, char *buf, enum usb_cmds cmd)
+{
+	int err, amount, len;
+
+	len = strlen(buf);
+	applog(LOG_DEBUG, "%s %d: Sending %s", bitfury->drv->name, bitfury->device_id, buf);
+	err = usb_write(bitfury, buf, len, &amount, cmd);
+	if (err || amount != len) {
+		applog(LOG_WARNING, "%s %d: Error %d sending %s sent %d of %d", bitfury->drv->name,
+		       bitfury->device_id, err, usb_cmdname(cmd), amount, len);
+		return false;
+	}
+	return true;
+}
+
 static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	if (!add_cgpu(bitfury))
@@ -303,7 +318,6 @@ static void *bxf_get_results(void *userdata)
 	struct cgpu_info *bitfury = userdata;
 	struct bitfury_info *info = bitfury->device_data;
 	char threadname[24], buf[512];
-	int err, amount, len;
 
 	snprintf(threadname, 24, "bxf_recv/%d", bitfury->device_id);
 
@@ -311,19 +325,16 @@ static void *bxf_get_results(void *userdata)
 	 * to process and gives us a better indicator of the nonce return rate
 	 * and hardware errors. */
 	sprintf(buf, "target ffffffff\n");
-	len = strlen(buf);
-	applog(LOG_DEBUG, "%s %d: Sending %s", bitfury->drv->name, bitfury->device_id, buf);
-	err = usb_write(bitfury, buf, len, &amount, C_BXF_TARGET);
-	if (err || amount != len) {
-		applog(LOG_WARNING, "%s %d: Error %d sending work sent %d of %d", bitfury->drv->name,
-		       bitfury->device_id, err, amount, len);
+	if (!bxf_send_msg(bitfury, buf, C_BXF_TARGET))
 		goto out;
-	}
+
 	/* Read thread sends the first work item to get the device started
 	 * since it will roll ntime and make work itself from there on. */
 	bxf_update_work(bitfury, info);
 
 	while (likely(!bitfury->shutdown)) {
+		int err, amount;
+
 		if (unlikely(bitfury->usbinfo.nodev))
 			break;
 
@@ -596,20 +607,13 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 	}
 }
 
-static void bxf_send_work(struct cgpu_info *bitfury, struct work *work)
+static bool bxf_send_work(struct cgpu_info *bitfury, struct work *work)
 {
 	char buf[512], hexwork[156];
-	int err, amount, len;
 
 	__bin2hex(hexwork, work->data, 76);
 	sprintf(buf, "work %s %x\n", hexwork, work->subid);
-	len = strlen(buf);
-	applog(LOG_DEBUG, "%s %d: Sending %s", bitfury->drv->name, bitfury->device_id, buf);
-	err = usb_write(bitfury, buf, len, &amount, C_BXF_WORK);
-	if (err || amount != len) {
-		applog(LOG_WARNING, "%s %d: Error %d sending work sent %d of %d", bitfury->drv->name,
-		       bitfury->device_id, err, amount, len);
-	}
+	return bxf_send_msg(bitfury, buf, C_BXF_WORK);
 }
 
 static void bxf_update_work(struct cgpu_info *bitfury, struct bitfury_info *info)
