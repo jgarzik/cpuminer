@@ -782,7 +782,12 @@ static struct api_data *bxf_api_stats(struct bitfury_info *info)
 {
 	struct api_data *root = NULL;
 	double nonce_rate;
+	char buf[32];
 
+	sprintf(buf, "%d.%d", info->ver_major, info->ver_minor);
+	root = api_add_string(root, "Version", buf, true);
+	root = api_add_int(root, "Revision", &info->hw_rev,  false);
+	root = api_add_int(root, "Chips", &info->chips, false);
 	nonce_rate = (double)info->total_nonces / (double)info->cycles;
 	root = api_add_double(root, "NonceRate", &nonce_rate, true);
 	root = api_add_int(root, "NoMatchingWork", &info->no_matching_work, false);
