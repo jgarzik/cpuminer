@@ -101,6 +101,9 @@ If building on Red Hat:
         sudo yum install autoconf automake autoreconf libtool openssl-compat-bitcoin-devel.x86_64 \
                          curl libcurl libcurl-devel openssh
 
+If building on Ubuntu:
+	sudo apt-get install autoconf automake libtool libcurl3-dev libudev-dev
+
 CGMiner specific configuration options:
   --enable-avalon         Compile support for Avalon (default disabled)
   --enable-bflsc          Compile support for BFL ASICs (default disabled)
