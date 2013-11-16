@@ -276,6 +276,18 @@ directory with the following command:
 After this you can either manually restart udev and re-login, or more easily
 just reboot.
 
+OSX:
+
+On OSX, like Linux, no drivers need to be installed. However some devices
+like the bitfury USB sticks automatically load a driver thinking they're a
+modem and the driver needs to be unloaded for cgminer to work:
+
+sudo kextunload -b com.apple.driver.AppleUSBCDC
+sudo kextunload -b com.apple.driver.AppleUSBCDCACMData
+
+
+---
+
 Advanced USB options:
 
 The --usb option can restrict how many Avalon, BFL ASIC, BitForce FPGAs,
