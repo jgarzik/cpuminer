@@ -1590,6 +1590,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 					"USB init, open device failed, err %d, "
 					"you don't have privilege to access %s",
 					err, devstr);
+				applog(LOG_ERR, "See README file included for help");
 				break;
 #ifdef WIN32
 			// Windows specific message
@@ -1598,6 +1599,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 					"USB init, open device failed, err %d, "
 					"you need to install a WinUSB driver for %s",
 					err, devstr);
+				applog(LOG_ERR, "See README.txt file included for help");
 				break;
 #endif
 			default:
