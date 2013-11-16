@@ -1,3 +1,90 @@
+Version 3.8.2 - 16th November 2013
+
+- Add more verbose documentation to the readme files for windows users.
+- Add more information on libusb failure to init telling users to check README
+file.
+- Add information on unloading cdc drivers on osx to README
+- Prevent a deadlock with use of restart_threads by spawning a thread to send
+the driver flush work messages.
+- Set priority of various threads if possible.
+- Add bxf data to api output.
+- Do not hold the mining thread lock in restart_threads when calling the driver
+flush work commands.
+- Send extra work regularly to the bxf device and parse the needwork command by
+sending the amount of work it requests.
+- Allow messages to have arbitrary offsets in the bxf parser in case we have
+lingering buffered data.
+- Send the maxroll command to the bxf driver and store the value to see if we
+need to update it.
+- Add sending of flush command to bxf on flush_work
+- Add flush and version commands to bxf start up, flush buffer and try to parse
+version response string.
+- Abstract out bxf recv message.
+- Add extra bxf commands to usbutils
+- Abstract out bxf send message to allow us to easily add extra commands.
+- Don't run device restart code if the device is not enabled.
+- Expand size of bitfury statline
+- Various driver fixes for bitfury devices, including a flag from when first
+valid work appears.
+- Look up work results in bxf driver from correct variable.
+- Correct incorrect error code in bxf driver for usb writes and add debugging.
+- Add bxf details to usbutils.
+- Implement a statline showing temperature for bxf
+- Add api data for bxf device, sharing the hashrate function with bf1.
+- Count no matching work as a hw error on bxf
+- Add BXF to udev rules.
+- Work id should be hexadecimal in bxf messages.
+- Add unrecognised string debugging to bxf driver.
+- Implement the main scanloop for bxf, trying to prevent it from ntime rolling
+work if the work protocol does not allow it.
+- Parse bxf work submits fully, submitting the results.
+- Provide a function for setting the work ntime.
+- Implement a skeleton parse bxf submit function.
+- Use the bxf read thread to set the device target and send its first work item.
+- Implement a bxf send work function and set update and restart functions to
+sending new work since that's the equivalent for that device.
+- Add temperature parsing to bxf driver
+- Create and destroy a basic bxf read thread.
+- Remove the buffer from bitfury info since it is only used on one pass in the
+bf1 device.
+- Add a rudimentary bxf detect one function.
+- Rename all bf1 specific functions in the bitfury driver, using a switch to
+choose correct function.
+- Rename bitfury_getinfo to bf1_getinfo since it's unique to bf1 devices.
+- Separate out the bf1 reset from bitfury reset.
+- Store the bitfury identity in the info struct.
+- BaB - updated tested OS comment
+- Uniquely identify the BF1 and BXF bitfury devices.
+- Remove the default libusb WinUsb pipe policies that don't suit us.
+- Only set the winusb pipe policy if it doesn't match our requirements instead
+of every transfer.
+- klondike - dont try to flush if not initialised
+- api.c trylock() add missing locklock
+- Use our new zero length packet support directly in windows.
+- Enable support for zero length packet on windows and auto clear pipe stalls.
+- util.c: Decreasing reference count on allocated JSON obects to prevent memory
+leak
+- api.c: Release apisock on error in api()
+- api.c: Release io_data->ptr when releasing io_data in io_free()
+- We can't connect to a GBT pool at all with fix protocol enabled.
+- Initialise the stgd lock mutex earlier to prevent dereferences when pool
+testing occurs before it.
+- Klondike support I2C USB layout also - as KLI
+- Return error codes in avalon_read() if they're not timeouts.
+- Break out of the avalon idle loop if we get a send error.
+- Set avalon ftdi latency to just less than the time it would take to fill the
+ftdi buffer at 115200 baud
+- Update example.conf
+- Only limit packetsize on usb out writes.
+- We must chop up every 64 bytes returned on an ftdi chip, not just the first 2
+bytes so revert to parsing the data internally in the avalon instead of using
+usbutils' simple ftdi parser.
+- Only retry 3 times in hfa_reset.
+- Only add_cgpu in hashfast driver once we have a real driver set up.
+- Clean up properly if hfa_detect_common fails in the hashfast driver.
+- --shares should be scaled to diff1 not absolute number of shares
+
+
 Version 3.8.1 - 11th November 2013
 
 - Revert "Send a zero length packet at the end of every usb transfer on windows
