@@ -2498,8 +2498,6 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT) {
 		memcpy(buf, data, length);
-		if (length > usb_epinfo->wMaxPacketSize)
-			length = usb_epinfo->wMaxPacketSize;
 		ut.transfer->flags |= LIBUSB_TRANSFER_ADD_ZERO_PACKET;
 	}
 
