@@ -599,7 +599,7 @@ struct resource_reply *res_reply_head = NULL;
 #define MODE_BULK_WRITE (1 << 3)
 
 // Set this to 0 to remove stats processing
-#define DO_USB_STATS 1
+#define DO_USB_STATS 0
 
 static bool stats_initialised = false;
 
@@ -2178,7 +2178,7 @@ static void newstats(struct cgpu_info *cgpu)
 
 	usb_stats[next_stat].name = cgpu->drv->name;
 	usb_stats[next_stat].device_id = -1;
-	usb_stats[next_stat].details = calloc(1, sizeof(struct cg_usb_stats_details) * C_MAX * 2);
+	usb_stats[next_stat].details = calloc(1, sizeof(struct cg_usb_stats_details) * C_MAX * 2 + 8);
 	if (unlikely(!usb_stats[next_stat].details))
 		quit(1, "USB failed to calloc details for %d", next_stat+1);
 
