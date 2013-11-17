@@ -539,8 +539,8 @@ static const char *nodatareturned = "no data returned ";
 
 // For device limits by driver
 static struct driver_count {
-	uint32_t count;
-	uint32_t limit;
+	int count;
+	int limit;
 } drv_count[DRIVER_MAX];
 
 // For device limits by list of bus/dev
