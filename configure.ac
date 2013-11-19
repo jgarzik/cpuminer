@@ -518,7 +518,7 @@ else
 	echo "  ModMiner.FPGAs.......: Disabled"
 fi
 
-if test "x$avalon$bab$bflsc$bitforce$bitfury$hashfast$icarus$klondike$knc$modminer" = xnononononononononono; then
+if test "x$avalon$bab$bflsc$bitforce$bitfury$hashfast$icarus$klondike$knc$modminer$drillbit" = xnonononononononononono; then
 	AC_MSG_ERROR([No mining configured in])
 fi
 
