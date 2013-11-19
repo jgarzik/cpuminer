@@ -4589,7 +4589,9 @@ void api(int api_thr_id)
 									param = param_buf;
 								}
 							}
+							json_decref(json_val);
 						}
+						json_decref(json_config);
 					}
 				}
 
