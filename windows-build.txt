@@ -325,16 +325,13 @@ rm *.zip
 
 ** Building cgminer
 
-Go back to the cgminer directory.
-
-At time of writing (3.8.1) cgminer doesn't support out-of-tree build
-directories so you'll need to rerun configure to switch between
-building for linux and cross-building for win32 (or check out totally
-separate working directories.)
+Below assumes you're building in a "build-win32" or similar directory
+inside the cgminer directory. Fix up the -I and -L paths appropriately
+if you're building in-tree or someplace else.
 
 Configure command:
 
-CPPFLAGS="-I`pwd`/../cgminer-win32-deps/include" LDFLAGS="-L`pwd`/../cgminer-win32-deps/lib -lcurldll" ./configure --prefix=/usr/local/i586-mingw32 --host=i586-mingw32msvc --build=i686-linux 
+CPPFLAGS="-I`pwd`/../../cgminer-win32-deps/include" LDFLAGS="-L`pwd`/../../cgminer-win32-deps/lib -lcurldll" ../autogen.sh --prefix=/usr/local/i586-mingw32 --host=i586-mingw32msvc --build=i686-linux 
 
 ^^^ Plus whatever configure arguments you want to add. Note the paths
     to cgminer-win32-deps that you may need to change.
