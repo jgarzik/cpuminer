@@ -139,6 +139,20 @@ static struct usb_intinfo bfu_ints[] = {
 	USB_EPS(1,  bfu1_epinfos),
 	USB_EPS(0,  bfu0_epinfos)
 };
+
+static struct usb_epinfo bxf0_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	8,	EPI(1), 0, 0 }
+};
+
+static struct usb_epinfo bxf1_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(2), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
+};
+
+static struct usb_intinfo bxf_ints[] = {
+	USB_EPS(1,  bxf1_epinfos),
+	USB_EPS(0,  bxf0_epinfos)
+};
 #endif
 
 #ifdef USE_HASHFAST
@@ -313,7 +327,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRIVER_bitfury,
 		.name = "BF1",
-		.ident = IDENT_BFU,
+		.ident = IDENT_BF1,
 		.idVendor = 0x03eb,
 		.idProduct = 0x204b,
 		.config = 1,
@@ -322,6 +336,19 @@ static struct usb_find_devices find_dev[] = {
 		//.iManufacturer = "BPMC",
 		.iProduct = "Bitfury BF1",
 		INTINFO(bfu_ints)
+	},
+	{
+		.drv = DRIVER_bitfury,
+		.name = "BXF",
+		.ident = IDENT_BXF,
+		.idVendor = 0x198c,
+		.idProduct = 0xb1f1,
+		.config = 1,
+		.timeout = BITFURY_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		.iManufacturer = "c-scape",
+		.iProduct = "bi?fury",
+		INTINFO(bxf_ints)
 	},
 #endif
 #ifdef USE_MODMINER
@@ -512,8 +539,8 @@ static const char *nodatareturned = "no data returned ";
 
 // For device limits by driver
 static struct driver_count {
-	uint32_t count;
-	uint32_t limit;
+	int count;
+	int limit;
 } drv_count[DRIVER_MAX];
 
 // For device limits by list of bus/dev
@@ -572,7 +599,7 @@ struct resource_reply *res_reply_head = NULL;
 #define MODE_BULK_WRITE (1 << 3)
 
 // Set this to 0 to remove stats processing
-#define DO_USB_STATS 1
+#define DO_USB_STATS 0
 
 static bool stats_initialised = false;
 
@@ -1563,6 +1590,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 					"USB init, open device failed, err %d, "
 					"you don't have privilege to access %s",
 					err, devstr);
+				applog(LOG_ERR, "See README file included for help");
 				break;
 #ifdef WIN32
 			// Windows specific message
@@ -1571,6 +1599,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 					"USB init, open device failed, err %d, "
 					"you need to install a WinUSB driver for %s",
 					err, devstr);
+				applog(LOG_ERR, "See README.txt file included for help");
 				break;
 #endif
 			default:
@@ -2149,7 +2178,7 @@ static void newstats(struct cgpu_info *cgpu)
 
 	usb_stats[next_stat].name = cgpu->drv->name;
 	usb_stats[next_stat].device_id = -1;
-	usb_stats[next_stat].details = calloc(1, sizeof(struct cg_usb_stats_details) * C_MAX * 2);
+	usb_stats[next_stat].details = calloc(1, sizeof(struct cg_usb_stats_details) * C_MAX * 2 + 8);
 	if (unlikely(!usb_stats[next_stat].details))
 		quit(1, "USB failed to calloc details for %d", next_stat+1);
 
@@ -2443,15 +2472,11 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	struct usb_transfer ut;
 	unsigned char endpoint;
 	int err, errn;
-	/* Zero length packet required */
-	bool zlp = false;
 #if DO_USB_STATS
 	struct timeval tv_start, tv_finish;
 #endif
 	unsigned char buf[512];
 #ifdef WIN32
-	int dummy;
-
 	/* On windows the callback_timeout is a safety mechanism only. */
 	bulk_timeout = timeout;
 	callback_timeout += WIN_CALLBACK_EXTRA;
@@ -2473,17 +2498,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT) {
 		memcpy(buf, data, length);
-		/* If this is the last packet in a transfer and is the length
-		 * of the wMaxPacketSize then we need to send a zero length
-		 * packet to let the device know it's the end of the message.*/
-		if (length > usb_epinfo->wMaxPacketSize)
-			length = usb_epinfo->wMaxPacketSize;
-		else if (length == usb_epinfo->wMaxPacketSize)
-			zlp = true;
-#ifndef WIN32
-		/* Windows doesn't support this flag so we emulate it below */
 		ut.transfer->flags |= LIBUSB_TRANSFER_ADD_ZERO_PACKET;
-#endif
 	}
 
 	USBDEBUG("USB debug: @usb_bulk_transfer(%s (nodev=%s),intinfo=%d,epinfo=%d,data=%p,length=%d,timeout=%u,mode=%d,cmd=%s,seq=%d) endpoint=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, data, length, timeout, mode, usb_cmdname(cmd), seq, (int)endpoint);
@@ -2526,12 +2541,6 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	}
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)
 		memcpy(data, buf, *transferred);
-	else if (zlp) {
-#ifdef WIN32
-		/* Send a zero length packet */
-		libusb_bulk_transfer(dev_handle, endpoint, NULL, 0, &dummy, 100);
-#endif
-	}
 
 	return err;
 }
