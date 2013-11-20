@@ -538,7 +538,7 @@ static int64_t bitfury_rate(struct bitfury_info *info)
 static int64_t bf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 			struct bitfury_info *info)
 {
-	int amount, i, aged = 0, total = 0, ms_diff;
+	int amount, i, aged, total = 0, ms_diff;
 	char readbuf[512], buf[45];
 	struct work *work, *tmp;
 	struct timeval tv_now;
@@ -626,15 +626,7 @@ out:
 	/* This iterates over the hashlist finding work started more than 6
 	 * seconds ago which equates to leaving 5 past work items in the array
 	 * to look for results. */
-	wr_lock(&bitfury->qlock);
-	HASH_ITER(hh, bitfury->queued_work, work, tmp) {
-		if (tdiff(&tv_now, &work->tv_work_start) > 6.0) {
-			__work_completed(bitfury, work);
-			aged++;
-		}
-	}
-	wr_unlock(&bitfury->qlock);
-
+	aged = age_queued_work(bitfury, 6.0);
 	if (aged) {
 		applog(LOG_DEBUG, "%s %d: Aged %d work items", bitfury->drv->name,
 		       bitfury->device_id, aged);
