@@ -2612,8 +2612,12 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	/* If we found the end of message marker, just use that data and
 	 * return success. */
 	if (eom) {
-		tot = (void *)eom - (void *)usbbuf + endlen;
-		err = LIBUSB_SUCCESS;
+		size_t eomlen = (void *)eom - (void *)usbbuf + endlen;
+
+		if (eomlen < bufsiz) {
+			bufsiz = eomlen;
+			err = LIBUSB_SUCCESS;
+		}
 	}
 
 	// N.B. usbdev->buffer was emptied before the while() loop
