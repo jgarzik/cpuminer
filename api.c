@@ -4382,7 +4382,7 @@ void api(int api_thr_id)
 	struct sockaddr_in cli;
 	socklen_t clisiz;
 	char cmdbuf[100];
-	char *cmd;
+	char *cmd = NULL;
 	char *param;
 	bool addrok;
 	char group;
