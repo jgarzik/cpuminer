@@ -48,7 +48,7 @@
 
 #define AVALON_DEFAULT_TIMEOUT 0x2D
 #define AVALON_MIN_FREQUENCY 256
-#define AVALON_MAX_FREQUENCY 1024
+#define AVALON_MAX_FREQUENCY 2000
 #define AVALON_TIMEOUT_FACTOR 12690
 #define AVALON_DEFAULT_FREQUENCY 282
 #define AVALON_DEFAULT_MINER_NUM 0x20
@@ -137,6 +137,7 @@ struct avalon_info {
 	int matching_work[AVALON_MAX_MINER_NUM];
 
 	int frequency;
+	int asic;
 	uint32_t ctlr_ver;
 
 	struct thr_info *thr;
