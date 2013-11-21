@@ -22,6 +22,10 @@
 #define AVALON_HASH_TIME_FACTOR	((float)1.67/0x32)
 #define AVALON_RESET_PITCH	(300*1000*1000)
 
+
+#define AVALON_A3256	110
+#define AVALON_A3255	55
+
 #define AVALON_FAN_FACTOR 120
 #define AVALON_PWM_MAX 0xA0
 #define AVALON_DEFAULT_FAN_MIN 20
@@ -137,7 +141,7 @@ struct avalon_info {
 	int matching_work[AVALON_MAX_MINER_NUM];
 
 	int frequency;
-	int asic;
+	uint32_t asic;
 	uint32_t ctlr_ver;
 
 	struct thr_info *thr;

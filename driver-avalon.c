@@ -110,7 +110,7 @@ static int avalon_init_task(struct avalon_task *at,
 	buf[10] = 0x00;
 	buf[11] = 0x00;
 
-	if (asic == 110) {
+	if (asic == AVALON_A3256) {
 		lefreq16 = (uint16_t *)&buf[6];
 		*lefreq16 = htole16(frequency * 8);
 	} else {
@@ -307,7 +307,7 @@ static bool avalon_decode_nonce(struct thr_info *thr, struct cgpu_info *avalon,
 	info = avalon->device_data;
 	info->matching_work[work->subid]++;
 	nonce = htole32(ar->nonce);
-	if (info->asic == 55)
+	if (info->asic == AVALON_A3255)
 		nonce -= 0xc0;
 	applog(LOG_DEBUG, "Avalon: nonce = %0x08x", nonce);
 	return submit_nonce(thr, work, nonce);
@@ -374,7 +374,7 @@ static int avalon_reset(struct cgpu_info *avalon, bool initial)
 			 AVALON_DEFAULT_MINER_NUM,
 			 0, 0,
 			 AVALON_DEFAULT_FREQUENCY,
-			 110);
+			 AVALON_A3256);
 
 	wait_avalon_ready(avalon);
 	ret = avalon_send_task(&at, avalon);
@@ -563,7 +563,7 @@ static bool get_options(int this_option_offset, int *baud, int *miner_count,
 						*timeout = avalon_calc_timeout(*frequency);
 					if (colon5 && *colon5) {
 						tmp = atoi(colon5);
-						if (tmp != 110 && tmp != 55)
+						if (tmp != AVALON_A3256 && tmp != AVALON_A3255)
 							quit(1, "Invalid avalon-options for asic, must be 110 or 55");
 						*asic = tmp;
 					}
@@ -821,6 +821,7 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	asic_count = AVALON_DEFAULT_ASIC_NUM;
 	timeout = AVALON_DEFAULT_TIMEOUT;
 	frequency = AVALON_DEFAULT_FREQUENCY;
+	asic = AVALON_A3256;
 
 	if (!usb_init(avalon, dev, found))
 		goto shin;
@@ -850,7 +851,7 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 		info->timeout = timeout;
 		info->frequency = frequency;
 	} else {
-		info->asic = 110;
+		info->asic = AVALON_A3256;
 		info->baud = AVALON_IO_SPEED;
 		info->asic_count = AVALON_DEFAULT_ASIC_NUM;
 		switch (usb_ident(avalon)) {
@@ -870,7 +871,7 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	info->temp_max = 0;
 	/* This is for check the temp/fan every 3~4s */
 	info->temp_history_count =
-		(4 / (float)((float)info->timeout * (110 / info->asic) * ((float)1.67/0x32))) + 1;
+		(4 / (float)((float)info->timeout * (AVALON_A3256 / info->asic) * ((float)1.67/0x32))) + 1;
 	if (info->temp_history_count <= 0)
 		info->temp_history_count = 1;
 
