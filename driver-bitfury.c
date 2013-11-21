@@ -623,10 +623,9 @@ out:
 
 	cgtime(&tv_now);
 
-	/* This iterates over the hashlist finding work started more than 6
-	 * seconds ago which equates to leaving 5 past work items in the array
-	 * to look for results. */
-	aged = age_queued_work(bitfury, 6.0);
+	/* This iterates over the hashlist finding work started more than 90
+	 * seconds ago. */
+	aged = age_queued_work(bitfury, 90.0);
 	if (aged) {
 		applog(LOG_DEBUG, "%s %d: Aged %d work items", bitfury->drv->name,
 		       bitfury->device_id, aged);
