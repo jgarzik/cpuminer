@@ -1839,7 +1839,7 @@ bool auth_stratum(struct pool *pool)
 			ss = json_dumps(err_val, JSON_INDENT(3));
 		else
 			ss = strdup("(unknown reason)");
-		applog(LOG_WARNING, "pool %d JSON stratum auth failed: %s", pool->pool_no, ss);
+		applog(LOG_INFO, "pool %d JSON stratum auth failed: %s", pool->pool_no, ss);
 		free(ss);
 
 		goto out;
