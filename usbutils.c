@@ -2609,17 +2609,6 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 			break;
 	}
 
-	/* If we found the end of message marker, just use that data and
-	 * return success. */
-	if (eom) {
-		size_t eomlen = (void *)eom - (void *)usbbuf + endlen;
-
-		if (eomlen < bufsiz) {
-			bufsiz = eomlen;
-			err = LIBUSB_SUCCESS;
-		}
-	}
-
 	// N.B. usbdev->buffer was emptied before the while() loop
 	if (tot > (int)bufsiz) {
 		usbdev->bufamt = tot - bufsiz;
@@ -2630,7 +2619,13 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 			cgpu->drv->name, cgpu->device_id, usbdev->bufamt);
 	}
 
-	*processed = tot;
+	/* If we found the end of message marker, just use that data and
+	 * return success. */
+	if (eom) {
+		*processed = (void *)eom - (void *)usbbuf + endlen;
+		err = LIBUSB_SUCCESS;
+	} else
+		*processed = tot;
 	memcpy((char *)buf, (const char *)usbbuf, (tot < (int)bufsiz) ? tot + 1 : (int)bufsiz);
 
 	if (err && err != LIBUSB_ERROR_TIMEOUT) {
