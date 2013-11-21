@@ -183,6 +183,7 @@ enum usb_types {
 };
 
 #define USB_MAX_READ 8192
+#define USB_READ_BUFSIZE (USB_MAX_READ + 4)
 
 struct cg_usb_device {
 	struct usb_find_devices *found;
@@ -256,7 +257,7 @@ struct cg_usb_info {
 	 * If a single device ever has multiple end points then it will need
 	 * multiple of these
 	 */
-	unsigned char bulkbuf[USB_MAX_READ+4];
+	unsigned char bulkbuf[USB_READ_BUFSIZE];
 
 	uint64_t tmo_count;
 	struct cg_usb_tmo usb_tmo[USB_TMOS];
