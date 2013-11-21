@@ -2522,11 +2522,14 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	unsigned int initial_timeout;
 	int bufleft, err, got, tot, pstate;
 	bool first = true;
-	int endlen = strlen(end);
+	int endlen = 0;
 	unsigned char *ptr, *usbbuf = cgpu->usbinfo.bulkbuf;
 	const size_t usbbufread = 512; /* Always read full size */
 	char *eom = NULL;
 	double done;
+
+	if (end)
+		endlen = strlen(end);
 
 	DEVRLOCK(cgpu, pstate);
 
