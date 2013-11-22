@@ -718,6 +718,7 @@ static void bxf_update_work(struct cgpu_info *bitfury, struct bitfury_info *info
 	work->subid = ++info->work_id;
 	mutex_unlock(&info->lock);
 
+	cgtime(&work->tv_work_start);
 	bxf_send_work(bitfury, work);
 }
 
