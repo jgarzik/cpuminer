@@ -623,9 +623,9 @@ out:
 
 	cgtime(&tv_now);
 
-	/* This iterates over the hashlist finding work started more than 90
+	/* This iterates over the hashlist finding work started more than 6
 	 * seconds ago. */
-	aged = age_queued_work(bitfury, 90.0);
+	aged = age_queued_work(bitfury, 6.0);
 	if (aged) {
 		applog(LOG_DEBUG, "%s %d: Aged %d work items", bitfury->drv->name,
 		       bitfury->device_id, aged);
@@ -643,25 +643,23 @@ out:
 
 static int64_t bxf_scan(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
-	struct work *work, *tmp;
 	int64_t ret;
-	int work_id;
+	int aged;
 
 	bxf_update_work(bitfury, info);
 	cgsleep_ms(600);
 
 	mutex_lock(&info->lock);
 	ret = bitfury_rate(info);
-	work_id = info->work_id;
 	mutex_unlock(&info->lock);
 
-	/* Keep no more than the last 5 work items in the hashlist */
-	wr_lock(&bitfury->qlock);
-	HASH_ITER(hh, bitfury->queued_work, work, tmp) {
-		if (work->subid + 5 < work_id)
-			__work_completed(bitfury, work);
+	/* Keep no more than the last 90 seconds worth of work items in the
+	 * hashlist */
+	aged = age_queued_work(bitfury, 90.0);
+	if (aged) {
+		applog(LOG_DEBUG, "%s %d: Aged %d work items", bitfury->drv->name,
+		       bitfury->device_id, aged);
 	}
-	wr_unlock(&bitfury->qlock);
 
 	if (unlikely(bitfury->usbinfo.nodev)) {
 		applog(LOG_WARNING, "%s %d: Device disappeared, disabling thread",
