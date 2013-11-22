@@ -270,7 +270,7 @@ out_close:
 	return false;
 }
 
-static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
+static struct cgpu_info *bitfury_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *bitfury;
 	struct bitfury_info *info;
@@ -308,7 +308,7 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 out:
 		bitfury = usb_free_cgpu(bitfury);
 	}
-	return ret;
+	return bitfury;
 }
 
 static void bitfury_detect(bool __maybe_unused hotplug)

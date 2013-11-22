@@ -741,7 +741,7 @@ static void bitburner_get_version(struct cgpu_info *avalon)
 	}
 }
 
-static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found)
+static struct cgpu_info *avalon_detect_one(libusb_device *dev, struct usb_find_devices *found)
 {
 	int baud, miner_count, asic_count, timeout, frequency;
 	int this_option_offset;
@@ -851,7 +851,7 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 		bitburner_get_version(avalon);
 	}
 
-	return true;
+	return avalon;
 
 unshin:
 
@@ -864,7 +864,7 @@ shin:
 
 	avalon = usb_free_cgpu(avalon);
 
-	return false;
+	return NULL;
 }
 
 static void avalon_detect(bool __maybe_unused hotplug)

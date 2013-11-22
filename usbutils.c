@@ -1410,6 +1410,7 @@ void usb_uninit(struct cgpu_info *cgpu)
 static void release_cgpu(struct cgpu_info *cgpu)
 {
 	struct cg_usb_device *cgusb = cgpu->usbdev;
+	bool initted = cgpu->usbinfo.initialised;
 	struct cgpu_info *lookcgpu;
 	int i;
 
@@ -1420,9 +1421,11 @@ static void release_cgpu(struct cgpu_info *cgpu)
 	applog(LOG_DEBUG, "USB release %s%i",
 			cgpu->drv->name, cgpu->device_id);
 
-	zombie_devs++;
-	total_count--;
-	drv_count[cgpu->drv->drv_id].count--;
+	if (initted) {
+		zombie_devs++;
+		total_count--;
+		drv_count[cgpu->drv->drv_id].count--;
+	}
 
 	cgpu->usbinfo.nodev = true;
 	cgpu->usbinfo.nodev_count++;
@@ -1432,8 +1435,10 @@ static void release_cgpu(struct cgpu_info *cgpu)
 	for (i = 0; i < total_devices; i++) {
 		lookcgpu = get_devices(i);
 		if (lookcgpu != cgpu && lookcgpu->usbdev == cgusb) {
-			total_count--;
-			drv_count[lookcgpu->drv->drv_id].count--;
+			if (initted) {
+				total_count--;
+				drv_count[lookcgpu->drv->drv_id].count--;
+			}
 
 			lookcgpu->usbinfo.nodev = true;
 			lookcgpu->usbinfo.nodev_count++;
@@ -1978,11 +1983,12 @@ static struct usb_find_devices *usb_check(__maybe_unused struct device_drv *drv,
 	return NULL;
 }
 
-void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_device *, struct usb_find_devices *))
+void usb_detect(struct device_drv *drv, struct cgpu_info *(*device_detect)(struct libusb_device *, struct usb_find_devices *))
 {
 	libusb_device **list;
 	ssize_t count, i;
 	struct usb_find_devices *found;
+	struct cgpu_info *cgpu;
 
 	applog(LOG_DEBUG, "USB scan devices: checking for %s devices", drv->name);
 
@@ -2027,9 +2033,11 @@ void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_devi
 			if (is_in_use(list[i]) || cgminer_usb_lock(drv, list[i]) == false)
 				free(found);
 			else {
-				if (!device_detect(list[i], found))
+				cgpu = device_detect(list[i], found);
+				if (!cgpu)
 					cgminer_usb_unlock(drv, list[i]);
 				else {
+					cgpu->usbinfo.initialised = true;
 					total_count++;
 					drv_count[drv->drv_id].count++;
 				}

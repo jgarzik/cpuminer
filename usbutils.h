@@ -230,6 +230,7 @@ struct cg_usb_info {
 	uint8_t device_address;
 	int usbstat;
 	bool nodev;
+	bool initialised;
 	int nodev_count;
 	struct timeval last_nodev;
 	uint32_t ioerr_count;
@@ -388,7 +389,7 @@ struct cgpu_info *usb_alloc_cgpu(struct device_drv *drv, int threads);
 struct cgpu_info *usb_free_cgpu(struct cgpu_info *cgpu);
 void usb_uninit(struct cgpu_info *cgpu);
 bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found);
-void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_device *, struct usb_find_devices *));
+void usb_detect(struct device_drv *drv, struct cgpu_info *(*device_detect)(struct libusb_device *, struct usb_find_devices *));
 struct api_data *api_usb_stats(int *count);
 void update_usb_stats(struct cgpu_info *cgpu);
 int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, int timeout, const char *end, enum usb_cmds cmd, bool readonce, bool cancellable);
