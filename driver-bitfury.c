@@ -576,7 +576,7 @@ static int64_t bf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 					  &amount, ms_diff, C_BF1_GETRES);
 	total += amount;
 	while (amount) {
-		usb_read_once_timeout(bitfury, readbuf + total, 512, &amount, 10,
+		usb_read_once_timeout(bitfury, readbuf + total, 512 - total, &amount, 10,
 				      C_BF1_GETRES);
 		total += amount;
 	};
