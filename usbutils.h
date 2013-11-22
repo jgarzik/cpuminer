@@ -183,6 +183,11 @@ enum usb_types {
 };
 
 #define USB_MAX_READ 8192
+/*
+ * We add 4: 1 for null, 2 for FTDI status and 1 to round to 4 bytes
+ * If a single device ever has multiple end points then it will need
+ * multiple of these
+ */
 #define USB_READ_BUFSIZE (USB_MAX_READ + 4)
 
 struct cg_usb_device {
@@ -251,13 +256,6 @@ struct cg_usb_info {
 	double total_read_delay;
 	uint64_t write_delay_count;
 	double total_write_delay;
-
-	/*
-	 * We add 4: 1 for null, 2 for FTDI status and 1 to round to 4 bytes
-	 * If a single device ever has multiple end points then it will need
-	 * multiple of these
-	 */
-	unsigned char bulkbuf[USB_READ_BUFSIZE];
 
 	uint64_t tmo_count;
 	struct cg_usb_tmo usb_tmo[USB_TMOS];
