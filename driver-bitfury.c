@@ -355,7 +355,11 @@ static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *inf
 		inc_hw_errors(thr);
 		return;
 	}
-	info->valid = true;
+	/* Set the device start time from when we first get valid results */
+	if (unlikely(!info->valid)) {
+		info->valid = true;
+		cgtime(&bitfury->dev_start_tv);
+	}
 	set_work_ntime(work, timestamp);
 	if (submit_nonce(thr, work, nonce)) {
 		mutex_lock(&info->lock);
@@ -617,8 +621,10 @@ out:
 		if (!found) {
 			if (likely(info->valid))
 				inc_hw_errors(thr);
-		} else
+		} else if (unlikely(!info->valid)) {
 			info->valid = true;
+			cgtime(&bitfury->dev_start_tv);
+		}
 	}
 
 	cgtime(&tv_now);
