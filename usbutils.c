@@ -57,14 +57,15 @@
 
 #define USB_CONFIG 1
 
+#define BITFURY_TIMEOUT_MS 999
+#define ICARUS_TIMEOUT_MS 999
+
 #ifdef WIN32
 #define BFLSC_TIMEOUT_MS 999
 #define BITFORCE_TIMEOUT_MS 999
-#define BITFURY_TIMEOUT_MS 999
 #define MODMINER_TIMEOUT_MS 999
 #define AVALON_TIMEOUT_MS 999
 #define KLONDIKE_TIMEOUT_MS 999
-#define ICARUS_TIMEOUT_MS 999
 #define HASHFAST_TIMEOUT_MS 999
 
 /* The safety timeout we use, cancelling async transfers on windows that fail
@@ -73,11 +74,9 @@
 #else
 #define BFLSC_TIMEOUT_MS 300
 #define BITFORCE_TIMEOUT_MS 200
-#define BITFURY_TIMEOUT_MS 100
 #define MODMINER_TIMEOUT_MS 100
 #define AVALON_TIMEOUT_MS 200
 #define KLONDIKE_TIMEOUT_MS 200
-#define ICARUS_TIMEOUT_MS 200
 #define HASHFAST_TIMEOUT_MS 200
 #endif
 
