@@ -98,7 +98,7 @@
 
 // Structure definitions, LE platforms
 
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#if __BYTE_ORDER == __BIG_ENDIAN
 #include "hf_protocol_be.h"
 #else
 // Generic header

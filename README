@@ -235,7 +235,8 @@ See FGPA-README for more information regarding this.
 
 Cgminer should automatically find all of your Avalon ASIC, BFL ASIC, BitForce
 FPGAs, Icarus bitstream FPGAs, Klondike ASIC, ASICMINER usb block erupters,
-KnC ASICs, BaB ASICs, Hashfast ASICs and ModMiner FPGAs.
+KnC ASICs, BaB ASICs, Hashfast ASICs, ModMiner FPGAs, BPMC/BGMC BF1 USB ASICs
+and Bi*fury USB ASICs.
 
 ---
 
@@ -244,13 +245,23 @@ SETTING UP USB DEVICES
 WINDOWS:
 
 On windows, the direct USB support requires the installation of a WinUSB
-driver (NOT the ftdi_sio driver), and attach it to your devices.
-The easiest way to do this is to use the zadig utility which will install the
-drivers for you and then once you plug in your device you can choose the
+driver (NOT the ftdi_sio driver), and attach it to the chosen USB device.
+When configuring your device, plug it in and wait for windows to attempt to
+install a driver on its own. It may think it has succeeded or failed but wait
+for it to finish regardless. This is NOT the driver you want installed. At this
+point you need to associate your device with the WinUSB driver. The easiest
+way to do this is to use the zadig utility which you must right click on and
+run as administrator. Then once you plug in your device you can choose the
 "list all devices" from the "option" menu and you should be able to see the
 device as something like: "BitFORCE SHA256 SC". Choose the install or replace
 driver option and select WinUSB. You can either google for zadig or download
 it from the cgminer directory in the DOWNLOADS link above.
+
+When you first switch a device over to WinUSB with zadig and it shows that
+correctly on the left of the zadig window, but it still gives permission
+errors, you may need to unplug the USB miner and then plug it back in. Some
+users may need to reboot at this point.
+
 
 LINUX:
 
@@ -275,6 +286,19 @@ directory with the following command:
 
 After this you can either manually restart udev and re-login, or more easily
 just reboot.
+
+
+OSX:
+
+On OSX, like Linux, no drivers need to be installed. However some devices
+like the bitfury USB sticks automatically load a driver thinking they're a
+modem and the driver needs to be unloaded for cgminer to work:
+
+sudo kextunload -b com.apple.driver.AppleUSBCDC
+sudo kextunload -b com.apple.driver.AppleUSBCDCACMData
+
+
+---
 
 Advanced USB options:
 

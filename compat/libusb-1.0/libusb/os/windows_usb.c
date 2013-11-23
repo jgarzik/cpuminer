@@ -1822,9 +1822,6 @@ static int windows_submit_transfer(struct usbi_transfer *itransfer)
 		return submit_control_transfer(itransfer);
 	case LIBUSB_TRANSFER_TYPE_BULK:
 	case LIBUSB_TRANSFER_TYPE_INTERRUPT:
-		if (IS_XFEROUT(transfer) &&
-		    transfer->flags & LIBUSB_TRANSFER_ADD_ZERO_PACKET)
-			return LIBUSB_ERROR_NOT_SUPPORTED;
 		return submit_bulk_transfer(itransfer);
 	case LIBUSB_TRANSFER_TYPE_ISOCHRONOUS:
 		return submit_iso_transfer(itransfer);
@@ -2391,20 +2388,8 @@ static int winusb_configure_endpoints(struct libusb_device_handle *dev_handle, i
 			PIPE_TRANSFER_TIMEOUT, sizeof(ULONG), &timeout)) {
 			usbi_dbg("failed to set PIPE_TRANSFER_TIMEOUT for control endpoint %02X", endpoint_address);
 		}
-		if (i == -1) continue;	// Other policies don't apply to control endpoint
-		policy = false;
-		if (!WinUsb_SetPipePolicy(winusb_handle, endpoint_address,
-			SHORT_PACKET_TERMINATE, sizeof(UCHAR), &policy)) {
-			usbi_dbg("failed to disable SHORT_PACKET_TERMINATE for endpoint %02X", endpoint_address);
-		}
-		if (!WinUsb_SetPipePolicy(winusb_handle, endpoint_address,
-			IGNORE_SHORT_PACKETS, sizeof(UCHAR), &policy)) {
-			usbi_dbg("failed to disable IGNORE_SHORT_PACKETS for endpoint %02X", endpoint_address);
-		}
-		if (!WinUsb_SetPipePolicy(winusb_handle, endpoint_address,
-			ALLOW_PARTIAL_READS, sizeof(UCHAR), &policy)) {
-			usbi_dbg("failed to disable ALLOW_PARTIAL_READS for endpoint %02X", endpoint_address);
-		}
+		if (i == -1)
+			continue;	// Other policies don't apply to control endpoint
 		policy = true;
 		if (!WinUsb_SetPipePolicy(winusb_handle, endpoint_address,
 			AUTO_CLEAR_STALL, sizeof(UCHAR), &policy)) {
@@ -2649,6 +2634,8 @@ static int winusb_submit_bulk_transfer(struct usbi_transfer *itransfer)
 	bool ret;
 	int current_interface;
 	struct winfd wfd;
+	ULONG ppolicy = sizeof(UCHAR);
+	UCHAR policy;
 
 	CHECK_WINUSB_AVAILABLE;
 
@@ -2671,9 +2658,20 @@ static int winusb_submit_bulk_transfer(struct usbi_transfer *itransfer)
 	}
 
 	if (IS_XFERIN(transfer)) {
-		usbi_dbg("reading %d bytes", transfer->length);
+		WinUsb_GetPipePolicy(wfd.handle, transfer->endpoint, AUTO_CLEAR_STALL, &ppolicy, &policy);
+		if (!policy) {
+			policy = TRUE;
+			WinUsb_SetPipePolicy(wfd.handle, transfer->endpoint, AUTO_CLEAR_STALL, ppolicy, &policy);
+		}
 		ret = WinUsb_ReadPipe(wfd.handle, transfer->endpoint, transfer->buffer, transfer->length, NULL, wfd.overlapped);
 	} else {
+		if (transfer->flags & LIBUSB_TRANSFER_ADD_ZERO_PACKET) {
+			WinUsb_GetPipePolicy(wfd.handle, transfer->endpoint, SHORT_PACKET_TERMINATE, &ppolicy, &policy);
+			if (!policy) {
+				policy = TRUE;
+				WinUsb_SetPipePolicy(wfd.handle, transfer->endpoint, SHORT_PACKET_TERMINATE, ppolicy, &policy);
+			}
+		}
 		usbi_dbg("writing %d bytes", transfer->length);
 		ret = WinUsb_WritePipe(wfd.handle, transfer->endpoint, transfer->buffer, transfer->length, NULL, wfd.overlapped);
 	}

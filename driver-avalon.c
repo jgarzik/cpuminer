@@ -142,12 +142,10 @@ static int avalon_write(struct cgpu_info *avalon, char *buf, ssize_t len, int ep
 	return AVA_SEND_OK;
 }
 
-static int avalon_send_task(const struct avalon_task *at, struct cgpu_info *avalon,
-			    struct avalon_info *info)
-
+static int avalon_send_task(const struct avalon_task *at, struct cgpu_info *avalon)
 {
 	uint8_t buf[AVALON_WRITE_SIZE + 4 * AVALON_DEFAULT_ASIC_NUM];
-	int delay, ret, i, ep = C_AVALON_TASK;
+	int ret, i, ep = C_AVALON_TASK;
 	uint32_t nonce_range;
 	size_t nr_len;
 
@@ -188,10 +186,6 @@ static int avalon_send_task(const struct avalon_task *at, struct cgpu_info *aval
 	tt |= ((buf[4] & 0x80) ? (1 << 0) : 0);
 	buf[4] = tt;
 #endif
-	delay = nr_len * 10 * 1000000;
-	delay = delay / info->baud;
-	delay += 4000;
-
 	if (at->reset) {
 		ep = C_AVALON_RESET;
 		nr_len = 1;
@@ -200,14 +194,7 @@ static int avalon_send_task(const struct avalon_task *at, struct cgpu_info *aval
 		applog(LOG_DEBUG, "Avalon: Sent(%u):", (unsigned int)nr_len);
 		hexdump(buf, nr_len);
 	}
-	/* Sleep from the last time we sent data */
-	cgsleep_us_r(&info->cgsent, info->send_delay);
-
-	cgsleep_prepare_r(&info->cgsent);
 	ret = avalon_write(avalon, (char *)buf, nr_len, ep);
-
-	applog(LOG_DEBUG, "Avalon: Sent: Buffer delay: %dus", info->send_delay);
-	info->send_delay = delay;
 
 	return ret;
 }
@@ -291,14 +278,31 @@ static inline bool avalon_cts(char c)
 
 static int avalon_read(struct cgpu_info *avalon, char *buf, size_t bufsize, int ep)
 {
-	int err, amount;
+	size_t total = 0, readsize = bufsize + 2;
+	char readbuf[AVALON_READBUF_SIZE];
+	int err, amount, ofs = 2, cp;
 
-	err = usb_read_once(avalon, buf, bufsize, &amount, ep);
+	err = usb_read_once(avalon, readbuf, readsize, &amount, ep);
 	applog(LOG_DEBUG, "%s%i: Get avalon read got err %d",
 	       avalon->drv->name, avalon->device_id, err);
-	if (unlikely(err && err != LIBUSB_ERROR_TIMEOUT))
-		amount = -1;
-	return amount;
+	if (err && err != LIBUSB_ERROR_TIMEOUT)
+		return err;
+
+	if (amount < 2)
+		goto out;
+
+	/* The first 2 of every 64 bytes are status on FTDIRL */
+	while (amount > 2) {
+		cp = amount - 2;
+		if (cp > 62)
+			cp = 62;
+		memcpy(&buf[total], &readbuf[ofs], cp);
+		total += cp;
+		amount -= cp + 2;
+		ofs += 64;
+	}
+out:
+	return total;
 }
 
 static int avalon_reset(struct cgpu_info *avalon, bool initial)
@@ -320,7 +324,7 @@ static int avalon_reset(struct cgpu_info *avalon, bool initial)
 			 AVALON_DEFAULT_FREQUENCY);
 
 	wait_avalon_ready(avalon);
-	ret = avalon_send_task(&at, avalon, info);
+	ret = avalon_send_task(&at, avalon);
 	if (unlikely(ret == AVA_SEND_ERROR))
 		return -1;
 
@@ -561,7 +565,8 @@ static void avalon_idle(struct cgpu_info *avalon, struct avalon_info *info)
 		avalon_init_task(&at, 0, 0, info->fan_pwm, info->timeout,
 				 info->asic_count, info->miner_count, 1, 1,
 				 info->frequency);
-		avalon_send_task(&at, avalon, info);
+		if (avalon_send_task(&at, avalon) == AVA_SEND_ERROR)
+			break;
 	}
 	applog(LOG_WARNING, "%s%i: Idling %d miners", avalon->drv->name, avalon->device_id, i);
 	wait_avalon_ready(avalon);
@@ -736,7 +741,7 @@ static void bitburner_get_version(struct cgpu_info *avalon)
 	}
 }
 
-static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found)
+static struct cgpu_info *avalon_detect_one(libusb_device *dev, struct usb_find_devices *found)
 {
 	int baud, miner_count, asic_count, timeout, frequency;
 	int this_option_offset;
@@ -761,7 +766,9 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 				 &asic_count, &timeout, &frequency,
 				 (usb_ident(avalon) == IDENT_BBF && opt_bitburner_fury_options != NULL) ? opt_bitburner_fury_options : opt_avalon_options);
 
-	avalon->usbdev->usb_type = USB_TYPE_FTDI;
+	/* Even though this is an FTDI type chip, we want to do the parsing
+	 * all ourselves so set it to std usb type */
+	avalon->usbdev->usb_type = USB_TYPE_STD;
 
 	/* We have a real Avalon! */
 	avalon_initialise(avalon);
@@ -844,7 +851,7 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 		bitburner_get_version(avalon);
 	}
 
-	return true;
+	return avalon;
 
 unshin:
 
@@ -857,7 +864,7 @@ shin:
 
 	avalon = usb_free_cgpu(avalon);
 
-	return false;
+	return NULL;
 }
 
 static void avalon_detect(bool __maybe_unused hotplug)
@@ -1152,7 +1159,7 @@ static void *avalon_send_tasks(void *userdata)
 			}
 			mutex_unlock(&info->qlock);
 
-			ret = avalon_send_task(&at, avalon, info);
+			ret = avalon_send_task(&at, avalon);
 
 			if (unlikely(ret == AVA_SEND_ERROR)) {
 				/* Send errors are fatal */

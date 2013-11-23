@@ -147,20 +147,26 @@ static bool hfa_send_packet(struct cgpu_info *hashfast, struct hf_header *h, int
 
 static bool hfa_get_header(struct cgpu_info *hashfast, struct hf_header *h, uint8_t *computed_crc)
 {
-	int amount, ret, orig_len, len, ofs = 0, reads = 0;
+	int amount, ret, orig_len, len, ofs = 0;
+	cgtimer_t ts_start;
 	char buf[512];
 	char *header;
+
+	orig_len = len = sizeof(*h);
 
 	/* Read for up to 200ms till we find the first occurrence of HF_PREAMBLE
 	 * though it should be the first byte unless we get woefully out of
 	 * sync. */
-	orig_len = len = sizeof(*h);
+	cgtimer_time(&ts_start);
 	do {
+		cgtimer_t ts_now, ts_diff;
 
-		if (++reads > 20)
+		cgtimer_time(&ts_now);
+		cgtimer_sub(&ts_now, &ts_start, &ts_diff);
+		if (cgtimer_to_ms(&ts_diff) > 200)
 			return false;
 
-		ret = usb_read_timeout(hashfast, buf + ofs, len, &amount, 10, C_HF_GETHEADER);
+		ret = usb_read(hashfast, buf + ofs, len, &amount, C_HF_GETHEADER);
 		if (unlikely(ret && ret != LIBUSB_ERROR_TIMEOUT))
 			return false;
 		ofs += amount;
@@ -206,11 +212,11 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	struct hf_usb_init_header usb_init, *hu = &usb_init;
 	struct hf_usb_init_base *db;
         struct hf_usb_init_options *ho;
+	int retries = 0, i;
 	char buf[1024];
 	struct hf_header *h = (struct hf_header *)buf;
 	uint8_t hcrc;
 	bool ret;
-	int i;
 
         // XXX Following items need to be defaults with command-line overrides
 	info->hash_clock_rate = 550;	// Hash clock rate in Mhz
@@ -260,7 +266,9 @@ tryagain:
 		applog(LOG_WARNING, "HFA %d: OP_USB_INIT: Tossing packet, valid but unexpected type %d",
                         hashfast->device_id, h->operation_code);
 		hfa_get_data(hashfast, buf, h->data_length);
-		goto tryagain;
+		if (retries++ < 3)
+			goto tryagain;
+		return false;
 	}
 
 	applog(LOG_DEBUG, "HFA %d: Good reply to OP_USB_INIT", hashfast->device_id);
@@ -409,7 +417,7 @@ static bool hfa_initialise(struct cgpu_info *hashfast)
 	return (err == 7);
 }
 
-static bool hfa_detect_one_usb(libusb_device *dev, struct usb_find_devices *found)
+static struct cgpu_info *hfa_detect_one(libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *hashfast;
 
@@ -419,19 +427,25 @@ static bool hfa_detect_one_usb(libusb_device *dev, struct usb_find_devices *foun
 
 	if (!usb_init(hashfast, dev, found)) {
 		hashfast = usb_free_cgpu(hashfast);
-		return false;
+		return NULL;
 	}
 
 	hashfast->usbdev->usb_type = USB_TYPE_STD;
 
 	if (!hfa_initialise(hashfast)) {
 		hashfast = usb_free_cgpu(hashfast);
-		return false;
+		return NULL;
 	}
 
-	add_cgpu(hashfast);
+	if (!hfa_detect_common(hashfast)) {
+		usb_uninit(hashfast);
+		hashfast = usb_free_cgpu(hashfast);
+		return NULL;
+	}
+	if (!add_cgpu(hashfast))
+		return NULL;
 
-	return hfa_detect_common(hashfast);
+	return hashfast;
 }
 
 static void hfa_detect(bool hotplug)
@@ -439,7 +453,7 @@ static void hfa_detect(bool hotplug)
 	/* Set up the CRC tables only once. */
 	if (!hotplug)
 		hfa_init_crc8();
-	usb_detect(&hashfast_drv, hfa_detect_one_usb);
+	usb_detect(&hashfast_drv, hfa_detect_one);
 }
 
 static bool hfa_get_packet(struct cgpu_info *hashfast, struct hf_header *h)

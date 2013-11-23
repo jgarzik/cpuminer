@@ -1626,9 +1626,13 @@ uint64_t api_trylock(void *lock, const char *file, const char *func, const int l
 	LOCKINFO *info;
 	uint64_t id;
 
+	locklock();
+
 	info = findlock(lock, CGLOCK_UNKNOWN, file, func, linenum);
 	id = lock_id++;
 	addgettry(info, id, file, func, linenum, false);
+
+	lockunlock();
 
 	return id;
 }
@@ -4378,7 +4382,7 @@ void api(int api_thr_id)
 	struct sockaddr_in cli;
 	socklen_t clisiz;
 	char cmdbuf[100];
-	char *cmd;
+	char *cmd = NULL;
 	char *param;
 	bool addrok;
 	char group;
@@ -4586,6 +4590,7 @@ void api(int api_thr_id)
 								}
 							}
 						}
+						json_decref(json_config);
 					}
 				}
 

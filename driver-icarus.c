@@ -786,7 +786,7 @@ static void get_options(int this_option_offset, struct cgpu_info *icarus, int *b
 	}
 }
 
-static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
+static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	int this_option_offset = ++option_offset;
 	struct ICARUS_INFO *info;
@@ -1010,7 +1010,7 @@ cmr2_retry:
 		}
 	}
 
-	return true;
+	return icarus;
 
 unshin:
 
@@ -1022,7 +1022,7 @@ shin:
 
 	icarus = usb_free_cgpu(icarus);
 
-	return false;
+	return NULL;
 }
 
 static void icarus_detect(bool __maybe_unused hotplug)

@@ -2484,7 +2484,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 				       hashshow, cgpu->drv->name, cgpu->device_id, resubmit ? "(resubmit)" : "", worktime);
 		}
 		sharelog("accept", work);
-		if (opt_shares && total_accepted >= opt_shares) {
+		if (opt_shares && total_diff_accepted >= opt_shares) {
 			applog(LOG_WARNING, "Successfully mined %d accepted shares as requested and exiting.", opt_shares);
 			kill_work();
 			return;
@@ -3529,6 +3529,17 @@ static void _copy_work(struct work *work, const struct work *base_work, int noff
 		work->coinbase = strdup(base_work->coinbase);
 }
 
+void set_work_ntime(struct work *work, int ntime)
+{
+	uint32_t *work_ntime = (uint32_t *)(work->data + 68);
+
+	*work_ntime = htobe32(ntime);
+	if (work->ntime) {
+		free(work->ntime);
+		work->ntime = bin2hex((unsigned char *)work_ntime, 4);
+	}
+}
+
 /* Generates a copy of an existing work struct, creating fresh heap allocations
  * for all dynamically allocated arrays within the struct. noffset is used for
  * when a driver has internally rolled the ntime, noffset is a relative value.
@@ -3851,11 +3862,13 @@ int restart_wait(struct thr_info *thr, unsigned int mstime)
 	
 static void flush_queue(struct cgpu_info *cgpu);
 
-static void restart_threads(void)
+static void *restart_thread(void __maybe_unused *arg)
 {
 	struct pool *cp = current_pool();
 	struct cgpu_info *cgpu;
-	int i;
+	int i, mt;
+
+	pthread_detach(pthread_self());
 
 	/* Artificially set the lagging flag to avoid pool not providing work
 	 * fast enough  messages after every long poll */
@@ -3865,15 +3878,19 @@ static void restart_threads(void)
 	discard_stale();
 
 	rd_lock(&mining_thr_lock);
-	for (i = 0; i < mining_threads; i++) {
+	mt = mining_threads;
+	rd_unlock(&mining_thr_lock);
+
+	for (i = 0; i < mt; i++) {
 		cgpu = mining_thr[i]->cgpu;
 		if (unlikely(!cgpu))
+			continue;
+		if (cgpu->deven != DEV_ENABLED)
 			continue;
 		mining_thr[i]->work_restart = true;
 		flush_queue(cgpu);
 		cgpu->drv->flush_work(cgpu);
 	}
-	rd_unlock(&mining_thr_lock);
 
 	mutex_lock(&restart_lock);
 	pthread_cond_broadcast(&restart_cond);
@@ -3885,6 +3902,17 @@ static void restart_threads(void)
 	 * early. */
 	cancel_usb_transfers();
 #endif
+	return NULL;
+}
+
+/* In order to prevent a deadlock via the various drv->flush_work
+ * implementations we send the restart messages via a separate thread. */
+static void restart_threads(void)
+{
+	pthread_t rthread;
+
+	if (unlikely(pthread_create(&rthread, NULL, restart_thread, NULL)))
+		quit(1, "Failed to create restart thread");
 }
 
 static void signal_work_update(void)
@@ -4436,6 +4464,30 @@ void zero_stats(void)
 	}
 }
 
+static void set_highprio(void)
+{
+#ifndef WIN32
+	int ret = nice(-10);
+
+	if (!ret)
+		applog(LOG_DEBUG, "Unable to set thread to high priority");
+#else
+	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+#endif
+}
+
+static void set_lowprio(void)
+{
+#ifndef WIN32
+	int ret = nice(10);
+
+	if (!ret)
+		applog(LOG_INFO, "Unable to set thread to low priority");
+#else
+	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST);
+#endif
+}
+
 #ifdef HAVE_CURSES
 static void display_pools(void)
 {
@@ -4841,6 +4893,7 @@ static void *api_thread(void *userdata)
 
 	RenameThread("api");
 
+	set_lowprio();
 	api(api_thr_id);
 
 	PTH(mythr) = 0L;
@@ -5503,7 +5556,7 @@ retry_stratum:
 	}
 
 	/* Probe for GBT support on first pass */
-	if (!pool->probed && !opt_fix_protocol) {
+	if (!pool->probed) {
 		applog(LOG_DEBUG, "Probing for GBT support");
 		val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
 				    gbt_req, true, false, &rolltime, pool, false);
@@ -6330,6 +6383,30 @@ void __work_completed(struct cgpu_info *cgpu, struct work *work)
 	cgpu->queued_count--;
 	HASH_DEL(cgpu->queued_work, work);
 }
+
+/* This iterates over a queued hashlist finding work started more than secs
+ * seconds ago and discards the work as completed. The driver must set the
+ * work->tv_work_start value appropriately. Returns the number of items aged. */
+int age_queued_work(struct cgpu_info *cgpu, double secs)
+{
+	struct work *work, *tmp;
+	struct timeval tv_now;
+	int aged = 0;
+
+	cgtime(&tv_now);
+
+	wr_lock(&cgpu->qlock);
+	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
+		if (tdiff(&tv_now, &work->tv_work_start) > secs) {
+			__work_completed(cgpu, work);
+			aged++;
+		}
+	}
+	wr_unlock(&cgpu->qlock);
+
+	return aged;
+}
+
 /* This function should be used by queued device drivers when they're sure
  * the work struct is no longer in use. */
 void work_completed(struct cgpu_info *cgpu, struct work *work)
@@ -6501,6 +6578,7 @@ void *miner_thread(void *userdata)
 	applog(LOG_DEBUG, "Waiting on sem in miner thread");
 	cgsem_wait(&mythr->sem);
 
+	set_highprio();
 	drv->hash_work(mythr);
 out:
 	drv->thread_shutdown(mythr);
@@ -6779,6 +6857,8 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 
 	RenameThread("watchpool");
 
+	set_lowprio();
+
 	while (42) {
 		struct timeval now;
 		int i;
@@ -6862,6 +6942,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 
 	RenameThread("watchdog");
 
+	set_lowprio();
 	memset(&zero_tv, 0, sizeof(struct timeval));
 	cgtime(&rotate_tv);
 
@@ -7112,9 +7193,9 @@ void print_summary(void)
 	}
 
 	if (opt_shares) {
-		applog(LOG_WARNING, "Mined %d accepted shares of %d requested\n", total_accepted, opt_shares);
-		if (opt_shares > total_accepted)
-			applog(LOG_WARNING, "WARNING - Mined only %d shares of %d requested.", total_accepted, opt_shares);
+		applog(LOG_WARNING, "Mined %.0f accepted shares of %d requested\n", total_diff_accepted, opt_shares);
+		if (opt_shares > total_diff_accepted)
+			applog(LOG_WARNING, "WARNING - Mined only %.0f shares of %d requested.", total_diff_accepted, opt_shares);
 	}
 	applog(LOG_WARNING, " ");
 
@@ -7649,6 +7730,8 @@ static void *hotplug_thread(void __maybe_unused *userdata)
 
 	RenameThread("hotplug");
 
+	set_lowprio();
+
 	hotplug_mode = true;
 
 	cgsleep_ms(5000);
@@ -7779,6 +7862,13 @@ int main(int argc, char *argv[])
 
 	if (unlikely(pthread_cond_init(&gws_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init gws_cond");
+
+	/* Create a unique get work queue */
+	getq = tq_new();
+	if (!getq)
+		quit(1, "Failed to create getq");
+	/* We use the getq mutex as the staged lock */
+	stgd_lock = &getq->mutex;
 
 	initialise_usb();
 
@@ -8005,13 +8095,6 @@ int main(int argc, char *argv[])
 		if (!mining_thr[i])
 			quit(1, "Failed to calloc mining_thr[%d]", i);
 	}
-
-	/* Create a unique get work queue */
-	getq = tq_new();
-	if (!getq)
-		quit(1, "Failed to create getq");
-	/* We use the getq mutex as the staged lock */
-	stgd_lock = &getq->mutex;
 
 	if (opt_benchmark)
 		goto begin_bench;
