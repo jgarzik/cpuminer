@@ -411,7 +411,7 @@ static bool hfa_initialise(struct cgpu_info *hashfast)
 	return (err == 7);
 }
 
-static bool hfa_detect_one_usb(libusb_device *dev, struct usb_find_devices *found)
+static struct cgpu_info *hfa_detect_one(libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *hashfast;
 
@@ -421,25 +421,25 @@ static bool hfa_detect_one_usb(libusb_device *dev, struct usb_find_devices *foun
 
 	if (!usb_init(hashfast, dev, found)) {
 		hashfast = usb_free_cgpu(hashfast);
-		return false;
+		return NULL;
 	}
 
 	hashfast->usbdev->usb_type = USB_TYPE_STD;
 
 	if (!hfa_initialise(hashfast)) {
 		hashfast = usb_free_cgpu(hashfast);
-		return false;
+		return NULL;
 	}
 
 	if (!hfa_detect_common(hashfast)) {
 		usb_uninit(hashfast);
 		hashfast = usb_free_cgpu(hashfast);
-		return false;
+		return NULL;
 	}
 	if (!add_cgpu(hashfast))
-		return false;
+		return NULL;
 
-	return true;
+	return hashfast;
 }
 
 static void hfa_detect(bool hotplug)
@@ -447,7 +447,7 @@ static void hfa_detect(bool hotplug)
 	/* Set up the CRC tables only once. */
 	if (!hotplug)
 		hfa_init_crc8();
-	usb_detect(&hashfast_drv, hfa_detect_one_usb);
+	usb_detect(&hashfast_drv, hfa_detect_one);
 }
 
 static bool hfa_get_packet(struct cgpu_info *hashfast, struct hf_header *h)
