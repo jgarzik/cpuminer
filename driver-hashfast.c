@@ -147,20 +147,26 @@ static bool hfa_send_packet(struct cgpu_info *hashfast, struct hf_header *h, int
 
 static bool hfa_get_header(struct cgpu_info *hashfast, struct hf_header *h, uint8_t *computed_crc)
 {
-	int amount, ret, orig_len, len, ofs = 0, reads = 0;
+	int amount, ret, orig_len, len, ofs = 0;
+	cgtimer_t ts_start;
 	char buf[512];
 	char *header;
+
+	orig_len = len = sizeof(*h);
 
 	/* Read for up to 200ms till we find the first occurrence of HF_PREAMBLE
 	 * though it should be the first byte unless we get woefully out of
 	 * sync. */
-	orig_len = len = sizeof(*h);
+	cgtimer_time(&ts_start);
 	do {
+		cgtimer_t ts_now, ts_diff;
 
-		if (++reads > 20)
+		cgtimer_time(&ts_now);
+		cgtimer_sub(&ts_now, &ts_start, &ts_diff);
+		if (cgtimer_to_ms(&ts_diff) > 200)
 			return false;
 
-		ret = usb_read_timeout(hashfast, buf + ofs, len, &amount, 10, C_HF_GETHEADER);
+		ret = usb_read(hashfast, buf + ofs, len, &amount, C_HF_GETHEADER);
 		if (unlikely(ret && ret != LIBUSB_ERROR_TIMEOUT))
 			return false;
 		ofs += amount;
