@@ -209,7 +209,7 @@ static const char *hf_usb_init_errors[] = {
 
 static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
-	struct hf_usb_init_header usb_init, *hu = &usb_init;
+	struct hf_usb_init_header usb_init[2], *hu = usb_init;
 	struct hf_usb_init_base *db;
         struct hf_usb_init_options *ho;
 	int retries = 0, i;
@@ -218,9 +218,9 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	uint8_t hcrc;
 	bool ret;
 
-        // XXX Following items need to be defaults with command-line overrides
-	info->hash_clock_rate = 550;	// Hash clock rate in Mhz
-	info->group_ntime_roll = 1;
+	/* Hash clock rate in Mhz */
+	info->hash_clock_rate = opt_hfa_hash_clock ? opt_hfa_hash_clock : 550;
+	info->group_ntime_roll = opt_hfa_ntime_roll ? opt_hfa_ntime_roll : 1;
 	info->core_ntime_roll = 1;
 
 	// Assemble the USB_INIT request
@@ -228,6 +228,11 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	hu->preamble = HF_PREAMBLE;
 	hu->operation_code = OP_USB_INIT;
 	hu->protocol = PROTOCOL_GLOBAL_WORK_QUEUE;	// Protocol to use
+	// Force PLL bypass
+	if (opt_hfa_pll_bypass) {
+		hu->user_configuration = 1;
+		hu->pll_bypass = 1;
+	}
 	hu->hash_clock = info->hash_clock_rate;		// Hash clock rate in Mhz
 	if (info->group_ntime_roll > 1 && info->core_ntime_roll) {
 		ho = (struct hf_usb_init_options *)(hu + 1);
