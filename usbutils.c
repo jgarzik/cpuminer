@@ -23,7 +23,7 @@
 /* Timeout errors on writes are basically unrecoverable */
 #define WRITENODEV(err) ((err) != LIBUSB_SUCCESS)
 
-#define NOCONTROLDEV(err) ((err) != LIBUSB_SUCCESS)
+#define NOCONTROLDEV(err) ((err) < 0 && (err) != LIBUSB_SUCCESS)
 
 /*
  * WARNING - these assume DEVLOCK(cgpu, pstate) is called first and
