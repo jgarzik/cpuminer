@@ -18,16 +18,12 @@
 #include "miner.h"
 #include "usbutils.h"
 
-#define NODEV(err) ((err) == LIBUSB_ERROR_NO_DEVICE || \
-			(err) == LIBUSB_ERROR_PIPE || \
-			(err) == LIBUSB_ERROR_IO || \
-			(err) == LIBUSB_ERROR_OTHER)
+#define READNODEV(err) ((err) != LIBUSB_SUCCESS && (err) != LIBUSB_ERROR_TIMEOUT)
 
 /* Timeout errors on writes are basically unrecoverable */
-#define WRITENODEV(err) ((err) == LIBUSB_ERROR_TIMEOUT || NODEV(err))
+#define WRITENODEV(err) ((err) != LIBUSB_SUCCESS)
 
-#define NOCONTROLDEV(err) ((err) == LIBUSB_ERROR_NO_DEVICE || \
-			(err) == LIBUSB_ERROR_OTHER)
+#define NOCONTROLDEV(err) ((err) != LIBUSB_SUCCESS)
 
 /*
  * WARNING - these assume DEVLOCK(cgpu, pstate) is called first and
@@ -523,7 +519,7 @@ static const char *nodatareturned = "no data returned ";
  static const char *debug_false_str = "false";
  static const char *nodevstr = "=NODEV";
  #define bool_str(boo) ((boo) ? debug_true_str : debug_false_str)
- #define isnodev(err) (NODEV(err) ? nodevstr : BLANK)
+ #define isnodev(err) (READNODEV(err) ? nodevstr : BLANK)
  #define USBDEBUG(fmt, ...) applog(LOG_WARNING, fmt, ##__VA_ARGS__)
 #else
  #define USBDEBUG(fmt, ...)
@@ -2641,7 +2637,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 			err = LIBUSB_ERROR_OTHER;
 	}
 out_noerrmsg:
-	if (NODEV(err)) {
+	if (READNODEV(err)) {
 		cg_ruwlock(&cgpu->usbinfo.devlock);
 		release_cgpu(cgpu);
 		DEVWUNLOCK(cgpu, pstate);
