@@ -20,6 +20,7 @@
 
 #define NODEV(err) ((err) == LIBUSB_ERROR_NO_DEVICE || \
 			(err) == LIBUSB_ERROR_PIPE || \
+			(err) == LIBUSB_ERROR_IO || \
 			(err) == LIBUSB_ERROR_OTHER)
 
 /* Timeout errors on writes are basically unrecoverable */
