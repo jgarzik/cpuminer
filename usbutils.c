@@ -508,22 +508,14 @@ static const char *BLANK = "";
 static const char *space = " ";
 static const char *nodatareturned = "no data returned ";
 
+/* Fake success on IO errors allowing code to retry up to USB_RETRY_MAX */
 #define IOERR_CHECK(cgpu, err) \
 		if (err == LIBUSB_ERROR_IO) { \
 			cgpu->usbinfo.ioerr_count++; \
-			cgpu->usbinfo.continuous_ioerr_count++; \
-		} else { \
-			cgpu->usbinfo.continuous_ioerr_count = 0; \
-		}
-
-/* Timeout errors on writes are unusual and should be treated as IO errors. */
-#define WRITEIOERR_CHECK(cgpu, err) \
-		if (err == LIBUSB_ERROR_IO || err == LIBUSB_ERROR_TIMEOUT) { \
-			cgpu->usbinfo.ioerr_count++; \
-			cgpu->usbinfo.continuous_ioerr_count++; \
-		} else { \
-			cgpu->usbinfo.continuous_ioerr_count = 0; \
-		}
+			if (++cgpu->usbinfo.continuous_ioerr_count < USB_RETRY_MAX) \
+				err = LIBUSB_SUCCESS; \
+		} else \
+			cgpu->usbinfo.continuous_ioerr_count = 0;
 
 #if 0 // enable USBDEBUG - only during development testing
  static const char *debug_true_str = "true";
@@ -2704,7 +2696,7 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 
 		USBDEBUG("USB debug: @_usb_write(%s (nodev=%s)) err=%d%s sent=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), sent);
 
-		WRITEIOERR_CHECK(cgpu, err);
+		IOERR_CHECK(cgpu, err);
 
 		tot += sent;
 
@@ -2821,7 +2813,7 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 
 	USBDEBUG("USB debug: @_usb_transfer(%s (nodev=%s)) err=%d%s", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err));
 
-	WRITEIOERR_CHECK(cgpu, err);
+	IOERR_CHECK(cgpu, err);
 
 	if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
 		applog(LOG_WARNING, "%s %i usb transfer err:(%d) %s", cgpu->drv->name, cgpu->device_id,
