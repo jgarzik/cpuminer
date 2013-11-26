@@ -815,13 +815,16 @@ restart:
 		p = (uint32_t *)(work->data + 64 + 4);
 		op_hash_data.timestamp = *p++;
 		op_hash_data.bits = *p++;
+		op_hash_data.starting_nonce = 0;
 		op_hash_data.nonce_loops = 0;
+		op_hash_data.ntime_loops = 0;
 
 		/* Set the number of leading zeroes to look for based on diff.
 		 * Diff 1 = 32, Diff 2 = 33, Diff 4 = 34 etc. */
 		intdiff = (uint64_t)work->device_diff;
 		for (i = 31; intdiff; i++, intdiff >>= 1);
 		op_hash_data.search_difficulty = i;
+		op_hash_data.group = 0;
 		if ((sequence = info->hash_sequence_head + 1) >= info->num_sequence)
 			sequence = 0;
 		ret = hfa_send_frame(hashfast, OP_HASH, sequence, (uint8_t *)&op_hash_data, sizeof(op_hash_data));
