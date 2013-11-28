@@ -76,14 +76,26 @@ typedef struct
 #define SZ_SERIALISED_IDENTITY 16
 static void deserialise_identity(Identity *identity, const uint8_t *buf);
 
+// Hashable structure of per-device config settings
+typedef struct {
+  uint8_t key[9];
+  BoardConfig config;
+  UT_hash_handle hh;
+} config_setting;
+
 /* Comparatively modest default settings */
-static BoardConfig drillbit_config = {
- core_voltage: CONFIG_CORE_085V,
- use_ext_clock: 0,
- int_clock_level: 40,
- clock_div2: 0,
- ext_clock_freq: 200
+static config_setting default_settings = {
+ key: { 0 },
+ config: {
+  core_voltage: CONFIG_CORE_085V,
+  use_ext_clock: 0,
+  int_clock_level: 40,
+  clock_div2: 0,
+  ext_clock_freq: 200
+ },
 };
+
+static config_setting *settings;
 
 /* Return a pointer to the chip_info structure for a given chip id, or NULL otherwise */
 static struct drillbit_chip_info *find_chip(struct drillbit_info *info, uint16_t chip_id) {
@@ -228,7 +240,16 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
         deserialise_identity(&identity, buf);
 
 	info->version = identity.protocol_version;
-	memcpy(&info->product, identity.product, sizeof(identity.product));
+        if(strncmp(identity.product, "DRILLBIT", sizeof(identity.product)) == 0) {
+          // Hack: first production firmwares all described themselves as DRILLBIT, so fill in the gaps
+          if(identity.num_chips == 1)
+            strcpy(info->product, "Thumb");
+          else
+            strcpy(info->product, "Eight");
+        }
+        else {
+          memcpy(info->product, identity.product, sizeof(identity.product));
+        }
         info->serial = identity.serial;
         info->num_chips = identity.num_chips;
 
@@ -248,18 +269,46 @@ static bool drillbit_reset(struct cgpu_info *drillbit)
 	return true;
 }
 
-static void drillbit_send_config(struct cgpu_info *drillbit, const BoardConfig *config)
+static void drillbit_send_config(struct cgpu_info *drillbit)
 {
+  struct drillbit_info *info = drillbit->device_data;
   char cmd;
   int amount;
+  uint8_t search_key[9];
   uint8_t buf[SZ_SERIALISED_BOARDCONFIG];
+  config_setting *setting;
+
+  // Find the relevant board config
+
+  // Search by serial (8 character hex string)
+  sprintf(search_key, "%08x", info->serial);
+  HASH_FIND_STR(settings, search_key, setting);
+  if(setting)  {
+    applog(LOG_INFO, "Using unit-specific settings for serial %s", search_key);
+  } 
+  else {
+    // Failing that, search by product name
+    HASH_FIND_STR(settings, info->product, setting);
+    if(setting) {
+      applog(LOG_INFO, "Using product-specific settings for device %s", info->product);
+    }
+    else {
+      // Failing that, return default/generic config (null key)
+      search_key[0] = 0;
+      HASH_FIND_STR(settings, search_key, setting);
+      applog(LOG_INFO, "Using non-specific settings for device %s (serial %08x)", info->product,
+             info->serial);
+    }
+  }
+
   applog(LOG_INFO, "Sending board configuration voltage=%d use_ext_clock=%d int_clock_level=%d clock_div2=%d ext_clock_freq=%d",
-         config->core_voltage, config->use_ext_clock, config->int_clock_level,
-         config->clock_div2, config->ext_clock_freq);
+         setting->config.core_voltage, setting->config.use_ext_clock,
+         setting->config.int_clock_level,
+         setting->config.clock_div2, setting->config.ext_clock_freq);
   cmd = 'C';
   usb_write(drillbit, &cmd, 1, &amount, C_BF_REQWORK);
 
-  serialise_board_config(buf, config);
+  serialise_board_config(buf, &setting->config);
   usb_write(drillbit, buf, SZ_SERIALISED_BOARDCONFIG, &amount, C_BF_CONFIG);
 
   /* Expect a single 'C' byte as acknowledgement */
@@ -269,41 +318,59 @@ static void drillbit_send_config(struct cgpu_info *drillbit, const BoardConfig *
 static bool drillbit_parse_options()
 {
   /* Read configuration options (currently global not per-ASIC or per-board) */
-  if (opt_drillbit_options != NULL) {
+  if(settings != NULL)
+    return true; // Already initialised
+
+  // Start with the system-wide defaults
+  HASH_ADD_STR( settings, key, (&default_settings) );
+
+  char *next_opt = opt_drillbit_options;
+  while (next_opt && strlen(next_opt)) {
+    BoardConfig parsed_config;
+    config_setting *new_setting;
+    uint8_t key[9];
     int count, freq, clockdiv, voltage;
     char clksrc[4];
 
-    count = sscanf(opt_drillbit_options, "%3s:%d:%d:%d",
+    // Try looking for an option tagged with a key, first
+    count = sscanf(next_opt, "%8[^:]:%3s:%d:%d:%d", key,
                    clksrc, &freq, &clockdiv, &voltage);
-
-    if(count < 2) {
-      applog(LOG_ERR, "Failed to parse drillbit-options. Invalid options string: '%s'", opt_drillbit_options);
-      return false;
-    }
-
-    if(count > 2 && clockdiv != 1 && clockdiv != 2) {
-      applog(LOG_ERR, "drillbit-options: Invalid clock divider value %d. Valid values are 1 & 2.", clockdiv);
-      return false;
-    }
-    drillbit_config.clock_div2 = count > 2 && clockdiv == 2;
-
-    if(!strcmp("int",clksrc)) {
-      drillbit_config.use_ext_clock = 0;
-      if(freq < 0 || freq > 63) {
-        applog(LOG_ERR, "drillbit-options: Invalid internal oscillator level %d. Recommended range is %s for this clock divider (possible is 0-63)", freq, drillbit_config.clock_div2 ? "48-57":"30-48");
+    if(count < 5) {
+      key[0] = 0;
+      count = sscanf(next_opt, "%3s:%d:%d:%d",
+                     clksrc, &freq, &clockdiv, &voltage);
+      if(count < 4) {
+        applog(LOG_ERR, "Failed to parse drillbit-options. Invalid options string: '%s'", next_opt);
+        settings = NULL;
         return false;
       }
-      if(drillbit_config.clock_div2 && (freq < 48 || freq > 57)) {
+    }
+
+    if(clockdiv != 1 && clockdiv != 2) {
+      applog(LOG_ERR, "drillbit-options: Invalid clock divider value %d. Valid values are 1 & 2.", clockdiv);
+      settings = NULL;
+      return false;
+    }
+    parsed_config.clock_div2 = count > 2 && clockdiv == 2;
+
+    if(!strcmp("int",clksrc)) {
+      parsed_config.use_ext_clock = 0;
+      if(freq < 0 || freq > 63) {
+        applog(LOG_ERR, "drillbit-options: Invalid internal oscillator level %d. Recommended range is %s for this clock divider (possible is 0-63)", freq, parsed_config.clock_div2 ? "48-57":"30-48");
+        settings = NULL;
+        return false;
+      }
+      if(parsed_config.clock_div2 && (freq < 48 || freq > 57)) {
         applog(LOG_WARNING, "drillbit-options: Internal oscillator level %d outside recommended range 48-57.", freq);
       }
-      if(!drillbit_config.clock_div2 && (freq < 30 || freq > 48)) {
+      if(!parsed_config.clock_div2 && (freq < 30 || freq > 48)) {
         applog(LOG_WARNING, "drillbit-options: Internal oscillator level %d outside recommended range 30-48.", freq);
       }
-      drillbit_config.int_clock_level = freq;
+      parsed_config.int_clock_level = freq;
     }
     else if (!strcmp("ext", clksrc)) {
-      drillbit_config.use_ext_clock = 1;
-      drillbit_config.ext_clock_freq = freq;
+      parsed_config.use_ext_clock = 1;
+      parsed_config.ext_clock_freq = freq;
       if(freq < 80 || freq > 230) {
         applog(LOG_WARNING, "drillbit-options: Warning: recommended external clock frequencies are 80-230MHz. Value %d may produce unexpected results.", freq);
       }
@@ -313,26 +380,36 @@ static bool drillbit_parse_options()
       return false;
     }
 
-    if(count > 3) {
-      switch(voltage) {
-      case 650:
-        voltage = CONFIG_CORE_065V;
-        break;
-      case 750:
-        voltage = CONFIG_CORE_075V;
-        break;
-      case 850:
-        voltage = CONFIG_CORE_085V;
-        break;
-      case 950:
-        voltage = CONFIG_CORE_095V;
-        break;
-      default:
-        applog(LOG_ERR, "drillbit-options: Invalid core voltage %d. Valid values 650,750,850,950mV)", voltage);
-        return false;
-      }
-      drillbit_config.core_voltage = voltage;
+    switch(voltage) {
+    case 650:
+      voltage = CONFIG_CORE_065V;
+      break;
+    case 750:
+      voltage = CONFIG_CORE_075V;
+      break;
+    case 850:
+      voltage = CONFIG_CORE_085V;
+      break;
+    case 950:
+      voltage = CONFIG_CORE_095V;
+      break;
+    default:
+      applog(LOG_ERR, "drillbit-options: Invalid core voltage %d. Valid values 650,750,850,950mV)", voltage);
+      return false;
     }
+    parsed_config.core_voltage = voltage;
+
+    // Add the new set of settings to the configuration choices hash table
+    new_setting = (config_setting *)calloc(sizeof(config_setting), 1);
+    memcpy(&new_setting->config, &parsed_config, sizeof(BoardConfig));
+    memcpy(&new_setting->key, key, 8);
+    config_setting *ignore;
+    HASH_REPLACE_STR(settings, key, new_setting, ignore);
+
+    // Look for next comma-delimited Drillbit option
+    next_opt = strstr(next_opt, ",");
+    if(next_opt)
+      next_opt++;
   }
   return true;
 }
@@ -344,7 +421,7 @@ static bool drillbit_detect_one(struct libusb_device *dev, struct usb_find_devic
         int i;
 
         if (!drillbit_parse_options())
-          return; // Bit of a hack doing this here, should do it somewhere else
+          return false; // Bit of a hack doing this here, should do it somewhere else
 
 	drillbit = usb_alloc_cgpu(&drillbit_drv, 1);
 
@@ -384,7 +461,7 @@ static bool drillbit_detect_one(struct libusb_device *dev, struct usb_find_devic
 
 	update_usb_stats(drillbit);
 
-        drillbit_send_config(drillbit, &drillbit_config);
+        drillbit_send_config(drillbit);
 
 	applog(LOG_INFO, "%s %d: Successfully initialised %s",
 	       drillbit->drv->name, drillbit->device_id, drillbit->device_path);
