@@ -2453,7 +2453,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 
 	/* Avoid any async transfers during shutdown to allow the polling
 	 * thread to be shut down after all existing transfers are complete */
-	if (unlikely(cgpu->shutdown))
+	if (opt_lowmem || cgpu->shutdown)
 		return libusb_bulk_transfer(dev_handle, endpoint, data, length, transferred, timeout);
 
 	init_usb_transfer(&ut);
