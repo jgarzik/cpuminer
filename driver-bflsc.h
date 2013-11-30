@@ -139,6 +139,8 @@ struct bflsc_info {
 	int que_noncecount;
 	int que_fld_min;
 	int que_fld_max;
+	int core_nonces[17];
+	int core_hw[17];
 	int flush_size;
 	// count of given size, [+2] is for any > QUE_MAX_RESULTS
 	uint64_t result_size[QUE_MAX_RESULTS+2];
