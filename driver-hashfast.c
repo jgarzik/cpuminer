@@ -119,6 +119,7 @@ static bool hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, uint16_t 
 		memcpy(&packet[sizeof(struct hf_header)], data, len);
 	tx_length = sizeof(struct hf_header) + len;
 
+	applog(LOG_DEBUG, "HFA %d: Sending %s frame", hashfast->device_id, hfa_cmds[opcode].cmd_name);
 	ret = usb_write(hashfast, (char *)packet, tx_length, &amount,
 			hfa_cmds[opcode].usb_cmd);
 	if (unlikely(ret < 0 || amount != tx_length)) {
