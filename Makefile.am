@@ -69,7 +69,7 @@ cgminer_SOURCES += driver-bitforce.c
 endif
 
 if HAS_HASHFAST
-cgminer_SOURCES += driver-hashfast.c driver-hashfast.h hf_protocol.h
+cgminer_SOURCES += driver-hashfast.c driver-hashfast.h hf_protocol.h hf_protocol_be.h
 endif
 
 if HAS_BITFURY

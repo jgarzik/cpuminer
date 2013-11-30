@@ -688,7 +688,7 @@ ne:
 	return ok;
 }
 
-static bool bflsc_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
+static struct cgpu_info *bflsc_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct bflsc_info *sc_info = NULL;
 	char buf[BFLSC_BUFSIZ+1];
@@ -888,7 +888,7 @@ reinit:
 	mutex_init(&bflsc->device_mutex);
 	rwlock_init(&sc_info->stat_lock);
 
-	return true;
+	return bflsc;
 
 unshin:
 
@@ -906,7 +906,7 @@ shin:
 
 	bflsc = usb_free_cgpu(bflsc);
 
-	return false;
+	return NULL;
 }
 
 static void bflsc_detect(bool __maybe_unused hotplug)

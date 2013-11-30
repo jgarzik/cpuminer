@@ -145,8 +145,6 @@ struct avalon_info {
 	pthread_mutex_t lock;
 	pthread_mutex_t qlock;
 	cgsem_t qsem;
-	cgtimer_t cgsent;
-	int send_delay;
 
 	int nonces;
 	int auto_queued;

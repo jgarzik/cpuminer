@@ -765,7 +765,7 @@ static void control_init(struct cgpu_info *klncgpu)
 			  klncgpu->drv->name, klncgpu->device_id, err);
 }
 
-static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
+static struct cgpu_info *klondike_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *klncgpu = usb_alloc_cgpu(&klondike_drv, 1);
 	struct klondike_info *klninfo = NULL;
@@ -823,7 +823,7 @@ static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devic
 				applog(LOG_DEBUG, "Klondike cgpu added");
 				rwlock_init(&klninfo->stat_lock);
 				cglock_init(&klninfo->klist_lock);
-				return true;
+				return klncgpu;
 			}
 		}
 		usb_uninit(klncgpu);
@@ -831,7 +831,7 @@ static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devic
 	free(klninfo->free);
 	free(klninfo);
 	free(klncgpu);
-	return false;
+	return NULL;
 }
 
 static void klondike_detect(bool __maybe_unused hotplug)
