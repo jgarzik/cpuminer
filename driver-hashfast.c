@@ -831,6 +831,11 @@ restart:
 		jobs = hfa_jobs(info);
 	}
 
+	if (jobs) {
+		applog(LOG_DEBUG, "HFA %d: Sending %d new jobs", hashfast->device_id,
+		       jobs);
+	}
+
 	while (jobs-- > 0) {
 		struct hf_hash_usb op_hash_data;
 		struct work *work;
