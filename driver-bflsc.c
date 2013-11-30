@@ -918,7 +918,7 @@ static void get_bflsc_statline_before(char *buf, size_t bufsiz, struct cgpu_info
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	float temp = 0;
-	float vcc1 = 0;
+	float vcc2 = 0;
 	int i;
 
 	rd_lock(&(sc_info->stat_lock));
@@ -927,12 +927,12 @@ static void get_bflsc_statline_before(char *buf, size_t bufsiz, struct cgpu_info
 			temp = sc_info->sc_devs[i].temp1;
 		if (sc_info->sc_devs[i].temp2 > temp)
 			temp = sc_info->sc_devs[i].temp2;
-		if (sc_info->sc_devs[i].vcc1 > vcc1)
-			vcc1 = sc_info->sc_devs[i].vcc1;
+		if (sc_info->sc_devs[i].vcc2 > vcc2)
+			vcc2 = sc_info->sc_devs[i].vcc2;
 	}
 	rd_unlock(&(sc_info->stat_lock));
 
-	tailsprintf(buf, bufsiz, " max%3.0fC %4.2fV | ", temp, vcc1);
+	tailsprintf(buf, bufsiz, " max%3.0fC %4.2fV | ", temp, vcc2);
 }
 
 static void flush_one_dev(struct cgpu_info *bflsc, int dev)
