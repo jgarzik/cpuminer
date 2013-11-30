@@ -205,7 +205,16 @@ static const char *hf_usb_init_errors[] = {
 	"Configuration operation timeout",
 	"Excessive core failures",
 	"All cores failed diagnostics",
-	"Too many groups configured - increase ntime roll amount"
+	"Too many groups configured - increase ntime roll amount",
+	"Chaining connections detected but secondary board(s) did not respond",
+	"Secondary board communication error",
+	"Main board 12V power is bad",
+	"Secondary board(s) 12V power is bad",
+	"Main board FPGA programming error",
+	"Main board FPGA SPI read timeout",
+	"Main board FPGA Bad magic number",
+	"Main board FPGA SPI write timeout",
+	"Main board FPGA register read/write test failed"
 };
 
 static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
