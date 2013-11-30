@@ -1219,19 +1219,22 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 	return true;
 }
 
+static void inc_core_errors(struct bflsc_info *info, int8_t core)
+{
+	if (core >= 0 && core < 16)
+		info->core_hw[core]++;
+}
+
 static void inc_bflsc_errors(struct thr_info *thr, struct bflsc_info *info, int8_t core)
 {
 	inc_hw_errors(thr);
-	if (core >= 0 && core < 16)
-		info->core_hw[core]++;
-	applog(LOG_WARNING, "Adding HW to core %d", core);
+	inc_core_errors(info, core);
 }
 
 static void inc_bflsc_nonces(struct bflsc_info *info, int8_t core)
 {
 	if (core >= 0 && core < 16)
 		info->core_nonces[core]++;
-	applog(LOG_WARNING, "Adding Nonce to core %d", core);
 }
 
 static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *data, int count, char **fields, int *nonces)
@@ -1324,7 +1327,8 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 			(*nonces)++;
 			x++;
 			inc_bflsc_nonces(sc_info, core);
-		}
+		} else
+			inc_core_errors(sc_info, core);
 	}
 
 	wr_lock(&(sc_info->stat_lock));
@@ -1949,6 +1953,16 @@ else a whole lot of something like these ... etc
 	root = api_add_volts(root, "X-%d-Vcc2", &(sc_info->vcc2), false);
 	root = api_add_volts(root, "X-%d-Vmain", &(sc_info->vmain), false);
 */
+	if (sc_info->que_noncecount != QUE_NONCECOUNT_V1) {
+		for (i = 0; i < 16; i++) {
+			sprintf(buf, "Core%d Nonces", i);
+			root = api_add_int(root, buf, &sc_info->core_nonces[i], false);
+		}
+		for (i = 0; i < 16; i++) {
+			sprintf(buf, "Core%d HW Errors", i);
+			root = api_add_int(root, buf, &sc_info->core_hw[i], false);
+		}
+	}
 
 	return root;
 }
