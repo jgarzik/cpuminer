@@ -66,6 +66,7 @@
 /* The safety timeout we use, cancelling async transfers on windows that fail
  * to timeout on their own. */
 #define WIN_CALLBACK_EXTRA 40
+#define WIN_WRITE_CBEXTRA 5000
 #else
 #define BFLSC_TIMEOUT_MS 300
 #define BITFORCE_TIMEOUT_MS 200
@@ -2495,6 +2496,13 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT) {
 		memcpy(buf, data, length);
 		ut.transfer->flags |= LIBUSB_TRANSFER_ADD_ZERO_PACKET;
+#ifdef WIN32
+		/* Writes on windows really don't like to be cancelled, but
+		 * are prone to timeouts under heavy USB traffic, so make this
+		 * a last resort cancellation delayed long after the write
+		 * would have timed out on its own. */
+		callback_timeout += WIN_WRITE_CBEXTRA;
+#endif
 	}
 
 	USBDEBUG("USB debug: @usb_bulk_transfer(%s (nodev=%s),intinfo=%d,epinfo=%d,data=%p,length=%d,timeout=%u,mode=%d,cmd=%s,seq=%d) endpoint=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, data, length, timeout, mode, usb_cmdname(cmd), seq, (int)endpoint);
