@@ -686,8 +686,21 @@ static void hfa_update_stats1(struct cgpu_info *hashfast, struct hashfast_info *
 #endif
 	applog(LOG_DEBUG, "      max_tx_buffers:               %6d", sd->max_tx_buffers);
 	applog(LOG_DEBUG, "      max_rx_buffers:               %6d", sd->max_rx_buffers);
+}
 
-    }
+static void hfa_parse_notice(struct cgpu_info *hashfast, struct hf_header *h)
+{
+	struct hf_usb_notice_data *d;
+
+	if (h->data_length == 0) {
+		applog(LOG_DEBUG, "HFA %d: Received OP_USB_NOTICE with zero data length",
+		       hashfast->device_id);
+		return;
+	}
+	d = (struct hf_usb_notice_data *)(h + 1);
+	/* FIXME Do something with the notification code d->extra_data here */
+	applog(LOG_NOTICE, "HFA %d NOTICE: %s", hashfast->device_id, d->message);
+}
 
 static void *hfa_read(void *arg)
 {
@@ -722,6 +735,9 @@ static void *hfa_read(void *arg)
 				break;
 			case OP_USB_STATS1:
 				hfa_update_stats1(hashfast, info, h);
+				break;
+			case OP_USB_NOTICE:
+				hfa_parse_notice(hashfast, h);
 				break;
 			default:
 				applog(LOG_WARNING, "HFA %d: Unhandled operation code %d",
