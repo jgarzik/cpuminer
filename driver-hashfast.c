@@ -727,6 +727,9 @@ static void *hfa_read(void *arg)
 		struct hf_header *h = (struct hf_header *)buf;
 		bool ret = hfa_get_packet(hashfast, h);
 
+		if (unlikely(hashfast->usbinfo.nodev))
+			break;
+
 		if (unlikely(!ret))
 			continue;
 
@@ -755,6 +758,7 @@ static void *hfa_read(void *arg)
 				break;
 		}
 	}
+	applog(LOG_DEBUG, "HFA %d: Shutting down read thread", hashfast->device_id);
 
 	return NULL;
 }
