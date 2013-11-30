@@ -805,6 +805,7 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 
 	if (unlikely(thr->work_restart)) {
 restart:
+		thr->work_restart = false;
 		ret = hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), 0, (uint8_t *)NULL, 0);
 		if (unlikely(!ret)) {
 			ret = hfa_reset(hashfast, info);
