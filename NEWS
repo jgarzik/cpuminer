@@ -1,3 +1,42 @@
+Version 3.8.3 - 23rd November 2013
+
+- Set the bitfury device start times from when we first get valid work.
+- Fix stack corruption of zeroing too much in bf1 driver.
+- Make usb_detect return the cgpu associated with it to check if it succeeds to
+decide on whether to increment the device count or not.
+- Set tv work start time for bxf driver.
+- Age the bxf work items over 90 seconds, not the bf1 work items.
+- Zero the read buffer in _usb_read to avoid stale data and only use stack
+memory instead of using the bulkbuf since it is only used in _usb_read.
+- Leave room for temperatures above 100 degrees and pad consistently for bxf
+statline.
+- Drop json stratum auth failed message log level to verbose.
+- Change the processed value not the bufsiz in response to an end of message
+marker.
+- Don't lose data beyond the end of message in a usb read.
+- Silence irrelevant warning.
+- Only check strlen on end if end exists.
+- Simplify the end of message detection in _usb_read and allow it to return
+without doing another read if the message is already in the buffer.
+- Increase work ageing time to 90 seconds for bxf driver to account for firmware
+changes.
+- Use the age_queued_work function in the bitfury driver.
+- Provide a function to discard queued work based on age.
+- The json_val in api.c is a borrowed reference, not a new one so don't decref
+it.
+- Decrement json references in api.c to not leak memory.
+- line 2913 added urlencode
+- With reliable writes to the avalon there is no need for the sleep delays
+between writes.
+- There is no need to limit usb write transfers to maxpacketsize and it's
+harmful for large transfers on slow devices such as wrt routers.
+- Disable USB stats which were not meant to be enabled by default and add extra
+memory for a memory error when stats are enabled.
+- Set limit and count to integers to not overflow during failed hotplug attempts
+and then not trying again.
+- Update api example compilation instructions.
+
+
 Version 3.8.2 - 16th November 2013
 
 - Add more verbose documentation to the readme files for windows users.

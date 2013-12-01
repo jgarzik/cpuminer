@@ -270,7 +270,7 @@ out_close:
 	return false;
 }
 
-static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
+static struct cgpu_info *bitfury_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *bitfury;
 	struct bitfury_info *info;
@@ -308,7 +308,7 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 out:
 		bitfury = usb_free_cgpu(bitfury);
 	}
-	return ret;
+	return bitfury;
 }
 
 static void bitfury_detect(bool __maybe_unused hotplug)
@@ -355,7 +355,11 @@ static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *inf
 		inc_hw_errors(thr);
 		return;
 	}
-	info->valid = true;
+	/* Set the device start time from when we first get valid results */
+	if (unlikely(!info->valid)) {
+		info->valid = true;
+		cgtime(&bitfury->dev_start_tv);
+	}
 	set_work_ntime(work, timestamp);
 	if (submit_nonce(thr, work, nonce)) {
 		mutex_lock(&info->lock);
@@ -538,7 +542,7 @@ static int64_t bitfury_rate(struct bitfury_info *info)
 static int64_t bf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 			struct bitfury_info *info)
 {
-	int amount, i, aged = 0, total = 0, ms_diff;
+	int amount, i, aged, total = 0, ms_diff;
 	char readbuf[512], buf[45];
 	struct work *work, *tmp;
 	struct timeval tv_now;
@@ -576,7 +580,7 @@ static int64_t bf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 					  &amount, ms_diff, C_BF1_GETRES);
 	total += amount;
 	while (amount) {
-		usb_read_once_timeout(bitfury, readbuf + total, 512, &amount, 10,
+		usb_read_once_timeout(bitfury, readbuf + total, 512 - total, &amount, 10,
 				      C_BF1_GETRES);
 		total += amount;
 	};
@@ -617,24 +621,17 @@ out:
 		if (!found) {
 			if (likely(info->valid))
 				inc_hw_errors(thr);
-		} else
+		} else if (unlikely(!info->valid)) {
 			info->valid = true;
+			cgtime(&bitfury->dev_start_tv);
+		}
 	}
 
 	cgtime(&tv_now);
 
 	/* This iterates over the hashlist finding work started more than 6
-	 * seconds ago which equates to leaving 5 past work items in the array
-	 * to look for results. */
-	wr_lock(&bitfury->qlock);
-	HASH_ITER(hh, bitfury->queued_work, work, tmp) {
-		if (tdiff(&tv_now, &work->tv_work_start) > 6.0) {
-			__work_completed(bitfury, work);
-			aged++;
-		}
-	}
-	wr_unlock(&bitfury->qlock);
-
+	 * seconds ago. */
+	aged = age_queued_work(bitfury, 6.0);
 	if (aged) {
 		applog(LOG_DEBUG, "%s %d: Aged %d work items", bitfury->drv->name,
 		       bitfury->device_id, aged);
@@ -652,25 +649,23 @@ out:
 
 static int64_t bxf_scan(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
-	struct work *work, *tmp;
 	int64_t ret;
-	int work_id;
+	int aged;
 
 	bxf_update_work(bitfury, info);
 	cgsleep_ms(600);
 
 	mutex_lock(&info->lock);
 	ret = bitfury_rate(info);
-	work_id = info->work_id;
 	mutex_unlock(&info->lock);
 
-	/* Keep no more than the last 5 work items in the hashlist */
-	wr_lock(&bitfury->qlock);
-	HASH_ITER(hh, bitfury->queued_work, work, tmp) {
-		if (work->subid + 5 < work_id)
-			__work_completed(bitfury, work);
+	/* Keep no more than the last 90 seconds worth of work items in the
+	 * hashlist */
+	aged = age_queued_work(bitfury, 90.0);
+	if (aged) {
+		applog(LOG_DEBUG, "%s %d: Aged %d work items", bitfury->drv->name,
+		       bitfury->device_id, aged);
 	}
-	wr_unlock(&bitfury->qlock);
 
 	if (unlikely(bitfury->usbinfo.nodev)) {
 		applog(LOG_WARNING, "%s %d: Device disappeared, disabling thread",
@@ -729,6 +724,7 @@ static void bxf_update_work(struct cgpu_info *bitfury, struct bitfury_info *info
 	work->subid = ++info->work_id;
 	mutex_unlock(&info->lock);
 
+	cgtime(&work->tv_work_start);
 	bxf_send_work(bitfury, work);
 }
 
@@ -818,7 +814,7 @@ static void bitfury_get_statline_before(char *buf, size_t bufsiz, struct cgpu_in
 
 	switch(info->ident) {
 		case IDENT_BXF:
-			tailsprintf(buf, bufsiz, "%3.1fC          | ", info->temperature);
+			tailsprintf(buf, bufsiz, "%5.1fC         | ", info->temperature);
 			break;
 		case IDENT_BF1:
 		default:

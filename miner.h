@@ -978,6 +978,7 @@ extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
 extern char *cgminer_path;
 extern bool opt_fail_only;
+extern bool opt_lowmem;
 extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;
@@ -1444,6 +1445,7 @@ extern struct work *__find_work_bymidstate(struct work *que, char *midstate, siz
 extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *clone_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern void __work_completed(struct cgpu_info *cgpu, struct work *work);
+extern int age_queued_work(struct cgpu_info *cgpu, double secs);
 extern void work_completed(struct cgpu_info *cgpu, struct work *work);
 extern struct work *take_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern void hash_driver_work(struct thr_info *mythr);

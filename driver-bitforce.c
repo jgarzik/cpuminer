@@ -162,7 +162,7 @@ failed:
 		mutex_unlock(&bitforce->device_mutex);
 }
 
-static bool bitforce_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
+static struct cgpu_info *bitforce_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	char buf[BITFORCE_BUFSIZ+1];
 	int err, amount;
@@ -270,7 +270,7 @@ reinit:
 
 	mutex_init(&bitforce->device_mutex);
 
-	return true;
+	return bitforce;
 
 unshin:
 
@@ -285,7 +285,7 @@ shin:
 
 	bitforce = usb_free_cgpu(bitforce);
 
-	return false;
+	return NULL;
 }
 
 static void bitforce_detect(bool __maybe_unused hotplug)

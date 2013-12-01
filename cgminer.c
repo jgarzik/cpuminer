@@ -74,6 +74,9 @@ char *curly = ":D";
 
 #ifdef USE_HASHFAST
 #include "driver-hashfast.h"
+int opt_hfa_ntime_roll;
+int opt_hfa_hash_clock;
+bool opt_hfa_pll_bypass;
 #endif
 
 #if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_MODMINER)
@@ -135,7 +138,7 @@ static bool opt_submit_stale = true;
 static int opt_shares;
 bool opt_fail_only;
 static bool opt_fix_protocol;
-static bool opt_lowmem;
+bool opt_lowmem;
 bool opt_autofan;
 bool opt_autoengine;
 bool opt_noadl;
@@ -1194,6 +1197,17 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bitburner-fury-options",
 		     set_bitburner_fury_options, NULL, NULL,
 		     "Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq"),
+#endif
+#ifdef USE_HASHFAST
+	OPT_WITH_ARG("--hfa-ntime-roll",
+		     opt_set_intval, NULL, &opt_hfa_ntime_roll,
+		     opt_hidden),
+	OPT_WITH_ARG("--hfa-hash-clock",
+		     opt_set_intval, NULL, &opt_hfa_hash_clock,
+		     opt_hidden),
+	OPT_WITHOUT_ARG("--hfa-pll-bypass",
+			opt_set_bool, &opt_hfa_pll_bypass,
+			opt_hidden),
 #endif
 #ifdef USE_KLONDIKE
 	OPT_WITH_ARG("--klondike-options",
@@ -6383,6 +6397,30 @@ void __work_completed(struct cgpu_info *cgpu, struct work *work)
 	cgpu->queued_count--;
 	HASH_DEL(cgpu->queued_work, work);
 }
+
+/* This iterates over a queued hashlist finding work started more than secs
+ * seconds ago and discards the work as completed. The driver must set the
+ * work->tv_work_start value appropriately. Returns the number of items aged. */
+int age_queued_work(struct cgpu_info *cgpu, double secs)
+{
+	struct work *work, *tmp;
+	struct timeval tv_now;
+	int aged = 0;
+
+	cgtime(&tv_now);
+
+	wr_lock(&cgpu->qlock);
+	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
+		if (tdiff(&tv_now, &work->tv_work_start) > secs) {
+			__work_completed(cgpu, work);
+			aged++;
+		}
+	}
+	wr_unlock(&cgpu->qlock);
+
+	return aged;
+}
+
 /* This function should be used by queued device drivers when they're sure
  * the work struct is no longer in use. */
 void work_completed(struct cgpu_info *cgpu, struct work *work)
@@ -8072,6 +8110,37 @@ int main(int argc, char *argv[])
 			quit(1, "Failed to calloc mining_thr[%d]", i);
 	}
 
+	// Start threads
+	k = 0;
+	for (i = 0; i < total_devices; ++i) {
+		struct cgpu_info *cgpu = devices[i];
+		cgpu->thr = malloc(sizeof(*cgpu->thr) * (cgpu->threads+1));
+		cgpu->thr[cgpu->threads] = NULL;
+		cgpu->status = LIFE_INIT;
+
+		for (j = 0; j < cgpu->threads; ++j, ++k) {
+			thr = get_thread(k);
+			thr->id = k;
+			thr->cgpu = cgpu;
+			thr->device_thread = j;
+
+			if (!cgpu->drv->thread_prepare(thr))
+				continue;
+
+			if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
+				quit(1, "thread %d create failed", thr->id);
+
+			cgpu->thr[j] = thr;
+
+			/* Enable threads for devices set not to mine but disable
+			 * their queue in case we wish to enable them later */
+			if (cgpu->deven != DEV_DISABLED) {
+				applog(LOG_DEBUG, "Pushing sem post to thread %d", thr->id);
+				cgsem_post(&thr->sem);
+			}
+		}
+	}
+
 	if (opt_benchmark)
 		goto begin_bench;
 
@@ -8128,40 +8197,6 @@ begin_bench:
 	cgtime(&total_tv_start);
 	cgtime(&total_tv_end);
 	get_datestamp(datestamp, sizeof(datestamp), &total_tv_start);
-
-	// Start threads
-	k = 0;
-	for (i = 0; i < total_devices; ++i) {
-		struct cgpu_info *cgpu = devices[i];
-		cgpu->thr = malloc(sizeof(*cgpu->thr) * (cgpu->threads+1));
-		cgpu->thr[cgpu->threads] = NULL;
-		cgpu->status = LIFE_INIT;
-
-		for (j = 0; j < cgpu->threads; ++j, ++k) {
-			thr = get_thread(k);
-			thr->id = k;
-			thr->cgpu = cgpu;
-			thr->device_thread = j;
-
-			if (!cgpu->drv->thread_prepare(thr))
-				continue;
-
-			if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
-				quit(1, "thread %d create failed", thr->id);
-
-			cgpu->thr[j] = thr;
-
-			/* Enable threads for devices set not to mine but disable
-			 * their queue in case we wish to enable them later */
-			if (cgpu->deven != DEV_DISABLED) {
-				applog(LOG_DEBUG, "Pushing sem post to thread %d", thr->id);
-				cgsem_post(&thr->sem);
-			}
-		}
-	}
-
-	cgtime(&total_tv_start);
-	cgtime(&total_tv_end);
 
 	watchpool_thr_id = 2;
 	thr = &control_thr[watchpool_thr_id];
