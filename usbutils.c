@@ -2687,10 +2687,17 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 	while (bufsiz > 0) {
 		int tosend = bufsiz;
 
-		if (usbdev->usecps) {
-			int cpms = usbdev->cps / 1000 ? : 1;
-			if (tosend > cpms)
-				tosend = cpms;
+		/* USB 1.1 devices don't handle zero packets well so split them
+		 * up to not have the final transfer equal to the wMaxPacketSize
+		 * or they will stall waiting for more data. */
+		if (usbdev->descriptor->bcdUSB < 0x0200) {
+			struct usb_epinfo *ue = &usbdev->found->intinfos[intinfo].epinfos[epinfo];
+
+			if (tosend == ue->wMaxPacketSize) {
+				tosend >>= 1;
+				if (unlikely(!tosend))
+					tosend = 1;
+			}
 		}
 		err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
 					(unsigned char *)buf, tosend, &sent, timeout,
@@ -2984,42 +2991,6 @@ uint32_t usb_buffer_size(struct cgpu_info *cgpu)
 	DEVRUNLOCK(cgpu, pstate);
 
 	return ret;
-}
-
-void usb_set_cps(struct cgpu_info *cgpu, int cps)
-{
-	int pstate;
-
-	DEVWLOCK(cgpu, pstate);
-
-	if (cgpu->usbdev)
-		cgpu->usbdev->cps = cps;
-
-	DEVWUNLOCK(cgpu, pstate);
-}
-
-void usb_enable_cps(struct cgpu_info *cgpu)
-{
-	int pstate;
-
-	DEVWLOCK(cgpu, pstate);
-
-	if (cgpu->usbdev)
-		cgpu->usbdev->usecps = true;
-
-	DEVWUNLOCK(cgpu, pstate);
-}
-
-void usb_disable_cps(struct cgpu_info *cgpu)
-{
-	int pstate;
-
-	DEVWLOCK(cgpu, pstate);
-
-	if (cgpu->usbdev)
-		cgpu->usbdev->usecps = false;
-
-	DEVWUNLOCK(cgpu, pstate);
 }
 
 /*
