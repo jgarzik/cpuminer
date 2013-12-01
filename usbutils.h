@@ -199,8 +199,6 @@ struct cg_usb_device {
 	enum usb_types usb_type;
 	enum sub_ident ident;
 	uint16_t usbver;
-	int cps;
-	bool usecps;
 	char *prod_string;
 	char *manuf_string;
 	char *serial_string;
@@ -419,9 +417,6 @@ int _usb_ftdi_set_latency(struct cgpu_info *cgpu, int intinfo);
 #define usb_ftdi_set_latency(_cgpu) _usb_ftdi_set_latency(_cgpu, DEFAULT_INTINFO)
 void usb_buffer_clear(struct cgpu_info *cgpu);
 uint32_t usb_buffer_size(struct cgpu_info *cgpu);
-void usb_set_cps(struct cgpu_info *cgpu, int cps);
-void usb_enable_cps(struct cgpu_info *cgpu);
-void usb_disable_cps(struct cgpu_info *cgpu);
 int _usb_interface(struct cgpu_info *cgpu, int intinfo);
 #define usb_interface(_cgpu) _usb_interface(_cgpu, DEFAULT_INTINFO)
 enum sub_ident usb_ident(struct cgpu_info *cgpu);

@@ -126,9 +126,6 @@ static struct cgpu_info *modminer_detect_one(struct libusb_device *dev, struct u
 	if (!usb_init(modminer, dev, found))
 		goto shin;
 
-	usb_set_cps(modminer, 11520);
-	usb_enable_cps(modminer);
-
 	do_ping(modminer);
 
 	if ((err = usb_write(modminer, MODMINER_GET_VERSION, 1, &amount, C_REQUESTVERSION)) < 0 || amount != 1) {
