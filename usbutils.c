@@ -2464,7 +2464,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 		  struct cgpu_info *cgpu, __maybe_unused int mode,
 		  enum usb_cmds cmd, __maybe_unused int seq, bool cancellable)
 {
-	int bulk_timeout, callback_timeout = timeout;
+	int bulk_timeout, callback_timeout = timeout, pipe_retries = 0;
 	struct usb_epinfo *usb_epinfo;
 	struct usb_transfer ut;
 	unsigned char endpoint;
@@ -2490,7 +2490,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	 * thread to be shut down after all existing transfers are complete */
 	if (opt_lowmem || cgpu->shutdown)
 		return libusb_bulk_transfer(dev_handle, endpoint, data, length, transferred, timeout);
-
+pipe_retry:
 	init_usb_transfer(&ut);
 
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT) {
@@ -2542,6 +2542,8 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 			if (err)
 				cgpu->usbinfo.clear_fail_count++;
 		} while (err && ++retries < USB_RETRY_MAX);
+		if (!err && ++pipe_retries < USB_RETRY_MAX)
+			goto pipe_retry;
 	}
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)
 		memcpy(data, buf, *transferred);
