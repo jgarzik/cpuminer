@@ -2172,7 +2172,7 @@ static void newstats(struct cgpu_info *cgpu)
 
 	usb_stats[next_stat].name = cgpu->drv->name;
 	usb_stats[next_stat].device_id = -1;
-	usb_stats[next_stat].details = calloc(1, sizeof(struct cg_usb_stats_details) * C_MAX * 2);
+	usb_stats[next_stat].details = calloc(2, sizeof(struct cg_usb_stats_details) * (C_MAX + 1));
 	if (unlikely(!usb_stats[next_stat].details))
 		quit(1, "USB failed to calloc details for %d", next_stat+1);
 
@@ -2215,7 +2215,7 @@ static void stats(struct cgpu_info *cgpu, struct timeval *tv_start, struct timev
 		int offset = 0;
 
 		if (extrams >= USB_TMO_2) {
-			applog(LOG_ERR, "%s%i: TIMEOUT %s took %dms but was %dms",
+			applog(LOG_INFO, "%s%i: TIMEOUT %s took %dms but was %dms",
 					cgpu->drv->name, cgpu->device_id,
 					usb_cmdname(cmd), totms, timeout) ;
 			offset = 2;
@@ -2430,7 +2430,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 		  struct cgpu_info *cgpu, __maybe_unused int mode,
 		  enum usb_cmds cmd, __maybe_unused int seq, bool cancellable)
 {
-	int bulk_timeout, callback_timeout = timeout;
+	int bulk_timeout, callback_timeout = timeout, pipe_retries = 0;
 	struct usb_epinfo *usb_epinfo;
 	struct usb_transfer ut;
 	unsigned char endpoint;
@@ -2456,7 +2456,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	 * thread to be shut down after all existing transfers are complete */
 	if (opt_lowmem || cgpu->shutdown)
 		return libusb_bulk_transfer(dev_handle, endpoint, data, length, transferred, timeout);
-
+pipe_retry:
 	init_usb_transfer(&ut);
 
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT) {
@@ -2508,6 +2508,8 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 			if (err)
 				cgpu->usbinfo.clear_fail_count++;
 		} while (err && ++retries < USB_RETRY_MAX);
+		if (!err && ++pipe_retries < USB_RETRY_MAX)
+			goto pipe_retry;
 	}
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)
 		memcpy(data, buf, *transferred);
@@ -2685,10 +2687,17 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 	while (bufsiz > 0) {
 		int tosend = bufsiz;
 
-		if (usbdev->usecps) {
-			int cpms = usbdev->cps / 1000 ? : 1;
-			if (tosend > cpms)
-				tosend = cpms;
+		/* USB 1.1 devices don't handle zero packets well so split them
+		 * up to not have the final transfer equal to the wMaxPacketSize
+		 * or they will stall waiting for more data. */
+		if (usbdev->descriptor->bcdUSB < 0x0200) {
+			struct usb_epinfo *ue = &usbdev->found->intinfos[intinfo].epinfos[epinfo];
+
+			if (tosend == ue->wMaxPacketSize) {
+				tosend >>= 1;
+				if (unlikely(!tosend))
+					tosend = 1;
+			}
 		}
 		err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
 					(unsigned char *)buf, tosend, &sent, timeout,
@@ -2982,42 +2991,6 @@ uint32_t usb_buffer_size(struct cgpu_info *cgpu)
 	DEVRUNLOCK(cgpu, pstate);
 
 	return ret;
-}
-
-void usb_set_cps(struct cgpu_info *cgpu, int cps)
-{
-	int pstate;
-
-	DEVWLOCK(cgpu, pstate);
-
-	if (cgpu->usbdev)
-		cgpu->usbdev->cps = cps;
-
-	DEVWUNLOCK(cgpu, pstate);
-}
-
-void usb_enable_cps(struct cgpu_info *cgpu)
-{
-	int pstate;
-
-	DEVWLOCK(cgpu, pstate);
-
-	if (cgpu->usbdev)
-		cgpu->usbdev->usecps = true;
-
-	DEVWUNLOCK(cgpu, pstate);
-}
-
-void usb_disable_cps(struct cgpu_info *cgpu)
-{
-	int pstate;
-
-	DEVWLOCK(cgpu, pstate);
-
-	if (cgpu->usbdev)
-		cgpu->usbdev->usecps = false;
-
-	DEVWUNLOCK(cgpu, pstate);
 }
 
 /*
