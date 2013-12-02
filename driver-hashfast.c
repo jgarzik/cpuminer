@@ -1016,7 +1016,8 @@ static void hfa_shutdown(struct thr_info *thr)
 	free(info->works);
 	free(info->die_statistics);
 	free(info->die_status);
-	free(info);
+	/* Don't free info here since it will be accessed by statline before
+	 * if a device is removed. */
 }
 
 struct device_drv hashfast_drv = {
