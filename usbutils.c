@@ -354,7 +354,7 @@ static struct usb_find_devices find_dev[] = {
 #ifdef USE_DRILLBIT
 	{
 		.drv = DRIVER_drillbit,
-		.name = "Drillbit",
+		.name = "DRB",
 		.ident = IDENT_DRB,
 		.idVendor = 0x03eb,
 		.idProduct = 0x2404,

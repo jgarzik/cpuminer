@@ -750,7 +750,7 @@ static void drillbit_shutdown(struct thr_info *thr)
 struct device_drv drillbit_drv = {
 	.drv_id = DRIVER_drillbit,
 	.dname = "Drillbit",
-	.name = "Drillbit",
+	.name = "DRB",
 	.drv_detect = drillbit_detect,
         .hash_work = &hash_driver_work,
 	.scanwork = drillbit_scanwork,
