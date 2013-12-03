@@ -20,6 +20,18 @@
 #define TIMEOUT 2000
 #define MAX_RESULTS 16 // max results from a single chip
 
+#define drvlog(prio, fmt, ...) do { \
+	if (opt_debug || prio != LOG_DEBUG) { \
+		if (use_syslog || opt_log_output || prio <= opt_log_level) { \
+			char tmp42[LOGBUFSIZ]; \
+			snprintf(tmp42, sizeof(tmp42), "%s %d: "fmt,    \
+			drillbit->drv->name, drillbit->device_id, ##__VA_ARGS__);       \
+			_applog(prio, tmp42, false); \
+		} \
+	} \
+} while (0)
+
+
 /* Request and response structsfor firmware */
 
 typedef struct
@@ -129,9 +141,9 @@ static bool usb_read_fixed_size(struct cgpu_info *drillbit, void *result, size_t
   if(count == result_size) {
     return true;
   }
-  applog(LOG_ERR, "Read incomplete fixed size packet - got %d bytes / %lu (timeout %d)", count, result_size, timeout);
+  drvlog(LOG_ERR, "Read incomplete fixed size packet - got %d bytes / %lu (timeout %d)", count, result_size, timeout);
   hex = bin2hex(res, count);
-  applog(LOG_DEBUG, "%s", hex);
+  drvlog(LOG_DEBUG, "%s", hex);
   free(hex);
   return false;
 }
@@ -145,7 +157,7 @@ static bool usb_send_simple_command(struct cgpu_info *drillbit, char command, en
   int amount;
   usb_write(drillbit, &command, 1, &amount, C_BF_REQWORK);
   if(amount != 1) {
-    applog(LOG_ERR, "Failed to write command %c",command);
+    drvlog(LOG_ERR, "Failed to write command %c",command);
     return false;
   }
   return usb_read_simple_response(drillbit, command, command_name);
@@ -161,11 +173,11 @@ static bool usb_read_simple_response(struct cgpu_info *drillbit, char command, e
   /* Expect a single byte, matching the command, as acknowledgement */
   usb_read_timeout(drillbit, &response, 1, &amount, TIMEOUT, C_BF_GETRES);
   if(amount != 1) {
-    applog(LOG_ERR, "Got no response to command %c",command);
+    drvlog(LOG_ERR, "Got no response to command %c",command);
     return false;
   }
   if(response != command) {
-    applog(LOG_ERR, "Got unexpected response %c to command %c", response, command);    
+    drvlog(LOG_ERR, "Got unexpected response %c to command %c", response, command);    
     return false;
   }
   return true;
@@ -221,38 +233,36 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
 	drillbit_empty_buffer(drillbit);
 	err = usb_write(drillbit, "I", 1, &amount, C_BF_REQINFO);
 	if (err) {
-		applog(LOG_INFO, "%s %d: Failed to write REQINFO",
-		       drillbit->drv->name, drillbit->device_id);
-		return false;
+                drvlog(LOG_INFO, "Failed to write REQINFO");
+                return false;
 	}
         // can't call usb_read_fixed_size here as stats not initialised
 	err = usb_read_timeout(drillbit, buf, SZ_SERIALISED_IDENTITY, &amount, 1000, C_BF_GETINFO);
 	if (err) {
-		applog(LOG_ERR, "%s %d: Failed to read GETINFO",
-		       drillbit->drv->name, drillbit->device_id);
+		drvlog(LOG_ERR, "Failed to read GETINFO");
 		return false;
 	}
 	if (amount != SZ_SERIALISED_IDENTITY) {
-		applog(LOG_INFO, "%s %d: Getinfo received %d bytes instead of %lu",
-		       drillbit->drv->name, drillbit->device_id, amount, sizeof(Identity));
+		drvlog(LOG_ERR, "Getinfo received %d bytes instead of %lu",
+                        amount, sizeof(Identity));
 		return false;
 	}
         deserialise_identity(&identity, buf);
 
         // sanity checks on the identity buffer we get back
         if(strlen(identity.product) == 0 || identity.serial == 0 || identity.num_chips == 0) {
-          applog(LOG_ERR, "Got invalid contents for GETINFO identity response");
+          drvlog(LOG_ERR, "Got invalid contents for GETINFO identity response");
           return false;
         }
 
         const int MIN_VERSION = 2;
         const int MAX_VERSION = 2;
         if(identity.protocol_version < MIN_VERSION) {
-          applog(LOG_ERR, "Unknown device protocol version %d.", identity.protocol_version);
+          drvlog(LOG_ERR, "Unknown device protocol version %d.", identity.protocol_version);
           return false;
         }
         if(identity.protocol_version > MAX_VERSION) {
-          applog(LOG_ERR, "Device firmware uses newer Drillbit protocol %d. We only support up to %d. Find a newer cgminer!", identity.protocol_version, MAX_VERSION);
+          drvlog(LOG_ERR, "Device firmware uses newer Drillbit protocol %d. We only support up to %d. Find a newer cgminer!", identity.protocol_version, MAX_VERSION);
           return false;
         }
 
@@ -271,8 +281,8 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
         info->serial = identity.serial;
         info->num_chips = identity.num_chips;
 
-	applog(LOG_INFO, "%s %d: Getinfo returned version %d, product %s serial %08x num_chips %d", drillbit->drv->name,
-	       drillbit->device_id, info->version, info->product, info->serial, info->num_chips);
+	drvlog(LOG_INFO, "Getinfo returned version %d, product %s serial %08x num_chips %d",
+                info->version, info->product, info->serial, info->num_chips);
 	drillbit_empty_buffer(drillbit);
 	return true;
 }
@@ -302,24 +312,24 @@ static void drillbit_send_config(struct cgpu_info *drillbit)
   sprintf(search_key, "%08x", info->serial);
   HASH_FIND_STR(settings, search_key, setting);
   if(setting)  {
-    applog(LOG_INFO, "Using unit-specific settings for serial %s", search_key);
+    drvlog(LOG_INFO, "Using unit-specific settings for serial %s", search_key);
   } 
   else {
     // Failing that, search by product name
     HASH_FIND_STR(settings, info->product, setting);
     if(setting) {
-      applog(LOG_INFO, "Using product-specific settings for device %s", info->product);
+      drvlog(LOG_INFO, "Using product-specific settings for device %s", info->product);
     }
     else {
       // Failing that, return default/generic config (null key)
       search_key[0] = 0;
       HASH_FIND_STR(settings, search_key, setting);
-      applog(LOG_INFO, "Using non-specific settings for device %s (serial %08x)", info->product,
+      drvlog(LOG_INFO, "Using non-specific settings for device %s (serial %08x)", info->product,
              info->serial);
     }
   }
 
-  applog(LOG_INFO, "Sending board configuration voltage=%d use_ext_clock=%d int_clock_level=%d clock_div2=%d ext_clock_freq=%d",
+  drvlog(LOG_INFO, "Sending board configuration voltage=%d use_ext_clock=%d int_clock_level=%d clock_div2=%d ext_clock_freq=%d",
          setting->config.core_voltage, setting->config.use_ext_clock,
          setting->config.int_clock_level,
          setting->config.clock_div2, setting->config.ext_clock_freq);
@@ -445,8 +455,7 @@ static struct cgpu_info *drillbit_detect_one(struct libusb_device *dev, struct u
 
 	if (!usb_init(drillbit, dev, found))
 		goto out;
-	applog(LOG_INFO, "%s %d: Found at %s", drillbit->drv->name,
-	       drillbit->device_id, drillbit->device_path);
+	drvlog(LOG_INFO, "Found at %s", drillbit->device_path);
 
 	info = calloc(sizeof(struct drillbit_info), 1);
 	if (!info)
@@ -481,8 +490,8 @@ static struct cgpu_info *drillbit_detect_one(struct libusb_device *dev, struct u
 
         drillbit_send_config(drillbit);
 
-	applog(LOG_INFO, "%s %d: Successfully initialised %s",
-	       drillbit->drv->name, drillbit->device_id, drillbit->device_path);
+	drvlog(LOG_INFO, "Successfully initialised %s",
+	       drillbit->device_path);
 
 	return drillbit;
 out_close:
@@ -559,31 +568,31 @@ static int check_for_results(struct thr_info *thr)
 
   // Receive count for work results
   if(!usb_read_fixed_size(drillbit, &result_count, sizeof(result_count), TIMEOUT, C_BF_GETRES)) {
-    applog(LOG_ERR, "Got no response to request for work results");
+    drvlog(LOG_ERR, "Got no response to request for work results");
     return false;
   }
   if(result_count)
-    applog(LOG_DEBUG, "Result count %d",result_count);
+    drvlog(LOG_DEBUG, "Result count %d",result_count);
 
   // Receive work results (0 or more)
   for(j = 0; j < result_count; j++) {
 
     if(!usb_read_fixed_size(drillbit, buf, SZ_SERIALISED_WORKRESULT, TIMEOUT, C_BF_GETRES)) {
-      applog(LOG_ERR, "Failed to read response data packet idx %d count 0x%x", j, result_count);
+      drvlog(LOG_ERR, "Failed to read response data packet idx %d count 0x%x", j, result_count);
       return 0;
     }
     deserialise_work_result(&response, buf);
 
     if (unlikely(thr->work_restart))
       goto cleanup;
-    applog(LOG_DEBUG, "Got response packet chip_id %d nonces %d is_idle %d", response.chip_id, response.num_nonces, response.is_idle);
+    drvlog(LOG_DEBUG, "Got response packet chip_id %d nonces %d is_idle %d", response.chip_id, response.num_nonces, response.is_idle);
     chip = find_chip(info, response.chip_id);
     if(!chip) {
-      applog(LOG_ERR, "Got work result for unknown chip id %d", response.chip_id);
+      drvlog(LOG_ERR, "Got work result for unknown chip id %d", response.chip_id);
       continue;
     }
     if(chip->state == IDLE) {
-      applog(LOG_WARNING, "Got spurious work results for idle ASIC %d", response.chip_id);
+      drvlog(LOG_WARNING, "Got spurious work results for idle ASIC %d", response.chip_id);
     }
     for(i = 0; i < response.num_nonces; i++) {
       found = false;
@@ -641,7 +650,7 @@ static int64_t drillbit_scanwork(struct thr_info *thr)
             continue;
           ms_diff = ms_tdiff(&tv_now, &info->chips[i].tv_start);
           if(ms_diff > TIMEOUT) {
-            applog(LOG_ERR, "Timing out unresponsive ASIC %d", info->chips[i].chip_id);
+            drvlog(LOG_ERR, "Timing out unresponsive ASIC %d", info->chips[i].chip_id);
             info->chips[i].state = IDLE;
             info->chips[i].timeout_count++;
             chip = &info->chips[i];
@@ -659,7 +668,7 @@ static int64_t drillbit_scanwork(struct thr_info *thr)
 		goto cascade;
 	}
 
-        applog(LOG_DEBUG, "Sending work to chip_id %d", chip->chip_id);
+        drvlog(LOG_DEBUG, "Sending work to chip_id %d", chip->chip_id);
         serialise_work_request(buf, chip->chip_id, work);
 
 	/* Send work to cgminer */
@@ -703,7 +712,7 @@ static int64_t drillbit_scanwork(struct thr_info *thr)
             if(amount >= sizeof(buf))
                break;
           }
-          applog(LOG_INFO, "%s", buf);
+          drvlog(LOG_INFO, "%s", buf);
           cgtime(&info->tv_lastchipinfo);
         }
 
@@ -711,7 +720,7 @@ cascade:
         drillbit_empty_buffer(drillbit);
 
 	if (unlikely(drillbit->usbinfo.nodev)) {
-		applog(LOG_WARNING, "%s %d: Device disappeared, disabling thread",
+		drvlog(LOG_WARNING, "%s %d: Device disappeared, disabling thread",
 		       drillbit->drv->name, drillbit->device_id);
 		return -1;
 	}
