@@ -195,18 +195,7 @@ static void drillbit_empty_buffer(struct cgpu_info *drillbit)
 
 static void drillbit_open(struct cgpu_info *drillbit)
 {
-	uint32_t buf[2];
-
 	drillbit_empty_buffer(drillbit);
-	/* Magic sequence to reset device only really needed for windows but
-	 * harmless on linux. */
-        /*
-	buf[0] = 0x80250000;
-	buf[1] = 0x00000800;
-	usb_transfer(drillbit, 0, 9, 1, 0, C_BF_RESET);
-	usb_transfer(drillbit, 0x21, 0x22, 0, 0, C_BF_OPEN);
-	usb_transfer_data(drillbit, 0x21, 0x20, 0x0000, 0, buf, 7, C_BF_INIT);
-        */
 }
 
 static void drillbit_close(struct cgpu_info *drillbit)
