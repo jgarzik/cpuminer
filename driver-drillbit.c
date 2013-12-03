@@ -414,7 +414,7 @@ static bool drillbit_parse_options()
   return true;
 }
 
-static bool drillbit_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
+static struct cgpu_info *drillbit_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *drillbit;
 	struct drillbit_info *info;
@@ -466,13 +466,13 @@ static bool drillbit_detect_one(struct libusb_device *dev, struct usb_find_devic
 	applog(LOG_INFO, "%s %d: Successfully initialised %s",
 	       drillbit->drv->name, drillbit->device_id, drillbit->device_path);
 
-	return true;
+	return drillbit;
 out_close:
 	drillbit_close(drillbit);
 	usb_uninit(drillbit);
 out:
 	drillbit = usb_free_cgpu(drillbit);
-	return false;
+	return drillbit;
 }
 
 static void drillbit_detect(bool __maybe_unused hotplug)
