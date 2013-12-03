@@ -228,7 +228,7 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
         // can't call usb_read_fixed_size here as stats not initialised
 	err = usb_read_timeout(drillbit, buf, SZ_SERIALISED_IDENTITY, &amount, 1000, C_BF_GETINFO);
 	if (err) {
-		applog(LOG_INFO, "%s %d: Failed to read GETINFO",
+		applog(LOG_ERR, "%s %d: Failed to read GETINFO",
 		       drillbit->drv->name, drillbit->device_id);
 		return false;
 	}
@@ -239,6 +239,24 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
 	}
         deserialise_identity(&identity, buf);
 
+        // sanity checks on the identity buffer we get back
+        if(strlen(identity.product) == 0 || identity.serial == 0 || identity.num_chips == 0) {
+          applog(LOG_ERR, "Got invalid contents for GETINFO identity response");
+          return false;
+        }
+
+        const int MIN_VERSION = 2;
+        const int MAX_VERSION = 2;
+        if(identity.protocol_version < MIN_VERSION) {
+          applog(LOG_ERR, "Unknown device protocol version %d.", identity.protocol_version);
+          return false;
+        }
+        if(identity.protocol_version > MAX_VERSION) {
+          applog(LOG_ERR, "Device firmware uses newer Drillbit protocol %d. We only support up to %d. Find a newer cgminer!", identity.protocol_version, MAX_VERSION);
+          return false;
+        }
+
+        // load identity data into device info structure
 	info->version = identity.protocol_version;
         if(strncmp(identity.product, "DRILLBIT", sizeof(identity.product)) == 0) {
           // Hack: first production firmwares all described themselves as DRILLBIT, so fill in the gaps
