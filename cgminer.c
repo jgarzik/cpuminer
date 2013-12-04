@@ -77,6 +77,7 @@ char *curly = ":D";
 int opt_hfa_ntime_roll;
 int opt_hfa_hash_clock;
 bool opt_hfa_pll_bypass;
+bool opt_hfa_dfu_boot;
 #endif
 
 #if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_MODMINER)
@@ -1199,11 +1200,14 @@ static struct opt_table opt_config_table[] = {
 		     "Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq"),
 #endif
 #ifdef USE_HASHFAST
-	OPT_WITH_ARG("--hfa-ntime-roll",
-		     opt_set_intval, NULL, &opt_hfa_ntime_roll,
-		     opt_hidden),
+	OPT_WITHOUT_ARG("--hfa-dfu-boot",
+			opt_set_bool, &opt_hfa_dfu_boot,
+			opt_hidden),
 	OPT_WITH_ARG("--hfa-hash-clock",
 		     opt_set_intval, NULL, &opt_hfa_hash_clock,
+		     opt_hidden),
+	OPT_WITH_ARG("--hfa-ntime-roll",
+		     opt_set_intval, NULL, &opt_hfa_ntime_roll,
 		     opt_hidden),
 	OPT_WITHOUT_ARG("--hfa-pll-bypass",
 			opt_set_bool, &opt_hfa_pll_bypass,
