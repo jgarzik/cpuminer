@@ -549,6 +549,9 @@ static int check_for_results(struct thr_info *thr)
         uint8_t buf[SZ_SERIALISED_WORKRESULT];
         WorkResult response;
 
+        if (unlikely(thr->work_restart))
+                return 0;
+
         successful_results = 0;
 
         // Send request for completed work
@@ -560,11 +563,15 @@ static int check_for_results(struct thr_info *thr)
                 drvlog(LOG_ERR, "Got no response to request for work results");
                 return false;
         }
+        if(unlikely(drillbit->usbinfo.nodev))
+                return 0;
         if(result_count)
                 drvlog(LOG_DEBUG, "Result count %d",result_count);
 
         // Receive work results (0 or more)
         for(j = 0; j < result_count; j++) {
+                if(unlikely(drillbit->usbinfo.nodev))
+                        return 0;
 
                 if(!usb_read_fixed_size(drillbit, buf, SZ_SERIALISED_WORKRESULT, TIMEOUT, C_BF_GETRES)) {
                         drvlog(LOG_ERR, "Failed to read response data packet idx %d count 0x%x", j, result_count);
@@ -584,6 +591,8 @@ static int check_for_results(struct thr_info *thr)
                         drvlog(LOG_WARNING, "Got spurious work results for idle ASIC %d", response.chip_id);
                 }
                 for(i = 0; i < response.num_nonces; i++) {
+                        if (unlikely(thr->work_restart))
+                                continue;
                         found = false;
                         for(k = 0; k < WORK_HISTORY_LEN; k++) {
                                 if (chip->current_work[k] && drillbit_checkresults(thr, chip->current_work[k], response.nonce[i])) {
@@ -609,52 +618,19 @@ cleanup:
         return successful_results;
 }
 
-static int64_t drillbit_scanwork(struct thr_info *thr)
+static void drillbit_send_work_to_chip(struct thr_info *thr, struct drillbit_chip_info *chip)
 {
 	struct cgpu_info *drillbit = thr->cgpu;
-	struct drillbit_info *info = drillbit->device_data;
         struct work *work;
-        struct drillbit_chip_info *chip = NULL;
-	struct timeval tv_now, tv_start;
-	int amount, i, j;
-	int ms_diff;
         uint8_t cmd;
-        int result_count;
-        uint8_t buf[200]; // also larger than SZ_SERIALISED_WORKREQUEST
-        char *tmp;
-
-        // check for outstanding results
-        result_count = check_for_results(thr);
-        for(i = 0; i < info->num_chips; i++) {
-                if(info->chips[i].state != WORKING_QUEUED) {
-                        chip = &info->chips[i];
-                        break;
-                }
-        }
-
-        // check for any chips that have timed out on sending results
-        cgtime(&tv_now);
-        for(i = 0; i < info->num_chips; i++) {
-                if(info->chips[i].state == IDLE)
-                        continue;
-                ms_diff = ms_tdiff(&tv_now, &info->chips[i].tv_start);
-                if(ms_diff > TIMEOUT) {
-                        drvlog(LOG_ERR, "Timing out unresponsive ASIC %d", info->chips[i].chip_id);
-                        info->chips[i].state = IDLE;
-                        info->chips[i].timeout_count++;
-                        chip = &info->chips[i];
-                }
-        }
-
-        if(chip == NULL) { // nothing available to send work to!
-                goto cascade;
-        }
+        uint8_t buf[SZ_SERIALISED_WORKREQUEST];
+        int amount, i;
 
         /* Get some new work for the chip */
 	work = get_queue_work(thr, drillbit, thr->id);
 	if (unlikely(thr->work_restart)) {
 		work_completed(drillbit, work);
-		goto cascade;
+		return;
 	}
 
         drvlog(LOG_DEBUG, "Sending work to chip_id %d", chip->chip_id);
@@ -666,7 +642,7 @@ static int64_t drillbit_scanwork(struct thr_info *thr)
 	usb_write(drillbit, buf, SZ_SERIALISED_WORKREQUEST, &amount, C_BF_REQWORK);
 
 	if (unlikely(thr->work_restart))
-		goto cascade;
+		return;
 
         /* Expect a single 'W' byte as acknowledgement */
         usb_read_simple_response(drillbit, 'W', C_BF_REQWORK);
@@ -682,6 +658,47 @@ static int64_t drillbit_scanwork(struct thr_info *thr)
                 chip->current_work[i] = chip->current_work[i+1];
         chip->current_work[WORK_HISTORY_LEN-1] = copy_work(work);
         cgtime(&chip->tv_start);
+}
+
+static int64_t drillbit_scanwork(struct thr_info *thr)
+{
+	struct cgpu_info *drillbit = thr->cgpu;
+	struct drillbit_info *info = drillbit->device_data;
+        struct drillbit_chip_info *chip;
+	struct timeval tv_now, tv_start;
+	int amount, i, j;
+	int ms_diff;
+        int result_count = 0;
+        uint8_t buf[200];
+        char *tmp;
+
+        /* send work to an any chip without queued work */
+        for(i = 0; i < info->num_chips; i++) {
+                if(info->chips[i].state != WORKING_QUEUED) {
+                        drillbit_send_work_to_chip(thr, &info->chips[i]);
+                }
+                if (unlikely(thr->work_restart) || unlikely(drillbit->usbinfo.nodev))
+                        goto cascade;
+        }
+
+        /* check for any chips that have timed out on sending results */
+        cgtime(&tv_now);
+        for(i = 0; i < info->num_chips; i++) {
+                if(info->chips[i].state == IDLE)
+                        continue;
+                ms_diff = ms_tdiff(&tv_now, &info->chips[i].tv_start);
+                if(ms_diff > TIMEOUT) {
+                        drvlog(LOG_ERR, "Timing out unresponsive ASIC %d", info->chips[i].chip_id);
+                        info->chips[i].state = IDLE;
+                        info->chips[i].timeout_count++;
+                        drillbit_send_work_to_chip(thr, &info->chips[i]);
+                }
+                if (unlikely(thr->work_restart) || unlikely(drillbit->usbinfo.nodev))
+                        goto cascade;
+        }
+
+        /* Check for results */
+        result_count = check_for_results(thr);
 
         /* Print a per-chip info line every 30 seconds */
         cgtime(&tv_now);
