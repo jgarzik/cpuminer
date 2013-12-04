@@ -21,11 +21,15 @@ struct drillbit_chip_info;
 struct drillbit_info {
   struct cgpu_info *base_cgpu;
   uint8_t version;
+  uint8_t num_chips;
+  uint16_t capabilities;
   char product[8];
   uint32_t serial;
-  uint8_t num_chips;
   struct drillbit_chip_info *chips;
   struct timeval tv_lastchipinfo;
+  struct timeval tv_lasttemp;
+  uint16_t temp;
+  uint16_t max_temp;
 };
 
 enum drillbit_chip_state {

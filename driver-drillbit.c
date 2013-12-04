@@ -85,6 +85,10 @@ typedef struct
         uint16_t capabilities;
 } Identity;
 
+/* Capabilities flags known to cgminer */
+#define CAP_TEMP 1
+#define CAP_EXT_CLOCK 2
+
 #define SZ_SERIALISED_IDENTITY 16
 static void deserialise_identity(Identity *identity, const uint8_t *buf);
 
@@ -245,7 +249,7 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
         }
 
         const int MIN_VERSION = 2;
-        const int MAX_VERSION = 2;
+        const int MAX_VERSION = 3;
         if(identity.protocol_version < MIN_VERSION) {
                 drvlog(LOG_ERR, "Unknown device protocol version %d.", identity.protocol_version);
                 return false;
@@ -253,6 +257,11 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
         if(identity.protocol_version > MAX_VERSION) {
                 drvlog(LOG_ERR, "Device firmware uses newer Drillbit protocol %d. We only support up to %d. Find a newer cgminer!", identity.protocol_version, MAX_VERSION);
                 return false;
+        }
+
+        if(identity.protocol_version == 2 && identity.num_chips == 1) {
+          // Production firmware Thumbs don't set any capability bits, so fill in the EXT_CLOCK one
+          identity.capabilities = CAP_EXT_CLOCK;
         }
 
         // load identity data into device info structure
@@ -269,9 +278,11 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
         }
         info->serial = identity.serial;
         info->num_chips = identity.num_chips;
+        info->capabilities = identity.capabilities;
 
         drvlog(LOG_INFO, "Getinfo returned version %d, product %s serial %08x num_chips %d",
                 info->version, info->product, info->serial, info->num_chips);
+
         drillbit_empty_buffer(drillbit);
         return true;
 }
@@ -322,6 +333,11 @@ static void drillbit_send_config(struct cgpu_info *drillbit)
                 setting->config.core_voltage, setting->config.use_ext_clock,
                 setting->config.int_clock_level,
                 setting->config.clock_div2, setting->config.ext_clock_freq);
+
+        if(setting->config.use_ext_clock && !(info->capabilities & CAP_EXT_CLOCK)) {
+          drvlog(LOG_WARNING, "Board configuration calls for external clock but this device (serial %08x) has no external clock!", info->serial);
+        }
+
         cmd = 'C';
         usb_write(drillbit, &cmd, 1, &amount, C_BF_REQWORK);
 
@@ -331,6 +347,52 @@ static void drillbit_send_config(struct cgpu_info *drillbit)
         /* Expect a single 'C' byte as acknowledgement */
         usb_read_simple_response(drillbit, 'C', C_BF_CONFIG); // TODO: verify response
 }
+
+static void drillbit_updatetemps(struct thr_info *thr)
+{
+  struct cgpu_info *drillbit = thr->cgpu;
+  struct drillbit_info *info = drillbit->device_data;
+  char cmd;
+  int amount;
+  uint16_t temp;
+  struct timeval tv_now;
+
+  if(!(info->capabilities & CAP_TEMP))
+    return;
+
+  cgtime(&tv_now);
+  if(ms_tdiff(&tv_now, &info->tv_lasttemp) < 1000)
+    return; // Only update temps once a second
+  info->tv_lasttemp = tv_now;
+
+  cmd = 'T';
+  usb_write(drillbit, &cmd, 1, &amount, C_BF_GETTEMP);
+
+  if(!usb_read_fixed_size(drillbit, &temp, sizeof(temp), TIMEOUT, C_BF_GETTEMP)) {
+    drvlog(LOG_ERR, "Got no response to request for current temperature");
+    return;
+  }
+
+  drvlog(LOG_INFO, "Got temperature reading %d.%dC", temp/10, temp%10);
+  info->temp = temp;
+  if(temp > info->max_temp)
+    info->max_temp = temp;
+}
+
+static void drillbit_get_statline_before(char *buf, size_t bufsiz, struct cgpu_info *drillbit)
+{
+	struct drillbit_info *info = drillbit->device_data;
+
+        tailsprintf(buf, bufsiz, "%c%d", info->product[0], info->num_chips);
+
+        if((info->capabilities & CAP_TEMP) && info->temp != 0) {
+          tailsprintf(buf, bufsiz, " %d.%dC (%d.%dC)", info->temp/10, info->temp%10,
+                      info->max_temp/10, info->max_temp%10);
+        }
+
+        tailsprintf(buf, bufsiz, " | ");
+}
+
 
 static bool drillbit_parse_options()
 {
@@ -722,6 +784,8 @@ static int64_t drillbit_scanwork(struct thr_info *thr)
                 cgtime(&info->tv_lastchipinfo);
         }
 
+        drillbit_updatetemps(thr);
+
 cascade:
         drillbit_empty_buffer(drillbit);
 
@@ -772,6 +836,7 @@ struct device_drv drillbit_drv = {
         .hash_work = &hash_driver_work,
 	.scanwork = drillbit_scanwork,
 	.get_api_stats = drillbit_api_stats,
+	.get_statline_before = drillbit_get_statline_before,
 	.reinit_device = drillbit_reinit,
 	.thread_shutdown = drillbit_shutdown,
 	.identify_device = drillbit_identify,
