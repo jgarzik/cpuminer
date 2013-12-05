@@ -240,10 +240,7 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	hu->operation_code = OP_USB_INIT;
 	hu->protocol = PROTOCOL_GLOBAL_WORK_QUEUE;	// Protocol to use
 	// Force PLL bypass
-	if (opt_hfa_pll_bypass) {
-		hu->user_configuration = 1;
-		hu->pll_bypass = 1;
-	}
+	hu->pll_bypass = opt_hfa_pll_bypass;
 	hu->hash_clock = info->hash_clock_rate;		// Hash clock rate in Mhz
 	if (info->group_ntime_roll > 1 && info->core_ntime_roll) {
 		ho = (struct hf_usb_init_options *)(hu + 1);
