@@ -18,6 +18,10 @@
 #include "miner.h"
 #include "usbutils.h"
 
+static pthread_mutex_t cgusb_lock;
+static pthread_mutex_t cgusbres_lock;
+static cglock_t cgusb_fd_lock;
+
 #define NODEV(err) ((err) != LIBUSB_SUCCESS && (err) != LIBUSB_ERROR_TIMEOUT)
 
 #define NOCONTROLDEV(err) ((err) < 0 && NODEV(err))
@@ -3626,4 +3630,11 @@ void *usb_resource_thread(void __maybe_unused *userdata)
 	}
 
 	return NULL;
+}
+
+void initialise_usblocks(void)
+{
+	mutex_init(&cgusb_lock);
+	mutex_init(&cgusbres_lock);
+	cglock_init(&cgusb_fd_lock);
 }

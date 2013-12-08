@@ -208,12 +208,6 @@ int hotplug_time = 5;
 pthread_mutex_t lockstat_lock;
 #endif
 
-#ifdef USE_USBUTILS
-pthread_mutex_t cgusb_lock;
-pthread_mutex_t cgusbres_lock;
-cglock_t cgusb_fd_lock;
-#endif
-
 pthread_mutex_t hash_lock;
 static pthread_mutex_t *stgd_lock;
 pthread_mutex_t console_lock;
@@ -7818,14 +7812,13 @@ static void *libusb_poll_thread(void __maybe_unused *arg)
 
 static void initialise_usb(void) {
 	int err = libusb_init(NULL);
+
 	if (err) {
 		fprintf(stderr, "libusb_init() failed err %d", err);
 		fflush(stderr);
 		quit(1, "libusb_init() failed");
 	}
-	mutex_init(&cgusb_lock);
-	mutex_init(&cgusbres_lock);
-	cglock_init(&cgusb_fd_lock);
+	initialise_usblocks();
 	usb_polling = true;
 	pthread_create(&usb_poll_thread, NULL, libusb_poll_thread, NULL);
 }
