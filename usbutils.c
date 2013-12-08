@@ -18,6 +18,10 @@
 #include "miner.h"
 #include "usbutils.h"
 
+static pthread_mutex_t cgusb_lock;
+static pthread_mutex_t cgusbres_lock;
+static cglock_t cgusb_fd_lock;
+
 #define NODEV(err) ((err) != LIBUSB_SUCCESS && (err) != LIBUSB_ERROR_TIMEOUT)
 
 #define NOCONTROLDEV(err) ((err) < 0 && NODEV(err))
@@ -2424,13 +2428,13 @@ static int usb_submit_transfer(struct usb_transfer *ut, struct libusb_transfer *
 }
 
 static int
-usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
-		  int epinfo, unsigned char *data, int length,
-		  int *transferred, unsigned int timeout,
-		  struct cgpu_info *cgpu, __maybe_unused int mode,
-		  enum usb_cmds cmd, __maybe_unused int seq, bool cancellable)
+usb_bulk_transfer(struct cgpu_info *cgpu, struct cg_usb_device *usbdev, int intinfo,
+		  int epinfo, unsigned char *data, int length, int *transferred,
+		  unsigned int timeout, __maybe_unused int mode, enum usb_cmds cmd,
+		  __maybe_unused int seq, bool cancellable)
 {
 	int bulk_timeout, callback_timeout = timeout, pipe_retries = 0;
+	struct libusb_device_handle *dev_handle = usbdev->handle;
 	struct usb_epinfo *usb_epinfo;
 	struct usb_transfer ut;
 	unsigned char endpoint;
@@ -2449,7 +2453,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	bulk_timeout = 0;
 #endif
 
-	usb_epinfo = &(cgpu->usbdev->found->intinfos[intinfo].epinfos[epinfo]);
+	usb_epinfo = &(usbdev->found->intinfos[intinfo].epinfos[epinfo]);
 	endpoint = usb_epinfo->ep;
 
 	/* Avoid any async transfers during shutdown to allow the polling
@@ -2572,10 +2576,9 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	initial_timeout = timeout;
 	cgtime(&read_start);
 	while (bufleft > 0 && !eom) {
-		err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
-					ptr, usbbufread, &got, timeout,
-					cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1,
-					cancellable);
+		err = usb_bulk_transfer(cgpu, usbdev, intinfo, epinfo, ptr, usbbufread,
+					&got, timeout, MODE_BULK_READ, cmd,
+					first ? SEQ0 : SEQ1, cancellable);
 		cgtime(&tv_finish);
 		ptr[got] = '\0';
 
@@ -2656,10 +2659,10 @@ out_noerrmsg:
 
 int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, int timeout, enum usb_cmds cmd)
 {
-	struct cg_usb_device *usbdev;
 	struct timeval write_start, tv_finish;
+	bool first = true, usb11 = false;
+	struct cg_usb_device *usbdev;
 	unsigned int initial_timeout;
-	__maybe_unused bool first = true;
 	int err, sent, tot, pstate;
 	double done;
 
@@ -2677,6 +2680,8 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 	}
 
 	usbdev = cgpu->usbdev;
+	if (usbdev->descriptor->bcdUSB < 0x0200)
+		usb11 = true;
 	if (timeout == DEVTIMEOUT)
 		timeout = usbdev->found->timeout;
 
@@ -2690,7 +2695,7 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 		/* USB 1.1 devices don't handle zero packets well so split them
 		 * up to not have the final transfer equal to the wMaxPacketSize
 		 * or they will stall waiting for more data. */
-		if (usbdev->descriptor->bcdUSB < 0x0200) {
+		if (usb11) {
 			struct usb_epinfo *ue = &usbdev->found->intinfos[intinfo].epinfos[epinfo];
 
 			if (tosend == ue->wMaxPacketSize) {
@@ -2699,10 +2704,9 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 					tosend = 1;
 			}
 		}
-		err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
-					(unsigned char *)buf, tosend, &sent, timeout,
-					cgpu, MODE_BULK_WRITE, cmd, first ? SEQ0 : SEQ1,
-					false);
+		err = usb_bulk_transfer(cgpu, usbdev, intinfo, epinfo, (unsigned char *)buf,
+					tosend, &sent, timeout, MODE_BULK_WRITE,
+					cmd, first ? SEQ0 : SEQ1, false);
 		cgtime(&tv_finish);
 
 		USBDEBUG("USB debug: @_usb_write(%s (nodev=%s)) err=%d%s sent=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), sent);
@@ -3560,6 +3564,7 @@ fila:
 	free(sem);
 	free(key);
 	remove_in_use(bus_number, device_address);
+	unlink(name);
 	return;
 #endif
 }
@@ -3627,4 +3632,11 @@ void *usb_resource_thread(void __maybe_unused *userdata)
 	}
 
 	return NULL;
+}
+
+void initialise_usblocks(void)
+{
+	mutex_init(&cgusb_lock);
+	mutex_init(&cgusbres_lock);
+	cglock_init(&cgusb_fd_lock);
 }
