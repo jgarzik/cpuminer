@@ -2659,10 +2659,10 @@ out_noerrmsg:
 
 int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, int timeout, enum usb_cmds cmd)
 {
-	struct cg_usb_device *usbdev;
 	struct timeval write_start, tv_finish;
+	bool first = true, usb11 = false;
+	struct cg_usb_device *usbdev;
 	unsigned int initial_timeout;
-	__maybe_unused bool first = true;
 	int err, sent, tot, pstate;
 	double done;
 
@@ -2680,6 +2680,8 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 	}
 
 	usbdev = cgpu->usbdev;
+	if (usbdev->descriptor->bcdUSB < 0x0200)
+		usb11 = true;
 	if (timeout == DEVTIMEOUT)
 		timeout = usbdev->found->timeout;
 
@@ -2693,7 +2695,7 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 		/* USB 1.1 devices don't handle zero packets well so split them
 		 * up to not have the final transfer equal to the wMaxPacketSize
 		 * or they will stall waiting for more data. */
-		if (usbdev->descriptor->bcdUSB < 0x0200) {
+		if (usb11) {
 			struct usb_epinfo *ue = &usbdev->found->intinfos[intinfo].epinfos[epinfo];
 
 			if (tosend == ue->wMaxPacketSize) {
