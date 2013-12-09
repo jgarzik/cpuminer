@@ -1007,6 +1007,36 @@ static void bflsc_flash_led(struct cgpu_info *bflsc, int dev)
 	return;
 }
 
+/* Flush and stop all work if the device reaches the thermal cutoff temp, or
+ * temporarily stop queueing work if it's in the throttling range. */
+static void bflsc_manage_temp(struct cgpu_info *bflsc, struct bflsc_dev *sc_dev,
+			      int dev, float temp)
+{
+	bflsc->temp = temp;
+	if (bflsc->cutofftemp > 0) {
+		int cutoff = bflsc->cutofftemp;
+		int throttle = cutoff - BFLSC_TEMP_THROTTLE;
+		int recover = cutoff - BFLSC_TEMP_RECOVER;
+
+		if (sc_dev->overheat) {
+			if (temp < recover)
+				sc_dev->overheat = false;
+		} else if (temp > throttle) {
+			sc_dev->overheat = true;
+			if (temp > cutoff) {
+				applog(LOG_WARNING, "%s%i: temp (%.1f) hit thermal cutoff limit %d, stopping work!",
+				       bflsc->drv->name, bflsc->device_id, temp, cutoff);
+				dev_error(bflsc, REASON_DEV_THERMAL_CUTOFF);
+				flush_one_dev(bflsc, dev);
+
+			} else {
+				applog(LOG_NOTICE, "%s%i: temp (%.1f) hit thermal throttle limit %d, throttling",
+				       bflsc->drv->name, bflsc->device_id, temp, throttle);
+			}
+		}
+	}
+}
+
 static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
@@ -1200,20 +1230,7 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 		if (temp < temp2)
 			temp = temp2;
 
-		bflsc->temp = temp;
-
-		if (bflsc->cutofftemp > 0 && temp >= bflsc->cutofftemp) {
-			applog(LOG_WARNING, "%s%i:%s temp (%.1f) hit thermal cutoff limit %d, stopping work!",
-						bflsc->drv->name, bflsc->device_id, xlink,
-						temp, bflsc->cutofftemp);
-			dev_error(bflsc, REASON_DEV_THERMAL_CUTOFF);
-			sc_dev->overheat = true;
-			flush_one_dev(bflsc, dev);
-			return false;
-		}
-
-		if (bflsc->cutofftemp > 0 && temp < (bflsc->cutofftemp - BFLSC_TEMP_RECOVER))
-			sc_dev->overheat = false;
+		bflsc_manage_temp(bflsc, sc_dev, dev, temp);
 	}
 
 	return true;
