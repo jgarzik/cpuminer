@@ -2607,6 +2607,18 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		if (end != NULL)
 			eom = strstr((const char *)usbbuf, end);
 
+		/* Attempt a usb reset for an error that will otherwise cause
+		 * this device to drop out provided we know the device still
+		 * might exist. */
+		if (err && err != LIBUSB_ERROR_TIMEOUT) {
+			applog(LOG_WARNING, "%s %i %s usb read err:(%d) %s", cgpu->drv->name,
+			       cgpu->device_id, usb_cmdname(cmd), err, libusb_error_name(err));
+			if (err != LIBUSB_ERROR_NO_DEVICE) {
+				err = libusb_reset_device(usbdev->handle);
+				applog(LOG_WARNING, "%s %i attempted reset got err:(%d) %s",
+				       cgpu->drv->name, cgpu->device_id, err, libusb_error_name(err));
+			}
+		}
 		if (err || readonce)
 			break;
 
@@ -2646,12 +2658,6 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	*processed = tot;
 	memcpy((char *)buf, (const char *)usbbuf, (tot < (int)bufsiz) ? tot + 1 : (int)bufsiz);
 
-	if (err && err != LIBUSB_ERROR_TIMEOUT) {
-		applog(LOG_WARNING, "%s %i %s usb read err:(%d) %s", cgpu->drv->name, cgpu->device_id, usb_cmdname(cmd),
-		       err, libusb_error_name(err));
-		if (cgpu->usbinfo.continuous_ioerr_count > USB_RETRY_MAX)
-			err = LIBUSB_ERROR_OTHER;
-	}
 out_noerrmsg:
 	if (NODEV(err)) {
 		cg_ruwlock(&cgpu->usbinfo.devlock);
@@ -2721,6 +2727,17 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 
 		tot += sent;
 
+		/* Unlike reads, even a timeout error is unrecoverable on
+		 * writes. */
+		if (err) {
+			applog(LOG_WARNING, "%s %i %s usb write err:(%d) %s", cgpu->drv->name,
+			       cgpu->device_id, usb_cmdname(cmd), err, libusb_error_name(err));
+			if (err != LIBUSB_ERROR_NO_DEVICE) {
+				err = libusb_reset_device(usbdev->handle);
+				applog(LOG_WARNING, "%s %i attempted reset got err:(%d) %s",
+				       cgpu->drv->name, cgpu->device_id, err, libusb_error_name(err));
+			}
+		}
 		if (err)
 			break;
 
@@ -2738,12 +2755,6 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 
 	*processed = tot;
 
-	if (err) {
-		applog(LOG_WARNING, "%s %i %s usb write err:(%d) %s", cgpu->drv->name, cgpu->device_id, usb_cmdname(cmd),
-		       err, libusb_error_name(err));
-		if (cgpu->usbinfo.continuous_ioerr_count > USB_RETRY_MAX)
-			err = LIBUSB_ERROR_OTHER;
-	}
 out_noerrmsg:
 	if (NODEV(err)) {
 		cg_ruwlock(&cgpu->usbinfo.devlock);
