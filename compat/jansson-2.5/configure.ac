@@ -4,6 +4,7 @@ AC_INIT([jansson], [2.5], [petri@digip.org])
 AC_CONFIG_MACRO_DIR([m4])
 
 AM_INIT_AUTOMAKE([1.10 foreign])
+m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
 AC_CONFIG_SRCDIR([src/value.c])
 AC_CONFIG_HEADERS([config.h])
