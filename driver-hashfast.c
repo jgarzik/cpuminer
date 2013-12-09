@@ -84,7 +84,7 @@ static const struct hfa_cmd hfa_cmds[] = {
 	{OP_GET_TRACE, "OP_GET_TRACE", C_NULL},
 	{OP_LOOPBACK_USB, "OP_LOOPBACK_USB", C_NULL},
 	{OP_LOOPBACK_UART, "OP_LOOPBACK_UART", C_NULL},
-	{OP_DFU, "OP_DFU", C_NULL},
+	{OP_DFU, "OP_DFU", C_HF_DFU},
 	{OP_USB_SHUTDOWN, "OP_USB_SHUTDOWN", C_NULL},
 	{OP_DIE_STATUS, "OP_DIE_STATUS", C_HF_DIE_STATUS},	// 24
 	{OP_GWQ_STATUS, "OP_GWQ_STATUS", C_HF_GWQ_STATUS},
@@ -240,10 +240,7 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	hu->operation_code = OP_USB_INIT;
 	hu->protocol = PROTOCOL_GLOBAL_WORK_QUEUE;	// Protocol to use
 	// Force PLL bypass
-	if (opt_hfa_pll_bypass) {
-		hu->user_configuration = 1;
-		hu->pll_bypass = 1;
-	}
+	hu->pll_bypass = opt_hfa_pll_bypass;
 	hu->hash_clock = info->hash_clock_rate;		// Hash clock rate in Mhz
 	if (info->group_ntime_roll > 1 && info->core_ntime_roll) {
 		ho = (struct hf_usb_init_options *)(hu + 1);
@@ -433,6 +430,15 @@ static bool hfa_initialise(struct cgpu_info *hashfast)
 	return (err == 7);
 }
 
+static void hfa_dfu_boot(struct cgpu_info *hashfast)
+{
+	bool ret;
+
+	ret = hfa_send_frame(hashfast, HF_USB_CMD(OP_DFU), 0, NULL, 0);
+	applog(LOG_WARNING, "HFA %d %03d:%03d DFU Boot %s", hashfast->device_id, hashfast->usbinfo.bus_number,
+	       hashfast->usbinfo.device_address, ret ? "Succeeded" : "Failed");
+}
+
 static struct cgpu_info *hfa_detect_one(libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *hashfast;
@@ -452,7 +458,11 @@ static struct cgpu_info *hfa_detect_one(libusb_device *dev, struct usb_find_devi
 		hashfast = usb_free_cgpu(hashfast);
 		return NULL;
 	}
-
+	if (opt_hfa_dfu_boot) {
+		hfa_dfu_boot(hashfast);
+		hashfast = usb_free_cgpu(hashfast);
+		return NULL;
+	}
 	if (!hfa_detect_common(hashfast)) {
 		usb_uninit(hashfast);
 		hashfast = usb_free_cgpu(hashfast);

@@ -377,6 +377,7 @@ struct cg_usb_info {
 	USB_ADD_COMMAND(C_HF_STATISTICS, "HFStatistics") \
 	USB_ADD_COMMAND(C_HF_CLOCKGATE, "HFClockGate") \
 	USB_ADD_COMMAND(C_HF_USB_INIT, "HFUSBInit") \
+	USB_ADD_COMMAND(C_HF_DFU, "HFDFU") \
 	USB_ADD_COMMAND(C_HF_DIE_STATUS, "HFDieStatus") \
 	USB_ADD_COMMAND(C_HF_GWQ_STATUS, "HFGWQStatus") \
 	USB_ADD_COMMAND(C_HF_WORK_RESTART, "HFWorkRestart") \
@@ -425,6 +426,7 @@ void usb_set_dev_start(struct cgpu_info *cgpu);
 void usb_cleanup();
 void usb_initialise();
 void *usb_resource_thread(void *userdata);
+void initialise_usblocks(void);
 
 #define usb_read(cgpu, buf, bufsiz, read, cmd) \
 	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false, false)
