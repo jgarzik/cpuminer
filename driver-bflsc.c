@@ -1831,7 +1831,7 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 	return ret;
 }
 
-#define BFLSC_OVER_TEMP 60
+#define BFLSC_OVER_TEMP 75
 
 /* Set the fanspeed to auto for any valid value <= BFLSC_OVER_TEMP,
  * or max for any value > BFLSC_OVER_TEMP or if we don't know the temperature. */
