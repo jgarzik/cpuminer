@@ -6797,6 +6797,11 @@ static void *longpoll_thread(void __maybe_unused *userdata)
 
 void reinit_device(struct cgpu_info *cgpu)
 {
+#ifdef USE_USBUTILS
+	/* Attempt a usb device reset if the device has gone sick */
+	if (cgpu->usbdev && cgpu->usbdev->handle)
+		libusb_reset_device(cgpu->usbdev->handle);
+#endif
 	cgpu->drv->reinit_device(cgpu);
 }
 
