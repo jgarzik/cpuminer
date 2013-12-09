@@ -2471,7 +2471,11 @@ pipe_retry:
 
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT) {
 		memcpy(buf, data, length);
+#ifndef HAVE_LIBUSB
+		/* Older versions may not have this feature so only enable it
+		 * when we know we're compiling with included static libusb */
 		ut.transfer->flags |= LIBUSB_TRANSFER_ADD_ZERO_PACKET;
+#endif
 #ifdef WIN32
 		/* Writes on windows really don't like to be cancelled, but
 		 * are prone to timeouts under heavy USB traffic, so make this
