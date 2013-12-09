@@ -580,15 +580,15 @@ static uint32_t decnonce(uint32_t in)
 	return out;
 }
 
-#define BT_OFFSETS 3
-const uint32_t bf_offsets[] = {-0x800000, 0, -0x400000};
+#define BF_OFFSETS 3
+static const uint32_t bf_offsets[] = {-0x800000, 0, -0x400000};
 
 static bool drillbit_checkresults(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	int i;
 
         nonce = decnonce(nonce);
-	for (i = 0; i < BT_OFFSETS; i++) {
+	for (i = 0; i < BF_OFFSETS; i++) {
 		if (test_nonce(work, nonce + bf_offsets[i])) {
 			submit_tested_work(thr, work);
 			return true;

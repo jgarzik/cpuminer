@@ -134,9 +134,9 @@ static struct usb_epinfo bfu1_epinfos[] = {
 };
 
 /* Default to interface 1 */
-static struct usb_intinfo bf1_ints[] = {
-	USB_EPS(1,  bf1_bulk_epinfos),
-	USB_EPS(0,  bf1_int_epinfos)
+static struct usb_intinfo bfu_ints[] = {
+	USB_EPS(1,  bfu1_epinfos),
+	USB_EPS(0,  bfu0_epinfos)
 };
 #endif
 
@@ -350,9 +350,9 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.timeout = BITFURY_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
-		.iManufacturer = "BPMC",
+		//.iManufacturer = "BPMC",
 		.iProduct = "Bitfury BF1",
-		INTINFO(bf1_ints)
+		INTINFO(bfu_ints)
 	},
 #endif
 #ifdef USE_DRILLBIT
@@ -3113,7 +3113,7 @@ void usb_cleanup(void)
 			case DRIVER_bflsc:
 			case DRIVER_bitforce:
 			case DRIVER_bitfury:
-                        case DRIVER_drillbit:
+			case DRIVER_drillbit:
 			case DRIVER_modminer:
 			case DRIVER_icarus:
 			case DRIVER_avalon:
