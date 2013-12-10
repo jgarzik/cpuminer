@@ -29,7 +29,7 @@
 #define BITMAIN_DATA_TYPE_RXSTATUS  0xa1
 #define BITMAIN_DATA_TYPE_RXNONCE   0xa2
 
-#define BITMAIN_FAN_FACTOR 120
+#define BITMAIN_FAN_FACTOR 60
 #define BITMAIN_PWM_MAX 0xA0
 #define BITMAIN_DEFAULT_FAN_MIN 20
 #define BITMAIN_DEFAULT_FAN_MAX 100
@@ -41,23 +41,35 @@
 #define BITMAIN_TEMP_OVERHEAT 60
 
 #define BITMAIN_DEFAULT_TIMEOUT 0x2D
-#define BITMAIN_MIN_FREQUENCY 256
-#define BITMAIN_MAX_FREQUENCY 450
+#define BITMAIN_MIN_FREQUENCY 10
+#define BITMAIN_MAX_FREQUENCY 1000000
 #define BITMAIN_TIMEOUT_FACTOR 12690
 #define BITMAIN_DEFAULT_FREQUENCY 282
 #define BITMAIN_DEFAULT_VOLTAGE 5
-#define BITMAIN_DEFAULT_MINER_NUM 0x20
-#define BITMAIN_DEFAULT_ASIC_NUM 0xA
+#define BITMAIN_DEFAULT_CHAIN_NUM 8
+#define BITMAIN_DEFAULT_ASIC_NUM 32
+#define BITMAIN_DEFAULT_REG_DATA 0
 
 #define BITMAIN_AUTO_CYCLE 1024
 
 #define BITMAIN_FTDI_READSIZE 510
 #define BITMAIN_USB_PACKETSIZE 512
-#define BITMAIN_SENDBUF_SIZE 64
+#define BITMAIN_SENDBUF_SIZE 8192
 #define BITMAIN_READBUF_SIZE 8192
 #define BITMAIN_RESET_TIMEOUT 100
 #define BITMAIN_READ_TIMEOUT 18 /* Enough to only half fill the buffer */
 #define BITMAIN_LATENCY 1
+
+#define BITMAIN_MAX_WORK_NUM       8
+#define BITMAIN_MAX_WORK_QUEUE_NUM 64
+#define BITMAIN_MAX_DEAL_QUEUE_NUM 1
+#define BITMAIN_MAX_NONCE_NUM      8
+#define BITMAIN_MAX_CHAIN_NUM      8
+#define BITMAIN_MAX_TEMP_NUM       32
+#define BITMAIN_MAX_FAN_NUM        32
+
+#define BITMAIN_SEND_STATUS_TIME   10 //s
+#define BITMAIN_SEND_FULL_SPACE    128
 
 struct bitmain_txconfig_token {
 	uint8_t token_type;
@@ -69,10 +81,10 @@ struct bitmain_txconfig_token {
 	uint8_t voltage_eft          :1;
 	uint8_t chain_check_time_eft :1;
 	uint8_t chip_config_eft      :1;
-	uint8_t reserved1            :1;
-	uint8_t reserved2;
+	uint8_t hw_error_eft         :1;
+	uint8_t reserved1;
 
-	uint8_t miner_num;
+	uint8_t chain_num;
 	uint8_t asic_num;
 	uint8_t fan_pwm_data;
 	uint8_t timeout_data;
@@ -81,23 +93,26 @@ struct bitmain_txconfig_token {
 	uint8_t voltage;
 	uint8_t chain_check_time;
 
-	uint32_t reg_data;
+	uint8_t reg_data[4];
 	uint8_t chip_address;
 	uint8_t reg_address;
 	uint16_t crc;
 } __attribute__((packed, aligned(4)));
 
-struct bitmain_txtask_token {
-	uint8_t token_type;
-	uint8_t length;
-	uint8_t new_block            :1;
-	uint8_t reserved1            :7;
-	uint8_t reserved2;
-
+struct bitmain_txtask_work {
 	uint32_t work_id;
 	uint8_t midstate[32];
 	uint8_t data2[12];
-	uint8_t reserved3[2];
+} __attribute__((packed, aligned(4)));
+
+struct bitmain_txtask_token {
+	uint8_t token_type;
+	uint8_t reserved1;
+	uint16_t length;
+	uint8_t new_block            :1;
+	uint8_t reserved2            :7;
+	uint8_t reserved3[3];
+	struct bitmain_txtask_work works[BITMAIN_MAX_WORK_NUM];
 	uint16_t crc;
 } __attribute__((packed, aligned(4)));
 
@@ -119,36 +134,52 @@ struct bitmain_rxstatus_data {
 	uint8_t length;
 	uint8_t chip_value_eft       :1;
 	uint8_t reserved1            :7;
-	uint8_t reserved2;
-
+	uint8_t version;
+	uint32_t fifo_space;
 	uint32_t reg_value;
-	uint8_t miner_num;
-	uint8_t asic_num;
+	uint32_t nonce_error;
+	uint8_t chain_num;
 	uint8_t temp_num;
 	uint8_t fan_num;
-	uint8_t temp[1024];
-	uint8_t fan[1024];
+	uint8_t reserved2;
+	uint32_t chain_asic_status[BITMAIN_MAX_CHAIN_NUM];
+	uint8_t chain_asic_num[BITMAIN_MAX_CHAIN_NUM];
+	uint8_t temp[BITMAIN_MAX_TEMP_NUM];
+	uint8_t fan[BITMAIN_MAX_FAN_NUM];
 	uint16_t crc;
+} __attribute__((packed, aligned(4)));
+
+struct bitmain_rxnonce_nonce {
+	uint32_t work_id;
+	uint32_t nonce;
 } __attribute__((packed, aligned(4)));
 
 struct bitmain_rxnonce_data {
 	uint8_t data_type;
 	uint8_t length;
-	uint8_t reserved1[2];
-	uint32_t work_id;
-	uint32_t nonce;
+	uint8_t fifo_space;
+	uint8_t nonce_num;
+	struct bitmain_rxnonce_nonce nonces[BITMAIN_MAX_NONCE_NUM];
+	uint16_t crc;
 } __attribute__((packed, aligned(4)));
 
 struct bitmain_info {
 	int baud;
-	int miner_num;
+	int chain_num;
 	int asic_num;
+	int chain_asic_num[BITMAIN_MAX_CHAIN_NUM];
+	uint32_t chain_asic_status[BITMAIN_MAX_CHAIN_NUM];
+	char chain_asic_status_t[BITMAIN_MAX_CHAIN_NUM][40];
 	int timeout;
+	int errorcount;
+	uint32_t nonce_error;
+	uint32_t last_nonce_error;
+	uint8_t reg_data[4];
 
 	int fan_num;
-	int fan[1024];
+	int fan[BITMAIN_MAX_FAN_NUM];
 	int temp_num;
-	int temp[1024];
+	int temp[BITMAIN_MAX_TEMP_NUM];
 
 	int temp_max;
 	int temp_avg;
@@ -158,10 +189,11 @@ struct bitmain_info {
 	int temp_old;
 	int fan_pwm;
 
-	int no_matching_work;
-	int matching_work[BITMAIN_DEFAULT_MINER_NUM];
-
 	int frequency;
+	int voltage;
+
+	int no_matching_work;
+	//int matching_work[BITMAIN_DEFAULT_CHAIN_NUM];
 
 	struct thr_info *thr;
 	pthread_t read_thr;
@@ -171,6 +203,10 @@ struct bitmain_info {
 	pthread_cond_t qcond;
 	cgsem_t write_sem;
 	int nonces;
+	int fifo_space;
+	unsigned int last_work_block;
+	struct timeval last_status_time;
+	int send_full_space;
 
 	int auto_queued;
 	int auto_nonces;
@@ -183,7 +219,7 @@ struct bitmain_info {
 };
 
 #define BITMAIN_READ_SIZE 12
-#define BITMAIN_ARRAY_SIZE 512
+#define BITMAIN_ARRAY_SIZE 2048
 
 #define BTM_GETS_ERROR -1
 #define BTM_GETS_OK 0
@@ -191,13 +227,12 @@ struct bitmain_info {
 #define BTM_SEND_ERROR -1
 #define BTM_SEND_OK 0
 
-#define bitmain_buffer_full(bitmain) !usb_ftdi_cts(bitmain)
-
 #define BITMAIN_READ_TIME(baud) ((double)BITMAIN_READ_SIZE * (double)8.0 / (double)(baud))
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
 
 extern struct bitmain_info **bitmain_info;
+extern char opt_bitmain_dev[256];
 extern int opt_bitmain_temp;
 extern int opt_bitmain_overheat;
 extern int opt_bitmain_fan_min;
@@ -205,6 +240,7 @@ extern int opt_bitmain_fan_max;
 extern int opt_bitmain_freq_min;
 extern int opt_bitmain_freq_max;
 extern bool opt_bitmain_auto;
+extern char *set_bitmain_dev(char *arg);
 extern char *set_bitmain_fan(char *arg);
 extern char *set_bitmain_freq(char *arg);
 
