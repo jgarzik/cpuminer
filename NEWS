@@ -1,3 +1,33 @@
+Version 3.8.5 - 10th December 2013
+
+- Increase the BFLSC overtemp to 75 for fanspeed to maximum.
+- Set bflsc cutoff temperature to 85 degrees and throttle 3 degrees below the
+cutoff temperature.
+- Only set LIBUSB_TRANSFER_ADD_ZERO_PACKET for libusb versions we know include
+support for.
+- Provide a helper function that can reset cgsems to zero.
+- Add to cgminer_CPPFLAGS instead of redefining them.
+- Attempt a libusb reset device on usb devices that have stopped responding.
+- Replace deprecated use of INCLUDES with _CPPFLAGS.
+- Remove more unused GPU code.
+- Attempt USB device resets on usb read/write errors that will normally cause
+the device to drop out.
+- Quieten down jansson component of build.
+- Cache the bool value for usb1.1 in _usb_write
+- Initialise usb locks within usbutils.c instead of exporting them.
+- Imitate a transaction translator for all usb1.1 device writes to compensate
+for variable quality hubs and operating system support.
+- Rationalise variables passed to usb_bulk_transfer.
+- Unlink files opened as semaphores on releasing them.
+- Remove user configuration flag from pll bypass enabling in hashfast driver.
+- Provide an hfa-dfu-boot option for resetting hashfast devices for
+reprogramming.
+- Fixed one byte stack overflow in mcast recvfrom.
+- Having changed C_MAX means we don't calloc enough for usb stats, off by one.
+- Don't free the info struct on hashfast shutdown since it's still accessed
+after a device is removed.
+
+
 Version 3.8.4 - 1st December 2013
 
 - Deprecate the usb usecps function and just split up transfers equal to the
