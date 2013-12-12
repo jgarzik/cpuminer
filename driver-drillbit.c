@@ -17,7 +17,8 @@
 #include "sha2.h"
 
 /* Wait longer 1/3 longer than it would take for a full nonce range */
-#define TIMEOUT 2000
+#define TIMEOUT 6000
+#define SHORT_TIMEOUT 2000
 #define MAX_RESULTS 16 // max results from a single chip
 
 #define drvlog(prio, fmt, ...) do { \
@@ -159,7 +160,7 @@ static bool usb_read_simple_response(struct cgpu_info *drillbit, char command, e
 */
 static bool usb_send_simple_command(struct cgpu_info *drillbit, char command, enum usb_cmds command_name) {
         int amount;
-        usb_write(drillbit, &command, 1, &amount, C_BF_REQWORK);
+        usb_write_timeout(drillbit, &command, 1, &amount, TIMEOUT, C_BF_REQWORK);
         if(amount != 1) {
                 drvlog(LOG_ERR, "Failed to write command %c",command);
                 return false;
@@ -224,7 +225,7 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
         Identity identity;
 
         drillbit_empty_buffer(drillbit);
-        err = usb_write(drillbit, "I", 1, &amount, C_BF_REQINFO);
+        err = usb_write_timeout(drillbit, "I", 1, &amount, TIMEOUT, C_BF_REQINFO);
         if (err) {
                 drvlog(LOG_INFO, "Failed to write REQINFO");
                 return false;
@@ -297,37 +298,52 @@ static bool drillbit_reset(struct cgpu_info *drillbit)
         return true;
 }
 
+static config_setting *find_settings(struct cgpu_info *drillbit)
+{
+        struct drillbit_info *info = drillbit->device_data;
+        config_setting *setting;
+        uint8_t search_key[9];
+
+        // Search by serial (8 character hex string)
+        sprintf(search_key, "%08x", info->serial);
+	HASH_FIND_STR(settings, search_key, setting);
+	if(setting)  {
+		drvlog(LOG_INFO, "Using unit-specific settings for serial %s", search_key);
+                return setting;
+	}
+
+        // Search by DRBxxx
+        snprintf(search_key, 9, "DRB%d", drillbit->device_id);
+        HASH_FIND_STR(settings, search_key, setting);
+        if(setting) {
+                drvlog(LOG_INFO, "Using device_id specific settings for device");
+                return setting;
+        }
+
+        // Failing that, search by product name
+        HASH_FIND_STR(settings, info->product, setting);
+        if(setting) {
+                drvlog(LOG_INFO, "Using product-specific settings for device %s", info->product);
+                return setting;
+        }
+
+        // Failing that, return default/generic config (null key)
+        search_key[0] = 0;
+        HASH_FIND_STR(settings, search_key, setting);
+        drvlog(LOG_INFO, "Using non-specific settings for device %s (serial %08x)", info->product,
+                info->serial);
+}
+
 static void drillbit_send_config(struct cgpu_info *drillbit)
 {
         struct drillbit_info *info = drillbit->device_data;
         char cmd;
         int amount;
-        uint8_t search_key[9];
         uint8_t buf[SZ_SERIALISED_BOARDCONFIG];
         config_setting *setting;
 
         // Find the relevant board config
-
-        // Search by serial (8 character hex string)
-        sprintf(search_key, "%08x", info->serial);
-        HASH_FIND_STR(settings, search_key, setting);
-        if(setting)  {
-                drvlog(LOG_INFO, "Using unit-specific settings for serial %s", search_key);
-        } 
-        else {
-                // Failing that, search by product name
-                HASH_FIND_STR(settings, info->product, setting);
-                if(setting) {
-                        drvlog(LOG_INFO, "Using product-specific settings for device %s", info->product);
-                }
-                else {
-                        // Failing that, return default/generic config (null key)
-                        search_key[0] = 0;
-                        HASH_FIND_STR(settings, search_key, setting);
-                        drvlog(LOG_INFO, "Using non-specific settings for device %s (serial %08x)", info->product,
-                                info->serial);
-                }
-        }
+        setting = find_settings(drillbit);
 
         drvlog(LOG_INFO, "Sending board configuration voltage=%d use_ext_clock=%d int_clock_level=%d clock_div2=%d ext_clock_freq=%d",
                 setting->config.core_voltage, setting->config.use_ext_clock,
@@ -339,10 +355,10 @@ static void drillbit_send_config(struct cgpu_info *drillbit)
         }
 
         cmd = 'C';
-        usb_write(drillbit, &cmd, 1, &amount, C_BF_REQWORK);
+        usb_write_timeout(drillbit, &cmd, 1, &amount, TIMEOUT, C_BF_REQWORK);
 
         serialise_board_config(buf, &setting->config);
-        usb_write(drillbit, buf, SZ_SERIALISED_BOARDCONFIG, &amount, C_BF_CONFIG);
+        usb_write_timeout(drillbit, buf, SZ_SERIALISED_BOARDCONFIG, &amount, TIMEOUT, C_BF_CONFIG);
 
         /* Expect a single 'C' byte as acknowledgement */
         usb_read_simple_response(drillbit, 'C', C_BF_CONFIG); // TODO: verify response
@@ -366,7 +382,7 @@ static void drillbit_updatetemps(struct thr_info *thr)
   info->tv_lasttemp = tv_now;
 
   cmd = 'T';
-  usb_write(drillbit, &cmd, 1, &amount, C_BF_GETTEMP);
+  usb_write_timeout(drillbit, &cmd, 1, &amount, TIMEOUT, C_BF_GETTEMP);
 
   if(!usb_read_fixed_size(drillbit, &temp, sizeof(temp), TIMEOUT, C_BF_GETTEMP)) {
     drvlog(LOG_ERR, "Got no response to request for current temperature");
@@ -618,7 +634,7 @@ static int check_for_results(struct thr_info *thr)
 
         // Send request for completed work
         cmd = 'E';
-        usb_write(drillbit, &cmd, 1, &amount, C_BF_GETRES);
+        usb_write_timeout(drillbit, &cmd, 1, &amount, TIMEOUT, C_BF_GETRES);
 
         // Receive count for work results
         if(!usb_read_fixed_size(drillbit, &result_count, sizeof(result_count), TIMEOUT, C_BF_GETRES)) {
@@ -700,8 +716,8 @@ static void drillbit_send_work_to_chip(struct thr_info *thr, struct drillbit_chi
 
 	/* Send work to cgminer */
         cmd = 'W';
-	usb_write(drillbit, &cmd, 1, &amount, C_BF_REQWORK);
-	usb_write(drillbit, buf, SZ_SERIALISED_WORKREQUEST, &amount, C_BF_REQWORK);
+	usb_write_timeout(drillbit, &cmd, 1, &amount, TIMEOUT, C_BF_REQWORK);
+	usb_write_timeout(drillbit, buf, SZ_SERIALISED_WORKREQUEST, &amount, TIMEOUT, C_BF_REQWORK);
 
 	if (unlikely(thr->work_restart))
 		return;
