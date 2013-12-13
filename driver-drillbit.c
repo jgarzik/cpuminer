@@ -332,6 +332,7 @@ static config_setting *find_settings(struct cgpu_info *drillbit)
         HASH_FIND_STR(settings, search_key, setting);
         drvlog(LOG_INFO, "Using non-specific settings for device %s (serial %08x)", info->product,
                 info->serial);
+        return setting;
 }
 
 static void drillbit_send_config(struct cgpu_info *drillbit)
