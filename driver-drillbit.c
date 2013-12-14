@@ -658,16 +658,15 @@ static int check_for_results(struct thr_info *thr)
         struct drillbit_info *info = drillbit->device_data;
         struct drillbit_chip_info *chip;
         char cmd;
-        int amount, i, j, k;
-        int successful_results, found;
+        int amount, i, j, k, found;
+        int successful_results = 0;
         uint32_t result_count;
         uint8_t buf[SZ_SERIALISED_WORKRESULT];
-        WorkResult response;
+        WorkResult *responses = NULL;
+        WorkResult *response;
 
         if (unlikely(thr->work_restart))
-                return 0;
-
-        successful_results = 0;
+                goto cleanup;
 
         // Send request for completed work
         cmd = 'E';
@@ -676,38 +675,57 @@ static int check_for_results(struct thr_info *thr)
         // Receive count for work results
         if(!usb_read_fixed_size(drillbit, &result_count, sizeof(result_count), TIMEOUT, C_BF_GETRES)) {
                 drvlog(LOG_ERR, "Got no response to request for work results");
-                return false;
+                goto cleanup;
         }
         if(unlikely(drillbit->usbinfo.nodev))
-                return 0;
+                goto cleanup;
         if(result_count)
                 drvlog(LOG_DEBUG, "Result count %d",result_count);
 
-        // Receive work results (0 or more)
+        if(result_count > 1024) {
+                drvlog(LOG_ERR, "Got implausible result count %d - treating as error!", result_count);
+                goto cleanup;
+        }
+
+        if(result_count == 0) {
+                // Short circuit reading any work results
+                return 0;
+        }
+
+        responses = calloc(result_count, sizeof(WorkResult));
+
+        // Receive work results (0 or more) into buffer
         for(j = 0; j < result_count; j++) {
                 if(unlikely(drillbit->usbinfo.nodev))
-                        return 0;
-
+                        goto cleanup;
                 if(!usb_read_fixed_size(drillbit, buf, SZ_SERIALISED_WORKRESULT, TIMEOUT, C_BF_GETRES)) {
                         drvlog(LOG_ERR, "Failed to read response data packet idx %d count 0x%x", j, result_count);
-                        return 0;
+                        goto cleanup;
                 }
-                deserialise_work_result(&response, buf);
+                deserialise_work_result(&responses[j], buf);
+        }
 
+        for(j = 0; j < result_count; j++) {
                 if (unlikely(thr->work_restart))
                         goto cleanup;
-                drvlog(LOG_DEBUG, "Got response packet chip_id %d nonces %d is_idle %d", response.chip_id, response.num_nonces, response.is_idle);
-                chip = find_chip(info, response.chip_id);
+
+                response = &responses[j];
+                drvlog(LOG_DEBUG, "Got response packet chip_id %d nonces %d is_idle %d", response->chip_id, response->num_nonces, response->is_idle);
+                chip = find_chip(info, response->chip_id);
                 if(!chip) {
-                        drvlog(LOG_ERR, "Got work result for unknown chip id %d", response.chip_id);
+                        drvlog(LOG_ERR, "Got work result for unknown chip id %d", response->chip_id);
                         continue;
                 }
                 if(chip->state == IDLE) {
-                        drvlog(LOG_WARNING, "Got spurious work results for idle ASIC %d", response.chip_id);
+                        drvlog(LOG_WARNING, "Got spurious work results for idle ASIC %d", response->chip_id);
                 }
-                for(i = 0; i < response.num_nonces; i++) {
+                if(response->num_nonces > MAX_RESULTS) {
+                        drvlog(LOG_ERR, "Got invalid number of result nonces (%d) for chip id %d", response->num_nonces, response->chip_id);
+                        goto cleanup;
+                }
+                for(i = 0; i < response->num_nonces; i++) {
                         if (unlikely(thr->work_restart))
-                                continue;
+                                goto cleanup;
                         found = false;
                         for(k = 0; k < WORK_HISTORY_LEN; k++) {
                                 /* NB we deliberately check all results against all work because sometimes ASICs seem to give multiple "valid" nonces,
@@ -716,7 +734,7 @@ static int check_for_results(struct thr_info *thr)
                                    However we only count one success per result set to avoid artificially inflating the hashrate.
                                    A smarter thing to do here might be to look at the full set of nonces in the response and start from the "best" one first.
                                 */
-                                if (chip->current_work[k] && drillbit_checkresults(thr, chip->current_work[k], response.nonce[i])) {
+                                if (chip->current_work[k] && drillbit_checkresults(thr, chip->current_work[k], response->nonce[i])) {
                                         if(!found) {
                                                 chip->success_count++;
                                                 successful_results++;
@@ -730,13 +748,16 @@ static int check_for_results(struct thr_info *thr)
                                 chip->error_count++;
                         }
                 }
-                if(chip->state == WORKING_QUEUED && !response.is_idle)
+                if(chip->state == WORKING_QUEUED && !response->is_idle)
                         chip->state = WORKING_NOQUEUED; // Time to queue up another piece of "next work"
                 else
                         chip->state = IDLE; // Uh-oh, we're totally out of work for this ASIC!
         }
 
 cleanup:
+        drillbit_empty_buffer(drillbit);
+        if(responses)
+             free(responses);
         return successful_results;
 }
 
