@@ -71,6 +71,7 @@ typedef struct
         uint8_t clock_div2;      // Apply the /2 clock divider (both internal and external)
         uint8_t use_ext_clock; // Ignored on boards without external clocks
         uint16_t ext_clock_freq;
+        uint16_t core_voltage_mv; // set to a plain human-readable integer value (not serialised atm)
 } BoardConfig;
 
 #define SZ_SERIALISED_BOARDCONFIG 6
@@ -104,6 +105,7 @@ static config_setting default_settings = {
 key: { 0 },
 config: {
         core_voltage: CONFIG_CORE_085V,
+        core_voltage_mv: 850,
         use_ext_clock: 0,
         int_clock_level: 40,
         clock_div2: 0,
@@ -365,6 +367,12 @@ static void drillbit_send_config(struct cgpu_info *drillbit)
 
         // Find the relevant board config
         setting = find_settings(drillbit);
+        drvlog(LOG_NOTICE, "Chose config %s:%d:%d:%d (device serial %08x)",
+                setting->config.use_ext_clock ? "ext":"int",
+                setting->config.use_ext_clock ? setting->config.ext_clock_freq : setting->config.int_clock_level,
+                setting->config.clock_div2 ? 2 : 1,
+                setting->config.core_voltage_mv,
+                info->serial);
 
         drvlog(LOG_INFO, "Sending board configuration voltage=%d use_ext_clock=%d int_clock_level=%d clock_div2=%d ext_clock_freq=%d",
                 setting->config.core_voltage, setting->config.use_ext_clock,
@@ -372,7 +380,7 @@ static void drillbit_send_config(struct cgpu_info *drillbit)
                 setting->config.clock_div2, setting->config.ext_clock_freq);
 
         if(setting->config.use_ext_clock && !(info->capabilities & CAP_EXT_CLOCK)) {
-          drvlog(LOG_WARNING, "Board configuration calls for external clock but this device (serial %08x) has no external clock!", info->serial);
+          drvlog(LOG_WARNING, "Chosen configuration specifies external clock but this device (serial %08x) has no external clock!", info->serial);
         }
 
         cmd = 'C';
@@ -496,6 +504,7 @@ static bool drillbit_parse_options()
                         return false;
                 }
 
+                parsed_config.core_voltage_mv = voltage;
                 switch(voltage) {
                 case 650:
                         voltage = CONFIG_CORE_065V;
