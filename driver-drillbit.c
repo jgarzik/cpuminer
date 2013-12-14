@@ -25,7 +25,7 @@
 	if (opt_debug || prio != LOG_DEBUG) { \
 		if (use_syslog || opt_log_output || prio <= opt_log_level) { \
 			char tmp42[LOGBUFSIZ]; \
-			snprintf(tmp42, sizeof(tmp42), "%s %d: "fmt,    \
+			snprintf(tmp42, sizeof(tmp42), "%s%d: "fmt,    \
 			drillbit->drv->name, drillbit->device_id, ##__VA_ARGS__);       \
 			_applog(prio, tmp42, false); \
 		} \
@@ -72,6 +72,7 @@ typedef struct
         uint8_t clock_div2;      // Apply the /2 clock divider (both internal and external)
         uint8_t use_ext_clock; // Ignored on boards without external clocks
         uint16_t ext_clock_freq;
+        uint16_t core_voltage_mv; // set to a plain human-readable integer value (not serialised atm)
 } BoardConfig;
 
 #define SZ_SERIALISED_BOARDCONFIG 6
@@ -105,6 +106,7 @@ static config_setting default_settings = {
 key: { 0 },
 config: {
         core_voltage: CONFIG_CORE_085V,
+        core_voltage_mv: 850,
         use_ext_clock: 0,
         int_clock_level: 40,
         clock_div2: 0,
@@ -290,12 +292,25 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
 
 static bool drillbit_reset(struct cgpu_info *drillbit)
 {
-        int amount, err;
-        if(!usb_send_simple_command(drillbit, 'R', C_BF_REQRESET))
-                return false;
+        struct drillbit_info *info = drillbit->device_data;
+        struct drillbit_chip_info *chip;
+        int amount, err, i, k, res;
+
+        res = usb_send_simple_command(drillbit, 'R', C_BF_REQRESET);
+
+        for(i = 0; i < info->num_chips; i++) {
+                chip = &info->chips[i];
+                chip->state = IDLE;
+                for(k = 0; k < WORK_HISTORY_LEN-1; k++) {
+                        if(chip->current_work[k]) {
+                                work_completed(drillbit, chip->current_work[k]);
+                                chip->current_work[k] = NULL;
+                        }
+                }
+        }
 
         drillbit_empty_buffer(drillbit);
-        return true;
+        return res;
 }
 
 static config_setting *find_settings(struct cgpu_info *drillbit)
@@ -327,6 +342,14 @@ static config_setting *find_settings(struct cgpu_info *drillbit)
                 return setting;
         }
 
+        // Search by "short" product name
+        snprintf(search_key, 9, "%c%d", info->product[0], info->num_chips);
+        HASH_FIND_STR(settings, search_key, setting);
+        if(setting) {
+                drvlog(LOG_INFO, "Using product-specific settings for device %s", info->product);
+                return setting;
+        }
+
         // Failing that, return default/generic config (null key)
         search_key[0] = 0;
         HASH_FIND_STR(settings, search_key, setting);
@@ -346,13 +369,20 @@ static void drillbit_send_config(struct cgpu_info *drillbit)
         // Find the relevant board config
         setting = find_settings(drillbit);
 
+        drvlog(LOG_NOTICE, "Chose config %s:%d:%d:%d (device serial %08x)",
+                setting->config.use_ext_clock ? "ext":"int",
+                setting->config.use_ext_clock ? setting->config.ext_clock_freq : setting->config.int_clock_level,
+                setting->config.clock_div2 ? 2 : 1,
+                setting->config.core_voltage_mv,
+                info->serial);
+
         drvlog(LOG_INFO, "Sending board configuration voltage=%d use_ext_clock=%d int_clock_level=%d clock_div2=%d ext_clock_freq=%d",
                 setting->config.core_voltage, setting->config.use_ext_clock,
                 setting->config.int_clock_level,
                 setting->config.clock_div2, setting->config.ext_clock_freq);
 
         if(setting->config.use_ext_clock && !(info->capabilities & CAP_EXT_CLOCK)) {
-          drvlog(LOG_WARNING, "Board configuration calls for external clock but this device (serial %08x) has no external clock!", info->serial);
+          drvlog(LOG_WARNING, "Chosen configuration specifies external clock but this device (serial %08x) has no external clock!", info->serial);
         }
 
         cmd = 'C';
@@ -400,11 +430,14 @@ static void drillbit_get_statline_before(char *buf, size_t bufsiz, struct cgpu_i
 {
 	struct drillbit_info *info = drillbit->device_data;
 
-        tailsprintf(buf, bufsiz, "%c%d", info->product[0], info->num_chips);
+        tailsprintf(buf, bufsiz, "%c%-2d", info->product[0], info->num_chips);
 
         if((info->capabilities & CAP_TEMP) && info->temp != 0) {
           tailsprintf(buf, bufsiz, " %d.%dC (%d.%dC)", info->temp/10, info->temp%10,
                       info->max_temp/10, info->max_temp%10);
+        } else {
+          // Space out to the same width as if there was a temp field in place
+          tailsprintf(buf, bufsiz, "              ");
         }
 
         tailsprintf(buf, bufsiz, " | ");
@@ -476,6 +509,7 @@ static bool drillbit_parse_options()
                         return false;
                 }
 
+                parsed_config.core_voltage_mv = voltage;
                 switch(voltage) {
                 case 650:
                         voltage = CONFIG_CORE_065V;
@@ -520,10 +554,11 @@ static struct cgpu_info *drillbit_detect_one(struct libusb_device *dev, struct u
                 return false; // Bit of a hack doing this here, should do it somewhere else
 
         drillbit = usb_alloc_cgpu(&drillbit_drv, 1);
+        drillbit->device_id = -1; // temporary so drvlog() prints a non-valid device_id
 
         if (!usb_init(drillbit, dev, found))
 		goto out;
-	drvlog(LOG_INFO, "Found at %s", drillbit->device_path);
+	applog(LOG_INFO, "DRB: Device found at %s", drillbit->device_path);
 
 	info = calloc(sizeof(struct drillbit_info), 1);
 	if (!info)
@@ -536,6 +571,13 @@ static struct cgpu_info *drillbit_detect_one(struct libusb_device *dev, struct u
 	if (!drillbit_getinfo(drillbit, info))
 		goto out_close;
 
+        /* TODO: Add detection for actual chip ids based on command/response,
+           not prefill assumption about chip layout based on info structure */
+        info->chips = calloc(sizeof(struct drillbit_chip_info), info->num_chips);
+        for(i = 0; i < info->num_chips; i++) {
+                info->chips[i].chip_id = i;
+        }
+
 	/* Send reset request */
 	if (!drillbit_reset(drillbit))
 		goto out_close;
@@ -543,12 +585,6 @@ static struct cgpu_info *drillbit_detect_one(struct libusb_device *dev, struct u
 	drillbit_identify(drillbit);
 	drillbit_empty_buffer(drillbit);
 
-        /* TODO: Add detection for actual chip ids based on command/response,
-           not prefill assumption about chip layout based on info structure */
-        info->chips = calloc(sizeof(struct drillbit_chip_info), info->num_chips);
-        for(i = 0; i < info->num_chips; i++) {
-                info->chips[i].chip_id = i;
-        }
         cgtime(&info->tv_lastchipinfo);
 
 	if (!add_cgpu(drillbit))
@@ -674,11 +710,18 @@ static int check_for_results(struct thr_info *thr)
                                 continue;
                         found = false;
                         for(k = 0; k < WORK_HISTORY_LEN; k++) {
+                                /* NB we deliberately check all results against all work because sometimes ASICs seem to give multiple "valid" nonces,
+                                   and this seems to avoid some result that would otherwise be rejected by the pool.
+
+                                   However we only count one success per result set to avoid artificially inflating the hashrate.
+                                   A smarter thing to do here might be to look at the full set of nonces in the response and start from the "best" one first.
+                                */
                                 if (chip->current_work[k] && drillbit_checkresults(thr, chip->current_work[k], response.nonce[i])) {
-                                        chip->success_count++;
-                                        successful_results++;
-                                        found = true;
-                                        break;
+                                        if(!found) {
+                                                chip->success_count++;
+                                                successful_results++;
+                                                found = true;
+                                        }
                                 }
                         }
                         if(!found && chip->state != IDLE) {
@@ -720,9 +763,6 @@ static void drillbit_send_work_to_chip(struct thr_info *thr, struct drillbit_chi
 	usb_write_timeout(drillbit, &cmd, 1, &amount, TIMEOUT, C_BF_REQWORK);
 	usb_write_timeout(drillbit, buf, SZ_SERIALISED_WORKREQUEST, &amount, TIMEOUT, C_BF_REQWORK);
 
-	if (unlikely(thr->work_restart))
-		return;
-
         /* Expect a single 'W' byte as acknowledgement */
         usb_read_simple_response(drillbit, 'W', C_BF_REQWORK);
         if(chip->state == WORKING_NOQUEUED)
@@ -730,12 +770,17 @@ static void drillbit_send_work_to_chip(struct thr_info *thr, struct drillbit_chi
         else
                 chip->state = WORKING_NOQUEUED;
 
+	if (unlikely(thr->work_restart)) {
+		work_completed(drillbit, work);
+		return;
+        }
+
         // Read into work history
         if(chip->current_work[0])
                 work_completed(drillbit, chip->current_work[0]);
         for(i = 0; i < WORK_HISTORY_LEN-1; i++)
                 chip->current_work[i] = chip->current_work[i+1];
-        chip->current_work[WORK_HISTORY_LEN-1] = copy_work(work);
+        chip->current_work[WORK_HISTORY_LEN-1] = work;
         cgtime(&chip->tv_start);
 }
 
@@ -811,6 +856,12 @@ cascade:
                         drillbit->drv->name, drillbit->device_id);
 		return -1;
 	}
+
+	if (unlikely(thr->work_restart)) {
+		/* Issue an ASIC reset as we won't be coming back for any of these results */
+		drillbit_reset(drillbit);
+	}
+
 	return 0xffffffffULL * result_count;
 }
 
