@@ -703,9 +703,6 @@ static void drillbit_send_work_to_chip(struct thr_info *thr, struct drillbit_chi
 	usb_write(drillbit, &cmd, 1, &amount, C_BF_REQWORK);
 	usb_write(drillbit, buf, SZ_SERIALISED_WORKREQUEST, &amount, C_BF_REQWORK);
 
-	if (unlikely(thr->work_restart))
-		return;
-
         /* Expect a single 'W' byte as acknowledgement */
         usb_read_simple_response(drillbit, 'W', C_BF_REQWORK);
         if(chip->state == WORKING_NOQUEUED)
@@ -713,12 +710,17 @@ static void drillbit_send_work_to_chip(struct thr_info *thr, struct drillbit_chi
         else
                 chip->state = WORKING_NOQUEUED;
 
+	if (unlikely(thr->work_restart)) {
+		work_completed(drillbit, work);
+		return;
+        }
+
         // Read into work history
         if(chip->current_work[0])
                 work_completed(drillbit, chip->current_work[0]);
         for(i = 0; i < WORK_HISTORY_LEN-1; i++)
                 chip->current_work[i] = chip->current_work[i+1];
-        chip->current_work[WORK_HISTORY_LEN-1] = copy_work(work);
+        chip->current_work[WORK_HISTORY_LEN-1] = work;
         cgtime(&chip->tv_start);
 }
 
