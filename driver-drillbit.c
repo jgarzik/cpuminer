@@ -16,9 +16,7 @@
 #include "driver-drillbit.h"
 #include "sha2.h"
 
-/* Wait longer 1/3 longer than it would take for a full nonce range */
-#define TIMEOUT 6000
-#define SHORT_TIMEOUT 2000
+#define TIMEOUT 3000
 #define MAX_RESULTS 16 // max results from a single chip
 
 #define drvlog(prio, fmt, ...) do { \
