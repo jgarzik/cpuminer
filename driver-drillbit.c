@@ -24,7 +24,7 @@
 	if (opt_debug || prio != LOG_DEBUG) { \
 		if (use_syslog || opt_log_output || prio <= opt_log_level) { \
 			char tmp42[LOGBUFSIZ]; \
-			snprintf(tmp42, sizeof(tmp42), "%s %d: "fmt,    \
+			snprintf(tmp42, sizeof(tmp42), "%s%d: "fmt,    \
 			drillbit->drv->name, drillbit->device_id, ##__VA_ARGS__);       \
 			_applog(prio, tmp42, false); \
 		} \
