@@ -428,11 +428,14 @@ static void drillbit_get_statline_before(char *buf, size_t bufsiz, struct cgpu_i
 {
 	struct drillbit_info *info = drillbit->device_data;
 
-        tailsprintf(buf, bufsiz, "%c%d", info->product[0], info->num_chips);
+        tailsprintf(buf, bufsiz, "%c%-2d", info->product[0], info->num_chips);
 
         if((info->capabilities & CAP_TEMP) && info->temp != 0) {
           tailsprintf(buf, bufsiz, " %d.%dC (%d.%dC)", info->temp/10, info->temp%10,
                       info->max_temp/10, info->max_temp%10);
+        } else {
+          // Space out to the same width as if there was a temp field in place
+          tailsprintf(buf, bufsiz, "              ");
         }
 
         tailsprintf(buf, bufsiz, " | ");
