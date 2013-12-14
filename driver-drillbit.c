@@ -310,37 +310,53 @@ static bool drillbit_reset(struct cgpu_info *drillbit)
         return res;
 }
 
+static config_setting *find_settings(struct cgpu_info *drillbit)
+{
+        struct drillbit_info *info = drillbit->device_data;
+        config_setting *setting;
+        uint8_t search_key[9];
+
+        // Search by serial (8 character hex string)
+        sprintf(search_key, "%08x", info->serial);
+	HASH_FIND_STR(settings, search_key, setting);
+	if(setting)  {
+		drvlog(LOG_INFO, "Using unit-specific settings for serial %s", search_key);
+                return setting;
+	}
+
+        // Search by DRBxxx
+        snprintf(search_key, 9, "DRB%d", drillbit->device_id);
+        HASH_FIND_STR(settings, search_key, setting);
+        if(setting) {
+                drvlog(LOG_INFO, "Using device_id specific settings for device");
+                return setting;
+        }
+
+        // Failing that, search by product name
+        HASH_FIND_STR(settings, info->product, setting);
+        if(setting) {
+                drvlog(LOG_INFO, "Using product-specific settings for device %s", info->product);
+                return setting;
+        }
+
+        // Failing that, return default/generic config (null key)
+        search_key[0] = 0;
+        HASH_FIND_STR(settings, search_key, setting);
+        drvlog(LOG_INFO, "Using non-specific settings for device %s (serial %08x)", info->product,
+                info->serial);
+        return setting;
+}
+
 static void drillbit_send_config(struct cgpu_info *drillbit)
 {
         struct drillbit_info *info = drillbit->device_data;
         char cmd;
         int amount;
-        uint8_t search_key[9];
         uint8_t buf[SZ_SERIALISED_BOARDCONFIG];
         config_setting *setting;
 
         // Find the relevant board config
-
-        // Search by serial (8 character hex string)
-        sprintf(search_key, "%08x", info->serial);
-        HASH_FIND_STR(settings, search_key, setting);
-        if(setting)  {
-                drvlog(LOG_INFO, "Using unit-specific settings for serial %s", search_key);
-        } 
-        else {
-                // Failing that, search by product name
-                HASH_FIND_STR(settings, info->product, setting);
-                if(setting) {
-                        drvlog(LOG_INFO, "Using product-specific settings for device %s", info->product);
-                }
-                else {
-                        // Failing that, return default/generic config (null key)
-                        search_key[0] = 0;
-                        HASH_FIND_STR(settings, search_key, setting);
-                        drvlog(LOG_INFO, "Using non-specific settings for device %s (serial %08x)", info->product,
-                                info->serial);
-                }
-        }
+        setting = find_settings(drillbit);
 
         drvlog(LOG_INFO, "Sending board configuration voltage=%d use_ext_clock=%d int_clock_level=%d clock_div2=%d ext_clock_freq=%d",
                 setting->config.core_voltage, setting->config.use_ext_clock,
