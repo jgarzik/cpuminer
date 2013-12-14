@@ -339,6 +339,14 @@ static config_setting *find_settings(struct cgpu_info *drillbit)
                 return setting;
         }
 
+        // Search by "short" product name
+        snprintf(search_key, 9, "%c%d", info->product[0], info->num_chips);
+        HASH_FIND_STR(settings, search_key, setting);
+        if(setting) {
+                drvlog(LOG_INFO, "Using product-specific settings for device %s", info->product);
+                return setting;
+        }
+
         // Failing that, return default/generic config (null key)
         search_key[0] = 0;
         HASH_FIND_STR(settings, search_key, setting);
