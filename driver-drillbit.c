@@ -657,11 +657,18 @@ static int check_for_results(struct thr_info *thr)
                                 continue;
                         found = false;
                         for(k = 0; k < WORK_HISTORY_LEN; k++) {
+                                /* NB we deliberately check all results against all work because sometimes ASICs seem to give multiple "valid" nonces,
+                                   and this seems to avoid some result that would otherwise be rejected by the pool.
+
+                                   However we only count one success per result set to avoid artificially inflating the hashrate.
+                                   A smarter thing to do here might be to look at the full set of nonces in the response and start from the "best" one first.
+                                */
                                 if (chip->current_work[k] && drillbit_checkresults(thr, chip->current_work[k], response.nonce[i])) {
-                                        chip->success_count++;
-                                        successful_results++;
-                                        found = true;
-                                        break;
+                                        if(!found) {
+                                                chip->success_count++;
+                                                successful_results++;
+                                                found = true;
+                                        }
                                 }
                         }
                         if(!found && chip->state != IDLE) {
