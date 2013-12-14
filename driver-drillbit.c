@@ -367,7 +367,7 @@ static void drillbit_send_config(struct cgpu_info *drillbit)
 
         // Find the relevant board config
         setting = find_settings(drillbit);
-        drvlog(LOG_NOTICE, "Chose config %s:%d:%d:%d (device serial %08x)",
+        drvlog(LOG_NOTICE, "Config: %s:%d:%d:%d Serial: %08x",
                 setting->config.use_ext_clock ? "ext":"int",
                 setting->config.use_ext_clock ? setting->config.ext_clock_freq : setting->config.int_clock_level,
                 setting->config.clock_div2 ? 2 : 1,
