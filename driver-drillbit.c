@@ -289,12 +289,25 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
 
 static bool drillbit_reset(struct cgpu_info *drillbit)
 {
-        int amount, err;
-        if(!usb_send_simple_command(drillbit, 'R', C_BF_REQRESET))
-                return false;
+        struct drillbit_info *info = drillbit->device_data;
+        struct drillbit_chip_info *chip;
+        int amount, err, i, k, res;
+
+        res = usb_send_simple_command(drillbit, 'R', C_BF_REQRESET);
+
+        for(i = 0; i < info->num_chips; i++) {
+                chip = &info->chips[i];
+                chip->state = IDLE;
+                for(k = 0; k < WORK_HISTORY_LEN-1; k++) {
+                        if(chip->current_work[k]) {
+                                work_completed(drillbit, chip->current_work[k]);
+                                chip->current_work[k] = NULL;
+                        }
+                }
+        }
 
         drillbit_empty_buffer(drillbit);
-        return true;
+        return res;
 }
 
 static void drillbit_send_config(struct cgpu_info *drillbit)
@@ -519,6 +532,13 @@ static struct cgpu_info *drillbit_detect_one(struct libusb_device *dev, struct u
 	if (!drillbit_getinfo(drillbit, info))
 		goto out_close;
 
+        /* TODO: Add detection for actual chip ids based on command/response,
+           not prefill assumption about chip layout based on info structure */
+        info->chips = calloc(sizeof(struct drillbit_chip_info), info->num_chips);
+        for(i = 0; i < info->num_chips; i++) {
+                info->chips[i].chip_id = i;
+        }
+
 	/* Send reset request */
 	if (!drillbit_reset(drillbit))
 		goto out_close;
@@ -526,12 +546,6 @@ static struct cgpu_info *drillbit_detect_one(struct libusb_device *dev, struct u
 	drillbit_identify(drillbit);
 	drillbit_empty_buffer(drillbit);
 
-        /* TODO: Add detection for actual chip ids based on command/response,
-           not prefill assumption about chip layout based on info structure */
-        info->chips = calloc(sizeof(struct drillbit_chip_info), info->num_chips);
-        for(i = 0; i < info->num_chips; i++) {
-                info->chips[i].chip_id = i;
-        }
         cgtime(&info->tv_lastchipinfo);
 
 	if (!add_cgpu(drillbit))
@@ -803,6 +817,12 @@ cascade:
                         drillbit->drv->name, drillbit->device_id);
 		return -1;
 	}
+
+	if (unlikely(thr->work_restart)) {
+		/* Issue an ASIC reset as we won't be coming back for any of these results */
+		drillbit_reset(drillbit);
+	}
+
 	return 0xffffffffULL * result_count;
 }
 
