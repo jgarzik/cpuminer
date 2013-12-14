@@ -549,10 +549,11 @@ static struct cgpu_info *drillbit_detect_one(struct libusb_device *dev, struct u
                 return false; // Bit of a hack doing this here, should do it somewhere else
 
         drillbit = usb_alloc_cgpu(&drillbit_drv, 1);
+        drillbit->device_id = -1; // temporary so drvlog() prints a non-valid device_id
 
         if (!usb_init(drillbit, dev, found))
 		goto out;
-	drvlog(LOG_INFO, "Found at %s", drillbit->device_path);
+	applog(LOG_INFO, "DRB: Device found at %s", drillbit->device_path);
 
 	info = calloc(sizeof(struct drillbit_info), 1);
 	if (!info)
