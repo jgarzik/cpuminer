@@ -299,6 +299,7 @@ static bool drillbit_reset(struct cgpu_info *drillbit)
         for(i = 0; i < info->num_chips; i++) {
                 chip = &info->chips[i];
                 chip->state = IDLE;
+                chip->work_sent_count = 0;
                 for(k = 0; k < WORK_HISTORY_LEN-1; k++) {
                         if(chip->current_work[k]) {
                                 work_completed(drillbit, chip->current_work[k]);
@@ -800,6 +801,8 @@ static void drillbit_send_work_to_chip(struct thr_info *thr, struct drillbit_chi
                 chip->current_work[i] = chip->current_work[i+1];
         chip->current_work[WORK_HISTORY_LEN-1] = work;
         cgtime(&chip->tv_start);
+
+        chip->work_sent_count++;
 }
 
 static int64_t drillbit_scanwork(struct thr_info *thr)
@@ -830,9 +833,13 @@ static int64_t drillbit_scanwork(struct thr_info *thr)
                         continue;
                 ms_diff = ms_tdiff(&tv_now, &info->chips[i].tv_start);
                 if(ms_diff > TIMEOUT) {
-                        drvlog(LOG_ERR, "Timing out unresponsive ASIC %d", info->chips[i].chip_id);
+                        if(info->chips[i].work_sent_count > 4) {
+                                /* Only count ASIC timeouts after the pool has started to send work in earnest,
+                                   some pools can create unusual delays early on */
+                                drvlog(LOG_ERR, "Timing out unresponsive ASIC %d", info->chips[i].chip_id);
+                                info->chips[i].timeout_count++;
+                        }
                         info->chips[i].state = IDLE;
-                        info->chips[i].timeout_count++;
                         drillbit_send_work_to_chip(thr, &info->chips[i]);
                 }
                 if (unlikely(thr->work_restart) || unlikely(drillbit->usbinfo.nodev))
