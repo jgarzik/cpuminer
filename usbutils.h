@@ -198,8 +198,6 @@ struct cg_usb_device {
 	enum usb_types usb_type;
 	enum sub_ident ident;
 	uint16_t usbver;
-	int cps;
-	bool usecps;
 	char *prod_string;
 	char *manuf_string;
 	char *serial_string;
@@ -361,10 +359,12 @@ struct cg_usb_info {
 	USB_ADD_COMMAND(C_HF_STATISTICS, "HFStatistics") \
 	USB_ADD_COMMAND(C_HF_CLOCKGATE, "HFClockGate") \
 	USB_ADD_COMMAND(C_HF_USB_INIT, "HFUSBInit") \
+	USB_ADD_COMMAND(C_HF_DFU, "HFDFU") \
 	USB_ADD_COMMAND(C_HF_DIE_STATUS, "HFDieStatus") \
 	USB_ADD_COMMAND(C_HF_GWQ_STATUS, "HFGWQStatus") \
 	USB_ADD_COMMAND(C_HF_WORK_RESTART, "HFWorkRestart") \
 	USB_ADD_COMMAND(C_HF_GWQSTATS, "HFGWQStats") \
+	USB_ADD_COMMAND(C_HF_NOTICE, "HFNotice") \
 	USB_ADD_COMMAND(C_HF_GETHEADER, "HFGetHeader") \
 	USB_ADD_COMMAND(C_HF_GETDATA, "HFGetData") \
 	USB_ADD_COMMAND(C_HF_CLEAR_READ, "HFClearRead")
@@ -401,9 +401,6 @@ int _usb_ftdi_set_latency(struct cgpu_info *cgpu, int intinfo);
 #define usb_ftdi_set_latency(_cgpu) _usb_ftdi_set_latency(_cgpu, DEFAULT_INTINFO)
 void usb_buffer_clear(struct cgpu_info *cgpu);
 uint32_t usb_buffer_size(struct cgpu_info *cgpu);
-void usb_set_cps(struct cgpu_info *cgpu, int cps);
-void usb_enable_cps(struct cgpu_info *cgpu);
-void usb_disable_cps(struct cgpu_info *cgpu);
 int _usb_interface(struct cgpu_info *cgpu, int intinfo);
 #define usb_interface(_cgpu) _usb_interface(_cgpu, DEFAULT_INTINFO)
 enum sub_ident usb_ident(struct cgpu_info *cgpu);
@@ -411,6 +408,7 @@ void usb_set_dev_start(struct cgpu_info *cgpu);
 void usb_cleanup();
 void usb_initialise();
 void *usb_resource_thread(void *userdata);
+void initialise_usblocks(void);
 
 #define usb_read(cgpu, buf, bufsiz, read, cmd) \
 	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false, false)

@@ -18,15 +18,14 @@
 #include "miner.h"
 #include "usbutils.h"
 
-#define NODEV(err) ((err) == LIBUSB_ERROR_NO_DEVICE || \
-			(err) == LIBUSB_ERROR_PIPE || \
-			(err) == LIBUSB_ERROR_OTHER)
+static pthread_mutex_t cgusb_lock;
+static pthread_mutex_t cgusbres_lock;
+static cglock_t cgusb_fd_lock;
+static cgtimer_t usb11_cgt;
 
-/* Timeout errors on writes are basically unrecoverable */
-#define WRITENODEV(err) ((err) == LIBUSB_ERROR_TIMEOUT || NODEV(err))
+#define NODEV(err) ((err) != LIBUSB_SUCCESS && (err) != LIBUSB_ERROR_TIMEOUT)
 
-#define NOCONTROLDEV(err) ((err) == LIBUSB_ERROR_NO_DEVICE || \
-			(err) == LIBUSB_ERROR_OTHER)
+#define NOCONTROLDEV(err) ((err) < 0 && NODEV(err))
 
 /*
  * WARNING - these assume DEVLOCK(cgpu, pstate) is called first and
@@ -57,27 +56,27 @@
 
 #define USB_CONFIG 1
 
+#define BITFURY_TIMEOUT_MS 999
+#define ICARUS_TIMEOUT_MS 999
+
 #ifdef WIN32
 #define BFLSC_TIMEOUT_MS 999
 #define BITFORCE_TIMEOUT_MS 999
-#define BITFURY_TIMEOUT_MS 999
 #define MODMINER_TIMEOUT_MS 999
 #define AVALON_TIMEOUT_MS 999
 #define KLONDIKE_TIMEOUT_MS 999
-#define ICARUS_TIMEOUT_MS 999
 #define HASHFAST_TIMEOUT_MS 999
 
 /* The safety timeout we use, cancelling async transfers on windows that fail
  * to timeout on their own. */
 #define WIN_CALLBACK_EXTRA 40
+#define WIN_WRITE_CBEXTRA 5000
 #else
 #define BFLSC_TIMEOUT_MS 300
 #define BITFORCE_TIMEOUT_MS 200
-#define BITFURY_TIMEOUT_MS 100
 #define MODMINER_TIMEOUT_MS 100
 #define AVALON_TIMEOUT_MS 200
 #define KLONDIKE_TIMEOUT_MS 200
-#define ICARUS_TIMEOUT_MS 200
 #define HASHFAST_TIMEOUT_MS 200
 #endif
 
@@ -509,22 +508,14 @@ static const char *BLANK = "";
 static const char *space = " ";
 static const char *nodatareturned = "no data returned ";
 
+/* Fake success on IO errors allowing code to retry up to USB_RETRY_MAX */
 #define IOERR_CHECK(cgpu, err) \
 		if (err == LIBUSB_ERROR_IO) { \
 			cgpu->usbinfo.ioerr_count++; \
-			cgpu->usbinfo.continuous_ioerr_count++; \
-		} else { \
-			cgpu->usbinfo.continuous_ioerr_count = 0; \
-		}
-
-/* Timeout errors on writes are unusual and should be treated as IO errors. */
-#define WRITEIOERR_CHECK(cgpu, err) \
-		if (err == LIBUSB_ERROR_IO || err == LIBUSB_ERROR_TIMEOUT) { \
-			cgpu->usbinfo.ioerr_count++; \
-			cgpu->usbinfo.continuous_ioerr_count++; \
-		} else { \
-			cgpu->usbinfo.continuous_ioerr_count = 0; \
-		}
+			if (++cgpu->usbinfo.continuous_ioerr_count < USB_RETRY_MAX) \
+				err = LIBUSB_SUCCESS; \
+		} else \
+			cgpu->usbinfo.continuous_ioerr_count = 0;
 
 #if 0 // enable USBDEBUG - only during development testing
  static const char *debug_true_str = "true";
@@ -599,7 +590,7 @@ struct resource_reply *res_reply_head = NULL;
 #define MODE_BULK_WRITE (1 << 3)
 
 // Set this to 0 to remove stats processing
-#define DO_USB_STATS 0
+#define DO_USB_STATS 1
 
 static bool stats_initialised = false;
 
@@ -2186,7 +2177,7 @@ static void newstats(struct cgpu_info *cgpu)
 
 	usb_stats[next_stat].name = cgpu->drv->name;
 	usb_stats[next_stat].device_id = -1;
-	usb_stats[next_stat].details = calloc(1, sizeof(struct cg_usb_stats_details) * C_MAX * 2 + 8);
+	usb_stats[next_stat].details = calloc(2, sizeof(struct cg_usb_stats_details) * (C_MAX + 1));
 	if (unlikely(!usb_stats[next_stat].details))
 		quit(1, "USB failed to calloc details for %d", next_stat+1);
 
@@ -2229,7 +2220,7 @@ static void stats(struct cgpu_info *cgpu, struct timeval *tv_start, struct timev
 		int offset = 0;
 
 		if (extrams >= USB_TMO_2) {
-			applog(LOG_ERR, "%s%i: TIMEOUT %s took %dms but was %dms",
+			applog(LOG_INFO, "%s%i: TIMEOUT %s took %dms but was %dms",
 					cgpu->drv->name, cgpu->device_id,
 					usb_cmdname(cmd), totms, timeout) ;
 			offset = 2;
@@ -2421,30 +2412,35 @@ static int callback_wait(struct usb_transfer *ut, int *transferred, unsigned int
 }
 
 static int usb_submit_transfer(struct usb_transfer *ut, struct libusb_transfer *transfer,
-			       bool cancellable)
+			       bool cancellable, bool tt)
 {
 	int err;
 
 	INIT_LIST_HEAD(&ut->list);
 
 	cg_wlock(&cgusb_fd_lock);
+	/* Imitate a transaction translator for writes to usb1.1 devices */
+	if (tt)
+		cgsleep_ms_r(&usb11_cgt, 1);
 	err = libusb_submit_transfer(transfer);
 	if (likely(!err))
 		ut->cancellable = cancellable;
 	list_add(&ut->list, &ut_list);
+	if (tt)
+		cgtimer_time(&usb11_cgt);
 	cg_wunlock(&cgusb_fd_lock);
 
 	return err;
 }
 
 static int
-usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
-		  int epinfo, unsigned char *data, int length,
-		  int *transferred, unsigned int timeout,
-		  struct cgpu_info *cgpu, __maybe_unused int mode,
-		  enum usb_cmds cmd, __maybe_unused int seq, bool cancellable)
+usb_bulk_transfer(struct cgpu_info *cgpu, struct cg_usb_device *usbdev, int intinfo,
+		  int epinfo, unsigned char *data, int length, int *transferred,
+		  unsigned int timeout, __maybe_unused int mode, enum usb_cmds cmd,
+		  __maybe_unused int seq, bool cancellable, bool tt)
 {
-	int bulk_timeout, callback_timeout = timeout;
+	int bulk_timeout, callback_timeout = timeout, pipe_retries = 0;
+	struct libusb_device_handle *dev_handle = usbdev->handle;
 	struct usb_epinfo *usb_epinfo;
 	struct usb_transfer ut;
 	unsigned char endpoint;
@@ -2463,19 +2459,30 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	bulk_timeout = 0;
 #endif
 
-	usb_epinfo = &(cgpu->usbdev->found->intinfos[intinfo].epinfos[epinfo]);
+	usb_epinfo = &(usbdev->found->intinfos[intinfo].epinfos[epinfo]);
 	endpoint = usb_epinfo->ep;
 
 	/* Avoid any async transfers during shutdown to allow the polling
 	 * thread to be shut down after all existing transfers are complete */
-	if (unlikely(cgpu->shutdown))
+	if (opt_lowmem || cgpu->shutdown)
 		return libusb_bulk_transfer(dev_handle, endpoint, data, length, transferred, timeout);
-
+pipe_retry:
 	init_usb_transfer(&ut);
 
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT) {
 		memcpy(buf, data, length);
+#ifndef HAVE_LIBUSB
+		/* Older versions may not have this feature so only enable it
+		 * when we know we're compiling with included static libusb */
 		ut.transfer->flags |= LIBUSB_TRANSFER_ADD_ZERO_PACKET;
+#endif
+#ifdef WIN32
+		/* Writes on windows really don't like to be cancelled, but
+		 * are prone to timeouts under heavy USB traffic, so make this
+		 * a last resort cancellation delayed long after the write
+		 * would have timed out on its own. */
+		callback_timeout += WIN_WRITE_CBEXTRA;
+#endif
 	}
 
 	USBDEBUG("USB debug: @usb_bulk_transfer(%s (nodev=%s),intinfo=%d,epinfo=%d,data=%p,length=%d,timeout=%u,mode=%d,cmd=%s,seq=%d) endpoint=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, data, length, timeout, mode, usb_cmdname(cmd), seq, (int)endpoint);
@@ -2483,7 +2490,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
 				  transfer_callback, &ut, bulk_timeout);
 	STATS_TIMEVAL(&tv_start);
-	err = usb_submit_transfer(&ut, ut.transfer, cancellable);
+	err = usb_submit_transfer(&ut, ut.transfer, cancellable, tt);
 	errn = errno;
 	if (!err)
 		err = callback_wait(&ut, transferred, callback_timeout);
@@ -2515,6 +2522,8 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 			if (err)
 				cgpu->usbinfo.clear_fail_count++;
 		} while (err && ++retries < USB_RETRY_MAX);
+		if (!err && ++pipe_retries < USB_RETRY_MAX)
+			goto pipe_retry;
 	}
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)
 		memcpy(data, buf, *transferred);
@@ -2577,10 +2586,9 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	initial_timeout = timeout;
 	cgtime(&read_start);
 	while (bufleft > 0 && !eom) {
-		err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
-					ptr, usbbufread, &got, timeout,
-					cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1,
-					cancellable);
+		err = usb_bulk_transfer(cgpu, usbdev, intinfo, epinfo, ptr, usbbufread,
+					&got, timeout, MODE_BULK_READ, cmd,
+					first ? SEQ0 : SEQ1, cancellable, false);
 		cgtime(&tv_finish);
 		ptr[got] = '\0';
 
@@ -2603,6 +2611,18 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		if (end != NULL)
 			eom = strstr((const char *)usbbuf, end);
 
+		/* Attempt a usb reset for an error that will otherwise cause
+		 * this device to drop out provided we know the device still
+		 * might exist. */
+		if (err && err != LIBUSB_ERROR_TIMEOUT) {
+			applog(LOG_WARNING, "%s %i %s usb read err:(%d) %s", cgpu->drv->name,
+			       cgpu->device_id, usb_cmdname(cmd), err, libusb_error_name(err));
+			if (err != LIBUSB_ERROR_NO_DEVICE) {
+				err = libusb_reset_device(usbdev->handle);
+				applog(LOG_WARNING, "%s %i attempted reset got err:(%d) %s",
+				       cgpu->drv->name, cgpu->device_id, err, libusb_error_name(err));
+			}
+		}
 		if (err || readonce)
 			break;
 
@@ -2642,12 +2662,6 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	*processed = tot;
 	memcpy((char *)buf, (const char *)usbbuf, (tot < (int)bufsiz) ? tot + 1 : (int)bufsiz);
 
-	if (err && err != LIBUSB_ERROR_TIMEOUT) {
-		applog(LOG_WARNING, "%s %i %s usb read err:(%d) %s", cgpu->drv->name, cgpu->device_id, usb_cmdname(cmd),
-		       err, libusb_error_name(err));
-		if (cgpu->usbinfo.continuous_ioerr_count > USB_RETRY_MAX)
-			err = LIBUSB_ERROR_OTHER;
-	}
 out_noerrmsg:
 	if (NODEV(err)) {
 		cg_ruwlock(&cgpu->usbinfo.devlock);
@@ -2661,10 +2675,10 @@ out_noerrmsg:
 
 int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, int timeout, enum usb_cmds cmd)
 {
-	struct cg_usb_device *usbdev;
 	struct timeval write_start, tv_finish;
+	bool first = true, usb11 = false;
+	struct cg_usb_device *usbdev;
 	unsigned int initial_timeout;
-	__maybe_unused bool first = true;
 	int err, sent, tot, pstate;
 	double done;
 
@@ -2682,6 +2696,8 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 	}
 
 	usbdev = cgpu->usbdev;
+	if (usbdev->descriptor->bcdUSB < 0x0200)
+		usb11 = true;
 	if (timeout == DEVTIMEOUT)
 		timeout = usbdev->found->timeout;
 
@@ -2692,23 +2708,40 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 	while (bufsiz > 0) {
 		int tosend = bufsiz;
 
-		if (usbdev->usecps) {
-			int cpms = usbdev->cps / 1000 ? : 1;
-			if (tosend > cpms)
-				tosend = cpms;
+		/* USB 1.1 devices don't handle zero packets well so split them
+		 * up to not have the final transfer equal to the wMaxPacketSize
+		 * or they will stall waiting for more data. */
+		if (usb11) {
+			struct usb_epinfo *ue = &usbdev->found->intinfos[intinfo].epinfos[epinfo];
+
+			if (tosend == ue->wMaxPacketSize) {
+				tosend >>= 1;
+				if (unlikely(!tosend))
+					tosend = 1;
+			}
 		}
-		err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
-					(unsigned char *)buf, tosend, &sent, timeout,
-					cgpu, MODE_BULK_WRITE, cmd, first ? SEQ0 : SEQ1,
-					false);
+		err = usb_bulk_transfer(cgpu, usbdev, intinfo, epinfo, (unsigned char *)buf,
+					tosend, &sent, timeout, MODE_BULK_WRITE,
+					cmd, first ? SEQ0 : SEQ1, false, usb11);
 		cgtime(&tv_finish);
 
 		USBDEBUG("USB debug: @_usb_write(%s (nodev=%s)) err=%d%s sent=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), sent);
 
-		WRITEIOERR_CHECK(cgpu, err);
+		IOERR_CHECK(cgpu, err);
 
 		tot += sent;
 
+		/* Unlike reads, even a timeout error is unrecoverable on
+		 * writes. */
+		if (err) {
+			applog(LOG_WARNING, "%s %i %s usb write err:(%d) %s", cgpu->drv->name,
+			       cgpu->device_id, usb_cmdname(cmd), err, libusb_error_name(err));
+			if (err != LIBUSB_ERROR_NO_DEVICE) {
+				err = libusb_reset_device(usbdev->handle);
+				applog(LOG_WARNING, "%s %i attempted reset got err:(%d) %s",
+				       cgpu->drv->name, cgpu->device_id, err, libusb_error_name(err));
+			}
+		}
 		if (err)
 			break;
 
@@ -2726,14 +2759,8 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 
 	*processed = tot;
 
-	if (err) {
-		applog(LOG_WARNING, "%s %i %s usb write err:(%d) %s", cgpu->drv->name, cgpu->device_id, usb_cmdname(cmd),
-		       err, libusb_error_name(err));
-		if (cgpu->usbinfo.continuous_ioerr_count > USB_RETRY_MAX)
-			err = LIBUSB_ERROR_OTHER;
-	}
 out_noerrmsg:
-	if (WRITENODEV(err)) {
+	if (NODEV(err)) {
 		cg_ruwlock(&cgpu->usbinfo.devlock);
 		release_cgpu(cgpu);
 		DEVWUNLOCK(cgpu, pstate);
@@ -2753,6 +2780,7 @@ static int usb_control_transfer(struct cgpu_info *cgpu, libusb_device_handle *de
 	struct usb_transfer ut;
 	unsigned char buf[70];
 	int err, transferred;
+	bool tt = false;
 
 	if (unlikely(cgpu->shutdown))
 		return libusb_control_transfer(dev_handle, bmRequestType, bRequest, wValue, wIndex, buffer, wLength, timeout);
@@ -2760,11 +2788,14 @@ static int usb_control_transfer(struct cgpu_info *cgpu, libusb_device_handle *de
 	init_usb_transfer(&ut);
 	libusb_fill_control_setup(buf, bmRequestType, bRequest, wValue,
 				  wIndex, wLength);
-	if ((bmRequestType & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT)
+	if ((bmRequestType & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT) {
 		memcpy(buf + LIBUSB_CONTROL_SETUP_SIZE, buffer, wLength);
+		if (cgpu->usbdev->descriptor->bcdUSB < 0x0200)
+			tt = true;
+	}
 	libusb_fill_control_transfer(ut.transfer, dev_handle, buf, transfer_callback,
 				     &ut, 0);
-	err = usb_submit_transfer(&ut, ut.transfer, false);
+	err = usb_submit_transfer(&ut, ut.transfer, false, tt);
 	if (!err)
 		err = callback_wait(&ut, &transferred, timeout);
 	if (err == LIBUSB_SUCCESS && transferred) {
@@ -2822,7 +2853,7 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 
 	USBDEBUG("USB debug: @_usb_transfer(%s (nodev=%s)) err=%d%s", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err));
 
-	WRITEIOERR_CHECK(cgpu, err);
+	IOERR_CHECK(cgpu, err);
 
 	if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
 		applog(LOG_WARNING, "%s %i usb transfer err:(%d) %s", cgpu->drv->name, cgpu->device_id,
@@ -2989,42 +3020,6 @@ uint32_t usb_buffer_size(struct cgpu_info *cgpu)
 	DEVRUNLOCK(cgpu, pstate);
 
 	return ret;
-}
-
-void usb_set_cps(struct cgpu_info *cgpu, int cps)
-{
-	int pstate;
-
-	DEVWLOCK(cgpu, pstate);
-
-	if (cgpu->usbdev)
-		cgpu->usbdev->cps = cps;
-
-	DEVWUNLOCK(cgpu, pstate);
-}
-
-void usb_enable_cps(struct cgpu_info *cgpu)
-{
-	int pstate;
-
-	DEVWLOCK(cgpu, pstate);
-
-	if (cgpu->usbdev)
-		cgpu->usbdev->usecps = true;
-
-	DEVWUNLOCK(cgpu, pstate);
-}
-
-void usb_disable_cps(struct cgpu_info *cgpu)
-{
-	int pstate;
-
-	DEVWLOCK(cgpu, pstate);
-
-	if (cgpu->usbdev)
-		cgpu->usbdev->usecps = false;
-
-	DEVWUNLOCK(cgpu, pstate);
 }
 
 /*
@@ -3594,6 +3589,7 @@ fila:
 	free(sem);
 	free(key);
 	remove_in_use(bus_number, device_address);
+	unlink(name);
 	return;
 #endif
 }
@@ -3661,4 +3657,11 @@ void *usb_resource_thread(void __maybe_unused *userdata)
 	}
 
 	return NULL;
+}
+
+void initialise_usblocks(void)
+{
+	mutex_init(&cgusb_lock);
+	mutex_init(&cgusbres_lock);
+	cglock_init(&cgusb_fd_lock);
 }

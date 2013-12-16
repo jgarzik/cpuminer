@@ -74,6 +74,10 @@ char *curly = ":D";
 
 #ifdef USE_HASHFAST
 #include "driver-hashfast.h"
+int opt_hfa_ntime_roll;
+int opt_hfa_hash_clock;
+bool opt_hfa_pll_bypass;
+bool opt_hfa_dfu_boot;
 #endif
 
 #if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_MODMINER)
@@ -135,7 +139,7 @@ static bool opt_submit_stale = true;
 static int opt_shares;
 bool opt_fail_only;
 static bool opt_fix_protocol;
-static bool opt_lowmem;
+bool opt_lowmem;
 bool opt_autofan;
 bool opt_autoengine;
 bool opt_noadl;
@@ -202,12 +206,6 @@ int hotplug_time = 5;
 
 #if LOCK_TRACKING
 pthread_mutex_t lockstat_lock;
-#endif
-
-#ifdef USE_USBUTILS
-pthread_mutex_t cgusb_lock;
-pthread_mutex_t cgusbres_lock;
-cglock_t cgusb_fd_lock;
 #endif
 
 pthread_mutex_t hash_lock;
@@ -1098,14 +1096,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--api-port",
 		     set_int_1_to_65535, opt_show_intval, &opt_api_port,
 		     "Port number of miner API"),
-#ifdef HAVE_ADL
-	OPT_WITHOUT_ARG("--auto-fan",
-			opt_set_bool, &opt_autofan,
-			"Automatically adjust all GPU fan speeds to maintain a target temperature"),
-	OPT_WITHOUT_ARG("--auto-gpu",
-			opt_set_bool, &opt_autoengine,
-			"Automatically adjust all GPU engine clock speeds to maintain a target temperature"),
-#endif
 	OPT_WITHOUT_ARG("--balance",
 		     set_balance, &pool_strategy,
 		     "Change multipool strategy from failover to even share balance"),
@@ -1195,6 +1185,20 @@ static struct opt_table opt_config_table[] = {
 		     set_bitburner_fury_options, NULL, NULL,
 		     "Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq"),
 #endif
+#ifdef USE_HASHFAST
+	OPT_WITHOUT_ARG("--hfa-dfu-boot",
+			opt_set_bool, &opt_hfa_dfu_boot,
+			opt_hidden),
+	OPT_WITH_ARG("--hfa-hash-clock",
+		     opt_set_intval, NULL, &opt_hfa_hash_clock,
+		     opt_hidden),
+	OPT_WITH_ARG("--hfa-ntime-roll",
+		     opt_set_intval, NULL, &opt_hfa_ntime_roll,
+		     opt_hidden),
+	OPT_WITHOUT_ARG("--hfa-pll-bypass",
+			opt_set_bool, &opt_hfa_pll_bypass,
+			opt_hidden),
+#endif
 #ifdef USE_KLONDIKE
 	OPT_WITH_ARG("--klondike-options",
 		     set_klondike_options, NULL, NULL,
@@ -1217,14 +1221,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--net-delay",
 			opt_set_bool, &opt_delaynet,
 			"Impose small delays in networking to not overload slow routers"),
-	OPT_WITHOUT_ARG("--no-adl",
-			opt_set_bool, &opt_noadl,
-#ifdef HAVE_ADL
-			"Disable the ATI display library used for monitoring and setting GPU parameters"
-#else
-			opt_hidden
-#endif
-			),
 	OPT_WITHOUT_ARG("--no-pool-disable",
 			opt_set_invbool, &opt_disable_pool,
 			opt_hidden),
@@ -1295,21 +1291,10 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &use_syslog,
 			"Use system log for output messages (default: standard error)"),
 #endif
-#if defined(HAVE_ADL) || defined(USE_BITFORCE) || defined(USE_MODMINER) || defined(USE_BFLSC)
+#if defined(USE_BITFORCE) || defined(USE_MODMINER) || defined(USE_BFLSC)
 	OPT_WITH_ARG("--temp-cutoff",
 		     set_temp_cutoff, opt_show_intval, &opt_cutofftemp,
 		     "Temperature where a device will be automatically disabled, one value or comma separated list"),
-#endif
-#ifdef HAVE_ADL
-	OPT_WITH_ARG("--temp-hysteresis",
-		     set_int_1_to_10, opt_show_intval, &opt_hysteresis,
-		     "Set how much the temperature can fluctuate outside limits when automanaging speeds"),
-	OPT_WITH_ARG("--temp-overheat",
-		     set_temp_overheat, opt_show_intval, &opt_overheattemp,
-		     "Overheat temperature when automatically managing fan and GPU speeds, one value or comma separated list"),
-	OPT_WITH_ARG("--temp-target",
-		     set_temp_target, opt_show_intval, &opt_targettemp,
-		     "Target temperature when automatically managing fan and GPU speeds, one value or comma separated list"),
 #endif
 	OPT_WITHOUT_ARG("--text-only|-T",
 			opt_set_invbool, &use_curses,
@@ -1319,11 +1304,6 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden
 #endif
 	),
-#ifdef USE_SCRYPT
-	OPT_WITH_ARG("--thread-concurrency",
-		     set_thread_concurrency, NULL, NULL,
-		     "Set GPU thread concurrency for scrypt mining, comma separated"),
-#endif
 	OPT_WITH_ARG("--url|-o",
 		     set_url, NULL, NULL,
 		     "URL for bitcoin JSON-RPC server"),
@@ -6817,6 +6797,11 @@ static void *longpoll_thread(void __maybe_unused *userdata)
 
 void reinit_device(struct cgpu_info *cgpu)
 {
+#ifdef USE_USBUTILS
+	/* Attempt a usb device reset if the device has gone sick */
+	if (cgpu->usbdev && cgpu->usbdev->handle)
+		libusb_reset_device(cgpu->usbdev->handle);
+#endif
 	cgpu->drv->reinit_device(cgpu);
 }
 
@@ -7041,19 +7026,6 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			denable = &cgpu->deven;
 			snprintf(dev_str, sizeof(dev_str), "%s%d", cgpu->drv->name, gpu);
 
-#ifdef HAVE_ADL
-			if (adl_active && cgpu->has_adl)
-				gpu_autotune(gpu, denable);
-			if (opt_debug && cgpu->has_adl) {
-				int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
-				float temp = 0, vddc = 0;
-
-				if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune))
-					applog(LOG_DEBUG, "%.1f C  F: %d%%(%dRPM)  E: %dMHz  M: %dMhz  V: %.3fV  A: %d%%  P: %d%%",
-					temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
-			}
-#endif
-			
 			/* Thread is waiting on getwork or disabled */
 			if (thr->getwork || *denable == DEV_DISABLED)
 				continue;
@@ -7070,12 +7042,6 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				cgtime(&thr->sick);
 
 				dev_error(cgpu, REASON_DEV_SICK_IDLE_60);
-#ifdef HAVE_ADL
-				if (adl_active && cgpu->has_adl && gpu_activity(gpu) > 50) {
-					applog(LOG_ERR, "GPU still showing activity suggesting a hard hang.");
-					applog(LOG_ERR, "Will not attempt to auto-restart it.");
-				} else
-#endif
 				if (opt_restart) {
 					applog(LOG_ERR, "%s: Attempting to restart", dev_str);
 					reinit_device(cgpu);
@@ -7090,11 +7056,6 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				   (cgpu->status == LIFE_SICK || cgpu->status == LIFE_DEAD)) {
 				/* Attempt to restart a GPU that's sick or dead once every minute */
 				cgtime(&thr->sick);
-#ifdef HAVE_ADL
-				if (adl_active && cgpu->has_adl && gpu_activity(gpu) > 50) {
-					/* Again do not attempt to restart a device that may have hard hung */
-				} else
-#endif
 				if (opt_restart)
 					reinit_device(cgpu);
 			}
@@ -7800,14 +7761,13 @@ static void *libusb_poll_thread(void __maybe_unused *arg)
 
 static void initialise_usb(void) {
 	int err = libusb_init(NULL);
+
 	if (err) {
 		fprintf(stderr, "libusb_init() failed err %d", err);
 		fflush(stderr);
 		quit(1, "libusb_init() failed");
 	}
-	mutex_init(&cgusb_lock);
-	mutex_init(&cgusbres_lock);
-	cglock_init(&cgusb_fd_lock);
+	initialise_usblocks();
 	usb_polling = true;
 	pthread_create(&usb_poll_thread, NULL, libusb_poll_thread, NULL);
 }
@@ -8096,6 +8056,37 @@ int main(int argc, char *argv[])
 			quit(1, "Failed to calloc mining_thr[%d]", i);
 	}
 
+	// Start threads
+	k = 0;
+	for (i = 0; i < total_devices; ++i) {
+		struct cgpu_info *cgpu = devices[i];
+		cgpu->thr = malloc(sizeof(*cgpu->thr) * (cgpu->threads+1));
+		cgpu->thr[cgpu->threads] = NULL;
+		cgpu->status = LIFE_INIT;
+
+		for (j = 0; j < cgpu->threads; ++j, ++k) {
+			thr = get_thread(k);
+			thr->id = k;
+			thr->cgpu = cgpu;
+			thr->device_thread = j;
+
+			if (!cgpu->drv->thread_prepare(thr))
+				continue;
+
+			if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
+				quit(1, "thread %d create failed", thr->id);
+
+			cgpu->thr[j] = thr;
+
+			/* Enable threads for devices set not to mine but disable
+			 * their queue in case we wish to enable them later */
+			if (cgpu->deven != DEV_DISABLED) {
+				applog(LOG_DEBUG, "Pushing sem post to thread %d", thr->id);
+				cgsem_post(&thr->sem);
+			}
+		}
+	}
+
 	if (opt_benchmark)
 		goto begin_bench;
 
@@ -8152,40 +8143,6 @@ begin_bench:
 	cgtime(&total_tv_start);
 	cgtime(&total_tv_end);
 	get_datestamp(datestamp, sizeof(datestamp), &total_tv_start);
-
-	// Start threads
-	k = 0;
-	for (i = 0; i < total_devices; ++i) {
-		struct cgpu_info *cgpu = devices[i];
-		cgpu->thr = malloc(sizeof(*cgpu->thr) * (cgpu->threads+1));
-		cgpu->thr[cgpu->threads] = NULL;
-		cgpu->status = LIFE_INIT;
-
-		for (j = 0; j < cgpu->threads; ++j, ++k) {
-			thr = get_thread(k);
-			thr->id = k;
-			thr->cgpu = cgpu;
-			thr->device_thread = j;
-
-			if (!cgpu->drv->thread_prepare(thr))
-				continue;
-
-			if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
-				quit(1, "thread %d create failed", thr->id);
-
-			cgpu->thr[j] = thr;
-
-			/* Enable threads for devices set not to mine but disable
-			 * their queue in case we wish to enable them later */
-			if (cgpu->deven != DEV_DISABLED) {
-				applog(LOG_DEBUG, "Pushing sem post to thread %d", thr->id);
-				cgsem_post(&thr->sem);
-			}
-		}
-	}
-
-	cgtime(&total_tv_start);
-	cgtime(&total_tv_end);
 
 	watchpool_thr_id = 2;
 	thr = &control_thr[watchpool_thr_id];

@@ -16,6 +16,11 @@
 #include "elist.h"
 #include "hf_protocol.h"
 
+int opt_hfa_ntime_roll;
+int opt_hfa_hash_clock;
+bool opt_hfa_pll_bypass;
+bool opt_hfa_dfu_boot;
+
 #define HASHFAST_MINER_THREADS 1
 
 // Matching fields for hf_statistics, but large #s for local accumulation, per-die

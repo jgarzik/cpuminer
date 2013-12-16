@@ -1,3 +1,79 @@
+Version 3.8.5 - 10th December 2013
+
+- Increase the BFLSC overtemp to 75 for fanspeed to maximum.
+- Set bflsc cutoff temperature to 85 degrees and throttle 3 degrees below the
+cutoff temperature.
+- Only set LIBUSB_TRANSFER_ADD_ZERO_PACKET for libusb versions we know include
+support for.
+- Provide a helper function that can reset cgsems to zero.
+- Add to cgminer_CPPFLAGS instead of redefining them.
+- Attempt a libusb reset device on usb devices that have stopped responding.
+- Replace deprecated use of INCLUDES with _CPPFLAGS.
+- Remove more unused GPU code.
+- Attempt USB device resets on usb read/write errors that will normally cause
+the device to drop out.
+- Quieten down jansson component of build.
+- Cache the bool value for usb1.1 in _usb_write
+- Initialise usb locks within usbutils.c instead of exporting them.
+- Imitate a transaction translator for all usb1.1 device writes to compensate
+for variable quality hubs and operating system support.
+- Rationalise variables passed to usb_bulk_transfer.
+- Unlink files opened as semaphores on releasing them.
+- Remove user configuration flag from pll bypass enabling in hashfast driver.
+- Provide an hfa-dfu-boot option for resetting hashfast devices for
+reprogramming.
+- Fixed one byte stack overflow in mcast recvfrom.
+- Having changed C_MAX means we don't calloc enough for usb stats, off by one.
+- Don't free the info struct on hashfast shutdown since it's still accessed
+after a device is removed.
+
+
+Version 3.8.4 - 1st December 2013
+
+- Deprecate the usb usecps function and just split up transfers equal to the
+maxpacketsize on usb1.1 devices.
+- Retry sending after successfully clearing a pipe error.
+- Drop logging of timeout overrun message to verbose level.
+- Use a much longer callback timeout for USB writes on windows only as a last
+resort since cancellations work so poorly.
+- Use vcc2 in bflsc voltage displayed.
+- Increment per core errors on false nonces in bflsc and add per core statistics
+to api stats, removing debugging.
+- Store a per-core nonce and hw error count for bflsc.
+- Fix json parsing in api.c
+- Add debugging to hfa driver for how many jobs are being sent.
+- Shut down the hfa read thread if the device disappears.
+- Add debug output saying what frame command is being sent in hfa driver.
+- Revert "Disable USB stats which were not meant to be enabled by default and
+add extra memory for a memory error when stats are enabled."
+- Reset work restart flag in hfa driver since we may check for it again in
+restart_wait.
+- Add more op usb init errors for hfa driver.
+- Perform basic displaying of hfa notices received.
+- Add hfa op usb notice macros.
+- Update hf protocol header.
+- Use sync usb transfers in lowmem mode.
+- Go back to allowing timeout errors on USB writes to be passed back to the
+driver without removing the device in case the driver wishes to manage them.
+- Initialise more values for the hfa data structures.
+- A USB control error must be < 0
+- Simplify USB NODEV error checking to success only for writes and control
+transfers, and success and timeout for reads.
+- libusb error IO should be fatal as well if it gets through usb read and write.
+- Allow IO errors in usb reads/writes to be ignored up to retry max times.
+- Use correct padding for bxf temperature display.
+- Initialise devices before attempting to connect to pools to allow their thread
+prepare function to be called before having to connect to pools.
+- Add hidden hfa options to set hash clock, group ntime roll and pll bypass,
+fixing frame sent on reset to include extra data.
+- Relax the timeouts for the slower usb devices on linux.
+- Add big endian hf protocol header to Makefile
+- Check for correct big endian macro in hf_protocol
+- Use an absolute timeout in hfa_get_header to cope with buffered usb reads
+returning instantly confusing the 200ms counter.
+- Update hfa_detect_one to use the new detect function API.
+
+
 Version 3.8.3 - 23rd November 2013
 
 - Set the bitfury device start times from when we first get valid work.

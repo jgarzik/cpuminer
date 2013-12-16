@@ -84,13 +84,14 @@ static const struct hfa_cmd hfa_cmds[] = {
 	{OP_GET_TRACE, "OP_GET_TRACE", C_NULL},
 	{OP_LOOPBACK_USB, "OP_LOOPBACK_USB", C_NULL},
 	{OP_LOOPBACK_UART, "OP_LOOPBACK_UART", C_NULL},
-	{OP_DFU, "OP_DFU", C_NULL},
+	{OP_DFU, "OP_DFU", C_HF_DFU},
 	{OP_USB_SHUTDOWN, "OP_USB_SHUTDOWN", C_NULL},
 	{OP_DIE_STATUS, "OP_DIE_STATUS", C_HF_DIE_STATUS},	// 24
 	{OP_GWQ_STATUS, "OP_GWQ_STATUS", C_HF_GWQ_STATUS},
 	{OP_WORK_RESTART, "OP_WORK_RESTART", C_HF_WORK_RESTART},
 	{OP_USB_STATS1, "OP_USB_STATS1", C_NULL},
-	{OP_USB_GWQSTATS, "OP_USB_GWQSTATS", C_HF_GWQSTATS}
+	{OP_USB_GWQSTATS, "OP_USB_GWQSTATS", C_HF_GWQSTATS},
+	{OP_USB_NOTICE, "OP_USB_NOTICE", C_HF_NOTICE}
 };
 
 #define HF_USB_CMD_OFFSET (128 - 18)
@@ -118,6 +119,7 @@ static bool hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, uint16_t 
 		memcpy(&packet[sizeof(struct hf_header)], data, len);
 	tx_length = sizeof(struct hf_header) + len;
 
+	applog(LOG_DEBUG, "HFA %d: Sending %s frame", hashfast->device_id, hfa_cmds[opcode].cmd_name);
 	ret = usb_write(hashfast, (char *)packet, tx_length, &amount,
 			hfa_cmds[opcode].usb_cmd);
 	if (unlikely(ret < 0 || amount != tx_length)) {
@@ -204,12 +206,21 @@ static const char *hf_usb_init_errors[] = {
 	"Configuration operation timeout",
 	"Excessive core failures",
 	"All cores failed diagnostics",
-	"Too many groups configured - increase ntime roll amount"
+	"Too many groups configured - increase ntime roll amount",
+	"Chaining connections detected but secondary board(s) did not respond",
+	"Secondary board communication error",
+	"Main board 12V power is bad",
+	"Secondary board(s) 12V power is bad",
+	"Main board FPGA programming error",
+	"Main board FPGA SPI read timeout",
+	"Main board FPGA Bad magic number",
+	"Main board FPGA SPI write timeout",
+	"Main board FPGA register read/write test failed"
 };
 
 static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
-	struct hf_usb_init_header usb_init, *hu = &usb_init;
+	struct hf_usb_init_header usb_init[2], *hu = usb_init;
 	struct hf_usb_init_base *db;
         struct hf_usb_init_options *ho;
 	int retries = 0, i;
@@ -218,9 +229,9 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	uint8_t hcrc;
 	bool ret;
 
-        // XXX Following items need to be defaults with command-line overrides
-	info->hash_clock_rate = 550;	// Hash clock rate in Mhz
-	info->group_ntime_roll = 1;
+	/* Hash clock rate in Mhz */
+	info->hash_clock_rate = opt_hfa_hash_clock ? opt_hfa_hash_clock : 550;
+	info->group_ntime_roll = opt_hfa_ntime_roll ? opt_hfa_ntime_roll : 1;
 	info->core_ntime_roll = 1;
 
 	// Assemble the USB_INIT request
@@ -228,6 +239,8 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	hu->preamble = HF_PREAMBLE;
 	hu->operation_code = OP_USB_INIT;
 	hu->protocol = PROTOCOL_GLOBAL_WORK_QUEUE;	// Protocol to use
+	// Force PLL bypass
+	hu->pll_bypass = opt_hfa_pll_bypass;
 	hu->hash_clock = info->hash_clock_rate;		// Hash clock rate in Mhz
 	if (info->group_ntime_roll > 1 && info->core_ntime_roll) {
 		ho = (struct hf_usb_init_options *)(hu + 1);
@@ -417,6 +430,15 @@ static bool hfa_initialise(struct cgpu_info *hashfast)
 	return (err == 7);
 }
 
+static void hfa_dfu_boot(struct cgpu_info *hashfast)
+{
+	bool ret;
+
+	ret = hfa_send_frame(hashfast, HF_USB_CMD(OP_DFU), 0, NULL, 0);
+	applog(LOG_WARNING, "HFA %d %03d:%03d DFU Boot %s", hashfast->device_id, hashfast->usbinfo.bus_number,
+	       hashfast->usbinfo.device_address, ret ? "Succeeded" : "Failed");
+}
+
 static struct cgpu_info *hfa_detect_one(libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *hashfast;
@@ -436,7 +458,11 @@ static struct cgpu_info *hfa_detect_one(libusb_device *dev, struct usb_find_devi
 		hashfast = usb_free_cgpu(hashfast);
 		return NULL;
 	}
-
+	if (opt_hfa_dfu_boot) {
+		hfa_dfu_boot(hashfast);
+		hashfast = usb_free_cgpu(hashfast);
+		return NULL;
+	}
 	if (!hfa_detect_common(hashfast)) {
 		usb_uninit(hashfast);
 		hashfast = usb_free_cgpu(hashfast);
@@ -680,8 +706,21 @@ static void hfa_update_stats1(struct cgpu_info *hashfast, struct hashfast_info *
 #endif
 	applog(LOG_DEBUG, "      max_tx_buffers:               %6d", sd->max_tx_buffers);
 	applog(LOG_DEBUG, "      max_rx_buffers:               %6d", sd->max_rx_buffers);
+}
 
-    }
+static void hfa_parse_notice(struct cgpu_info *hashfast, struct hf_header *h)
+{
+	struct hf_usb_notice_data *d;
+
+	if (h->data_length == 0) {
+		applog(LOG_DEBUG, "HFA %d: Received OP_USB_NOTICE with zero data length",
+		       hashfast->device_id);
+		return;
+	}
+	d = (struct hf_usb_notice_data *)(h + 1);
+	/* FIXME Do something with the notification code d->extra_data here */
+	applog(LOG_NOTICE, "HFA %d NOTICE: %s", hashfast->device_id, d->message);
+}
 
 static void *hfa_read(void *arg)
 {
@@ -697,6 +736,9 @@ static void *hfa_read(void *arg)
 		char buf[512];
 		struct hf_header *h = (struct hf_header *)buf;
 		bool ret = hfa_get_packet(hashfast, h);
+
+		if (unlikely(hashfast->usbinfo.nodev))
+			break;
 
 		if (unlikely(!ret))
 			continue;
@@ -717,12 +759,16 @@ static void *hfa_read(void *arg)
 			case OP_USB_STATS1:
 				hfa_update_stats1(hashfast, info, h);
 				break;
+			case OP_USB_NOTICE:
+				hfa_parse_notice(hashfast, h);
+				break;
 			default:
 				applog(LOG_WARNING, "HFA %d: Unhandled operation code %d",
 				       hashfast->device_id, h->operation_code);
 				break;
 		}
 	}
+	applog(LOG_DEBUG, "HFA %d: Shutting down read thread", hashfast->device_id);
 
 	return NULL;
 }
@@ -774,6 +820,7 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 
 	if (unlikely(thr->work_restart)) {
 restart:
+		thr->work_restart = false;
 		ret = hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), 0, (uint8_t *)NULL, 0);
 		if (unlikely(!ret)) {
 			ret = hfa_reset(hashfast, info);
@@ -794,6 +841,11 @@ restart:
 		jobs = hfa_jobs(info);
 	}
 
+	if (jobs) {
+		applog(LOG_DEBUG, "HFA %d: Sending %d new jobs", hashfast->device_id,
+		       jobs);
+	}
+
 	while (jobs-- > 0) {
 		struct hf_hash_usb op_hash_data;
 		struct work *work;
@@ -810,13 +862,16 @@ restart:
 		p = (uint32_t *)(work->data + 64 + 4);
 		op_hash_data.timestamp = *p++;
 		op_hash_data.bits = *p++;
+		op_hash_data.starting_nonce = 0;
 		op_hash_data.nonce_loops = 0;
+		op_hash_data.ntime_loops = 0;
 
 		/* Set the number of leading zeroes to look for based on diff.
 		 * Diff 1 = 32, Diff 2 = 33, Diff 4 = 34 etc. */
 		intdiff = (uint64_t)work->device_diff;
 		for (i = 31; intdiff; i++, intdiff >>= 1);
 		op_hash_data.search_difficulty = i;
+		op_hash_data.group = 0;
 		if ((sequence = info->hash_sequence_head + 1) >= info->num_sequence)
 			sequence = 0;
 		ret = hfa_send_frame(hashfast, OP_HASH, sequence, (uint8_t *)&op_hash_data, sizeof(op_hash_data));
@@ -971,7 +1026,8 @@ static void hfa_shutdown(struct thr_info *thr)
 	free(info->works);
 	free(info->die_statistics);
 	free(info->die_status);
-	free(info);
+	/* Don't free info here since it will be accessed by statline before
+	 * if a device is removed. */
 }
 
 struct device_drv hashfast_drv = {

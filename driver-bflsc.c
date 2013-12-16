@@ -918,7 +918,7 @@ static void get_bflsc_statline_before(char *buf, size_t bufsiz, struct cgpu_info
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	float temp = 0;
-	float vcc1 = 0;
+	float vcc2 = 0;
 	int i;
 
 	rd_lock(&(sc_info->stat_lock));
@@ -927,12 +927,12 @@ static void get_bflsc_statline_before(char *buf, size_t bufsiz, struct cgpu_info
 			temp = sc_info->sc_devs[i].temp1;
 		if (sc_info->sc_devs[i].temp2 > temp)
 			temp = sc_info->sc_devs[i].temp2;
-		if (sc_info->sc_devs[i].vcc1 > vcc1)
-			vcc1 = sc_info->sc_devs[i].vcc1;
+		if (sc_info->sc_devs[i].vcc2 > vcc2)
+			vcc2 = sc_info->sc_devs[i].vcc2;
 	}
 	rd_unlock(&(sc_info->stat_lock));
 
-	tailsprintf(buf, bufsiz, " max%3.0fC %4.2fV | ", temp, vcc1);
+	tailsprintf(buf, bufsiz, " max%3.0fC %4.2fV | ", temp, vcc2);
 }
 
 static void flush_one_dev(struct cgpu_info *bflsc, int dev)
@@ -1005,6 +1005,36 @@ static void bflsc_flash_led(struct cgpu_info *bflsc, int dev)
 	sc_info->flash_led = false;
 
 	return;
+}
+
+/* Flush and stop all work if the device reaches the thermal cutoff temp, or
+ * temporarily stop queueing work if it's in the throttling range. */
+static void bflsc_manage_temp(struct cgpu_info *bflsc, struct bflsc_dev *sc_dev,
+			      int dev, float temp)
+{
+	bflsc->temp = temp;
+	if (bflsc->cutofftemp > 0) {
+		int cutoff = bflsc->cutofftemp;
+		int throttle = cutoff - BFLSC_TEMP_THROTTLE;
+		int recover = cutoff - BFLSC_TEMP_RECOVER;
+
+		if (sc_dev->overheat) {
+			if (temp < recover)
+				sc_dev->overheat = false;
+		} else if (temp > throttle) {
+			sc_dev->overheat = true;
+			if (temp > cutoff) {
+				applog(LOG_WARNING, "%s%i: temp (%.1f) hit thermal cutoff limit %d, stopping work!",
+				       bflsc->drv->name, bflsc->device_id, temp, cutoff);
+				dev_error(bflsc, REASON_DEV_THERMAL_CUTOFF);
+				flush_one_dev(bflsc, dev);
+
+			} else {
+				applog(LOG_NOTICE, "%s%i: temp (%.1f) hit thermal throttle limit %d, throttling",
+				       bflsc->drv->name, bflsc->device_id, temp, throttle);
+			}
+		}
+	}
 }
 
 static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
@@ -1200,34 +1230,41 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 		if (temp < temp2)
 			temp = temp2;
 
-		bflsc->temp = temp;
-
-		if (bflsc->cutofftemp > 0 && temp >= bflsc->cutofftemp) {
-			applog(LOG_WARNING, "%s%i:%s temp (%.1f) hit thermal cutoff limit %d, stopping work!",
-						bflsc->drv->name, bflsc->device_id, xlink,
-						temp, bflsc->cutofftemp);
-			dev_error(bflsc, REASON_DEV_THERMAL_CUTOFF);
-			sc_dev->overheat = true;
-			flush_one_dev(bflsc, dev);
-			return false;
-		}
-
-		if (bflsc->cutofftemp > 0 && temp < (bflsc->cutofftemp - BFLSC_TEMP_RECOVER))
-			sc_dev->overheat = false;
+		bflsc_manage_temp(bflsc, sc_dev, dev, temp);
 	}
 
 	return true;
+}
+
+static void inc_core_errors(struct bflsc_info *info, int8_t core)
+{
+	if (core >= 0 && core < 16)
+		info->core_hw[core]++;
+}
+
+static void inc_bflsc_errors(struct thr_info *thr, struct bflsc_info *info, int8_t core)
+{
+	inc_hw_errors(thr);
+	inc_core_errors(info, core);
+}
+
+static void inc_bflsc_nonces(struct bflsc_info *info, int8_t core)
+{
+	if (core >= 0 && core < 16)
+		info->core_nonces[core]++;
 }
 
 static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *data, int count, char **fields, int *nonces)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	char midstate[MIDSTATE_BYTES], blockdata[MERKLE_BYTES];
+	struct thr_info *thr = bflsc->thr[0];
 	struct work *work;
+	int8_t core = -1;
 	uint32_t nonce;
 	int i, num, x;
-	bool res;
 	char *tmp;
+	bool res;
 
 	if (count < sc_info->que_fld_min) {
 		tmp = str_text(data);
@@ -1235,15 +1272,22 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 				"%s%i:%s work returned too small (%d,%s)",
 				bflsc->drv->name, bflsc->device_id, xlink, count, tmp);
 		free(tmp);
-		inc_hw_errors(bflsc->thr[0]);
+		inc_bflsc_errors(thr, sc_info, core);
 		return;
+	}
+
+	if (sc_info->que_noncecount != QUE_NONCECOUNT_V1) {
+		unsigned int ucore;
+
+		if (sscanf(fields[QUE_CHIP_V2], "%x", &ucore) == 1)
+			core = ucore;
 	}
 
 	if (count > sc_info->que_fld_max) {
 		applog(LOG_INFO, "%s%i:%s work returned too large (%d) processing %d anyway",
 		       bflsc->drv->name, bflsc->device_id, xlink, count, sc_info->que_fld_max);
 		count = sc_info->que_fld_max;
-		inc_hw_errors(bflsc->thr[0]);
+		inc_bflsc_errors(thr, sc_info, core);
 	}
 
 	num = atoi(fields[sc_info->que_noncecount]);
@@ -1254,7 +1298,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 				bflsc->drv->name, bflsc->device_id, xlink, num,
 				count - sc_info->que_fld_max, tmp);
 		free(tmp);
-		inc_hw_errors(bflsc->thr[0]);
+		inc_bflsc_errors(thr, sc_info, core);
 	}
 
 	memset(midstate, 0, MIDSTATE_BYTES);
@@ -1263,7 +1307,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	    !hex2bin((unsigned char *)blockdata, fields[QUE_BLOCKDATA], MERKLE_BYTES)) {
 		applog(LOG_INFO, "%s%i:%s Failed to convert binary data to hex result - ignored",
 		       bflsc->drv->name, bflsc->device_id, xlink);
-		inc_hw_errors(bflsc->thr[0]);
+		inc_bflsc_errors(thr, sc_info, core);
 		return;
 	}
 
@@ -1273,7 +1317,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 		if (sc_info->not_first_work) {
 			applog(LOG_INFO, "%s%i:%s failed to find nonce work - can't be processed - ignored",
 			       bflsc->drv->name, bflsc->device_id, xlink);
-			inc_hw_errors(bflsc->thr[0]);
+			inc_bflsc_errors(thr, sc_info, core);
 		}
 		return;
 	}
@@ -1291,7 +1335,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 
 		hex2bin((void*)&nonce, fields[i], 4);
 		nonce = htobe32(nonce);
-		res = submit_nonce(bflsc->thr[0], work, nonce);
+		res = submit_nonce(thr, work, nonce);
 		if (res) {
 			wr_lock(&(sc_info->stat_lock));
 			sc_info->sc_devs[dev].nonces_found++;
@@ -1299,7 +1343,9 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 
 			(*nonces)++;
 			x++;
-		}
+			inc_bflsc_nonces(sc_info, core);
+		} else
+			inc_core_errors(sc_info, core);
 	}
 
 	wr_lock(&(sc_info->stat_lock));
@@ -1785,7 +1831,7 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 	return ret;
 }
 
-#define BFLSC_OVER_TEMP 60
+#define BFLSC_OVER_TEMP 75
 
 /* Set the fanspeed to auto for any valid value <= BFLSC_OVER_TEMP,
  * or max for any value > BFLSC_OVER_TEMP or if we don't know the temperature. */
@@ -1924,6 +1970,16 @@ else a whole lot of something like these ... etc
 	root = api_add_volts(root, "X-%d-Vcc2", &(sc_info->vcc2), false);
 	root = api_add_volts(root, "X-%d-Vmain", &(sc_info->vmain), false);
 */
+	if (sc_info->que_noncecount != QUE_NONCECOUNT_V1) {
+		for (i = 0; i < 16; i++) {
+			sprintf(buf, "Core%d Nonces", i);
+			root = api_add_int(root, buf, &sc_info->core_nonces[i], false);
+		}
+		for (i = 0; i < 16; i++) {
+			sprintf(buf, "Core%d HW Errors", i);
+			root = api_add_int(root, buf, &sc_info->core_hw[i], false);
+		}
+	}
 
 	return root;
 }

@@ -8,7 +8,7 @@
 //
 // Useful data structures and values for interfacing with HashFast products
 //
-// Version 1.0
+// Version 1.1
 //
 
 #ifndef _HF_PROTOCOL_H_
@@ -44,6 +44,9 @@
 // Conversions for the ADC readings from GN on-chip sensors
 #define GN_CORE_VOLTAGE(a)              ((float)(a)/256*1.2)
 #define GN_DIE_TEMPERATURE(a)           ((((float)(a)*240)/4096.0)-61.5)
+
+// What to use in an OP_CONFIG hdata field to set thermal overload point to a given temp in degrees C
+#define GN_THERMAL_CUTOFF(temp)         ((uint16_t)(((temp)+61.5)*4096/240))
 
 // The sequence distance between a sent and received sequence number.
 #define HF_SEQUENCE_DISTANCE(tx,rx)        ((tx)>=(rx)?((tx)-(rx)):(info->num_sequence+(tx)-(rx)))
@@ -92,6 +95,17 @@
 #define E_CLOCKGATE_TIMEOUT             3
 #define E_CONFIG_TIMEOUT                4
 #define E_EXCESS_CORE_FAILURES          5
+#define E_TOTAL_CORE_FAILURES           6
+#define E_TOO_MANY_GROUPS               7
+#define E_NO_SLAVES                     8
+#define E_SLAVE_COMM                    9
+#define E_MAIN_POWER_BAD                10
+#define E_SECONDARY_POWER_BAD           11
+#define E_BOARD_1                       12
+#define E_BOARD_2                       13
+#define E_BOARD_3                       14
+#define E_BOARD_4                       15
+#define E_BOARD_5                       16
 
 #define U32SIZE(x)                      (sizeof(x)/sizeof(uint32_t))
 

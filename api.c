@@ -4278,7 +4278,7 @@ static void mcast()
 
 		count++;
 		came_from_siz = sizeof(came_from);
-		if (SOCKETFAIL(rep = recvfrom(mcast_sock, buf, sizeof(buf),
+		if (SOCKETFAIL(rep = recvfrom(mcast_sock, buf, sizeof(buf) - 1,
 						0, (struct sockaddr *)(&came_from), &came_from_siz))) {
 			applog(LOG_DEBUG, "API mcast failed count=%d (%s) (%d)",
 					count, SOCKERRMSG, (int)mcast_sock);
@@ -4387,7 +4387,7 @@ void api(int api_thr_id)
 	bool addrok;
 	char group;
 	json_error_t json_err;
-	json_t *json_config;
+	json_t *json_config = NULL;
 	json_t *json_val;
 	bool isjson;
 	bool did;
@@ -4562,21 +4562,18 @@ void api(int api_thr_id)
 						message(io_data, MSG_INVJSON, 0, NULL, isjson);
 						send_result(io_data, c, isjson);
 						did = true;
-					}
-					else {
+					} else {
 						json_val = json_object_get(json_config, JSON_COMMAND);
 						if (json_val == NULL) {
 							message(io_data, MSG_MISCMD, 0, NULL, isjson);
 							send_result(io_data, c, isjson);
 							did = true;
-						}
-						else {
+						} else {
 							if (!json_is_string(json_val)) {
 								message(io_data, MSG_INVCMD, 0, NULL, isjson);
 								send_result(io_data, c, isjson);
 								did = true;
-							}
-							else {
+							} else {
 								cmd = (char *)json_string_value(json_val);
 								json_val = json_object_get(json_config, JSON_PARAMETER);
 								if (json_is_string(json_val))
@@ -4590,11 +4587,10 @@ void api(int api_thr_id)
 								}
 							}
 						}
-						json_decref(json_config);
 					}
 				}
 
-				if (!did)
+				if (!did) {
 					for (i = 0; cmds[i].name != NULL; i++) {
 						if (strcmp(cmd, cmds[i].name) == 0) {
 							sprintf(cmdbuf, "|%s|", cmd);
@@ -4610,11 +4606,14 @@ void api(int api_thr_id)
 							break;
 						}
 					}
+				}
 
 				if (!did) {
 					message(io_data, MSG_INVCMD, 0, NULL, isjson);
 					send_result(io_data, c, isjson);
 				}
+				if (json_is_object(json_config))
+					json_decref(json_config);
 			}
 		}
 		CLOSESOCKET(c);

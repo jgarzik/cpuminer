@@ -314,9 +314,6 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 	if (icarus->usbinfo.nodev)
 		return;
 
-	usb_set_cps(icarus, baud / 10);
-	usb_enable_cps(icarus);
-
 	interface = _usb_interface(icarus, info->intinfo);
 	ident = usb_ident(icarus);
 

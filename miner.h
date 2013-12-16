@@ -115,10 +115,6 @@ static inline int fsync (int fd)
 #endif
 
 
-#ifdef HAVE_ADL
- #include "ADL_SDK/adl_sdk.h"
-#endif
-
 #ifdef USE_USBUTILS
   #include <libusb.h>
 #endif
@@ -285,44 +281,6 @@ struct strategies {
 
 struct cgpu_info;
 
-#ifdef HAVE_ADL
-struct gpu_adl {
-	ADLTemperature lpTemperature;
-	int iAdapterIndex;
-	int lpAdapterID;
-	int iBusNumber;
-	char strAdapterName[256];
-
-	ADLPMActivity lpActivity;
-	ADLODParameters lpOdParameters;
-	ADLODPerformanceLevels *DefPerfLev;
-	ADLFanSpeedInfo lpFanSpeedInfo;
-	ADLFanSpeedValue lpFanSpeedValue;
-	ADLFanSpeedValue DefFanSpeedValue;
-
-	int iEngineClock;
-	int iMemoryClock;
-	int iVddc;
-	int iPercentage;
-
-	bool autofan;
-	bool autoengine;
-	bool managed; /* Were the values ever changed on this card */
-
-	int lastengine;
-	int lasttemp;
-	int targetfan;
-	int targettemp;
-	int overtemp;
-	int minspeed;
-	int maxspeed;
-
-	int gpu;
-	bool has_fanspeed;
-	struct gpu_adl *twin;
-};
-#endif
-
 extern void blank_get_statline_before(char *buf, size_t bufsiz, struct cgpu_info __maybe_unused *cgpu);
 
 struct api_data;
@@ -388,15 +346,6 @@ enum dev_enable {
 	DEV_ENABLED,
 	DEV_DISABLED,
 	DEV_RECOVER,
-};
-
-enum cl_kernels {
-	KL_NONE,
-	KL_POCLBM,
-	KL_PHATK,
-	KL_DIAKGCN,
-	KL_DIABLO,
-	KL_SCRYPT,
 };
 
 enum dev_reason {
@@ -978,6 +927,7 @@ extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
 extern char *cgminer_path;
 extern bool opt_fail_only;
+extern bool opt_lowmem;
 extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;
@@ -994,7 +944,6 @@ extern bool opt_api_listen;
 extern bool opt_api_network;
 extern bool opt_delaynet;
 extern bool opt_restart;
-extern bool opt_nogpu;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern bool opt_worktime;
@@ -1048,12 +997,6 @@ extern int opt_queue;
 extern int opt_scantime;
 extern int opt_expiry;
 
-#ifdef USE_USBUTILS
-extern pthread_mutex_t cgusb_lock;
-extern pthread_mutex_t cgusbres_lock;
-extern cglock_t cgusb_fd_lock;
-#endif
-
 extern cglock_t control_lock;
 extern pthread_mutex_t hash_lock;
 extern pthread_mutex_t console_lock;
@@ -1072,14 +1015,6 @@ extern void kill_work(void);
 
 extern void reinit_device(struct cgpu_info *cgpu);
 
-#ifdef HAVE_ADL
-extern bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc, int *activity, int *fanspeed, int *fanpercent, int *powertune);
-extern int set_fanspeed(int gpu, int iFanSpeed);
-extern int set_vddc(int gpu, float fVddc);
-extern int set_engineclock(int gpu, int iEngineClock);
-extern int set_memoryclock(int gpu, int iMemoryClock);
-#endif
-
 extern void api(int thr_id);
 
 extern struct pool *current_pool(void);
@@ -1091,30 +1026,7 @@ extern void adjust_quota_gcd(void);
 extern struct pool *add_pool(void);
 extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
 
-#define MAX_GPUDEVICES 16
 #define MAX_DEVICES 4096
-
-#define MIN_SHA_INTENSITY -10
-#define MIN_SHA_INTENSITY_STR "-10"
-#define MAX_SHA_INTENSITY 14
-#define MAX_SHA_INTENSITY_STR "14"
-#define MIN_SCRYPT_INTENSITY 8
-#define MIN_SCRYPT_INTENSITY_STR "8"
-#define MAX_SCRYPT_INTENSITY 20
-#define MAX_SCRYPT_INTENSITY_STR "20"
-#ifdef USE_SCRYPT
-#define MIN_INTENSITY (opt_scrypt ? MIN_SCRYPT_INTENSITY : MIN_SHA_INTENSITY)
-#define MIN_INTENSITY_STR (opt_scrypt ? MIN_SCRYPT_INTENSITY_STR : MIN_SHA_INTENSITY_STR)
-#define MAX_INTENSITY (opt_scrypt ? MAX_SCRYPT_INTENSITY : MAX_SHA_INTENSITY)
-#define MAX_INTENSITY_STR (opt_scrypt ? MAX_SCRYPT_INTENSITY_STR : MAX_SHA_INTENSITY_STR)
-#define MAX_GPU_INTENSITY MAX_SCRYPT_INTENSITY
-#else
-#define MIN_INTENSITY MIN_SHA_INTENSITY
-#define MIN_INTENSITY_STR MIN_SHA_INTENSITY_STR
-#define MAX_INTENSITY MAX_SHA_INTENSITY
-#define MAX_INTENSITY_STR MAX_SHA_INTENSITY_STR
-#define MAX_GPU_INTENSITY MAX_SHA_INTENSITY
-#endif
 
 extern bool hotplug_mode;
 extern int hotplug_time;
@@ -1126,13 +1038,6 @@ extern bool use_syslog;
 extern bool opt_quiet;
 extern struct thr_info *control_thr;
 extern struct thr_info **mining_thr;
-extern struct cgpu_info gpus[MAX_GPUDEVICES];
-extern int gpu_threads;
-#ifdef USE_SCRYPT
-extern bool opt_scrypt;
-#else
-#define opt_scrypt (0)
-#endif
 extern double total_secs;
 extern int mining_threads;
 extern int total_devices;
@@ -1330,9 +1235,7 @@ struct work {
 	unsigned char	target[32];
 	unsigned char	hash[32];
 
-#ifdef USE_SCRYPT
 	unsigned char	device_target[32];
-#endif
 	double		device_diff;
 	uint64_t	share_diff;
 
