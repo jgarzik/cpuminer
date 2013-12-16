@@ -877,13 +877,13 @@ cascade:
         drillbit_empty_buffer(drillbit);
 
 	if (unlikely(drillbit->usbinfo.nodev)) {
-		drvlog(LOG_WARNING, "%s %d: Device disappeared, disabling thread",
-                        drillbit->drv->name, drillbit->device_id);
-		return -1;
+                drvlog(LOG_WARNING, "Device disappeared, disabling thread");
+                return -1;
 	}
 
 	if (unlikely(thr->work_restart)) {
 		/* Issue an ASIC reset as we won't be coming back for any of these results */
+                drvlog(LOG_DEBUG, "Received work restart, resetting ASIC");
 		drillbit_reset(drillbit);
 	}
 
