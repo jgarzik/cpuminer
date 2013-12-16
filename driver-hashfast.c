@@ -515,6 +515,22 @@ static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_inf
 		hashfast->device_id, g->sequence_head, g->sequence_tail, info->hash_sequence_tail,
 		g->shed_count, HF_SEQUENCE_DISTANCE(info->hash_sequence_head,g->sequence_tail));
 
+	/* This is a special flag that the thermal overload has been tripped */
+	if (unlikely(h->core_address & 0x80)) {
+		applog(LOG_WARNING, "HFA %d Thermal overload tripped! Resetting device",
+		       hashfast->device_id);
+		hfa_send_shutdown(hashfast);
+		if (hfa_reset(hashfast, info)) {
+			applog(LOG_NOTICE, "HFA %d: Succesfully reset, continuing operation",
+			       hashfast->device_id);
+			return;
+		}
+		applog(LOG_WARNING, "HFA %d Failed to reset device, killing off thread to allow re-hotplug",
+		       hashfast->device_id);
+		usb_nodev(hashfast);
+		return;
+	}
+
 	mutex_lock(&info->lock);
 	info->hash_count += g->hash_count;
 	info->device_sequence_head = g->sequence_head;
