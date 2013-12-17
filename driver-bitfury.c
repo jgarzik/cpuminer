@@ -371,15 +371,21 @@ static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *inf
 
 static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info, char *buf)
 {
-	unsigned int temp;
+	int decitemp;
 
-	if (!sscanf(&buf[5], "%u", &temp)) {
+	if (!sscanf(&buf[5], "%d", &decitemp)) {
 		applog(LOG_INFO, "%s %d: Failed to parse temperature",
 		       bitfury->drv->name, bitfury->device_id);
 		return;
 	}
+
 	mutex_lock(&info->lock);
-	info->temperature = (double)temp / 10;
+	info->temperature = (double)decitemp / 10;
+	if (decitemp > info->max_decitemp) {
+		info->max_decitemp = decitemp;
+		applog(LOG_DEBUG, "%s %d: New max decitemp %d", bitfury->drv->name,
+		       bitfury->device_id, decitemp);
+	}
 	mutex_unlock(&info->lock);
 }
 
@@ -823,6 +829,12 @@ static struct api_data *bxf_api_stats(struct bitfury_info *info)
 	nonce_rate = (double)info->total_nonces / (double)info->cycles;
 	root = api_add_double(root, "NonceRate", &nonce_rate, true);
 	root = api_add_int(root, "NoMatchingWork", &info->no_matching_work, false);
+	root = api_add_double(root, "Temperature", &info->temperature, false);
+	root = api_add_int(root, "Max DeciTemp", &info->max_decitemp, false);
+	root = api_add_int(root, "Core0 hwerror", &info->filtered_hw[0], false);
+	root = api_add_int(root, "Core1 hwerror", &info->filtered_hw[1], false);
+	root = api_add_int(root, "Core0 jobs", &info->job[0], false);
+	root = api_add_int(root, "Core1 jobs", &info->job[1], false);
 
 	return root;
 }

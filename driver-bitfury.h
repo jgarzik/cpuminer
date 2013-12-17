@@ -37,6 +37,7 @@ struct bitfury_info {
 	pthread_mutex_t lock;
 	pthread_t read_thr;
 	double temperature;
+	int max_decitemp;
 	int work_id; // Current work->subid
 	int no_matching_work;
 	int maxroll; // Last maxroll sent to device
