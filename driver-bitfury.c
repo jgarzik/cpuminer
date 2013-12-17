@@ -369,6 +369,16 @@ static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *inf
 	free_work(work);
 }
 
+static bool bxf_send_clock(struct cgpu_info *bitfury, struct bitfury_info *info,
+			   uint8_t clockspeed)
+{
+	char buf[64];
+
+	info->clocks = clockspeed;
+	sprintf(buf, "clock %d %d\n", clockspeed, clockspeed);
+	return bxf_send_msg(bitfury, buf, C_BXF_CLOCK);
+}
+
 static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info, char *buf)
 {
 	int decitemp;
@@ -387,6 +397,52 @@ static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info,
 		       bitfury->device_id, decitemp);
 	}
 	mutex_unlock(&info->lock);
+
+	if (decitemp > BXF_TEMP_TARGET + BXF_TEMP_HYSTERESIS) {
+		if (info->clocks <= BXF_CLOCK_MIN)
+			goto out;
+		applog(LOG_WARNING, "%s %d: Hit overheat temperature of %d, throttling!",
+		       bitfury->drv->name, bitfury->device_id, decitemp);
+		bxf_send_clock(bitfury, info, BXF_CLOCK_MIN);
+		goto out;
+	}
+	if (decitemp > BXF_TEMP_TARGET) {
+		if (info->clocks <= BXF_CLOCK_MIN)
+			goto out;
+		if (decitemp < info->last_decitemp)
+			goto out;
+		applog(LOG_INFO, "%s %d: Temp %d over target and not falling, decreasing clock",
+		       bitfury->drv->name, bitfury->device_id, decitemp);
+		bxf_send_clock(bitfury, info, info->clocks - 1);
+		goto out;
+	}
+	if (decitemp <= BXF_TEMP_TARGET && decitemp >= BXF_TEMP_TARGET - BXF_TEMP_HYSTERESIS) {
+		if (decitemp == info->last_decitemp)
+			goto out;
+		if (decitemp > info->last_decitemp) {
+			if (info->clocks <= BXF_CLOCK_MIN)
+				goto out;
+			applog(LOG_DEBUG, "%s %d: Temp %d in target and rising, decreasing clock",
+			       bitfury->drv->name, bitfury->device_id, decitemp);
+			bxf_send_clock(bitfury, info, info->clocks - 1);
+			goto out;
+		}
+		/* implies: decitemp < info->last_decitemp */
+		if (info->clocks >= BXF_CLOCK_DEFAULT)
+			goto out;
+		applog(LOG_DEBUG, "%s %d: Temp %d in target and falling, increasing clock",
+		       bitfury->drv->name, bitfury->device_id, decitemp);
+		bxf_send_clock(bitfury, info, info->clocks + 1);
+		goto out;
+	}
+	/* implies: decitemp < BXF_TEMP_TARGET - BXF_TEMP_HYSTERESIS */
+	if (info->clocks >= BXF_CLOCK_DEFAULT)
+		goto out;
+	applog(LOG_DEBUG, "%s %d: Temp %d below target, increasing clock",
+		bitfury->drv->name, bitfury->device_id, decitemp);
+	bxf_send_clock(bitfury, info, info->clocks + 1);
+out:
+	info->last_decitemp = decitemp;
 }
 
 static void bxf_update_work(struct cgpu_info *bitfury, struct bitfury_info *info);
@@ -497,14 +553,10 @@ out:
 
 static bool bxf_prepare(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
-	char buf[64];
-
 	mutex_init(&info->lock);
 	if (pthread_create(&info->read_thr, NULL, bxf_get_results, (void *)bitfury))
 		quit(1, "Failed to create bxf read_thr");
-	info->clocks = BXF_DEFAULT_CLOCK;
-	sprintf(buf, "clock %d %d\n", info->clocks, info->clocks);
-	return bxf_send_msg(bitfury, buf, C_BXF_CLOCK);
+	return bxf_send_clock(bitfury, info, BXF_CLOCK_DEFAULT);
 }
 
 static bool bitfury_prepare(struct thr_info *thr)
@@ -831,6 +883,7 @@ static struct api_data *bxf_api_stats(struct bitfury_info *info)
 	root = api_add_int(root, "NoMatchingWork", &info->no_matching_work, false);
 	root = api_add_double(root, "Temperature", &info->temperature, false);
 	root = api_add_int(root, "Max DeciTemp", &info->max_decitemp, false);
+	root = api_add_uint8(root, "Clock", &info->clocks, false);
 	root = api_add_int(root, "Core0 hwerror", &info->filtered_hw[0], false);
 	root = api_add_int(root, "Core1 hwerror", &info->filtered_hw[1], false);
 	root = api_add_int(root, "Core0 jobs", &info->job[0], false);

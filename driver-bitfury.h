@@ -13,9 +13,14 @@
 #include "miner.h"
 #include "usbutils.h"
 
-#define BXF_DEFAULT_CLOCK 54
-#define BXF_MIN_CLOCK 0
-#define BXF_MAX_CLOCK 63
+#define BXF_CLOCK_DEFAULT 54
+#define BXF_CLOCK_OFF 0
+#define BXF_CLOCK_MIN 32
+#define BXF_CLOCK_MAX 63 // Not really used since we only get hw errors above default
+
+/* In tenths of a degree */
+#define BXF_TEMP_TARGET 820
+#define BXF_TEMP_HYSTERESIS 30
 
 struct bitfury_info {
 	struct cgpu_info *base_cgpu;
@@ -37,6 +42,7 @@ struct bitfury_info {
 	pthread_mutex_t lock;
 	pthread_t read_thr;
 	double temperature;
+	int last_decitemp;
 	int max_decitemp;
 	int work_id; // Current work->subid
 	int no_matching_work;
