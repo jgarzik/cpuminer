@@ -399,6 +399,47 @@ static void parse_bxf_needwork(struct cgpu_info *bitfury, struct bitfury_info *i
 		bxf_update_work(bitfury, info);
 }
 
+static void parse_bxf_job(struct cgpu_info *bitfury, struct bitfury_info *info, char *buf)
+{
+	int job_id, timestamp, chip;
+
+	if (sscanf(&buf[4], "%x %x %x", &job_id, &timestamp, &chip) != 3) {
+		applog(LOG_INFO, "%s %d: Failed to parse job",
+		       bitfury->drv->name, bitfury->device_id);
+		return;
+	}
+	if (chip > 1) {
+		applog(LOG_INFO, "%s %d: Invalid job chip number %d",
+		       bitfury->drv->name, bitfury->device_id, chip);
+		return;
+	}
+	++info->job[chip];
+}
+
+static void parse_bxf_hwerror(struct cgpu_info *bitfury, struct bitfury_info *info, char *buf)
+{
+	int chip;
+
+	if (!sscanf(&buf[8], "%d", &chip)) {
+		applog(LOG_INFO, "%s %d: Failed to parse hwerror",
+		       bitfury->drv->name, bitfury->device_id);
+		return;
+	}
+	if (chip > 1) {
+		applog(LOG_INFO, "%s %d: Invalid hwerror chip number %d",
+		       bitfury->drv->name, bitfury->device_id, chip);
+		return;
+	}
+	++info->filtered_hw[chip];
+}
+
+#define PARSE_BXF_MSG(MSG) \
+	msg = strstr(buf, #MSG); \
+	if (msg) { \
+		parse_bxf_##MSG(bitfury, info, msg); \
+		continue; \
+	}
+
 static void *bxf_get_results(void *userdata)
 {
 	struct cgpu_info *bitfury = userdata;
@@ -435,21 +476,12 @@ static void *bxf_get_results(void *userdata)
 		if (!err)
 			continue;
 
-		msg = strstr(buf, "submit");
-		if (msg) {
-			parse_bxf_submit(bitfury, info, msg);
-			continue;
-		}
-		msg = strstr(buf, "temp");
-		if (msg) {
-			parse_bxf_temp(bitfury, info, msg);
-			continue;
-		}
-		msg = strstr(buf, "needwork");
-		if (msg) {
-			parse_bxf_needwork(bitfury, info, msg);
-			continue;
-		}
+		PARSE_BXF_MSG(submit);
+		PARSE_BXF_MSG(temp);
+		PARSE_BXF_MSG(needwork);
+		PARSE_BXF_MSG(job);
+		PARSE_BXF_MSG(hwerror);
+
 		applog(LOG_DEBUG, "%s %d: Unrecognised string %s",
 		       bitfury->drv->name, bitfury->device_id, buf);
 	}
@@ -459,10 +491,14 @@ out:
 
 static bool bxf_prepare(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
+	char buf[64];
+
 	mutex_init(&info->lock);
 	if (pthread_create(&info->read_thr, NULL, bxf_get_results, (void *)bitfury))
 		quit(1, "Failed to create bxf read_thr");
-	return true;
+	info->clocks = BXF_DEFAULT_CLOCK;
+	sprintf(buf, "clock %d %d\n", info->clocks, info->clocks);
+	return bxf_send_msg(bitfury, buf, C_BXF_CLOCK);
 }
 
 static bool bitfury_prepare(struct thr_info *thr)

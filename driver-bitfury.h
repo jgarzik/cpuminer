@@ -13,6 +13,10 @@
 #include "miner.h"
 #include "usbutils.h"
 
+#define BXF_DEFAULT_CLOCK 54
+#define BXF_MIN_CLOCK 0
+#define BXF_MAX_CLOCK 63
+
 struct bitfury_info {
 	struct cgpu_info *base_cgpu;
 	struct thr_info *thr;
@@ -40,6 +44,9 @@ struct bitfury_info {
 	int ver_minor;
 	int hw_rev;
 	int chips;
+	uint8_t clocks; // There are two but we set them equal
+	int filtered_hw[2]; // Hardware errors we're told about but are filtered
+	int job[2]; // Completed jobs we're told about
 };
 
 #endif /* BITFURY_H */
