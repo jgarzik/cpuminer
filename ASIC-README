@@ -49,8 +49,7 @@ Bitfury devices need the --enable-bitfury option when compiling cgminer.
 
 Currently the BPMC/BGMC BF1 devices AKA redfury/bluefury are supported and
 come up as BF1, along with the Bi*fury USB devices which come up as BXF.
-There are no options available for them. Bitfury USB devices are also set up
-as per the USB ASICs below.
+Bitfury USB devices are also set up as per the USB ASICs below.
 
 
 ---
@@ -132,6 +131,7 @@ ASIC SPECIFIC COMMANDS
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
 --bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
 --bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
+--bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
 --klondike-options <arg> Set klondike options clock:temptarget
 
 
@@ -312,6 +312,15 @@ BFLSC Devices
 This will allow you to change or disable the default temperature where cgminer
 throttles BFLSC devices by allowing them to temporarily go idle.
 
+
+BITFURY Devices
+
+--bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
+
+Cgminer uses dynamic clocking on Bi*fury devices to try and maintain the
+temperature just below an optimal target. This option allows you to change the
+target temperature. When actively cooled below this, the devices will run at
+maximum speed.
 
 ---
 

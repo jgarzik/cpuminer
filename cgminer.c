@@ -72,6 +72,10 @@ char *curly = ":D";
 #include "driver-bflsc.h"
 #endif
 
+#ifdef USE_BITFURY
+#include "driver-bitfury.h"
+#endif
+
 #ifdef USE_HASHFAST
 #include "driver-hashfast.h"
 int opt_hfa_ntime_roll;
@@ -641,7 +645,7 @@ static char *set_int_0_to_100(const char *arg, int *i)
 }
 #endif
 
-#ifdef USE_BFLSC
+#if defined(USE_BFLSC) || defined(USE_BITFURY)
 static char *set_int_0_to_200(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 0, 200);
@@ -1111,6 +1115,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bflsc-overheat",
 		     set_int_0_to_200, opt_show_intval, &opt_bflsc_overheat,
 		     "Set overheat temperature where BFLSC devices throttle, 0 to disable"),
+#endif
+#ifdef USE_BITFURY
+	OPT_WITH_ARG("--bxf-temp-target",
+		     set_int_0_to_200, opt_show_intval, &opt_bxf_temp_target,
+		     "Set target temperature for BXF devices"),
 #endif
 #ifdef HAVE_CURSES
 	OPT_WITHOUT_ARG("--compact",

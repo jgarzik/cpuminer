@@ -22,6 +22,8 @@
 #define BXF_TEMP_TARGET 820
 #define BXF_TEMP_HYSTERESIS 30
 
+extern int opt_bxf_temp_target;
+
 struct bitfury_info {
 	struct cgpu_info *base_cgpu;
 	struct thr_info *thr;
@@ -44,6 +46,7 @@ struct bitfury_info {
 	double temperature;
 	int last_decitemp;
 	int max_decitemp;
+	int temp_target;
 	int work_id; // Current work->subid
 	int no_matching_work;
 	int maxroll; // Last maxroll sent to device

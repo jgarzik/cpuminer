@@ -13,6 +13,8 @@
 #include "driver-bitfury.h"
 #include "sha2.h"
 
+int opt_bxf_temp_target = BXF_TEMP_TARGET / 10;
+
 /* Wait longer 1/3 longer than it would take for a full nonce range */
 #define BF1WAIT 1600
 #define BF1MSGSIZE 7
@@ -231,6 +233,7 @@ static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
 
 	info->total_nonces = 1;
+	info->temp_target = opt_bxf_temp_target * 10;
 	/* This unsets it to make sure it gets set on the first pass */
 	info->maxroll = -1;
 
@@ -398,7 +401,7 @@ static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info,
 	}
 	mutex_unlock(&info->lock);
 
-	if (decitemp > BXF_TEMP_TARGET + BXF_TEMP_HYSTERESIS) {
+	if (decitemp > info->temp_target + BXF_TEMP_HYSTERESIS) {
 		if (info->clocks <= BXF_CLOCK_MIN)
 			goto out;
 		applog(LOG_WARNING, "%s %d: Hit overheat temperature of %d, throttling!",
@@ -406,7 +409,7 @@ static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info,
 		bxf_send_clock(bitfury, info, BXF_CLOCK_MIN);
 		goto out;
 	}
-	if (decitemp > BXF_TEMP_TARGET) {
+	if (decitemp > info->temp_target) {
 		if (info->clocks <= BXF_CLOCK_MIN)
 			goto out;
 		if (decitemp < info->last_decitemp)
@@ -416,7 +419,7 @@ static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info,
 		bxf_send_clock(bitfury, info, info->clocks - 1);
 		goto out;
 	}
-	if (decitemp <= BXF_TEMP_TARGET && decitemp >= BXF_TEMP_TARGET - BXF_TEMP_HYSTERESIS) {
+	if (decitemp <= info->temp_target && decitemp >= info->temp_target - BXF_TEMP_HYSTERESIS) {
 		if (decitemp == info->last_decitemp)
 			goto out;
 		if (decitemp > info->last_decitemp) {
@@ -435,7 +438,7 @@ static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info,
 		bxf_send_clock(bitfury, info, info->clocks + 1);
 		goto out;
 	}
-	/* implies: decitemp < BXF_TEMP_TARGET - BXF_TEMP_HYSTERESIS */
+	/* implies: decitemp < info->temp_target - BXF_TEMP_HYSTERESIS */
 	if (info->clocks >= BXF_CLOCK_DEFAULT)
 		goto out;
 	applog(LOG_DEBUG, "%s %d: Temp %d below target, increasing clock",
