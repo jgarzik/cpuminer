@@ -175,8 +175,8 @@ struct knc_state {
 
 	/* Local stats */
 #define	KNC_MINUTES_IN_STATS_BUFFER	60
-	unsigned int last_hour_shares[MAX_ASICS][256][KNC_MINUTES_IN_STATS_BUFFER];
-	unsigned int last_hour_hwerrs[MAX_ASICS][256][KNC_MINUTES_IN_STATS_BUFFER];
+	unsigned int last_hour_shares[MAX_ASICS][256][KNC_MINUTES_IN_STATS_BUFFER + 1];
+	unsigned int last_hour_hwerrs[MAX_ASICS][256][KNC_MINUTES_IN_STATS_BUFFER + 1];
 	unsigned int last_hour_shares_index[MAX_ASICS][256];
 	unsigned int last_hour_hwerrs_index[MAX_ASICS][256];
 
@@ -316,25 +316,37 @@ static int spi_transfer(struct spidev_context *ctx, uint8_t *txbuf,
 	return ret;
 }
 
-static void stats_update(unsigned int *data, unsigned int *index, unsigned int cur_index)
+static void stats_zero_data_if_curindex_updated(unsigned int *data, unsigned int *index, unsigned int cur_index)
 {
 	if (cur_index != *index) {
 		unsigned int i;
-		for (i = (*index + 1) % KNC_MINUTES_IN_STATS_BUFFER; i != cur_index; i = ((i + 1 ) % KNC_MINUTES_IN_STATS_BUFFER))
+		for (i = (*index + 1) % (KNC_MINUTES_IN_STATS_BUFFER + 1);
+			 i != cur_index;
+			 i = ((i + 1 ) % (KNC_MINUTES_IN_STATS_BUFFER + 1)))
 			data[i] = 0;
 		data[cur_index] = 0;
 		*index = cur_index;
 	}
+}
 
+static void stats_update(unsigned int *data, unsigned int *index, unsigned int cur_index)
+{
+	stats_zero_data_if_curindex_updated(data, index, cur_index);
 	++(data[cur_index]);
 }
 
-static unsigned int get_accumulated_stats(unsigned int *data)
+static unsigned int get_accumulated_stats(unsigned int *data, unsigned int *index, unsigned int cur_index)
 {
 	int i;
-	unsigned int res = 0;
-	for (i = 0; i < KNC_MINUTES_IN_STATS_BUFFER; ++i)
-		res += data[i];
+	unsigned int res;
+
+	stats_zero_data_if_curindex_updated(data, index, cur_index);
+
+	res = 0;
+	for (i = 0; i < (KNC_MINUTES_IN_STATS_BUFFER + 1); ++i) {
+		if (i != cur_index)
+			res += data[i];
+	}
 
 	return res;
 }
@@ -343,7 +355,7 @@ static inline void stats_good_share(struct knc_state *knc, uint32_t asic, uint32
 {
 	if ((asic >= MAX_ASICS) || (core >= 256))
 		return;
-	unsigned int cur_minute = (ts->tv_sec / SECONDS_IN_MINUTE) % KNC_MINUTES_IN_STATS_BUFFER;
+	unsigned int cur_minute = (ts->tv_sec / SECONDS_IN_MINUTE) % (KNC_MINUTES_IN_STATS_BUFFER + 1);
 	stats_update(knc->last_hour_shares[asic][core], &(knc->last_hour_shares_index[asic][core]), cur_minute);
 }
 
@@ -351,22 +363,24 @@ static inline void stats_bad_share(struct knc_state *knc, uint32_t asic, uint32_
 {
 	if ((asic >= MAX_ASICS) || (core >= 256))
 		return;
-	unsigned int cur_minute = (ts->tv_sec / SECONDS_IN_MINUTE) % KNC_MINUTES_IN_STATS_BUFFER;
+	unsigned int cur_minute = (ts->tv_sec / SECONDS_IN_MINUTE) % (KNC_MINUTES_IN_STATS_BUFFER + 1);
 	stats_update(knc->last_hour_hwerrs[asic][core], &(knc->last_hour_hwerrs_index[asic][core]), cur_minute);
 }
 
-static inline unsigned int get_hour_shares(struct knc_state *knc, uint32_t asic, uint32_t core)
+static inline unsigned int get_hour_shares(struct knc_state *knc, uint32_t asic, uint32_t core, struct timespec *ts)
 {
 	if ((asic >= MAX_ASICS) || (core >= 256))
 		return 0;
-	return get_accumulated_stats(knc->last_hour_shares[asic][core]);
+	unsigned int cur_minute = (ts->tv_sec / SECONDS_IN_MINUTE) % (KNC_MINUTES_IN_STATS_BUFFER + 1);
+	return get_accumulated_stats(knc->last_hour_shares[asic][core], &(knc->last_hour_shares_index[asic][core]), cur_minute);
 }
 
-static inline unsigned int get_hour_errors(struct knc_state *knc, uint32_t asic, uint32_t core)
+static inline unsigned int get_hour_errors(struct knc_state *knc, uint32_t asic, uint32_t core, struct timespec *ts)
 {
 	if ((asic >= MAX_ASICS) || (core >= 256))
 		return 0;
-	return get_accumulated_stats(knc->last_hour_hwerrs[asic][core]);
+	unsigned int cur_minute = (ts->tv_sec / SECONDS_IN_MINUTE) % (KNC_MINUTES_IN_STATS_BUFFER + 1);
+	return get_accumulated_stats(knc->last_hour_hwerrs[asic][core], &(knc->last_hour_hwerrs_index[asic][core]), cur_minute);
 }
 
 static struct api_data *knc_api_stats(struct cgpu_info *cgpu)
@@ -376,13 +390,16 @@ static struct api_data *knc_api_stats(struct cgpu_info *cgpu)
 	char buf[4096];
 	int asic, core;
 	int cursize, n;
+	struct timespec ts_now;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts_now);
 
 	for (asic = 0; asic < MAX_ASICS; ++asic) {
 		char asic_name[128];
 		snprintf(asic_name, sizeof(asic_name), "asic_%d_shares", asic + 1);
 		cursize = 0;
 		for (core = 0; core < CORES_PER_ASIC; ++core) {
-			unsigned int shares = get_hour_shares(knc, asic, core);
+			unsigned int shares = get_hour_shares(knc, asic, core, &ts_now);
 			n = snprintf(buf + cursize, sizeof(buf) - cursize, "%d,", shares);
 			cursize += n;
 			if (sizeof(buf) < cursize) {
@@ -397,7 +414,7 @@ static struct api_data *knc_api_stats(struct cgpu_info *cgpu)
 		snprintf(asic_name, sizeof(asic_name), "asic_%d_hwerrs", asic + 1);
 		cursize = 0;
 		for (core = 0; core < CORES_PER_ASIC; ++core) {
-			unsigned int errors = get_hour_errors(knc, asic, core);
+			unsigned int errors = get_hour_errors(knc, asic, core, &ts_now);
 			n = snprintf(buf + cursize, sizeof(buf) - cursize, "%d,", errors);
 			cursize += n;
 			if (sizeof(buf) < cursize) {
