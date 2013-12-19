@@ -41,7 +41,7 @@ typedef struct
 } WorkRequest;
 
 #define SZ_SERIALISED_WORKREQUEST 46
-static void serialise_work_request(uint8_t *buf, uint16_t chip_id, const struct work *wr);
+static void serialise_work_request(char *buf, uint16_t chip_id, const struct work *wr);
 
 typedef struct
 {
@@ -52,7 +52,7 @@ typedef struct
 } WorkResult;
 
 #define SZ_SERIALISED_WORKRESULT (4+4*MAX_RESULTS)
-static void deserialise_work_result(WorkResult *work_result, const uint8_t *buf);
+static void deserialise_work_result(WorkResult *work_result, const char *buf);
 
 #define CONFIG_PW1 (1<<0)
 #define CONFIG_PW2 (1<<1)
@@ -74,12 +74,12 @@ typedef struct
 } BoardConfig;
 
 #define SZ_SERIALISED_BOARDCONFIG 6
-static void serialise_board_config(uint8_t *buf, const BoardConfig *boardconfig);
+static void serialise_board_config(char *buf, const BoardConfig *boardconfig);
 
 typedef struct
 {
         uint8_t protocol_version;
-        uint8_t product[8];
+        char product[8];
         uint32_t serial;
         uint8_t num_chips;
         uint16_t capabilities;
@@ -90,11 +90,11 @@ typedef struct
 #define CAP_EXT_CLOCK 2
 
 #define SZ_SERIALISED_IDENTITY 16
-static void deserialise_identity(Identity *identity, const uint8_t *buf);
+static void deserialise_identity(Identity *identity, const char *buf);
 
 // Hashable structure of per-device config settings
 typedef struct {
-        uint8_t key[9];
+        char key[9];
         BoardConfig config;
         UT_hash_handle hh;
 } config_setting;
@@ -126,12 +126,12 @@ static struct drillbit_chip_info *find_chip(struct drillbit_info *info, uint16_t
 
 /* Read a fixed size buffer back from USB, returns true on success */
 static bool usb_read_fixed_size(struct cgpu_info *drillbit, void *result, size_t result_size, int timeout, enum usb_cmds command_name) {
-        uint8_t *res = (uint8_t *)result;
-        char *hex;
-        int count, ms_left;
+        char *res = (char *)result;
+        int ms_left;
+        size_t count;
         struct timeval tv_now, tv_start;
         int amount;
-        
+
         cgtime(&tv_start);
         ms_left = timeout;
 
@@ -146,10 +146,7 @@ static bool usb_read_fixed_size(struct cgpu_info *drillbit, void *result, size_t
         if(count == result_size) {
                 return true;
         }
-        drvlog(LOG_ERR, "Read incomplete fixed size packet - got %d bytes / %lu (timeout %d)", count, result_size, timeout);
-        hex = bin2hex(res, count);
-        drvlog(LOG_DEBUG, "%s", hex);
-        free(hex);
+        drvlog(LOG_ERR, "Read incomplete fixed size packet - got %zu bytes / %zu (timeout %d)", count, result_size, timeout);
         return false;
 }
 
@@ -176,7 +173,7 @@ static bool usb_read_simple_response(struct cgpu_info *drillbit, char command, e
         int amount;
         char response;
         /* Expect a single byte, matching the command, as acknowledgement */
-        usb_read_timeout(drillbit, &response, 1, &amount, TIMEOUT, C_BF_GETRES);
+        usb_read_timeout(drillbit, &response, 1, &amount, TIMEOUT, command_name);
         if(amount != 1) {
                 drvlog(LOG_ERR, "Got no response to command %c",command);
                 return false;
@@ -213,15 +210,14 @@ static void drillbit_close(struct cgpu_info *drillbit)
 
 static void drillbit_identify(struct cgpu_info *drillbit)
 {
-        int amount;
-
         usb_send_simple_command(drillbit, 'L', C_BF_IDENTIFY);
 }
 
 static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *info)
 {
-        int amount, err;
-        uint8_t buf[SZ_SERIALISED_IDENTITY];
+        int err;
+        int amount;
+        char buf[SZ_SERIALISED_IDENTITY];
         Identity identity;
 
         drillbit_empty_buffer(drillbit);
@@ -237,7 +233,7 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
                 return false;
         }
         if (amount != SZ_SERIALISED_IDENTITY) {
-                drvlog(LOG_ERR, "Getinfo received %d bytes instead of %lu",
+                drvlog(LOG_ERR, "Getinfo received %d bytes instead of %zu",
                         amount, sizeof(Identity));
                 return false;
         }
@@ -292,7 +288,7 @@ static bool drillbit_reset(struct cgpu_info *drillbit)
 {
         struct drillbit_info *info = drillbit->device_data;
         struct drillbit_chip_info *chip;
-        int amount, err, i, k, res;
+        int i, k, res;
 
         res = usb_send_simple_command(drillbit, 'R', C_BF_REQRESET);
 
@@ -316,7 +312,7 @@ static config_setting *find_settings(struct cgpu_info *drillbit)
 {
         struct drillbit_info *info = drillbit->device_data;
         config_setting *setting;
-        uint8_t search_key[9];
+        char search_key[9];
 
         // Search by serial (8 character hex string)
         sprintf(search_key, "%08x", info->serial);
@@ -362,7 +358,7 @@ static void drillbit_send_config(struct cgpu_info *drillbit)
         struct drillbit_info *info = drillbit->device_data;
         char cmd;
         int amount;
-        uint8_t buf[SZ_SERIALISED_BOARDCONFIG];
+        char buf[SZ_SERIALISED_BOARDCONFIG];
         config_setting *setting;
 
         // Find the relevant board config
@@ -455,7 +451,7 @@ static bool drillbit_parse_options()
         while (next_opt && strlen(next_opt)) {
                 BoardConfig parsed_config;
                 config_setting *new_setting;
-                uint8_t key[9];
+                char key[9];
                 int count, freq, clockdiv, voltage;
                 char clksrc[4];
 
@@ -656,10 +652,11 @@ static int check_for_results(struct thr_info *thr)
         struct drillbit_info *info = drillbit->device_data;
         struct drillbit_chip_info *chip;
         char cmd;
-        int amount, i, j, k, found;
+        int amount, i, k, found;
+        uint8_t j;
         int successful_results = 0;
         uint32_t result_count;
-        uint8_t buf[SZ_SERIALISED_WORKRESULT];
+        char buf[SZ_SERIALISED_WORKRESULT];
         WorkResult *responses = NULL;
         WorkResult *response;
 
@@ -763,8 +760,8 @@ static void drillbit_send_work_to_chip(struct thr_info *thr, struct drillbit_chi
 {
 	struct cgpu_info *drillbit = thr->cgpu;
         struct work *work;
-        uint8_t cmd;
-        uint8_t buf[SZ_SERIALISED_WORKREQUEST];
+        char cmd;
+        char buf[SZ_SERIALISED_WORKREQUEST];
         int amount, i;
 
         /* Get some new work for the chip */
@@ -810,12 +807,9 @@ static int64_t drillbit_scanwork(struct thr_info *thr)
 	struct cgpu_info *drillbit = thr->cgpu;
 	struct drillbit_info *info = drillbit->device_data;
         struct drillbit_chip_info *chip;
-	struct timeval tv_now, tv_start;
-	int amount, i, j;
-	int ms_diff;
-        int result_count = 0;
-        uint8_t buf[200];
-        char *tmp;
+	struct timeval tv_now;
+	int amount, i, j, ms_diff, result_count = 0;;
+        char buf[200];
 
         /* send work to an any chip without queued work */
         for(i = 0; i < info->num_chips; i++) {
@@ -856,19 +850,21 @@ static int64_t drillbit_scanwork(struct thr_info *thr)
                    chips in a single device
                 */
                 amount = sprintf(buf, "%s %d: S/E/T", drillbit->drv->name, drillbit->device_id);
-                for(i = 0; i < info->num_chips; i++) {
-                        chip= &info->chips[i];
-                        j = snprintf(buf+amount, sizeof(buf)-amount, " %d:%d/%d/%d",
-                                chip->chip_id, chip->success_count, chip->error_count,
-                                chip->timeout_count);
-                        if(j < 0)
-                                break;
-                        amount += j;
-                        if(amount >= sizeof(buf))
-                                break;
+                if(amount > 0) {
+                  for(i = 0; i < info->num_chips; i++) {
+                    chip= &info->chips[i];
+                    j = snprintf(&buf[amount], sizeof(buf)-(size_t)amount, "%u:%u/%u/%u",
+                                 chip->chip_id, chip->success_count, chip->error_count,
+                                 chip->timeout_count);
+                    if(j < 0)
+                      break;
+                    amount += j;
+                    if((size_t)amount >= sizeof(buf))
+                      break;
+                  }
+                  drvlog(LOG_INFO, "%s", buf);
+                  cgtime(&info->tv_lastchipinfo);
                 }
-                drvlog(LOG_INFO, "%s", buf);
-                cgtime(&info->tv_lastchipinfo);
         }
 
         drillbit_updatetemps(thr);
@@ -948,7 +944,7 @@ struct device_drv drillbit_drv = {
                 offset += sizeof(FIELD);                        \
         } while(0)
 
-static void serialise_work_request(uint8_t *buf, uint16_t chip_id, const struct work *work)
+static void serialise_work_request(char *buf, uint16_t chip_id, const struct work *work)
 {
         size_t offset = 0;
         SERIALISE(chip_id);
@@ -958,7 +954,7 @@ static void serialise_work_request(uint8_t *buf, uint16_t chip_id, const struct 
         //offset += 12;
 }
 
-static void deserialise_work_result(WorkResult *wr, const uint8_t *buf)
+static void deserialise_work_result(WorkResult *wr, const char *buf)
 {
         int i;
         size_t offset = 0;
@@ -969,7 +965,7 @@ static void deserialise_work_result(WorkResult *wr, const uint8_t *buf)
                 DESERIALISE(wr->nonce[i]);
 }
 
-static void serialise_board_config(uint8_t *buf, const BoardConfig *bc)
+static void serialise_board_config(char *buf, const BoardConfig *bc)
 {
         size_t offset = 0;
         SERIALISE(bc->core_voltage);
@@ -979,7 +975,7 @@ static void serialise_board_config(uint8_t *buf, const BoardConfig *bc)
         SERIALISE(bc->ext_clock_freq);
 }
 
-static void deserialise_identity(Identity *id, const uint8_t *buf)
+static void deserialise_identity(Identity *id, const char *buf)
 {
         size_t offset = 0;
         DESERIALISE(id->protocol_version);
