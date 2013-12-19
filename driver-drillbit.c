@@ -894,10 +894,17 @@ static struct api_data *drillbit_api_stats(struct cgpu_info *cgpu)
 	int version;
 
 	version = info->version;
-	root = api_add_int(root, "Version", &version, true);
+	root = api_add_int(root, "Protocol Version", &version, true);
 	root = api_add_string(root, "Product", info->product, false);
 	sprintf(serial, "%08x", info->serial);
 	root = api_add_string(root, "Serial", serial, true);
+        root = api_add_uint8(root, "ASIC Count", &info->num_chips, true);
+        if(info->capabilities & CAP_TEMP) {
+                float temp = (float)info->temp/10;
+                root = api_add_temp(root, "Temp", &temp, true);
+                temp = (float)info->max_temp/10;
+                root = api_add_temp(root, "Temp Max", &temp, true);
+        }
 
 	return root;
 }
