@@ -612,15 +612,20 @@ static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
 	applog(LOG_DEBUG, "HFA %d: OP_NONCE: %2d:, num_nonces %d hdata 0x%04x",
 	       hashfast->device_id, h->chip_address, num_nonces, h->hdata);
 	for (i = 0; i < num_nonces; i++, n++) {
-		struct work *work;
+		struct work *work = NULL;
 
 		applog(LOG_DEBUG, "HFA %d: OP_NONCE: %2d: %2d: ntime %2d sequence %4d nonce 0x%08x",
 		       hashfast->device_id, h->chip_address, i, n->ntime & HF_NTIME_MASK, n->sequence, n->nonce);
 
-		// Find the job from the sequence number
-		mutex_lock(&info->lock);
-		work = info->works[n->sequence];
-		mutex_unlock(&info->lock);
+		if (n->sequence < info->usb_init_base.sequence_modulus) {
+			// Find the job from the sequence number
+			mutex_lock(&info->lock);
+			work = info->works[n->sequence];
+			mutex_unlock(&info->lock);
+		} else {
+			applog(LOG_INFO, "HFA %d: OP_NONCE: Sequence out of range %4d max %4d",
+			       hashfast->device_id, n->sequence, info->usb_init_base.sequence_modulus);
+		}
 
 		if (unlikely(!work)) {
 			info->no_matching_work++;
