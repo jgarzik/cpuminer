@@ -146,6 +146,9 @@ static bool bxf_send_msg(struct cgpu_info *bitfury, char *buf, enum usb_cmds cmd
 {
 	int err, amount, len;
 
+	if (unlikely(bitfury->usbinfo.nodev))
+		return false;
+
 	len = strlen(buf);
 	applog(LOG_DEBUG, "%s %d: Sending %s", bitfury->drv->name, bitfury->device_id, buf);
 	err = usb_write(bitfury, buf, len, &amount, cmd);
@@ -324,13 +327,15 @@ static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *inf
 	struct work *match_work, *tmp, *work = NULL;
 	struct thr_info *thr = info->thr;
 	uint32_t nonce, timestamp;
-	int workid;
+	int workid, chip = -1;
 
-	if (!sscanf(&buf[7], "%x %x %x", &nonce, &workid, &timestamp)) {
+	if (!sscanf(&buf[7], "%x %x %x %d", &nonce, &workid, &timestamp, &chip)) {
 		applog(LOG_WARNING, "%s %d: Failed to parse submit response",
 		       bitfury->drv->name, bitfury->device_id);
 		return;
 	}
+	if (chip > -1 && chip < 2)
+		info->submits[chip]++;
 
 	applog(LOG_DEBUG, "%s %d: Parsed nonce %u workid %d timestamp %u",
 	       bitfury->drv->name, bitfury->device_id, nonce, workid, timestamp);
@@ -811,6 +816,9 @@ static void bxf_update_work(struct cgpu_info *bitfury, struct bitfury_info *info
 	struct thr_info *thr = info->thr;
 	struct work *work;
 
+	if (unlikely(bitfury->usbinfo.nodev))
+		return;
+
 	work = get_queue_work(thr, bitfury, thr->id);
 	if (work->drv_rolllimit != info->maxroll) {
 		info->maxroll = work->drv_rolllimit;
@@ -891,6 +899,8 @@ static struct api_data *bxf_api_stats(struct bitfury_info *info)
 	root = api_add_int(root, "Core1 hwerror", &info->filtered_hw[1], false);
 	root = api_add_int(root, "Core0 jobs", &info->job[0], false);
 	root = api_add_int(root, "Core1 jobs", &info->job[1], false);
+	root = api_add_int(root, "Core0 submits", &info->submits[0], false);
+	root = api_add_int(root, "Core1 submits", &info->submits[1], false);
 
 	return root;
 }

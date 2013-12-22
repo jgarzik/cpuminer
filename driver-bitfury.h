@@ -57,6 +57,7 @@ struct bitfury_info {
 	uint8_t clocks; // There are two but we set them equal
 	int filtered_hw[2]; // Hardware errors we're told about but are filtered
 	int job[2]; // Completed jobs we're told about
+	int submits[2]; // Submitted responses
 };
 
 #endif /* BITFURY_H */
