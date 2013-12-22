@@ -4612,7 +4612,7 @@ void api(int api_thr_id)
 					message(io_data, MSG_INVCMD, 0, NULL, isjson);
 					send_result(io_data, c, isjson);
 				}
-				if (json_is_object(json_config))
+				if (isjson && json_is_object(json_config))
 					json_decref(json_config);
 			}
 		}
