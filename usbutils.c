@@ -77,7 +77,7 @@ static cgtimer_t usb11_cgt;
 #define MODMINER_TIMEOUT_MS 100
 #define AVALON_TIMEOUT_MS 200
 #define KLONDIKE_TIMEOUT_MS 200
-#define HASHFAST_TIMEOUT_MS 200
+#define HASHFAST_TIMEOUT_MS 500
 #endif
 
 #define USB_EPS(_intx, _epinfosx) { \

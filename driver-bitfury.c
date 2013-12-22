@@ -13,6 +13,8 @@
 #include "driver-bitfury.h"
 #include "sha2.h"
 
+int opt_bxf_temp_target = BXF_TEMP_TARGET / 10;
+
 /* Wait longer 1/3 longer than it would take for a full nonce range */
 #define BF1WAIT 1600
 #define BF1MSGSIZE 7
@@ -231,6 +233,7 @@ static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
 
 	info->total_nonces = 1;
+	info->temp_target = opt_bxf_temp_target * 10;
 	/* This unsets it to make sure it gets set on the first pass */
 	info->maxroll = -1;
 
@@ -369,18 +372,80 @@ static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *inf
 	free_work(work);
 }
 
+static bool bxf_send_clock(struct cgpu_info *bitfury, struct bitfury_info *info,
+			   uint8_t clockspeed)
+{
+	char buf[64];
+
+	info->clocks = clockspeed;
+	sprintf(buf, "clock %d %d\n", clockspeed, clockspeed);
+	return bxf_send_msg(bitfury, buf, C_BXF_CLOCK);
+}
+
 static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info, char *buf)
 {
-	unsigned int temp;
+	int decitemp;
 
-	if (!sscanf(&buf[5], "%u", &temp)) {
+	if (!sscanf(&buf[5], "%d", &decitemp)) {
 		applog(LOG_INFO, "%s %d: Failed to parse temperature",
 		       bitfury->drv->name, bitfury->device_id);
 		return;
 	}
+
 	mutex_lock(&info->lock);
-	info->temperature = (double)temp / 10;
+	info->temperature = (double)decitemp / 10;
+	if (decitemp > info->max_decitemp) {
+		info->max_decitemp = decitemp;
+		applog(LOG_DEBUG, "%s %d: New max decitemp %d", bitfury->drv->name,
+		       bitfury->device_id, decitemp);
+	}
 	mutex_unlock(&info->lock);
+
+	if (decitemp > info->temp_target + BXF_TEMP_HYSTERESIS) {
+		if (info->clocks <= BXF_CLOCK_MIN)
+			goto out;
+		applog(LOG_WARNING, "%s %d: Hit overheat temperature of %d, throttling!",
+		       bitfury->drv->name, bitfury->device_id, decitemp);
+		bxf_send_clock(bitfury, info, BXF_CLOCK_MIN);
+		goto out;
+	}
+	if (decitemp > info->temp_target) {
+		if (info->clocks <= BXF_CLOCK_MIN)
+			goto out;
+		if (decitemp < info->last_decitemp)
+			goto out;
+		applog(LOG_INFO, "%s %d: Temp %d over target and not falling, decreasing clock",
+		       bitfury->drv->name, bitfury->device_id, decitemp);
+		bxf_send_clock(bitfury, info, info->clocks - 1);
+		goto out;
+	}
+	if (decitemp <= info->temp_target && decitemp >= info->temp_target - BXF_TEMP_HYSTERESIS) {
+		if (decitemp == info->last_decitemp)
+			goto out;
+		if (decitemp > info->last_decitemp) {
+			if (info->clocks <= BXF_CLOCK_MIN)
+				goto out;
+			applog(LOG_DEBUG, "%s %d: Temp %d in target and rising, decreasing clock",
+			       bitfury->drv->name, bitfury->device_id, decitemp);
+			bxf_send_clock(bitfury, info, info->clocks - 1);
+			goto out;
+		}
+		/* implies: decitemp < info->last_decitemp */
+		if (info->clocks >= BXF_CLOCK_DEFAULT)
+			goto out;
+		applog(LOG_DEBUG, "%s %d: Temp %d in target and falling, increasing clock",
+		       bitfury->drv->name, bitfury->device_id, decitemp);
+		bxf_send_clock(bitfury, info, info->clocks + 1);
+		goto out;
+	}
+	/* implies: decitemp < info->temp_target - BXF_TEMP_HYSTERESIS */
+	if (info->clocks >= BXF_CLOCK_DEFAULT)
+		goto out;
+	applog(LOG_DEBUG, "%s %d: Temp %d below target, increasing clock",
+		bitfury->drv->name, bitfury->device_id, decitemp);
+	bxf_send_clock(bitfury, info, info->clocks + 1);
+out:
+	info->last_decitemp = decitemp;
 }
 
 static void bxf_update_work(struct cgpu_info *bitfury, struct bitfury_info *info);
@@ -398,6 +463,47 @@ static void parse_bxf_needwork(struct cgpu_info *bitfury, struct bitfury_info *i
 	while (needed-- > 0)
 		bxf_update_work(bitfury, info);
 }
+
+static void parse_bxf_job(struct cgpu_info *bitfury, struct bitfury_info *info, char *buf)
+{
+	int job_id, timestamp, chip;
+
+	if (sscanf(&buf[4], "%x %x %x", &job_id, &timestamp, &chip) != 3) {
+		applog(LOG_INFO, "%s %d: Failed to parse job",
+		       bitfury->drv->name, bitfury->device_id);
+		return;
+	}
+	if (chip > 1) {
+		applog(LOG_INFO, "%s %d: Invalid job chip number %d",
+		       bitfury->drv->name, bitfury->device_id, chip);
+		return;
+	}
+	++info->job[chip];
+}
+
+static void parse_bxf_hwerror(struct cgpu_info *bitfury, struct bitfury_info *info, char *buf)
+{
+	int chip;
+
+	if (!sscanf(&buf[8], "%d", &chip)) {
+		applog(LOG_INFO, "%s %d: Failed to parse hwerror",
+		       bitfury->drv->name, bitfury->device_id);
+		return;
+	}
+	if (chip > 1) {
+		applog(LOG_INFO, "%s %d: Invalid hwerror chip number %d",
+		       bitfury->drv->name, bitfury->device_id, chip);
+		return;
+	}
+	++info->filtered_hw[chip];
+}
+
+#define PARSE_BXF_MSG(MSG) \
+	msg = strstr(buf, #MSG); \
+	if (msg) { \
+		parse_bxf_##MSG(bitfury, info, msg); \
+		continue; \
+	}
 
 static void *bxf_get_results(void *userdata)
 {
@@ -435,21 +541,12 @@ static void *bxf_get_results(void *userdata)
 		if (!err)
 			continue;
 
-		msg = strstr(buf, "submit");
-		if (msg) {
-			parse_bxf_submit(bitfury, info, msg);
-			continue;
-		}
-		msg = strstr(buf, "temp");
-		if (msg) {
-			parse_bxf_temp(bitfury, info, msg);
-			continue;
-		}
-		msg = strstr(buf, "needwork");
-		if (msg) {
-			parse_bxf_needwork(bitfury, info, msg);
-			continue;
-		}
+		PARSE_BXF_MSG(submit);
+		PARSE_BXF_MSG(temp);
+		PARSE_BXF_MSG(needwork);
+		PARSE_BXF_MSG(job);
+		PARSE_BXF_MSG(hwerror);
+
 		applog(LOG_DEBUG, "%s %d: Unrecognised string %s",
 		       bitfury->drv->name, bitfury->device_id, buf);
 	}
@@ -462,7 +559,7 @@ static bool bxf_prepare(struct cgpu_info *bitfury, struct bitfury_info *info)
 	mutex_init(&info->lock);
 	if (pthread_create(&info->read_thr, NULL, bxf_get_results, (void *)bitfury))
 		quit(1, "Failed to create bxf read_thr");
-	return true;
+	return bxf_send_clock(bitfury, info, BXF_CLOCK_DEFAULT);
 }
 
 static bool bitfury_prepare(struct thr_info *thr)
@@ -787,6 +884,13 @@ static struct api_data *bxf_api_stats(struct bitfury_info *info)
 	nonce_rate = (double)info->total_nonces / (double)info->cycles;
 	root = api_add_double(root, "NonceRate", &nonce_rate, true);
 	root = api_add_int(root, "NoMatchingWork", &info->no_matching_work, false);
+	root = api_add_double(root, "Temperature", &info->temperature, false);
+	root = api_add_int(root, "Max DeciTemp", &info->max_decitemp, false);
+	root = api_add_uint8(root, "Clock", &info->clocks, false);
+	root = api_add_int(root, "Core0 hwerror", &info->filtered_hw[0], false);
+	root = api_add_int(root, "Core1 hwerror", &info->filtered_hw[1], false);
+	root = api_add_int(root, "Core0 jobs", &info->job[0], false);
+	root = api_add_int(root, "Core1 jobs", &info->job[1], false);
 
 	return root;
 }

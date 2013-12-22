@@ -13,6 +13,17 @@
 #include "miner.h"
 #include "usbutils.h"
 
+#define BXF_CLOCK_DEFAULT 54
+#define BXF_CLOCK_OFF 0
+#define BXF_CLOCK_MIN 32
+#define BXF_CLOCK_MAX 63 // Not really used since we only get hw errors above default
+
+/* In tenths of a degree */
+#define BXF_TEMP_TARGET 820
+#define BXF_TEMP_HYSTERESIS 30
+
+extern int opt_bxf_temp_target;
+
 struct bitfury_info {
 	struct cgpu_info *base_cgpu;
 	struct thr_info *thr;
@@ -33,6 +44,9 @@ struct bitfury_info {
 	pthread_mutex_t lock;
 	pthread_t read_thr;
 	double temperature;
+	int last_decitemp;
+	int max_decitemp;
+	int temp_target;
 	int work_id; // Current work->subid
 	int no_matching_work;
 	int maxroll; // Last maxroll sent to device
@@ -40,6 +54,9 @@ struct bitfury_info {
 	int ver_minor;
 	int hw_rev;
 	int chips;
+	uint8_t clocks; // There are two but we set them equal
+	int filtered_hw[2]; // Hardware errors we're told about but are filtered
+	int job[2]; // Completed jobs we're told about
 };
 
 #endif /* BITFURY_H */

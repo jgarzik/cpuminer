@@ -515,6 +515,22 @@ static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_inf
 		hashfast->device_id, g->sequence_head, g->sequence_tail, info->hash_sequence_tail,
 		g->shed_count, HF_SEQUENCE_DISTANCE(info->hash_sequence_head,g->sequence_tail));
 
+	/* This is a special flag that the thermal overload has been tripped */
+	if (unlikely(h->core_address & 0x80)) {
+		applog(LOG_WARNING, "HFA %d Thermal overload tripped! Resetting device",
+		       hashfast->device_id);
+		hfa_send_shutdown(hashfast);
+		if (hfa_reset(hashfast, info)) {
+			applog(LOG_NOTICE, "HFA %d: Succesfully reset, continuing operation",
+			       hashfast->device_id);
+			return;
+		}
+		applog(LOG_WARNING, "HFA %d Failed to reset device, killing off thread to allow re-hotplug",
+		       hashfast->device_id);
+		usb_nodev(hashfast);
+		return;
+	}
+
 	mutex_lock(&info->lock);
 	info->hash_count += g->hash_count;
 	info->device_sequence_head = g->sequence_head;
@@ -596,15 +612,20 @@ static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
 	applog(LOG_DEBUG, "HFA %d: OP_NONCE: %2d:, num_nonces %d hdata 0x%04x",
 	       hashfast->device_id, h->chip_address, num_nonces, h->hdata);
 	for (i = 0; i < num_nonces; i++, n++) {
-		struct work *work;
+		struct work *work = NULL;
 
 		applog(LOG_DEBUG, "HFA %d: OP_NONCE: %2d: %2d: ntime %2d sequence %4d nonce 0x%08x",
 		       hashfast->device_id, h->chip_address, i, n->ntime & HF_NTIME_MASK, n->sequence, n->nonce);
 
-		// Find the job from the sequence number
-		mutex_lock(&info->lock);
-		work = info->works[n->sequence];
-		mutex_unlock(&info->lock);
+		if (n->sequence < info->usb_init_base.sequence_modulus) {
+			// Find the job from the sequence number
+			mutex_lock(&info->lock);
+			work = info->works[n->sequence];
+			mutex_unlock(&info->lock);
+		} else {
+			applog(LOG_INFO, "HFA %d: OP_NONCE: Sequence out of range %4d max %4d",
+			       hashfast->device_id, n->sequence, info->usb_init_base.sequence_modulus);
+		}
 
 		if (unlikely(!work)) {
 			info->no_matching_work++;
