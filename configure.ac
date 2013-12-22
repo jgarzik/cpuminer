@@ -173,11 +173,11 @@ AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
 bitfury="no"
 
 AC_ARG_ENABLE([bitfury],
-	[AC_HELP_STRING([--enable-bitfury],[Compile support for BitFury BF1 (default disabled)])],
+	[AC_HELP_STRING([--enable-bitfury],[Compile support for BitFury ASICs (default disabled)])],
 	[bitfury=$enableval]
 	)
 if test "x$bitfury" = xyes; then
-	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if BitFury BF1 support is wanted])
+	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if BitFury ASIC support is wanted])
 fi
 AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
 
@@ -469,9 +469,9 @@ else
 fi
 
 if test "x$bitfury" = xyes; then
-	echo "  BitFury.BF1........: Enabled"
+	echo "  BitFury.ASICs........: Enabled"
 else
-	echo "  BitFury.BF1........: Disabled"
+	echo "  BitFury.ASICs........: Disabled"
 fi
 
 if test "x$drillbit" = xyes; then
