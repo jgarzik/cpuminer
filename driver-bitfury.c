@@ -146,6 +146,9 @@ static bool bxf_send_msg(struct cgpu_info *bitfury, char *buf, enum usb_cmds cmd
 {
 	int err, amount, len;
 
+	if (unlikely(bitfury->usbinfo.nodev))
+		return false;
+
 	len = strlen(buf);
 	applog(LOG_DEBUG, "%s %d: Sending %s", bitfury->drv->name, bitfury->device_id, buf);
 	err = usb_write(bitfury, buf, len, &amount, cmd);
@@ -810,6 +813,9 @@ static void bxf_update_work(struct cgpu_info *bitfury, struct bitfury_info *info
 {
 	struct thr_info *thr = info->thr;
 	struct work *work;
+
+	if (unlikely(bitfury->usbinfo.nodev))
+		return;
 
 	work = get_queue_work(thr, bitfury, thr->id);
 	if (work->drv_rolllimit != info->maxroll) {
