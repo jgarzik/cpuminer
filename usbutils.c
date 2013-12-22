@@ -57,6 +57,7 @@ static cgtimer_t usb11_cgt;
 #define USB_CONFIG 1
 
 #define BITFURY_TIMEOUT_MS 999
+#define DRILLBIT_TIMEOUT_MS 999
 #define ICARUS_TIMEOUT_MS 999
 
 #ifdef WIN32
@@ -137,6 +138,24 @@ static struct usb_epinfo bfu1_epinfos[] = {
 static struct usb_intinfo bfu_ints[] = {
 	USB_EPS(1,  bfu1_epinfos),
 	USB_EPS(0,  bfu0_epinfos)
+};
+#endif
+
+#ifdef USE_DRILLBIT
+// Drillbit Bitfury devices
+static struct usb_epinfo drillbit_int_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	8,	EPI(3), 0, 0 }
+};
+
+static struct usb_epinfo drillbit_bulk_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPO(2), 0, 0 },
+};
+
+/* Default to interface 1 */
+static struct usb_intinfo drillbit_ints[] = {
+	USB_EPS(1,  drillbit_bulk_epinfos),
+	USB_EPS(0,  drillbit_int_epinfos)
 };
 
 static struct usb_epinfo bxf0_epinfos[] = {
@@ -335,6 +354,21 @@ static struct usb_find_devices find_dev[] = {
 		//.iManufacturer = "BPMC",
 		.iProduct = "Bitfury BF1",
 		INTINFO(bfu_ints)
+	},
+#endif
+#ifdef USE_DRILLBIT
+	{
+		.drv = DRIVER_drillbit,
+		.name = "DRB",
+		.ident = IDENT_DRB,
+		.idVendor = 0x03eb,
+		.idProduct = 0x2404,
+		.config = 1,
+		.timeout = DRILLBIT_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		.iManufacturer = "Drillbit Systems",
+		.iProduct = NULL, /* Can be Thumb or Eight, same driver */
+		INTINFO(drillbit_ints)
 	},
 	{
 		.drv = DRIVER_bitfury,
@@ -3104,6 +3138,7 @@ void usb_cleanup(void)
 			case DRIVER_bflsc:
 			case DRIVER_bitforce:
 			case DRIVER_bitfury:
+			case DRIVER_drillbit:
 			case DRIVER_modminer:
 			case DRIVER_icarus:
 			case DRIVER_avalon:
