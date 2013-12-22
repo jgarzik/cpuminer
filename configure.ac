@@ -475,9 +475,9 @@ else
 fi
 
 if test "x$drillbit" = xyes; then
-	echo "  Drillbit.BitFury........: Enabled"
+	echo "  Drillbit.BitFury.....: Enabled"
 else
-	echo "  Drillbit.BitFury........: Disabled"
+	echo "  Drillbit.BitFury.....: Disabled"
 fi
 
 if test "x$hashfast" = xyes; then

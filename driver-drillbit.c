@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2013 Con Kolivas
  * Copyright 2013 Angus Gratton
@@ -32,7 +31,7 @@
 	} \
 } while (0)
 
-/* Request and response structsfor firmware */
+/* Request and response structs for firmware */
 
 typedef struct
 {
@@ -102,15 +101,15 @@ typedef struct {
 
 /* Comparatively modest default settings */
 static config_setting default_settings = {
-key: { 0 },
-config: {
-	core_voltage: CONFIG_CORE_085V,
-	core_voltage_mv: 850,
-	use_ext_clock: 0,
-	int_clock_level: 40,
-	clock_div2: 0,
-	ext_clock_freq: 200
-},
+	key: { 0 },
+	config: {
+		core_voltage: CONFIG_CORE_085V,
+		core_voltage_mv: 850,
+		use_ext_clock: 0,
+		int_clock_level: 40,
+		clock_div2: 0,
+		ext_clock_freq: 200
+	},
 };
 
 static config_setting *settings;
@@ -118,8 +117,8 @@ static config_setting *settings;
 /* Return a pointer to the chip_info structure for a given chip id, or NULL otherwise */
 static struct drillbit_chip_info *find_chip(struct drillbit_info *info, uint16_t chip_id) {
 	int i;
-	for(i = 0; i < info->num_chips; i++) {
-		if(info->chips[i].chip_id == chip_id)
+	for (i = 0; i < info->num_chips; i++) {
+		if (info->chips[i].chip_id == chip_id)
 			return &info->chips[i];
 	}
 	return NULL;
@@ -138,13 +137,13 @@ static bool usb_read_fixed_size(struct cgpu_info *drillbit, void *result, size_t
 
 	amount = 1;
 	count = 0;
-	while(count < result_size && ms_left > 0) {
+	while (count < result_size && ms_left > 0) {
 		usb_read_timeout(drillbit, &res[count], result_size-count, &amount, ms_left, command_name);
 		count += amount;
 		cgtime(&tv_now);
 		ms_left = timeout - ms_tdiff(&tv_now, &tv_start);
 	}
-	if(count == result_size) {
+	if (count == result_size) {
 		return true;
 	}
 	drvlog(LOG_ERR, "Read incomplete fixed size packet - got %zu bytes / %zu (timeout %d)", count, result_size, timeout);
@@ -159,8 +158,8 @@ static bool usb_read_simple_response(struct cgpu_info *drillbit, char command, e
 static bool usb_send_simple_command(struct cgpu_info *drillbit, char command, enum usb_cmds command_name) {
 	int amount;
 	usb_write_timeout(drillbit, &command, 1, &amount, TIMEOUT, C_BF_REQWORK);
-	if(amount != 1) {
-		drvlog(LOG_ERR, "Failed to write command %c",command);
+	if (amount != 1) {
+		drvlog(LOG_ERR, "Failed to write command %c", command);
 		return false;
 	}
 	return usb_read_simple_response(drillbit, command, command_name);
@@ -175,16 +174,18 @@ static bool usb_read_simple_response(struct cgpu_info *drillbit, char command, e
 	char response;
 	/* Expect a single byte, matching the command, as acknowledgement */
 	usb_read_timeout(drillbit, &response, 1, &amount, TIMEOUT, command_name);
-	if(amount != 1) {
-		drvlog(LOG_ERR, "Got no response to command %c",command);
+	if (amount != 1) {
+		drvlog(LOG_ERR, "Got no response to command %c", command);
 		return false;
 	}
-	if(response != command) {
+	if (response != command) {
 		drvlog(LOG_ERR, "Got unexpected response %c to command %c", response, command);	   
 		return false;
 	}
 	return true;
 }
+
+#define EMPTY_TIMEOUT 5
 
 static void drillbit_empty_buffer(struct cgpu_info *drillbit)
 {
@@ -192,7 +193,7 @@ static void drillbit_empty_buffer(struct cgpu_info *drillbit)
 	int amount;
 
 	do {
-		usb_read_timeout(drillbit, buf, 512, &amount, 5, C_BF_FLUSH);
+		usb_read_timeout(drillbit, buf, sizeof(buf), &amount, EMPTY_TIMEOUT, C_BF_FLUSH);
 	} while (amount);
 }
 
@@ -205,7 +206,7 @@ static void drillbit_close(struct cgpu_info *drillbit)
 {
 	struct drillbit_info *info = drillbit->device_data;
 	drillbit_empty_buffer(drillbit);
-	if(info->chips)
+	if (info->chips)
 		free(info->chips);
 }
 
@@ -213,6 +214,8 @@ static void drillbit_identify(struct cgpu_info *drillbit)
 {
 	usb_send_simple_command(drillbit, 'L', C_BF_IDENTIFY);
 }
+
+#define ID_TIMEOUT 1000
 
 static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *info)
 {
@@ -228,7 +231,7 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
 		return false;
 	}
 	// can't call usb_read_fixed_size here as stats not initialised
-	err = usb_read_timeout(drillbit, buf, SZ_SERIALISED_IDENTITY, &amount, 1000, C_BF_GETINFO);
+	err = usb_read_timeout(drillbit, buf, SZ_SERIALISED_IDENTITY, &amount, ID_TIMEOUT, C_BF_GETINFO);
 	if (err) {
 		drvlog(LOG_ERR, "Failed to read GETINFO");
 		return false;
@@ -241,37 +244,36 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
 	deserialise_identity(&identity, buf);
 
 	// sanity checks on the identity buffer we get back
-	if(strlen(identity.product) == 0 || identity.serial == 0 || identity.num_chips == 0) {
+	if (strlen(identity.product) == 0 || identity.serial == 0 || identity.num_chips == 0) {
 		drvlog(LOG_ERR, "Got invalid contents for GETINFO identity response");
 		return false;
 	}
 
 	const int MIN_VERSION = 2;
 	const int MAX_VERSION = 3;
-	if(identity.protocol_version < MIN_VERSION) {
+	if (identity.protocol_version < MIN_VERSION) {
 		drvlog(LOG_ERR, "Unknown device protocol version %d.", identity.protocol_version);
 		return false;
 	}
-	if(identity.protocol_version > MAX_VERSION) {
+	if (identity.protocol_version > MAX_VERSION) {
 		drvlog(LOG_ERR, "Device firmware uses newer Drillbit protocol %d. We only support up to %d. Find a newer cgminer!", identity.protocol_version, MAX_VERSION);
 		return false;
 	}
 
-	if(identity.protocol_version == 2 && identity.num_chips == 1) {
+	if (identity.protocol_version == 2 && identity.num_chips == 1) {
 		// Production firmware Thumbs don't set any capability bits, so fill in the EXT_CLOCK one
 		identity.capabilities = CAP_EXT_CLOCK;
 	}
 
 	// load identity data into device info structure
 	info->version = identity.protocol_version;
-	if(strncmp(identity.product, "DRILLBIT", sizeof(identity.product)) == 0) {
+	if (strncmp(identity.product, "DRILLBIT", sizeof(identity.product)) == 0) {
 		// Hack: first production firmwares all described themselves as DRILLBIT, so fill in the gaps
-		if(identity.num_chips == 1)
+		if (identity.num_chips == 1)
 			strcpy(info->product, "Thumb");
 		else
 			strcpy(info->product, "Eight");
-	}
-	else {
+	} else {
 		memcpy(info->product, identity.product, sizeof(identity.product));
 	}
 	info->serial = identity.serial;
@@ -293,12 +295,12 @@ static bool drillbit_reset(struct cgpu_info *drillbit)
 
 	res = usb_send_simple_command(drillbit, 'R', C_BF_REQRESET);
 
-	for(i = 0; i < info->num_chips; i++) {
+	for (i = 0; i < info->num_chips; i++) {
 		chip = &info->chips[i];
 		chip->state = IDLE;
 		chip->work_sent_count = 0;
-		for(k = 0; k < WORK_HISTORY_LEN-1; k++) {
-			if(chip->current_work[k]) {
+		for (k = 0; k < WORK_HISTORY_LEN-1; k++) {
+			if (chip->current_work[k]) {
 				work_completed(drillbit, chip->current_work[k]);
 				chip->current_work[k] = NULL;
 			}
@@ -318,7 +320,7 @@ static config_setting *find_settings(struct cgpu_info *drillbit)
 	// Search by serial (8 character hex string)
 	sprintf(search_key, "%08x", info->serial);
 	HASH_FIND_STR(settings, search_key, setting);
-	if(setting)  {
+	if (setting)  {
 		drvlog(LOG_INFO, "Using unit-specific settings for serial %s", search_key);
 		return setting;
 	}
@@ -326,14 +328,14 @@ static config_setting *find_settings(struct cgpu_info *drillbit)
 	// Search by DRBxxx
 	snprintf(search_key, 9, "DRB%d", drillbit->device_id);
 	HASH_FIND_STR(settings, search_key, setting);
-	if(setting) {
+	if (setting) {
 		drvlog(LOG_INFO, "Using device_id specific settings for device");
 		return setting;
 	}
 
 	// Failing that, search by product name
 	HASH_FIND_STR(settings, info->product, setting);
-	if(setting) {
+	if (setting) {
 		drvlog(LOG_INFO, "Using product-specific settings for device %s", info->product);
 		return setting;
 	}
@@ -341,7 +343,7 @@ static config_setting *find_settings(struct cgpu_info *drillbit)
 	// Search by "short" product name
 	snprintf(search_key, 9, "%c%d", info->product[0], info->num_chips);
 	HASH_FIND_STR(settings, search_key, setting);
-	if(setting) {
+	if (setting) {
 		drvlog(LOG_INFO, "Using product-specific settings for device %s", info->product);
 		return setting;
 	}
@@ -365,7 +367,7 @@ static void drillbit_send_config(struct cgpu_info *drillbit)
 	// Find the relevant board config
 	setting = find_settings(drillbit);
 	drvlog(LOG_NOTICE, "Config: %s:%d:%d:%d Serial: %08x",
-	       setting->config.use_ext_clock ? "ext":"int",
+	       setting->config.use_ext_clock ? "ext" : "int",
 	       setting->config.use_ext_clock ? setting->config.ext_clock_freq : setting->config.int_clock_level,
 	       setting->config.clock_div2 ? 2 : 1,
 	       setting->config.core_voltage_mv,
@@ -376,7 +378,7 @@ static void drillbit_send_config(struct cgpu_info *drillbit)
 	       setting->config.int_clock_level,
 	       setting->config.clock_div2, setting->config.ext_clock_freq);
 
-	if(setting->config.use_ext_clock && !(info->capabilities & CAP_EXT_CLOCK)) {
+	if (setting->config.use_ext_clock && !(info->capabilities & CAP_EXT_CLOCK)) {
 		drvlog(LOG_WARNING, "Chosen configuration specifies external clock but this device (serial %08x) has no external clock!", info->serial);
 	}
 
@@ -399,25 +401,25 @@ static void drillbit_updatetemps(struct thr_info *thr)
 	uint16_t temp;
 	struct timeval tv_now;
 
-	if(!(info->capabilities & CAP_TEMP))
+	if (!(info->capabilities & CAP_TEMP))
 		return;
 
 	cgtime(&tv_now);
-	if(ms_tdiff(&tv_now, &info->tv_lasttemp) < 1000)
+	if (ms_tdiff(&tv_now, &info->tv_lasttemp) < 1000)
 		return; // Only update temps once a second
 	info->tv_lasttemp = tv_now;
 
 	cmd = 'T';
 	usb_write_timeout(drillbit, &cmd, 1, &amount, TIMEOUT, C_BF_GETTEMP);
 
-	if(!usb_read_fixed_size(drillbit, &temp, sizeof(temp), TIMEOUT, C_BF_GETTEMP)) {
+	if (!usb_read_fixed_size(drillbit, &temp, sizeof(temp), TIMEOUT, C_BF_GETTEMP)) {
 		drvlog(LOG_ERR, "Got no response to request for current temperature");
 		return;
 	}
 
 	drvlog(LOG_INFO, "Got temperature reading %d.%dC", temp/10, temp%10);
 	info->temp = temp;
-	if(temp > info->max_temp)
+	if (temp > info->max_temp)
 		info->max_temp = temp;
 }
 
@@ -427,7 +429,7 @@ static void drillbit_get_statline_before(char *buf, size_t bufsiz, struct cgpu_i
 
 	tailsprintf(buf, bufsiz, "%c%-2d", info->product[0], info->num_chips);
 
-	if((info->capabilities & CAP_TEMP) && info->temp != 0) {
+	if ((info->capabilities & CAP_TEMP) && info->temp != 0) {
 		tailsprintf(buf, bufsiz, " %d.%dC (%d.%dC)", info->temp/10, info->temp%10,
 			    info->max_temp/10, info->max_temp%10);
 	} else {
@@ -442,7 +444,7 @@ static void drillbit_get_statline_before(char *buf, size_t bufsiz, struct cgpu_i
 static bool drillbit_parse_options(struct cgpu_info *drillbit)
 {
 	/* Read configuration options (currently global not per-ASIC or per-board) */
-	if(settings != NULL)
+	if (settings != NULL)
 		return true; // Already initialised
 
 	// Start with the system-wide defaults
@@ -459,50 +461,40 @@ static bool drillbit_parse_options(struct cgpu_info *drillbit)
 		// Try looking for an option tagged with a key, first
 		count = sscanf(next_opt, "%8[^:]:%3s:%d:%d:%d", key,
 			       clksrc, &freq, &clockdiv, &voltage);
-		if(count < 5) {
+		if (count < 5) {
 			key[0] = 0;
 			count = sscanf(next_opt, "%3s:%d:%d:%d",
 				       clksrc, &freq, &clockdiv, &voltage);
-			if(count < 4) {
-				drvlog(LOG_ERR, "Failed to parse drillbit-options. Invalid options string: '%s'", next_opt);
-				settings = NULL;
-				return false;
+			if (count < 4) {
+				quithere(1, "Failed to parse drillbit-options. Invalid options string: '%s'", next_opt);
 			}
 		}
 
-		if(clockdiv != 1 && clockdiv != 2) {
-			drvlog(LOG_ERR, "Invalid clock divider value %d. Valid values are 1 & 2.", clockdiv);
-			settings = NULL;
-			return false;
+		if (clockdiv != 1 && clockdiv != 2) {
+			quithere(1, "Invalid clock divider value %d. Valid values are 1 & 2.", clockdiv);
 		}
 		parsed_config.clock_div2 = count > 2 && clockdiv == 2;
 
-		if(!strcmp("int",clksrc)) {
+		if (!strcmp("int",clksrc)) {
 			parsed_config.use_ext_clock = 0;
-			if(freq < 0 || freq > 63) {
-				drvlog(LOG_ERR, "Invalid internal oscillator level %d. Recommended range is %s for this clock divider (possible is 0-63)", freq, parsed_config.clock_div2 ? "48-57":"30-48");
-				settings = NULL;
-				return false;
+			if (freq < 0 || freq > 63) {
+				quithere(1, "Invalid internal oscillator level %d. Recommended range is %s for this clock divider (possible is 0-63)", freq, parsed_config.clock_div2 ? "48-57":"30-48");
 			}
-			if(parsed_config.clock_div2 && (freq < 48 || freq > 57)) {
+			if (parsed_config.clock_div2 && (freq < 48 || freq > 57)) {
 				drvlog(LOG_WARNING, "Internal oscillator level %d outside recommended range 48-57.", freq);
 			}
-			if(!parsed_config.clock_div2 && (freq < 30 || freq > 48)) {
+			if (!parsed_config.clock_div2 && (freq < 30 || freq > 48)) {
 				drvlog(LOG_WARNING, "Internal oscillator level %d outside recommended range 30-48.", freq);
 			}
 			parsed_config.int_clock_level = freq;
-		}
-		else if (!strcmp("ext", clksrc)) {
+		} else if (!strcmp("ext", clksrc)) {
 			parsed_config.use_ext_clock = 1;
 			parsed_config.ext_clock_freq = freq;
-			if(freq < 80 || freq > 230) {
+			if (freq < 80 || freq > 230) {
 				drvlog(LOG_WARNING, "Warning: recommended external clock frequencies are 80-230MHz. Value %d may produce unexpected results.", freq);
 			}
-		}
-		else {
-			drvlog(LOG_ERR, "Invalid clock source. Valid choices are int, ext.");
-			return false;
-		}
+		} else
+			quithere(1, "Invalid clock source. Valid choices are int, ext.");
 
 		parsed_config.core_voltage_mv = voltage;
 		switch(voltage) {
@@ -519,8 +511,7 @@ static bool drillbit_parse_options(struct cgpu_info *drillbit)
 			voltage = CONFIG_CORE_095V;
 			break;
 		default:
-			drvlog(LOG_ERR, "Invalid core voltage %d. Valid values 650,750,850,950mV)", voltage);
-			return false;
+			quithere(1, "Invalid core voltage %d. Valid values 650,750,850,950mV)", voltage);
 		}
 		parsed_config.core_voltage = voltage;
 
@@ -533,7 +524,7 @@ static bool drillbit_parse_options(struct cgpu_info *drillbit)
 
 		// Look for next comma-delimited Drillbit option
 		next_opt = strstr(next_opt, ",");
-		if(next_opt)
+		if (next_opt)
 			next_opt++;
 	}
 	return true;
@@ -570,7 +561,7 @@ static struct cgpu_info *drillbit_detect_one(struct libusb_device *dev, struct u
 	/* TODO: Add detection for actual chip ids based on command/response,
 	   not prefill assumption about chip layout based on info structure */
 	info->chips = calloc(sizeof(struct drillbit_chip_info), info->num_chips);
-	for(i = 0; i < info->num_chips; i++) {
+	for (i = 0; i < info->num_chips; i++) {
 		info->chips[i].chip_id = i;
 	}
 
@@ -670,21 +661,21 @@ static int check_for_results(struct thr_info *thr)
 	usb_write_timeout(drillbit, &cmd, 1, &amount, TIMEOUT, C_BF_GETRES);
 
 	// Receive count for work results
-	if(!usb_read_fixed_size(drillbit, &result_count, sizeof(result_count), TIMEOUT, C_BF_GETRES)) {
+	if (!usb_read_fixed_size(drillbit, &result_count, sizeof(result_count), TIMEOUT, C_BF_GETRES)) {
 		drvlog(LOG_ERR, "Got no response to request for work results");
 		goto cleanup;
 	}
-	if(unlikely(drillbit->usbinfo.nodev))
+	if (unlikely(drillbit->usbinfo.nodev))
 		goto cleanup;
-	if(result_count)
+	if (result_count)
 		drvlog(LOG_DEBUG, "Result count %d",result_count);
 
-	if(result_count > 1024) {
+	if (result_count > 1024) {
 		drvlog(LOG_ERR, "Got implausible result count %d - treating as error!", result_count);
 		goto cleanup;
 	}
 
-	if(result_count == 0) {
+	if (result_count == 0) {
 		// Short circuit reading any work results
 		return 0;
 	}
@@ -692,39 +683,39 @@ static int check_for_results(struct thr_info *thr)
 	responses = calloc(result_count, sizeof(WorkResult));
 
 	// Receive work results (0 or more) into buffer
-	for(j = 0; j < result_count; j++) {
-		if(unlikely(drillbit->usbinfo.nodev))
+	for (j = 0; j < result_count; j++) {
+		if (unlikely(drillbit->usbinfo.nodev))
 			goto cleanup;
-		if(!usb_read_fixed_size(drillbit, buf, SZ_SERIALISED_WORKRESULT, TIMEOUT, C_BF_GETRES)) {
+		if (!usb_read_fixed_size(drillbit, buf, SZ_SERIALISED_WORKRESULT, TIMEOUT, C_BF_GETRES)) {
 			drvlog(LOG_ERR, "Failed to read response data packet idx %d count 0x%x", j, result_count);
 			goto cleanup;
 		}
 		deserialise_work_result(&responses[j], buf);
 	}
 
-	for(j = 0; j < result_count; j++) {
+	for (j = 0; j < result_count; j++) {
 		if (unlikely(thr->work_restart))
 			goto cleanup;
 
 		response = &responses[j];
 		drvlog(LOG_DEBUG, "Got response packet chip_id %d nonces %d is_idle %d", response->chip_id, response->num_nonces, response->is_idle);
 		chip = find_chip(info, response->chip_id);
-		if(!chip) {
+		if (!chip) {
 			drvlog(LOG_ERR, "Got work result for unknown chip id %d", response->chip_id);
 			continue;
 		}
-		if(chip->state == IDLE) {
+		if (chip->state == IDLE) {
 			drvlog(LOG_WARNING, "Got spurious work results for idle ASIC %d", response->chip_id);
 		}
-		if(response->num_nonces > MAX_RESULTS) {
+		if (response->num_nonces > MAX_RESULTS) {
 			drvlog(LOG_ERR, "Got invalid number of result nonces (%d) for chip id %d", response->num_nonces, response->chip_id);
 			goto cleanup;
 		}
-		for(i = 0; i < response->num_nonces; i++) {
+		for (i = 0; i < response->num_nonces; i++) {
 			if (unlikely(thr->work_restart))
 				goto cleanup;
 			found = false;
-			for(k = 0; k < WORK_HISTORY_LEN; k++) {
+			for (k = 0; k < WORK_HISTORY_LEN; k++) {
 				/* NB we deliberately check all results against all work because sometimes ASICs seem to give multiple "valid" nonces,
 				   and this seems to avoid some result that would otherwise be rejected by the pool.
 
@@ -732,20 +723,20 @@ static int check_for_results(struct thr_info *thr)
 				   A smarter thing to do here might be to look at the full set of nonces in the response and start from the "best" one first.
 				*/
 				if (chip->current_work[k] && drillbit_checkresults(thr, chip->current_work[k], response->nonce[i])) {
-					if(!found) {
+					if (!found) {
 						chip->success_count++;
 						successful_results++;
 						found = true;
 					}
 				}
 			}
-			if(!found && chip->state != IDLE) {
+			if (!found && chip->state != IDLE) {
 				/* all nonces we got back from this chip were invalid */
 				inc_hw_errors(thr);
 				chip->error_count++;
 			}
 		}
-		if(chip->state == WORKING_QUEUED && !response->is_idle)
+		if (chip->state == WORKING_QUEUED && !response->is_idle)
 			chip->state = WORKING_NOQUEUED; // Time to queue up another piece of "next work"
 		else
 			chip->state = IDLE; // Uh-oh, we're totally out of work for this ASIC!
@@ -753,7 +744,7 @@ static int check_for_results(struct thr_info *thr)
 
 cleanup:
 	drillbit_empty_buffer(drillbit);
-	if(responses)
+	if (responses)
 		free(responses);
 	return successful_results;
 }
@@ -783,7 +774,7 @@ static void drillbit_send_work_to_chip(struct thr_info *thr, struct drillbit_chi
 
 	/* Expect a single 'W' byte as acknowledgement */
 	usb_read_simple_response(drillbit, 'W', C_BF_REQWORK);
-	if(chip->state == WORKING_NOQUEUED)
+	if (chip->state == WORKING_NOQUEUED)
 		chip->state = WORKING_QUEUED;
 	else
 		chip->state = WORKING_NOQUEUED;
@@ -794,9 +785,9 @@ static void drillbit_send_work_to_chip(struct thr_info *thr, struct drillbit_chi
 	}
 
 	// Read into work history
-	if(chip->current_work[0])
+	if (chip->current_work[0])
 		work_completed(drillbit, chip->current_work[0]);
-	for(i = 0; i < WORK_HISTORY_LEN-1; i++)
+	for (i = 0; i < WORK_HISTORY_LEN-1; i++)
 		chip->current_work[i] = chip->current_work[i+1];
 	chip->current_work[WORK_HISTORY_LEN-1] = work;
 	cgtime(&chip->tv_start);
@@ -814,8 +805,8 @@ static int64_t drillbit_scanwork(struct thr_info *thr)
 	char buf[200];
 
 	/* send work to an any chip without queued work */
-	for(i = 0; i < info->num_chips; i++) {
-		if(info->chips[i].state != WORKING_QUEUED) {
+	for (i = 0; i < info->num_chips; i++) {
+		if (info->chips[i].state != WORKING_QUEUED) {
 			drillbit_send_work_to_chip(thr, &info->chips[i]);
 		}
 		if (unlikely(thr->work_restart) || unlikely(drillbit->usbinfo.nodev))
@@ -824,12 +815,12 @@ static int64_t drillbit_scanwork(struct thr_info *thr)
 
 	/* check for any chips that have timed out on sending results */
 	cgtime(&tv_now);
-	for(i = 0; i < info->num_chips; i++) {
-		if(info->chips[i].state == IDLE)
+	for (i = 0; i < info->num_chips; i++) {
+		if (info->chips[i].state == IDLE)
 			continue;
 		ms_diff = ms_tdiff(&tv_now, &info->chips[i].tv_start);
-		if(ms_diff > TIMEOUT) {
-			if(info->chips[i].work_sent_count > 4) {
+		if (ms_diff > TIMEOUT) {
+			if (info->chips[i].work_sent_count > 4) {
 				/* Only count ASIC timeouts after the pool has started to send work in earnest,
 				   some pools can create unusual delays early on */
 				drvlog(LOG_ERR, "Timing out unresponsive ASIC %d", info->chips[i].chip_id);
@@ -847,21 +838,21 @@ static int64_t drillbit_scanwork(struct thr_info *thr)
 
 	/* Print a per-chip info line every 30 seconds */
 	cgtime(&tv_now);
-	if(opt_log_level <= LOG_INFO && ms_tdiff(&tv_now, &info->tv_lastchipinfo) > 30000) {
+	if (opt_log_level <= LOG_INFO && ms_tdiff(&tv_now, &info->tv_lastchipinfo) > 30000) {
 		/* TODO: this output line may get truncated (max debug is 256 bytes) once we get more
 		   chips in a single device
 		*/
 		amount = sprintf(buf, "%s %d: S/E/T", drillbit->drv->name, drillbit->device_id);
-		if(amount > 0) {
-			for(i = 0; i < info->num_chips; i++) {
+		if (amount > 0) {
+			for (i = 0; i < info->num_chips; i++) {
 				chip= &info->chips[i];
 				j = snprintf(&buf[amount], sizeof(buf)-(size_t)amount, "%u:%u/%u/%u",
 					     chip->chip_id, chip->success_count, chip->error_count,
 					     chip->timeout_count);
-				if(j < 0)
+				if (j < 0)
 					break;
 				amount += j;
-				if((size_t)amount >= sizeof(buf))
+				if ((size_t)amount >= sizeof(buf))
 					break;
 			}
 			drvlog(LOG_INFO, "%s", buf);
@@ -901,7 +892,7 @@ static struct api_data *drillbit_api_stats(struct cgpu_info *cgpu)
 	sprintf(serial, "%08x", info->serial);
 	root = api_add_string(root, "Serial", serial, true);
 	root = api_add_uint8(root, "ASIC Count", &info->num_chips, true);
-	if(info->capabilities & CAP_TEMP) {
+	if (info->capabilities & CAP_TEMP) {
 		float temp = (float)info->temp/10;
 		root = api_add_temp(root, "Temp", &temp, true);
 		temp = (float)info->max_temp/10;
@@ -946,12 +937,12 @@ struct device_drv drillbit_drv = {
 #define SERIALISE(FIELD) do {					\
 		memcpy(&buf[offset], &FIELD, sizeof(FIELD));	\
 		offset += sizeof(FIELD);			\
-	} while(0)
+	} while (0)
 
 #define DESERIALISE(FIELD) do {					\
 		memcpy(&FIELD, &buf[offset], sizeof(FIELD));	\
 		offset += sizeof(FIELD);			\
-	} while(0)
+	} while (0)
 
 static void serialise_work_request(char *buf, uint16_t chip_id, const struct work *work)
 {
@@ -970,7 +961,7 @@ static void deserialise_work_result(WorkResult *wr, const char *buf)
 	DESERIALISE(wr->chip_id);
 	DESERIALISE(wr->num_nonces);
 	DESERIALISE(wr->is_idle);
-	for(i = 0; i < MAX_RESULTS; i++)
+	for (i = 0; i < MAX_RESULTS; i++)
 		DESERIALISE(wr->nonce[i]);
 }
 
