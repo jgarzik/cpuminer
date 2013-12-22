@@ -486,16 +486,15 @@ static void knc_check_disabled_cores(struct knc_state *knc)
 
 static void knc_work_from_queue_to_spi(struct knc_state *knc,
 				       struct active_work *q_work,
-				       struct spi_request *spi_req)
+				       struct spi_request *spi_req, uint32_t work_id)
 {
 	uint32_t *buf_from, *buf_to;
 	int i;
 
 	spi_req->cmd = CMD_SUBMIT_WORK;
 	spi_req->queue_id = 0; /* at the moment we have one and only queue #0 */
-	spi_req->work_id = (knc->next_work_id ^ knc->salt) & WORK_ID_MASK;
+	spi_req->work_id = (work_id ^ knc->salt) & WORK_ID_MASK;
 	q_work->work_id = spi_req->work_id;
-	++(knc->next_work_id);
 	buf_to = spi_req->midstate;
 	buf_from = (uint32_t *)q_work->work->midstate;
 
@@ -522,6 +521,8 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 	num_sent = knc->write_q - knc->read_q - 1;
 	if (knc->write_q <= knc->read_q)
 		num_sent += KNC_QUEUED_BUFFER_SIZE;
+
+	knc->next_work_id += rxbuf->works_accepted;
 
 	/* Actually process SPI response */
 	if (rxbuf->works_accepted) {
@@ -798,11 +799,15 @@ static int64_t knc_scanwork(struct thr_info *thr)
 
 	while (next_read_q != knc->write_q) {
 		knc_work_from_queue_to_spi(knc, &knc->queued_fifo[next_read_q],
-					   &spi_txbuf[num]);
+					   &spi_txbuf[num], knc->next_work_id + num);
 		knc_queued_fifo_inc_idx(&next_read_q);
 		++num;
 	}
-	/* knc->read_q is advanced in knc_process_response, not here */
+	/* knc->read_q is advanced in knc_process_response, not here.
+	 * knc->next_work_id is advanced in knc_process_response as well,
+	 *   because only after SPI response we know how many works were actually
+	 *   consumed by FPGA.
+	 */
 
 	len = spi_transfer(knc->ctx, (uint8_t *)spi_txbuf,
 			   (uint8_t *)&spi_rxbuf, sizeof(spi_txbuf));
