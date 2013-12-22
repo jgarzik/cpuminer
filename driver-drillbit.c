@@ -19,17 +19,18 @@
 #define TIMEOUT 3000
 #define MAX_RESULTS 16 // max results from a single chip
 
-#define drvlog(prio, fmt, ...) do {					\
-		if (opt_debug || prio != LOG_DEBUG) {			\
-			if (use_syslog || opt_log_output || prio <= opt_log_level) { \
-				char tmp42[LOGBUFSIZ];			\
-				snprintf(tmp42, sizeof(tmp42), "%s%d: "fmt, \
-					 drillbit->drv->name, drillbit->device_id, ##__VA_ARGS__); \
-				_applog(prio, tmp42, false);		\
-			}						\
-		}							\
-	} while (0)
-
+#define drvlog(prio, fmt, ...) do { \
+	if (drillbit->device_id == -1) { \
+		applog(prio, "%s: "fmt, \
+			     drillbit->drv->dname, \
+			     ##__VA_ARGS__); \
+	} else { \
+		applog(prio, "%s %d: "fmt, \
+			     drillbit->drv->name, \
+			     drillbit->device_id, \
+			     ##__VA_ARGS__); \
+	} \
+} while (0)
 
 /* Request and response structsfor firmware */
 
@@ -438,7 +439,7 @@ static void drillbit_get_statline_before(char *buf, size_t bufsiz, struct cgpu_i
 }
 
 
-static bool drillbit_parse_options()
+static bool drillbit_parse_options(struct cgpu_info *drillbit)
 {
 	/* Read configuration options (currently global not per-ASIC or per-board) */
 	if(settings != NULL)
@@ -463,14 +464,14 @@ static bool drillbit_parse_options()
 			count = sscanf(next_opt, "%3s:%d:%d:%d",
 				       clksrc, &freq, &clockdiv, &voltage);
 			if(count < 4) {
-				applog(LOG_ERR, "Failed to parse drillbit-options. Invalid options string: '%s'", next_opt);
+				drvlog(LOG_ERR, "Failed to parse drillbit-options. Invalid options string: '%s'", next_opt);
 				settings = NULL;
 				return false;
 			}
 		}
 
 		if(clockdiv != 1 && clockdiv != 2) {
-			applog(LOG_ERR, "drillbit-options: Invalid clock divider value %d. Valid values are 1 & 2.", clockdiv);
+			drvlog(LOG_ERR, "Invalid clock divider value %d. Valid values are 1 & 2.", clockdiv);
 			settings = NULL;
 			return false;
 		}
@@ -479,15 +480,15 @@ static bool drillbit_parse_options()
 		if(!strcmp("int",clksrc)) {
 			parsed_config.use_ext_clock = 0;
 			if(freq < 0 || freq > 63) {
-				applog(LOG_ERR, "drillbit-options: Invalid internal oscillator level %d. Recommended range is %s for this clock divider (possible is 0-63)", freq, parsed_config.clock_div2 ? "48-57":"30-48");
+				drvlog(LOG_ERR, "Invalid internal oscillator level %d. Recommended range is %s for this clock divider (possible is 0-63)", freq, parsed_config.clock_div2 ? "48-57":"30-48");
 				settings = NULL;
 				return false;
 			}
 			if(parsed_config.clock_div2 && (freq < 48 || freq > 57)) {
-				applog(LOG_WARNING, "drillbit-options: Internal oscillator level %d outside recommended range 48-57.", freq);
+				drvlog(LOG_WARNING, "Internal oscillator level %d outside recommended range 48-57.", freq);
 			}
 			if(!parsed_config.clock_div2 && (freq < 30 || freq > 48)) {
-				applog(LOG_WARNING, "drillbit-options: Internal oscillator level %d outside recommended range 30-48.", freq);
+				drvlog(LOG_WARNING, "Internal oscillator level %d outside recommended range 30-48.", freq);
 			}
 			parsed_config.int_clock_level = freq;
 		}
@@ -495,11 +496,11 @@ static bool drillbit_parse_options()
 			parsed_config.use_ext_clock = 1;
 			parsed_config.ext_clock_freq = freq;
 			if(freq < 80 || freq > 230) {
-				applog(LOG_WARNING, "drillbit-options: Warning: recommended external clock frequencies are 80-230MHz. Value %d may produce unexpected results.", freq);
+				drvlog(LOG_WARNING, "Warning: recommended external clock frequencies are 80-230MHz. Value %d may produce unexpected results.", freq);
 			}
 		}
 		else {
-			applog(LOG_ERR, "drillbit-options: Invalid clock source. Valid choices are int, ext.");
+			drvlog(LOG_ERR, "Invalid clock source. Valid choices are int, ext.");
 			return false;
 		}
 
@@ -518,7 +519,7 @@ static bool drillbit_parse_options()
 			voltage = CONFIG_CORE_095V;
 			break;
 		default:
-			applog(LOG_ERR, "drillbit-options: Invalid core voltage %d. Valid values 650,750,850,950mV)", voltage);
+			drvlog(LOG_ERR, "Invalid core voltage %d. Valid values 650,750,850,950mV)", voltage);
 			return false;
 		}
 		parsed_config.core_voltage = voltage;
@@ -544,19 +545,20 @@ static struct cgpu_info *drillbit_detect_one(struct libusb_device *dev, struct u
 	struct drillbit_info *info;
 	int i;
 
-	if (!drillbit_parse_options())
-		return false; // Bit of a hack doing this here, should do it somewhere else
-
 	drillbit = usb_alloc_cgpu(&drillbit_drv, 1);
-	drillbit->device_id = -1; // temporary so drvlog() prints a non-valid device_id
+	drillbit->device_id = -1; // so drvlog() prints dname
+
+	if (!drillbit_parse_options(drillbit))
+		goto out;
 
 	if (!usb_init(drillbit, dev, found))
 		goto out;
-	applog(LOG_INFO, "DRB: Device found at %s", drillbit->device_path);
+
+	drvlog(LOG_INFO, "Device found at %s", drillbit->device_path);
 
 	info = calloc(sizeof(struct drillbit_info), 1);
 	if (!info)
-		quit(1, "Failed to calloc info in drillbit_detect_one");
+		quit(1, "Failed to calloc info in %s", __func__);
 	drillbit->device_data = info;
 
 	drillbit_open(drillbit);
