@@ -1755,13 +1755,15 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 {
 	unsigned char *merkleroot;
 	struct timeval now;
+	uint64_t nonce2le;
 
 	cgtime(&now);
 	if (now.tv_sec - pool->tv_lastwork.tv_sec > 60)
 		update_gbt(pool);
 
 	cg_wlock(&pool->gbt_lock);
-	memcpy(pool->coinbase + pool->nonce2_offset, &pool->nonce2, 4);
+	nonce2le = htole64(pool->nonce2);
+	memcpy(pool->coinbase + pool->nonce2_offset, &nonce2le, pool->n2size);
 	pool->nonce2++;
 	cg_dwlock(&pool->gbt_lock);
 	merkleroot = __gbt_merkleroot(pool);
@@ -1860,8 +1862,9 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	free(pool->coinbasetxn);
 	pool->coinbasetxn = strdup(coinbasetxn);
 	cbt_len = strlen(pool->coinbasetxn) / 2;
-	pool->coinbase_len = cbt_len + 4;
-	/* We add 4 bytes of extra data corresponding to nonce2 of stratum */
+	/* We add 8 bytes of extra data corresponding to nonce2 */
+	pool->n2size = 8;
+	pool->coinbase_len = cbt_len + pool->n2size;
 	cal_len = pool->coinbase_len + 1;
 	align_len(&cal_len);
 	free(pool->coinbase);
@@ -1872,7 +1875,7 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	extra_len = (uint8_t *)(pool->coinbase + 41);
 	orig_len = *extra_len;
 	hex2bin(pool->coinbase + 42, pool->coinbasetxn + 84, orig_len);
-	*extra_len += 4;
+	*extra_len += pool->n2size;
 	hex2bin(pool->coinbase + 42 + *extra_len, pool->coinbasetxn + 84 + (orig_len * 2),
 		cbt_len - orig_len - 42);
 	pool->nonce2_offset = orig_len + 42;
@@ -5372,10 +5375,11 @@ static void *stratum_sthread(void *userdata)
 		quit(1, "Failed to create stratum_q in stratum_sthread");
 
 	while (42) {
-		char noncehex[12], nonce2hex[20];
+		char noncehex[12], nonce2hex[20], s[1024];
 		struct stratum_share *sshare;
 		uint32_t *hash32, nonce;
-		char s[1024], nonce2[8];
+		unsigned char nonce2[8];
+		uint64_t *nonce2_64;
 		struct work *work;
 		bool submitted;
 
@@ -5410,10 +5414,9 @@ static void *stratum_sthread(void *userdata)
 		sshare->id = swork_id++;
 		mutex_unlock(&sshare_lock);
 
-		memset(nonce2, 0, 8);
-		/* We only use uint32_t sized nonce2 increments internally */
-		memcpy(nonce2, &work->nonce2, sizeof(uint32_t));
-		__bin2hex(nonce2hex, (const unsigned char *)nonce2, work->nonce2_len);
+		nonce2_64 = (uint64_t *)nonce2;
+		*nonce2_64 = htole64(work->nonce2);
+		__bin2hex(nonce2hex, nonce2, work->nonce2_len);
 
 		snprintf(s, sizeof(s),
 			"{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
@@ -5817,12 +5820,15 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 {
 	unsigned char merkle_root[32], merkle_sha[64];
 	uint32_t *data32, *swap32;
+	uint64_t nonce2le;
 	int i;
 
 	cg_wlock(&pool->data_lock);
 
-	/* Update coinbase */
-	memcpy(pool->coinbase + pool->nonce2_offset, &pool->nonce2, sizeof(uint32_t));
+	/* Update coinbase. Always use an LE encoded nonce2 to fill in values
+	 * from left to right and prevent overflow errors with small n2sizes */
+	nonce2le = htole64(pool->nonce2);
+	memcpy(pool->coinbase + pool->nonce2_offset, &nonce2le, pool->n2size);
 	work->nonce2 = pool->nonce2++;
 	work->nonce2_len = pool->n2size;
 
@@ -5862,7 +5868,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 		merkle_hash = bin2hex((const unsigned char *)merkle_root, 32);
 		applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
 		applog(LOG_DEBUG, "Generated stratum header %s", header);
-		applog(LOG_DEBUG, "Work job_id %s nonce2 %d ntime %s", work->job_id, work->nonce2, work->ntime);
+		applog(LOG_DEBUG, "Work job_id %s nonce2 %"PRIu64" ntime %s", work->job_id,
+		       work->nonce2, work->ntime);
 		free(header);
 		free(merkle_hash);
 	}
