@@ -33,8 +33,7 @@
 
 /* Request and response structs for firmware */
 
-typedef struct
-{
+typedef struct {
 	uint16_t chip_id;
 	uint8_t midstate[32];
 	uint8_t data[12];
@@ -43,8 +42,7 @@ typedef struct
 #define SZ_SERIALISED_WORKREQUEST 46
 static void serialise_work_request(char *buf, uint16_t chip_id, const struct work *wr);
 
-typedef struct
-{
+typedef struct {
 	uint16_t chip_id;
 	uint8_t num_nonces;
 	uint8_t is_idle;
@@ -63,8 +61,7 @@ static void deserialise_work_result(WorkResult *work_result, const char *buf);
 #define CONFIG_CORE_085V CONFIG_PW1
 #define CONFIG_CORE_095V (CONFIG_PW1|CONFIG_PW2)
 
-typedef struct
-{
+typedef struct {
 	uint8_t core_voltage; // Set to flags defined above
 	uint8_t int_clock_level; // Clock level (30-48 without divider), see asic.c for details
 	uint8_t clock_div2;	 // Apply the /2 clock divider (both internal and external)
@@ -76,8 +73,7 @@ typedef struct
 #define SZ_SERIALISED_BOARDCONFIG 6
 static void serialise_board_config(char *buf, const BoardConfig *boardconfig);
 
-typedef struct
-{
+typedef struct {
 	uint8_t protocol_version;
 	char product[8];
 	uint32_t serial;
@@ -164,7 +160,6 @@ static bool usb_send_simple_command(struct cgpu_info *drillbit, char command, en
 	}
 	return usb_read_simple_response(drillbit, command, command_name);
 }
-
 
 /* Read a simple single-byte response and check it matches the correct command character
    Return true on success
@@ -320,7 +315,7 @@ static config_setting *find_settings(struct cgpu_info *drillbit)
 	// Search by serial (8 character hex string)
 	sprintf(search_key, "%08x", info->serial);
 	HASH_FIND_STR(settings, search_key, setting);
-	if (setting)  {
+	if (setting) {
 		drvlog(LOG_INFO, "Using unit-specific settings for serial %s", search_key);
 		return setting;
 	}
@@ -460,7 +455,7 @@ static bool drillbit_parse_options(struct cgpu_info *drillbit)
 		return true; // Already initialised
 
 	// Start with the system-wide defaults
-	HASH_ADD_STR( settings, key, (&default_settings) );
+	HASH_ADD_STR(settings, key, (&default_settings));
 
 	char *next_opt = opt_drillbit_options;
 	while (next_opt && strlen(next_opt)) {
