@@ -1,3 +1,71 @@
+Version 3.9.0 - 23rd December 2013
+
+- drillbit asic - enable in api.c
+- Fix trivial warnings in knc driver.
+- Reinstate work utility based hashmeter for knc.
+- drillbit format %z not valid on windows
+- drillbit more formatting changes
+- usbutils remove old code added back
+- Memset the spi tx buffer under lock in knc driver.
+- drillbit fix temp display to fit in standard space
+- Drillbit formatting
+- drillbit - use one drvlog and display dname before add_cgpu
+- Keep orginal naming for the bitfury driver
+- knc: Bugfix - good shares wrongly reported as HW errors.   Root cause of the
+problem: several work items were assigned the same   work_id in the active works
+queue of the knc driver. Thus when good   nonce report arrived from the FPGA,
+wrong work item was picked up from   the queue, and submit_nonce evaluated that
+as an error.   Fix: Limit the work_id counter update rate. Update it only to the
+number of   works actually consumed by the FPGA, not to the number of works
+send.
+- Store per-chip submit information for bxf device and show them in the API.
+- Check for removed bxf devices before trying to update work or send messages.
+- api.c no decref if not json
+- Minimise risk of nonce2 overflow with small nonce2 lengths by always encoding
+the work little endian, and increasing the maximum size of nonce2 to 8 bytes.
+- Change default hashfast timeout to 500ms.
+- Ensure we can look up the work item in the hashfast driver or print out an
+error if we don't.
+- Drillbit source formatting - reindent and retabify
+- Add ASIC count, temperature status to drillbit API output (closes #1)
+- Many warning fixes
+- knc: Do not include variable "last minute" data into the "last hour" per-core
+stats
+- knc: Make per-core statistics available through API
+- Implement command line control of the bxf target temperature.
+- Add a simple PID-like controller to bi*fury devices to dynamically alter the
+clock setting to maintain a nominal target temperature set to 82 degrees.
+- Add data to BXF API output.
+- Add support for newer protocol bi*fury commands job, clock and hwerror,
+setting clock to default 54 value, turning parsing into a compact macro.
+- Look for the thermal overload flag in the gwq status message in the hashfast
+driver and send it a shutdown followed by an attempted reset.
+- Log message fixups
+- Fix for "Timing out unresponsive ASIC" for pools which send early reconnect
+requests, and then take a short time to send work (ie BTCGuild)
+- Shorten initial config line, win32/pdcurses doesn't like long lines during
+early logging
+- Pull back the very long timeouts set in fe478953cf50
+- Fix bug where work restart during results scan could lead to bad device state
+- Align device status lines same regardless of number of temp status or >10
+ASICs
+- Tag log lines from brand new devices as DRB-1 until they are initialised
+- Tag log lines as 'DRB0' rather than 'DRB 0', same as other places in cgminer
+- Print a summary of the device settings at level NOTICE during initialisation
+- Allow chosing device settings based on 'short' product names shown in status
+line
+- Allow per-device settings to use "DRBnn" as an identifier instead
+- Issue an ASIC restart during a work_restart, removes spurious timeout messages
+from ASICs and probably some rejected shares
+- Check all results against all work instead of just taking the first match
+(avoids some rejected submissions to the pool, ASIC can produce multiple
+candidate results.)
+- Fix memory leak caused by unnecesarily copied work
+- Fix bug with find_settings not returning default value
+- Set timeouts on write, set very long timeouts
+- Merge drillbit driver
+
+
 Version 3.8.5 - 10th December 2013
 
 - Increase the BFLSC overtemp to 75 for fanspeed to maximum.
