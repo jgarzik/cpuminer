@@ -322,6 +322,20 @@ temperature just below an optimal target. This option allows you to change the
 target temperature. When actively cooled below this, the devices will run at
 maximum speed.
 
+
+BITFURY Devices
+
+--drillbit-options <arg> Set drillbit options <int|ext>:clock[:clock_divider][:voltage]
+
+int/ext defines the clock source - default int
+clock_divider must be 1 or 2 with a default of 1
+int allows a clock of 0 to 63 with recommended 48-58 for div 2 and 30-48 for div 1
+ with a default of 40 with div 1
+ext recommends a clock of 80 to 230, with a default of 200
+
+voltage must be one of 650, 750, 850 or 950 with a default of 850
+
+
 ---
 
 This code is provided entirely free of charge by the programmer in his spare

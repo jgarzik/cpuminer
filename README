@@ -221,6 +221,7 @@ ASIC only options:
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
 --bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
 --bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
+--drillbit-options <arg> Set drillbit options <int|ext>:clock[:clock_divider][:voltage]
 --klondike-options <arg> Set klondike options clock:temptarget
 
 See ASIC-README for more information regarding these.
