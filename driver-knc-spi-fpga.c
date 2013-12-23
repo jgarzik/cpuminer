@@ -337,8 +337,7 @@ static void stats_update(unsigned int *data, unsigned int *index, unsigned int c
 
 static unsigned int get_accumulated_stats(unsigned int *data, unsigned int *index, unsigned int cur_index)
 {
-	int i;
-	unsigned int res;
+	unsigned int res, i;
 
 	stats_zero_data_if_curindex_updated(data, index, cur_index);
 
@@ -387,9 +386,9 @@ static struct api_data *knc_api_stats(struct cgpu_info *cgpu)
 {
 	struct knc_state *knc = cgpu->device_data;
 	struct api_data *root = NULL;
+	unsigned int cursize;
+	int asic, core, n;
 	char buf[4096];
-	int asic, core;
-	int cursize, n;
 	struct timespec ts_now;
 
 	clock_gettime(CLOCK_MONOTONIC, &ts_now);
