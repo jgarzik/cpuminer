@@ -104,13 +104,13 @@ struct spi_response {
 	uint32_t core;
 };
 
+typedef struct spi_request spi_txbuf_t;
+
 #define MAX_REQUESTS_IN_BATCH	( MAX_BYTES_IN_SPI_XSFER /	\
-				  sizeof(struct spi_request)	\
+				  sizeof(spi_txbuf_t)	\
 				)
 
-static struct spi_request spi_txbuf[MAX_REQUESTS_IN_BATCH];
-
-#define MAX_RESPONSES_IN_BATCH	( (sizeof(spi_txbuf) - 12) /	\
+#define MAX_RESPONSES_IN_BATCH	( (sizeof(spi_txbuf_t) * MAX_REQUESTS_IN_BATCH - 12) /	\
 				   sizeof(struct spi_response)	\
 				)
 
@@ -132,8 +132,6 @@ struct spi_rx_t {
 	uint32_t rsvd_3;
 	struct spi_response responses[MAX_RESPONSES_IN_BATCH];
 };
-
-static struct spi_rx_t spi_rxbuf;
 
 struct active_work {
 	struct work *work;
@@ -181,6 +179,8 @@ struct knc_state {
 	unsigned int last_hour_hwerrs_index[MAX_ASICS][256];
 
 	pthread_mutex_t lock;
+	spi_txbuf_t spi_txbuf[MAX_REQUESTS_IN_BATCH];
+	struct spi_rx_t spi_rxbuf;
 };
 
 static inline bool knc_queued_fifo_full(struct knc_state *knc)
@@ -678,10 +678,10 @@ static int _internal_knc_flush_fpga(struct knc_state *knc)
 {
 	int len;
 
-	spi_txbuf[0].cmd = CMD_FLUSH_QUEUE;
-	spi_txbuf[0].queue_id = 0; /* at the moment we have one and only queue #0 */
-	len = spi_transfer(knc->ctx, (uint8_t *)spi_txbuf,
-			   (uint8_t *)&spi_rxbuf, sizeof(struct spi_request));
+	knc->spi_txbuf[0].cmd = CMD_FLUSH_QUEUE;
+	knc->spi_txbuf[0].queue_id = 0; /* at the moment we have one and only queue #0 */
+	len = spi_transfer(knc->ctx, (uint8_t *)knc->spi_txbuf,
+			   (uint8_t *)&knc->spi_rxbuf, sizeof(struct spi_request));
 	if (len != sizeof(struct spi_request))
 		return -1;
 
@@ -789,17 +789,17 @@ static int64_t knc_scanwork(struct thr_info *thr)
 
 	knc_check_disabled_cores(knc);
 
-	/* Prepare tx buffer */
-	memset(spi_txbuf, 0, sizeof(spi_txbuf));
 	num = 0;
 
 	mutex_lock(&knc->lock);
+	/* Prepare tx buffer */
+	memset(knc->spi_txbuf, 0, sizeof(spi_txbuf_t));
 	next_read_q = knc->read_q;
 	knc_queued_fifo_inc_idx(&next_read_q);
 
 	while (next_read_q != knc->write_q) {
 		knc_work_from_queue_to_spi(knc, &knc->queued_fifo[next_read_q],
-					   &spi_txbuf[num], knc->next_work_id + num);
+					   &knc->spi_txbuf[num], knc->next_work_id + num);
 		knc_queued_fifo_inc_idx(&next_read_q);
 		++num;
 	}
@@ -809,16 +809,16 @@ static int64_t knc_scanwork(struct thr_info *thr)
 	 *   consumed by FPGA.
 	 */
 
-	len = spi_transfer(knc->ctx, (uint8_t *)spi_txbuf,
-			   (uint8_t *)&spi_rxbuf, sizeof(spi_txbuf));
-	if (len != sizeof(spi_rxbuf)) {
+	len = spi_transfer(knc->ctx, (uint8_t *)knc->spi_txbuf,
+			   (uint8_t *)&knc->spi_rxbuf, sizeof(spi_txbuf_t));
+	if (len != sizeof(knc->spi_rxbuf)) {
 		ret = -1;
 		goto out_unlock;
 	}
 
 	applog(LOG_DEBUG, "KnC spi: %d works in request", num);
 
-	ret = knc_process_response(thr, cgpu, &spi_rxbuf);
+	ret = knc_process_response(thr, cgpu, &knc->spi_rxbuf);
 out_unlock:
 	mutex_unlock(&knc->lock);
 
@@ -886,7 +886,7 @@ static void knc_flush_work(struct cgpu_info *cgpu)
 
 	len = _internal_knc_flush_fpga(knc);
 	if (len > 0)
-		knc_process_response(NULL, cgpu, &spi_rxbuf);
+		knc_process_response(NULL, cgpu, &knc->spi_rxbuf);
 	mutex_unlock(&knc->lock);
 }
 
