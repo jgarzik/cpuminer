@@ -139,6 +139,20 @@ static struct usb_intinfo bfu_ints[] = {
 	USB_EPS(1,  bfu1_epinfos),
 	USB_EPS(0,  bfu0_epinfos)
 };
+
+static struct usb_epinfo bxf0_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	8,	EPI(1), 0, 0 }
+};
+
+static struct usb_epinfo bxf1_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(2), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
+};
+
+static struct usb_intinfo bxf_ints[] = {
+	USB_EPS(1,  bxf1_epinfos),
+	USB_EPS(0,  bxf0_epinfos)
+};
 #endif
 
 #ifdef USE_DRILLBIT
@@ -156,20 +170,6 @@ static struct usb_epinfo drillbit_bulk_epinfos[] = {
 static struct usb_intinfo drillbit_ints[] = {
 	USB_EPS(1,  drillbit_bulk_epinfos),
 	USB_EPS(0,  drillbit_int_epinfos)
-};
-
-static struct usb_epinfo bxf0_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	8,	EPI(1), 0, 0 }
-};
-
-static struct usb_epinfo bxf1_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(2), 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
-};
-
-static struct usb_intinfo bxf_ints[] = {
-	USB_EPS(1,  bxf1_epinfos),
-	USB_EPS(0,  bxf0_epinfos)
 };
 #endif
 
@@ -355,6 +355,19 @@ static struct usb_find_devices find_dev[] = {
 		.iProduct = "Bitfury BF1",
 		INTINFO(bfu_ints)
 	},
+	{
+		.drv = DRIVER_bitfury,
+		.name = "BXF",
+		.ident = IDENT_BXF,
+		.idVendor = 0x198c,
+		.idProduct = 0xb1f1,
+		.config = 1,
+		.timeout = BITFURY_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		.iManufacturer = "c-scape",
+		.iProduct = "bi?fury",
+		INTINFO(bxf_ints)
+	},
 #endif
 #ifdef USE_DRILLBIT
 	{
@@ -369,19 +382,6 @@ static struct usb_find_devices find_dev[] = {
 		.iManufacturer = "Drillbit Systems",
 		.iProduct = NULL, /* Can be Thumb or Eight, same driver */
 		INTINFO(drillbit_ints)
-	},
-	{
-		.drv = DRIVER_bitfury,
-		.name = "BXF",
-		.ident = IDENT_BXF,
-		.idVendor = 0x198c,
-		.idProduct = 0xb1f1,
-		.config = 1,
-		.timeout = BITFURY_TIMEOUT_MS,
-		.latency = LATENCY_UNUSED,
-		.iManufacturer = "c-scape",
-		.iProduct = "bi?fury",
-		INTINFO(bxf_ints)
 	},
 #endif
 #ifdef USE_MODMINER
