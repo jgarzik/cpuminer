@@ -789,11 +789,11 @@ static int64_t knc_scanwork(struct thr_info *thr)
 
 	knc_check_disabled_cores(knc);
 
-	/* Prepare tx buffer */
-	memset(spi_txbuf, 0, sizeof(spi_txbuf));
 	num = 0;
 
 	mutex_lock(&knc->lock);
+	/* Prepare tx buffer */
+	memset(spi_txbuf, 0, sizeof(spi_txbuf));
 	next_read_q = knc->read_q;
 	knc_queued_fifo_inc_idx(&next_read_q);
 
