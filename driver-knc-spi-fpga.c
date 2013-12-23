@@ -32,6 +32,7 @@
 #define SPI_DELAY_USECS		0
 /* Max number of ASICs permitted on one SPI device */
 #define MAX_ASICS		6
+#define CORES_PER_ASIC	192
 
 /* How many hardware errors in a row before disabling the core */
 #define HW_ERR_LIMIT		10
@@ -44,8 +45,14 @@
 
 #define WORK_STALE_US		60000000
 
+#define	SECONDS_IN_MINUTE	60
+
 /* Keep core disabled for no longer than 15 minutes */
-#define CORE_DISA_PERIOD_US	(15 * 60 * 1000000)
+#define CORE_DISA_PERIOD_US	(15 * SECONDS_IN_MINUTE * 1000000)
+
+/* DP = Disable Policy */
+bool opt_knc_DP_checkworkid = false;
+bool opt_knc_DP_disable_permanently = false;
 
 struct spidev_context {
 	int fd;
@@ -165,6 +172,13 @@ struct knc_state {
 	int read_d, write_d;
 #define KNC_DISA_CORES_SIZE	(MAX_ASICS * 256)
 	struct core_disa_data disa_cores_fifo[KNC_DISA_CORES_SIZE];
+
+	/* Local stats */
+#define	KNC_MINUTES_IN_STATS_BUFFER	60
+	unsigned int last_hour_shares[MAX_ASICS][256][KNC_MINUTES_IN_STATS_BUFFER + 1];
+	unsigned int last_hour_hwerrs[MAX_ASICS][256][KNC_MINUTES_IN_STATS_BUFFER + 1];
+	unsigned int last_hour_shares_index[MAX_ASICS][256];
+	unsigned int last_hour_hwerrs_index[MAX_ASICS][256];
 
 	pthread_mutex_t lock;
 };
@@ -302,6 +316,120 @@ static int spi_transfer(struct spidev_context *ctx, uint8_t *txbuf,
 	return ret;
 }
 
+static void stats_zero_data_if_curindex_updated(unsigned int *data, unsigned int *index, unsigned int cur_index)
+{
+	if (cur_index != *index) {
+		unsigned int i;
+		for (i = (*index + 1) % (KNC_MINUTES_IN_STATS_BUFFER + 1);
+			 i != cur_index;
+			 i = ((i + 1 ) % (KNC_MINUTES_IN_STATS_BUFFER + 1)))
+			data[i] = 0;
+		data[cur_index] = 0;
+		*index = cur_index;
+	}
+}
+
+static void stats_update(unsigned int *data, unsigned int *index, unsigned int cur_index)
+{
+	stats_zero_data_if_curindex_updated(data, index, cur_index);
+	++(data[cur_index]);
+}
+
+static unsigned int get_accumulated_stats(unsigned int *data, unsigned int *index, unsigned int cur_index)
+{
+	int i;
+	unsigned int res;
+
+	stats_zero_data_if_curindex_updated(data, index, cur_index);
+
+	res = 0;
+	for (i = 0; i < (KNC_MINUTES_IN_STATS_BUFFER + 1); ++i) {
+		if (i != cur_index)
+			res += data[i];
+	}
+
+	return res;
+}
+
+static inline void stats_good_share(struct knc_state *knc, uint32_t asic, uint32_t core, struct timespec *ts)
+{
+	if ((asic >= MAX_ASICS) || (core >= 256))
+		return;
+	unsigned int cur_minute = (ts->tv_sec / SECONDS_IN_MINUTE) % (KNC_MINUTES_IN_STATS_BUFFER + 1);
+	stats_update(knc->last_hour_shares[asic][core], &(knc->last_hour_shares_index[asic][core]), cur_minute);
+}
+
+static inline void stats_bad_share(struct knc_state *knc, uint32_t asic, uint32_t core, struct timespec *ts)
+{
+	if ((asic >= MAX_ASICS) || (core >= 256))
+		return;
+	unsigned int cur_minute = (ts->tv_sec / SECONDS_IN_MINUTE) % (KNC_MINUTES_IN_STATS_BUFFER + 1);
+	stats_update(knc->last_hour_hwerrs[asic][core], &(knc->last_hour_hwerrs_index[asic][core]), cur_minute);
+}
+
+static inline unsigned int get_hour_shares(struct knc_state *knc, uint32_t asic, uint32_t core, struct timespec *ts)
+{
+	if ((asic >= MAX_ASICS) || (core >= 256))
+		return 0;
+	unsigned int cur_minute = (ts->tv_sec / SECONDS_IN_MINUTE) % (KNC_MINUTES_IN_STATS_BUFFER + 1);
+	return get_accumulated_stats(knc->last_hour_shares[asic][core], &(knc->last_hour_shares_index[asic][core]), cur_minute);
+}
+
+static inline unsigned int get_hour_errors(struct knc_state *knc, uint32_t asic, uint32_t core, struct timespec *ts)
+{
+	if ((asic >= MAX_ASICS) || (core >= 256))
+		return 0;
+	unsigned int cur_minute = (ts->tv_sec / SECONDS_IN_MINUTE) % (KNC_MINUTES_IN_STATS_BUFFER + 1);
+	return get_accumulated_stats(knc->last_hour_hwerrs[asic][core], &(knc->last_hour_hwerrs_index[asic][core]), cur_minute);
+}
+
+static struct api_data *knc_api_stats(struct cgpu_info *cgpu)
+{
+	struct knc_state *knc = cgpu->device_data;
+	struct api_data *root = NULL;
+	char buf[4096];
+	int asic, core;
+	int cursize, n;
+	struct timespec ts_now;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts_now);
+
+	for (asic = 0; asic < MAX_ASICS; ++asic) {
+		char asic_name[128];
+		snprintf(asic_name, sizeof(asic_name), "asic_%d_shares", asic + 1);
+		cursize = 0;
+		for (core = 0; core < CORES_PER_ASIC; ++core) {
+			unsigned int shares = get_hour_shares(knc, asic, core, &ts_now);
+			n = snprintf(buf + cursize, sizeof(buf) - cursize, "%d,", shares);
+			cursize += n;
+			if (sizeof(buf) < cursize) {
+				cursize = sizeof(buf);
+				break;
+			}
+		}
+		if (0 < cursize)
+			buf[cursize - 1] = '\0'; /* last comma */
+		root = api_add_string(root, asic_name, buf, true);
+
+		snprintf(asic_name, sizeof(asic_name), "asic_%d_hwerrs", asic + 1);
+		cursize = 0;
+		for (core = 0; core < CORES_PER_ASIC; ++core) {
+			unsigned int errors = get_hour_errors(knc, asic, core, &ts_now);
+			n = snprintf(buf + cursize, sizeof(buf) - cursize, "%d,", errors);
+			cursize += n;
+			if (sizeof(buf) < cursize) {
+				cursize = sizeof(buf);
+				break;
+			}
+		}
+		if (0 < cursize)
+			buf[cursize - 1] = '\0'; /* last comma */
+		root = api_add_string(root, asic_name, buf, true);
+	}
+
+	return root;
+}
+
 static void disable_core(uint8_t asic, uint8_t core)
 {
 	char str[256];
@@ -358,16 +486,15 @@ static void knc_check_disabled_cores(struct knc_state *knc)
 
 static void knc_work_from_queue_to_spi(struct knc_state *knc,
 				       struct active_work *q_work,
-				       struct spi_request *spi_req)
+				       struct spi_request *spi_req, uint32_t work_id)
 {
 	uint32_t *buf_from, *buf_to;
 	int i;
 
 	spi_req->cmd = CMD_SUBMIT_WORK;
 	spi_req->queue_id = 0; /* at the moment we have one and only queue #0 */
-	spi_req->work_id = (knc->next_work_id ^ knc->salt) & WORK_ID_MASK;
+	spi_req->work_id = (work_id ^ knc->salt) & WORK_ID_MASK;
 	q_work->work_id = spi_req->work_id;
-	++(knc->next_work_id);
 	buf_to = spi_req->midstate;
 	buf_from = (uint32_t *)q_work->work->midstate;
 
@@ -384,15 +511,18 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 				    struct spi_rx_t *rxbuf)
 {
 	struct knc_state *knc = cgpu->device_data;
-	int submitted, successful, i, num_sent;
+	int submitted, completed, i, num_sent;
 	int next_read_q, next_read_a;
 	struct timeval now;
+	struct timespec ts_now;
 	struct work *work;
 	int64_t us;
 
 	num_sent = knc->write_q - knc->read_q - 1;
 	if (knc->write_q <= knc->read_q)
 		num_sent += KNC_QUEUED_BUFFER_SIZE;
+
+	knc->next_work_id += rxbuf->works_accepted;
 
 	/* Actually process SPI response */
 	if (rxbuf->works_accepted) {
@@ -405,6 +535,7 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 	}
 	/* move works_accepted number of items from queued_fifo to active_fifo */
 	gettimeofday(&now, NULL);
+	clock_gettime(CLOCK_MONOTONIC, &ts_now);
 	submitted = 0;
 
 	for (i = 0; i < rxbuf->works_accepted; ++i) {
@@ -430,7 +561,7 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 
 	/* check for completed works and calculated nonces */
 	gettimeofday(&now, NULL);
-	successful = 0;
+	completed = 0;
 
 	for (i = 0; i < (int)MAX_RESPONSES_IN_BATCH; ++i) {
 		if ((rxbuf->responses[i].type != RESPONSE_TYPE_NONCE_FOUND) &&
@@ -488,15 +619,19 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 
 				if (submit_nonce(thr, work,
 						 rxbuf->responses[i].nonce)) {
+					stats_good_share(knc, rxbuf->responses[i].asic, rxbuf->responses[i].core, &ts_now);
 					if (cidx < (int)sizeof(knc->hwerrs)) {
 						knc->hwerrs[cidx] = 0;
 						knc->disa_cnt[cidx] = 0;
 						knc->hwerr_work_id[cidx] = 0xFFFFFFFF;
 					}
-					successful++;
 				} else  {
-					if ((cidx < (int)sizeof(knc->hwerrs)) &&
-					    (knc->hwerr_work_id[cidx] != rxbuf->responses[i].work_id)) {
+					stats_bad_share(knc, rxbuf->responses[i].asic, rxbuf->responses[i].core, &ts_now);
+					bool process_hwerr = (cidx < (int)sizeof(knc->hwerrs));
+					if (process_hwerr && opt_knc_DP_checkworkid &&
+					    (knc->hwerr_work_id[cidx] == rxbuf->responses[i].work_id))
+						process_hwerr = false;
+					if (process_hwerr) {
 						knc->hwerr_work_id[cidx] = rxbuf->responses[i].work_id;
 						if (++(knc->hwerrs[cidx]) >= HW_ERR_LIMIT) {
 						    struct core_disa_data *core;
@@ -506,7 +641,8 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 						    core->asic = rxbuf->responses[i].asic;
 						    core->core = rxbuf->responses[i].core;
 						    disable_core(core->asic, core->core);
-						    if (++(knc->disa_cnt[cidx]) >= DISA_ERR_LIMIT) {
+						    if (opt_knc_DP_disable_permanently &&
+							(++(knc->disa_cnt[cidx]) >= DISA_ERR_LIMIT)) {
 							    applog(LOG_WARNING,
 			"KnC: core %u-%u was disabled permanently", core->asic, core->core);
 						    } else {
@@ -531,9 +667,10 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 			       sizeof(struct active_work));
 		}
 		knc->active_fifo[knc->read_a].work = NULL;
+		++completed;
 	}
 
-	return ((uint64_t)successful) * 0x100000000UL;
+	return ((uint64_t)completed) * 0x100000000UL;
 }
 
 /* Send flush command via SPI */
@@ -662,11 +799,15 @@ static int64_t knc_scanwork(struct thr_info *thr)
 
 	while (next_read_q != knc->write_q) {
 		knc_work_from_queue_to_spi(knc, &knc->queued_fifo[next_read_q],
-					   &spi_txbuf[num]);
+					   &spi_txbuf[num], knc->next_work_id + num);
 		knc_queued_fifo_inc_idx(&next_read_q);
 		++num;
 	}
-	/* knc->read_q is advanced in knc_process_response, not here */
+	/* knc->read_q is advanced in knc_process_response, not here.
+	 * knc->next_work_id is advanced in knc_process_response as well,
+	 *   because only after SPI response we know how many works were actually
+	 *   consumed by FPGA.
+	 */
 
 	len = spi_transfer(knc->ctx, (uint8_t *)spi_txbuf,
 			   (uint8_t *)&spi_rxbuf, sizeof(spi_txbuf));
@@ -759,4 +900,6 @@ struct device_drv knc_drv = {
 	.scanwork = knc_scanwork,
 	.queue_full = knc_queue_full,
 	.flush_work = knc_flush_work,
+
+	.get_api_stats = knc_api_stats,
 };
