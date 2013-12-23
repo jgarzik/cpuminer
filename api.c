@@ -26,7 +26,7 @@
 #include "util.h"
 #include "klist.h"
 
-#if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_HASHFAST) || defined(USE_BITFURY) || defined(USE_KLONDIKE) || defined(USE_KNC) || defined(USE_BAB) || defined(USE_DRILLBIT) || defined(USE_MINION) || defined(USE_COINTERRA)
+#if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_HASHFAST) || defined(USE_BITFURY) || defined(USE_KLONDIKE) || defined(USE_KNC) || defined(USE_BAB) || defined(USE_DRILLBIT) || defined(USE_MINION) || defined(USE_COINTERRA) || defined(USE_BITMINE_A1)
 #define HAVE_AN_ASIC 1
 #endif
 
@@ -170,6 +170,9 @@ static const char *DEVICECODE = ""
 #endif
 #ifdef USE_HASHFAST
 			"HFA "
+#endif
+#ifdef USE_BITMINE_A1
+			"BA1 "
 #endif
 #ifdef USE_ICARUS
 			"ICA "

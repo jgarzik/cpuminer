@@ -240,6 +240,7 @@ static inline int fsync (int fd)
 	DRIVER_ADD_COMMAND(hashfast) \
 	DRIVER_ADD_COMMAND(klondike) \
 	DRIVER_ADD_COMMAND(knc) \
+	DRIVER_ADD_COMMAND(bitmineA1) \
 	DRIVER_ADD_COMMAND(drillbit) \
 	DRIVER_ADD_COMMAND(bab) \
 	DRIVER_ADD_COMMAND(minion) \
@@ -982,6 +983,9 @@ extern char *opt_drillbit_options;
 #ifdef USE_BAB
 extern char *opt_bab_options;
 #endif
+#ifdef USE_BITMINE_A1
+extern char *opt_bitmine_a1_options;
+#endif
 #ifdef USE_USBUTILS
 extern char *opt_usb_select;
 extern int opt_usbdump;
@@ -1319,7 +1323,7 @@ struct work {
 	char		getwork_mode;
 };
 
-#ifdef USE_MODMINER 
+#ifdef USE_MODMINER
 struct modminer_fpga_state {
 	bool work_running;
 	struct work running_work;

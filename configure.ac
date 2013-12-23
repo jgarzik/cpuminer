@@ -192,6 +192,17 @@ if test "x$cointerra" = xyes; then
 fi
 AM_CONDITIONAL([HAS_COINTERRA], [test x$cointerra = xyes])
 
+bitmine_A1="no"
+
+AC_ARG_ENABLE([bitmine_A1],
+	[AC_HELP_STRING([--enable-bitmine_A1],[Compile support for Bitmine.ch A1 ASICs (default disabled)])],
+	[bitmine_A1=$enableval]
+	)
+if test "x$bitmine_A1" = xyes; then
+	AC_DEFINE([USE_BITMINE_A1], [1], [Defined to 1 if Bitmine A1 support is wanted])
+fi
+AM_CONDITIONAL([HAS_BITMINE_A1], [test x$bitmine_A1 = xyes])
+
 drillbit="no"
 
 AC_ARG_ENABLE([drillbit],
@@ -202,6 +213,7 @@ if test "x$drillbit" = xyes; then
 	AC_DEFINE([USE_DRILLBIT], [1], [Defined to 1 if Drillbit BitFury support is wanted])
 fi
 AM_CONDITIONAL([HAS_DRILLBIT], [test x$drillbit = xyes])
+
 
 hashfast="no"
 
@@ -513,6 +525,12 @@ if test "x$cointerra" = xyes; then
 	echo "  Cointerra.ASICs......: Enabled"
 else
 	echo "  Cointerra.ASICs......: Disabled"
+
+if test "x$bitmine_A1" = xyes; then
+	echo "  Bitmine-A1.ASICs........: Enabled"
+else
+	echo "  Bitmine-A1.ASICs........: Disabled"
+
 fi
 
 if test "x$drillbit" = xyes; then
@@ -551,7 +569,7 @@ else
 	echo "  ModMiner.FPGAs.......: Disabled"
 fi
 
-if test "x$avalon$bab$bflsc$bitforce$bitfury$hashfast$icarus$klondike$knc$modminer$drillbit$minion$cointerra" = xnonononononononononononono; then
+if test "x$avalon$bab$bflsc$bitforce$bitfury$hashfast$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1" = xnononononononononononononono; then
 	AC_MSG_ERROR([No mining configured in])
 fi
 
