@@ -142,7 +142,8 @@ static bool usb_read_fixed_size(struct cgpu_info *drillbit, void *result, size_t
 	if (count == result_size) {
 		return true;
 	}
-	drvlog(LOG_ERR, "Read incomplete fixed size packet - got %zu bytes / %zu (timeout %d)", count, result_size, timeout);
+	drvlog(LOG_ERR, "Read incomplete fixed size packet - got %d bytes / %d (timeout %d)",
+			(int)count, (int)result_size, timeout);
 	return false;
 }
 
@@ -232,8 +233,8 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
 		return false;
 	}
 	if (amount != SZ_SERIALISED_IDENTITY) {
-		drvlog(LOG_ERR, "Getinfo received %d bytes instead of %zu",
-		       amount, sizeof(Identity));
+		drvlog(LOG_ERR, "Getinfo received %d bytes instead of %d",
+		       amount, (int)sizeof(Identity));
 		return false;
 	}
 	deserialise_identity(&identity, buf);
