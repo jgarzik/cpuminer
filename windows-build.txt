@@ -4,6 +4,8 @@
 #                                                                                    #
 ######################################################################################
 
+(See bottom of file for steps to cross-build for Win32 from Linux.)
+
 **************************************************************************************
 * Introduction                                                                       *
 **************************************************************************************
@@ -251,8 +253,94 @@ You will have to copy "libusb-1.0.dll" to your working cgminer binary directory.
 --without-curses        Compile support for curses TUI (default enabled)
 --without-libudev       Autodetect FPGAs using libudev (default enabled)
 
+
+
 ######################################################################################
 #                                                                                    #
-#       Native WIN32 setup and build instructions (on mingw32/Windows) complete      #
+#       Cross-compiling for Windows from Linux                                       #
 #                                                                                    #
 ######################################################################################
+
+It is possible to cross-compile Windows binaries from Linux. The
+process is a bit different to the native steps shown above (it is also
+possible to use wine and the native steps, but this is more messing
+around, very slow, and not advisable.)
+
+** Install mingw cross compiler
+
+On Ubuntu/Debian:
+
+sudo apt-get install mingw32
+
+** create a directory to hold our cross-library dependencies
+
+We'll create a directory outside the source tree to hold non-system
+libraries we depend on. We could put these in
+/usr/i586-mingw32msvc/lib or anywhere else, instead (though keeping it
+outside /usr means we can set it up without root privileges.)
+
+IMPORTANT: If you put this directory inside your cgminer directory,
+remember 'make distclean' may delete it!
+
+mkdir -p ../cgminer-win32-deps/lib
+cd ../cgminer-win32-deps
+mkdir include
+mkdir bin
+
+NB: All following steps assume you are in the "cgminer-win32-deps" directory. Adjust as necessary.
+
+** pdcurses
+
+wget http://internode.dl.sourceforge.net/project/pdcurses/pdcurses/3.4/pdc34dllw.zip
+unzip /home/gus/Downloads/pdc34dllw.zip
+mv *.h include/
+mv pdcurses.lib lib/
+mv pdcurses.dll bin/
+
+** pthreads-w32
+
+(NB: I found pthreads-w32 2.9.1 doesn't seem to work properly, transfers time out early due to sem_timedwait exiting immediately(?))
+
+wget -O lib/libpthread.a ftp://sourceware.org/pub/pthreads-win32/prebuilt-dll-2-8-0-release/lib/libpthreadGC2.a
+wget -O include/pthread.h ftp://sourceware.org/pub/pthreads-win32/prebuilt-dll-2-8-0-release/include/pthread.h
+wget -O include/sched.h ftp://sourceware.org/pub/pthreads-win32/prebuilt-dll-2-8-0-release/include/sched.h
+wget -O include/semaphore.h ftp://sourceware.org/pub/pthreads-win32/prebuilt-dll-2-8-0-release/include/semaphore.h
+wget -O lib/libpthread.a ftp://sourceware.org/pub/pthreads-win32/prebuilt-dll-2-8-0-release/lib/libpthreadGC2.a
+wget -O bin/pthreadGC2.dll ftp://sourceware.org/pub/pthreads-win32/prebuilt-dll-2-8-0-release/lib/pthreadGC2.dll
+
+** libcurl
+
+wget http://curl.haxx.se/gknw.net/7.33.0/dist-w32/curl-7.33.0-devel-mingw32.zip
+unzip curl-7.33.0-devel-mingw32.zip
+mv curl-7.33.0-devel-mingw32/include/* include/
+mv curl-7.33.0-devel-mingw32/lib/* lib/
+mv curl-7.33.0-devel-mingw32/bin/* bin/
+rm -rf curl-7.33.0-devel-mingw32
+
+
+** clean up
+
+rm *.zip
+
+
+** Building cgminer
+
+Below assumes you're building in a "build-win32" or similar directory
+inside the cgminer directory. Fix up the -I and -L paths appropriately
+if you're building in-tree or someplace else.
+
+Configure command:
+
+CPPFLAGS="-I`pwd`/../../cgminer-win32-deps/include" LDFLAGS="-L`pwd`/../../cgminer-win32-deps/lib -lcurldll" ../autogen.sh --prefix=/usr/local/i586-mingw32 --host=i586-mingw32msvc --build=i686-linux 
+
+^^^ Plus whatever configure arguments you want to add. Note the paths
+    to cgminer-win32-deps that you may need to change.
+
+And make:
+
+make
+
+After cgminer builds, the next steps are the same as for native
+building as given under "Copy files to a build directory/folder"
+(DLLs can all be found in the cgminer-win32-deps/bin directory.)
+
