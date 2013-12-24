@@ -389,6 +389,7 @@ static bool bxf_send_clock(struct cgpu_info *bitfury, struct bitfury_info *info,
 
 static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info, char *buf)
 {
+	uint8_t clockspeed = BXF_CLOCK_DEFAULT;
 	int decitemp;
 
 	if (!sscanf(&buf[5], "%d", &decitemp)) {
@@ -411,7 +412,7 @@ static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info,
 			goto out;
 		applog(LOG_WARNING, "%s %d: Hit overheat temperature of %d, throttling!",
 		       bitfury->drv->name, bitfury->device_id, decitemp);
-		bxf_send_clock(bitfury, info, BXF_CLOCK_MIN);
+		clockspeed = BXF_CLOCK_MIN;
 		goto out;
 	}
 	if (decitemp > info->temp_target) {
@@ -421,7 +422,7 @@ static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info,
 			goto out;
 		applog(LOG_INFO, "%s %d: Temp %d over target and not falling, decreasing clock",
 		       bitfury->drv->name, bitfury->device_id, decitemp);
-		bxf_send_clock(bitfury, info, info->clocks - 1);
+		clockspeed = info->clocks - 1;
 		goto out;
 	}
 	if (decitemp <= info->temp_target && decitemp >= info->temp_target - BXF_TEMP_HYSTERESIS) {
@@ -432,7 +433,7 @@ static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info,
 				goto out;
 			applog(LOG_DEBUG, "%s %d: Temp %d in target and rising, decreasing clock",
 			       bitfury->drv->name, bitfury->device_id, decitemp);
-			bxf_send_clock(bitfury, info, info->clocks - 1);
+			clockspeed = info->clocks - 1;
 			goto out;
 		}
 		/* implies: decitemp < info->last_decitemp */
@@ -440,7 +441,7 @@ static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info,
 			goto out;
 		applog(LOG_DEBUG, "%s %d: Temp %d in target and falling, increasing clock",
 		       bitfury->drv->name, bitfury->device_id, decitemp);
-		bxf_send_clock(bitfury, info, info->clocks + 1);
+		clockspeed = info->clocks + 1;
 		goto out;
 	}
 	/* implies: decitemp < info->temp_target - BXF_TEMP_HYSTERESIS */
@@ -448,8 +449,9 @@ static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info,
 		goto out;
 	applog(LOG_DEBUG, "%s %d: Temp %d below target, increasing clock",
 		bitfury->drv->name, bitfury->device_id, decitemp);
-	bxf_send_clock(bitfury, info, info->clocks + 1);
+	clockspeed = info->clocks + 1;
 out:
+	bxf_send_clock(bitfury, info, clockspeed);
 	info->last_decitemp = decitemp;
 }
 
