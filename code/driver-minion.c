@@ -19,9 +19,10 @@ static void minion_detect(__maybe_unused bool hotplug)
 
 #include <unistd.h>
 #include <linux/spi/spidev.h>
-#include <sys/mman.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <fcntl.h>
+#include <poll.h>
 
 #define MINION_SPI_BUS 0
 #define MINION_SPI_CHIP 0
@@ -67,6 +68,42 @@ static void minion_detect(__maybe_unused bool hotplug)
 
 // All SYS data sizes are DATA_SIZ
 #define MINION_SYS_SIZ DATA_SIZ
+
+#define MINION_GPIO_RESULT_INT_PIN 24
+
+#define MINION_GPIO_SYS "/sys/class/gpio"
+#define MINION_GPIO_ENA "/export"
+#define MINION_GPIO_ENA_VAL "%d"
+#define MINION_GPIO_DIS "/unexport"
+#define MINION_GPIO_PIN "/gpio%d"
+#define MINION_GPIO_DIR "/direction"
+#define MINION_GPIO_DIR_READ "in"
+#define MINION_GPIO_DIR_WRITE "out"
+#define MINION_GPIO_EDGE "/edge"
+#define MINION_GPIO_EDGE_NONE "none"
+#define MINION_GPIO_EDGE_RISING "rising"
+#define MINION_GPIO_EDGE_FALLING "falling"
+#define MINION_GPIO_EDGE_BOTH "both"
+#define MINION_GPIO_ACT "/active_low"
+#define MINION_GPIO_ACT_LO "1"
+#define MINION_GPIO_ACT_HI "0"
+#define MINION_GPIO_VALUE "/value"
+
+#define MINION_RESULT_INT 0x01
+#define MINION_RESULT_FULL_INT 0x02
+#define MINION_CMD_INT 0x04
+#define MINION_CMD_FULL_INT 0x08
+#define MINION_TEMP_LOW_INT 0x10
+#define MINION_TEMP_HI_INT 0x20
+#define MINION_ALL_INT  MINION_RESULT_INT | \
+			MINION_RESULT_FULL_INT | \
+			MINION_CMD_INT | \
+			MINION_CMD_FULL_INT | \
+			MINION_TEMP_LOW_INT | \
+			MINION_TEMP_HI_INT
+
+// Number of results to make a GPIO5 interrupt
+#define MINION_RESULT_INT_SIZE 1
 
 #define RSTN_CTL_RESET_CORES 0x01
 #define RSTN_CTL_FLUSH_RESULTS 0x02
@@ -146,6 +183,20 @@ struct minion_header {
 
 #define MINION_NOCHIP_SIG 0x00000000
 #define MINION_CHIP_SIG 0x32020ffa
+
+// TODO: Finding these means the chip is there - but how to fix it?
+// Also, code can of course generate them from MINION_CHIP_SIG
+#define MINION_CHIP_SIG_SHIFT1 0x0ffa0000
+#define MINION_CHIP_SIG_SHIFT2 0x020ffa00
+#define MINION_CHIP_SIG_SHIFT3 0x0032020f
+#define MINION_CHIP_SIG_SHIFT4 0x00003202
+
+/*
+ * Number of times to try and get the SIG with each chip,
+ * if the chip returns neither of the above values
+ * TODO: maybe need some reset between tries, to handle an offset value?
+ */
+#define MINION_SIG_TRIES 3
 
 #define STA_TEMP(_sta) ((uint16_t)((_sta)[3] & 0x1f))
 #define STA_CORES(_sta) ((uint16_t)((_sta)[2]))
@@ -284,6 +335,9 @@ struct minion_info {
 	pthread_mutex_t sta_lock;
 
 	int spifd;
+	char gpiointvalue[64];
+	int gpiointfd;
+
 	// TODO: need to track disabled chips - done?
 	int chips;
 	bool chip[MINION_CHIPS];
@@ -921,6 +975,53 @@ void enable_chip_cores(struct cgpu_info *minioncgpu, struct minion_info *minioni
 	}
 }
 
+// TODO: hard coded for now
+void enable_interrupt(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, int chip)
+{
+	struct minion_header *head;
+	uint8_t rbuf[MINION_BUFSIZ];
+	uint8_t wbuf[MINION_BUFSIZ];
+	uint32_t wsiz;
+	int reply;
+
+	head = (struct minion_header *)wbuf;
+	head->chip = chip;
+	SET_HEAD_WRITE(head, MINION_SYS_BUF_TRIG);
+	SET_HEAD_SIZ(head, MINION_SYS_SIZ);
+
+	head->data[0] = MINION_RESULT_INT_SIZE;
+	head->data[1] = 0x00;
+	head->data[2] = 0x00;
+	head->data[3] = 0x00;
+
+	wsiz = HSIZE() + MINION_SYS_SIZ;
+	reply = do_ioctl(wbuf, wsiz, rbuf, 0);
+
+	if (reply != (int)wsiz) {
+		applog(LOG_ERR, "%s: chip %d result tigger set %d returned %d (should be %d)",
+				minioncgpu->drv->dname, chip, MINION_RESULT_INT_SIZE,
+				reply, (int)wsiz);
+	}
+
+	head = (struct minion_header *)wbuf;
+	head->chip = chip;
+	SET_HEAD_WRITE(head, MINION_SYS_INT_ENA);
+	SET_HEAD_SIZ(head, MINION_SYS_SIZ);
+
+	head->data[0] = MINION_RESULT_INT;
+	head->data[1] = 0x00;
+	head->data[2] = 0x00;
+	head->data[3] = 0x00;
+
+	wsiz = HSIZE() + MINION_CORE_SIZ;
+	reply = do_ioctl(wbuf, wsiz, rbuf, 0);
+
+	if (reply != (int)wsiz) {
+		applog(LOG_ERR, "%s: chip %d result trigger enable returned %d (should be %d)",
+				minioncgpu->drv->dname, chip, reply, (int)wsiz);
+	}
+}
+
 // Simple detect - just check each chip for the signature
 void minion_detect_chips(struct cgpu_info *minioncgpu, struct minion_info *minioninfo)
 {
@@ -951,7 +1052,7 @@ void minion_detect_chips(struct cgpu_info *minioncgpu, struct minion_info *minio
 					minioninfo->chips++;
 					ok = true;
 				} else {
-					if (sig == MINION_NOCHIP_SIG)
+					if (sig == MINION_NOCHIP_SIG) // Assume no chip
 						ok = true;
 					else {
 						applog(LOG_ERR, "%s: chip %d detect failed got"
@@ -964,7 +1065,7 @@ void minion_detect_chips(struct cgpu_info *minioncgpu, struct minion_info *minio
 				applog(LOG_ERR, "%s: chip %d reply %d ignored should be %d",
 						minioncgpu->drv->dname, chip, reply, (int)(wsiz));
 			}
-		} while (!ok && ++tries < 3);
+		} while (!ok && ++tries <= MINION_SIG_TRIES);
 
 		if (!ok) {
 			applog(LOG_ERR, "%s: chip %d - detect failure status",
@@ -972,11 +1073,18 @@ void minion_detect_chips(struct cgpu_info *minioncgpu, struct minion_info *minio
 		}
 	}
 
-	for (chip = 0; chip < MINION_CHIPS; chip++) {
-		if (minioninfo->chip[chip]) {
-			init_chip(minioncgpu, minioninfo, chip);
-			enable_chip_cores(minioncgpu, minioninfo, chip);
+	if (minioninfo->chips) {
+		for (chip = 0; chip < MINION_CHIPS; chip++) {
+			if (minioninfo->chip[chip]) {
+				init_chip(minioncgpu, minioninfo, chip);
+				enable_chip_cores(minioncgpu, minioninfo, chip);
+			}
 		}
+
+		// After everything is ready
+		for (chip = 0; chip < MINION_CHIPS; chip++)
+			if (minioninfo->chip[chip])
+				enable_interrupt(minioncgpu, minioninfo, chip);
 	}
 }
 
@@ -1051,6 +1159,159 @@ bad_out:
 	return false;
 }
 
+static bool minion_init_gpio_interrupt(struct cgpu_info *minioncgpu, struct minion_info *minioninfo)
+{
+	char pindir[64], ena[64], pin[8], dir[64], edge[64], act[64];
+	struct stat st;
+	int file, err;
+	ssize_t ret;
+
+	snprintf(pindir, sizeof(pindir), MINION_GPIO_SYS MINION_GPIO_PIN,
+					 MINION_GPIO_RESULT_INT_PIN);
+	memset(&st, 0, sizeof(st));
+
+	if (stat(pindir, &st) == 0) { // already exists
+		if (!S_ISDIR(st.st_mode)) {
+			applog(LOG_ERR, "%s: failed1 to enable GPIO pin %d interrupt"
+					" - not a directory",
+					minioncgpu->drv->dname,
+					MINION_GPIO_RESULT_INT_PIN);
+			return false;
+		}
+	} else {
+		snprintf(ena, sizeof(ena), MINION_GPIO_SYS MINION_GPIO_ENA);
+		file = open(ena, O_WRONLY | O_SYNC);
+		if (file == -1) {
+			applog(LOG_ERR, "%s: failed2 to enable GPIO pin %d interrupt (%d)"
+					" - you need to be root?",
+					minioncgpu->drv->dname,
+					MINION_GPIO_RESULT_INT_PIN,
+					errno);
+			return false;
+		}
+		snprintf(pin, sizeof(pin), MINION_GPIO_ENA_VAL, MINION_GPIO_RESULT_INT_PIN);
+		ret = write(file, pin, (size_t)strlen(pin));
+		if (ret != (ssize_t)strlen(pin)) {
+			if (ret < 0)
+				err = errno;
+			else
+				err = (int)ret;
+			close(file);
+			applog(LOG_ERR, "%s: failed3 to enable GPIO pin %d interrupt (%d:%d)",
+					minioncgpu->drv->dname,
+					MINION_GPIO_RESULT_INT_PIN,
+					err, strlen(pin));
+			return false;
+		}
+		close(file);
+
+		// Check again if it exists
+		memset(&st, 0, sizeof(st));
+		if (stat(pindir, &st) != 0) {
+			applog(LOG_ERR, "%s: failed4 to enable GPIO pin %d interrupt (%d)",
+					minioncgpu->drv->dname,
+					MINION_GPIO_RESULT_INT_PIN,
+					errno);
+			return false;
+		}
+	}
+
+	// Set the pin attributes
+	// Direction
+	snprintf(dir, sizeof(dir), MINION_GPIO_SYS MINION_GPIO_PIN MINION_GPIO_DIR,
+				   MINION_GPIO_RESULT_INT_PIN);
+	file = open(dir, O_WRONLY | O_SYNC);
+	if (file == -1) {
+		applog(LOG_ERR, "%s: failed5 to enable GPIO pin %d interrupt (%d)"
+				" - you need to be root?",
+				minioncgpu->drv->dname,
+				MINION_GPIO_RESULT_INT_PIN,
+				errno);
+		return false;
+	}
+	ret = write(file, MINION_GPIO_DIR_READ, (size_t)strlen(MINION_GPIO_DIR_READ));
+	if (ret != (ssize_t)strlen(MINION_GPIO_DIR_READ)) {
+		if (ret < 0)
+			err = errno;
+		else
+			err = (int)ret;
+		close(file);
+		applog(LOG_ERR, "%s: failed6 to enable GPIO pin %d interrupt (%d:%d)",
+				minioncgpu->drv->dname,
+				MINION_GPIO_RESULT_INT_PIN,
+				err, strlen(MINION_GPIO_DIR_READ));
+		return false;
+	}
+	close(file);
+
+	// Edge
+	snprintf(edge, sizeof(edge), MINION_GPIO_SYS MINION_GPIO_PIN MINION_GPIO_EDGE,
+				   MINION_GPIO_RESULT_INT_PIN);
+	file = open(edge, O_WRONLY | O_SYNC);
+	if (file == -1) {
+		applog(LOG_ERR, "%s: failed7 to enable GPIO pin %d interrupt (%d)",
+				minioncgpu->drv->dname,
+				MINION_GPIO_RESULT_INT_PIN,
+				errno);
+		return false;
+	}
+	ret = write(file, MINION_GPIO_EDGE_RISING, (size_t)strlen(MINION_GPIO_EDGE_RISING));
+	if (ret != (ssize_t)strlen(MINION_GPIO_EDGE_RISING)) {
+		if (ret < 0)
+			err = errno;
+		else
+			err = (int)ret;
+		close(file);
+		applog(LOG_ERR, "%s: failed8 to enable GPIO pin %d interrupt (%d:%d)",
+				minioncgpu->drv->dname,
+				MINION_GPIO_RESULT_INT_PIN,
+				err, strlen(MINION_GPIO_EDGE_RISING));
+		return false;
+	}
+	close(file);
+
+	// Active
+	snprintf(act, sizeof(act), MINION_GPIO_SYS MINION_GPIO_PIN MINION_GPIO_ACT,
+				   MINION_GPIO_RESULT_INT_PIN);
+	file = open(act, O_WRONLY | O_SYNC);
+	if (file == -1) {
+		applog(LOG_ERR, "%s: failed9 to enable GPIO pin %d interrupt (%d)",
+				minioncgpu->drv->dname,
+				MINION_GPIO_RESULT_INT_PIN,
+				errno);
+		return false;
+	}
+	ret = write(file, MINION_GPIO_ACT_HI, (size_t)strlen(MINION_GPIO_ACT_HI));
+	if (ret != (ssize_t)strlen(MINION_GPIO_ACT_HI)) {
+		if (ret < 0)
+			err = errno;
+		else
+			err = (int)ret;
+		close(file);
+		applog(LOG_ERR, "%s: failed10 to enable GPIO pin %d interrupt (%d:%d)",
+				minioncgpu->drv->dname,
+				MINION_GPIO_RESULT_INT_PIN,
+				err, strlen(MINION_GPIO_ACT_HI));
+		return false;
+	}
+	close(file);
+
+	// Value
+	snprintf(minioninfo->gpiointvalue, sizeof(minioninfo->gpiointvalue),
+				   MINION_GPIO_SYS MINION_GPIO_PIN MINION_GPIO_VALUE,
+				   MINION_GPIO_RESULT_INT_PIN);
+	minioninfo->gpiointfd = open(minioninfo->gpiointvalue, O_RDONLY);
+	if (minioninfo->gpiointfd == -1) {
+		applog(LOG_ERR, "%s: failed11 to enable GPIO pin %d interrupt (%d)",
+				minioncgpu->drv->dname,
+				MINION_GPIO_RESULT_INT_PIN,
+				errno);
+		return false;
+	}
+
+	return true;
+}
+
 static void minion_detect(bool hotplug)
 {
 	struct cgpu_info *minioncgpu = NULL;
@@ -1074,6 +1335,9 @@ static void minion_detect(bool hotplug)
 	minioncgpu->device_data = (void *)minioninfo;
 
 	if (!minion_init_spi(minioncgpu, minioninfo, MINION_SPI_BUS, MINION_SPI_CHIP))
+		goto unalloc;
+
+	if (!minion_init_gpio_interrupt(minioncgpu, minioninfo))
 		goto unalloc;
 
 	mutex_init(&(minioninfo->spi_lock));
@@ -1113,6 +1377,7 @@ static void minion_detect(bool hotplug)
 	return;
 
 cleanup:
+	close(minioninfo->gpiointfd);
 	close(minioninfo->spifd);
 	mutex_destroy(&(minioninfo->sta_lock));
 	mutex_destroy(&(minioninfo->spi_lock));
@@ -1127,7 +1392,7 @@ static void minion_identify(__maybe_unused struct cgpu_info *minioncgpu)
 
 #define MINION_POLL_uS 3000
 #define MINION_TASK_uS 29000
-#define MINION_REPLY_uS 9000
+#define MINION_REPLY_mS 888
 
 /*
  * SPI/ioctl write thread
@@ -1265,8 +1530,7 @@ static void *minion_spi_write(void *userdata)
 
 /*
  * SPI/ioctl reply thread
- * ioctl done every REPLY_uS checking for results
- * TODO: interrupt handled instead
+ * ioctl done every interrupt or MINION_REPLY_mS checking for results
  */
 static void *minion_spi_reply(void *userdata)
 {
@@ -1275,7 +1539,14 @@ static void *minion_spi_reply(void *userdata)
 	struct minion_result *result;
 	K_ITEM *item;
 	TITEM fifo_task, res_task;
-	int chip, r;
+	int chip, resoff, ret;
+	struct pollfd pfd;
+
+	struct minion_header *head;
+	uint8_t rbuf[MINION_BUFSIZ];
+	uint8_t wbuf[MINION_BUFSIZ];
+	uint32_t wsiz;
+	int reply;
 
 	applog(MINION_LOG, "%s%i: SPI replying...",
 				minioncgpu->drv->name, minioncgpu->device_id);
@@ -1303,6 +1574,14 @@ static void *minion_spi_reply(void *userdata)
 	res_task.rsiz = MINION_RES_DATA_SIZ;
 	res_task.urgent = false;
 	res_task.work = NULL;
+
+	memset(&pfd, 0, sizeof(pfd));
+	pfd.fd = minioninfo->gpiointfd;
+	pfd.events = POLLPRI;
+
+	head = (struct minion_header *)wbuf;
+	SET_HEAD_SIZ(head, MINION_SYS_SIZ);
+	wsiz = HSIZE() + MINION_SYS_SIZ;
 
 	while (minioncgpu->shutdown == false) {
 		for (chip = 0; chip < MINION_CHIPS; chip++) {
@@ -1351,8 +1630,8 @@ static void *minion_spi_reply(void *userdata)
 										minioncgpu->drv->name, minioncgpu->device_id,
 										res_task.reply, (int)(res_task.osiz));
 							}
-							for (r = res_task.osiz - res_task.rsiz; r < (int)res_task.osiz; r += MINION_RES_DATA_SIZ) {
-								result = (struct minion_result *)&(res_task.rbuf[r]);
+							for (resoff = res_task.osiz - res_task.rsiz; resoff < (int)res_task.osiz; resoff += MINION_RES_DATA_SIZ) {
+								result = (struct minion_result *)&(res_task.rbuf[resoff]);
 
 								if (IS_RESULT(result)) {
 									K_WLOCK(minioninfo->rfree_list);
@@ -1365,6 +1644,8 @@ static void *minion_spi_reply(void *userdata)
 									DATAR(item)->nonce = RES_NONCE(result);
 									DATAR(item)->no_nonce = !RES_GOLD(result);
 
+applog(LOG_ERR, "%s%i: found a result chip %d core %d task 0x%04x nonce 0x%08x", minioncgpu->drv->name, minioncgpu->device_id, DATAR(item)->chip, DATAR(item)->core, DATAR(item)->task_id, DATAR(item)->nonce);
+
 									K_WLOCK(minioninfo->rnonce_list);
 									k_add_head(minioninfo->rnonce_list, item, MINION_FFL_HERE);
 									K_WUNLOCK(minioninfo->rnonce_list);
@@ -1375,7 +1656,57 @@ static void *minion_spi_reply(void *userdata)
 				}
 			}
 		}
-		cgsleep_us(MINION_REPLY_uS);
+
+		// TODO: this is going to require a bit of tuning with 2TH/s mining:
+		// The interrupt size MINION_RESULT_INT_SIZE should be high enough to expect
+		// most chips to have some results but low enough to cause negligible latency
+		// If all chips don't have some results when an interrupt occurs, then it is a waste
+		// since we have to check all chips for results anyway since we don't know which one
+		// caused the interrupt
+		// MINION_REPLY_mS needs to be low enough in the case of bad luck where no chip
+		// finds MINION_RESULT_INT_SIZE results in a short amount of time, so we go check
+		// them all anyway - to avoid high latency when there are only a few results due to low luck
+		ret = poll(&pfd, 1, MINION_REPLY_mS);
+		if (ret > 0) {
+			int c;
+
+			read(minioninfo->gpiointfd, &c, 1);
+
+			applog(LOG_ERR, "%s%i: result interrupt",
+					   minioncgpu->drv->name, minioncgpu->device_id);
+
+			// TODO: which chip do I check for interrupts? Do I need to check every one of them?
+			SET_HEAD_READ(head, MINION_SYS_INT_STA);
+			head->chip = 0;
+			// TODO: will we lose an interrupt if it happens before it gets back to poll
+			// but after 'get count of results' is done?
+			reply = do_ioctl(wbuf, wsiz, rbuf, MINION_SYS_SIZ);
+			if (reply != (int)wsiz) {
+				applog(LOG_ERR, "%s: chip %d int status returned %d (should be %d)",
+						minioncgpu->drv->dname, chip, reply, (int)wsiz);
+			}
+/*
+			if (rbuf[wsiz] & MINION_RESULT_INT) {
+				applog(LOG_ERR, "%s%i: correct interrupt",
+						   minioncgpu->drv->name, minioncgpu->device_id);
+			}
+				applog(LOG_ERR, "%s%i: interrupt: 0x%02x 0x%02x 0x%02x 0x%02x",
+						   minioncgpu->drv->name, minioncgpu->device_id,
+						   rbuf[wsiz], rbuf[wsiz+1], rbuf[wsiz+2], rbuf[wsiz+3]);
+*/
+
+			// Clear the interrupt bit
+			SET_HEAD_WRITE(head, MINION_SYS_INT_CLR);
+			head->data[0] = MINION_RESULT_INT;
+			head->data[1] = 0x00;
+			head->data[2] = 0x00;
+			head->data[3] = 0x00;
+			reply = do_ioctl(wbuf, wsiz, rbuf, 0);
+			if (reply != (int)wsiz) {
+				applog(LOG_ERR, "%s: chip %d int clear returned %d (should be %d)",
+						minioncgpu->drv->dname, chip, reply, (int)wsiz);
+			}
+		}
 	}
 
 	return NULL;
