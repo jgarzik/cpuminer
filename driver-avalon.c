@@ -1566,8 +1566,8 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 
 	mutex_lock(&info->lock);
 	hash_count = 0xffffffffull * (uint64_t)info->nonces;
-	avalon->results += info->nonces + info->idle;
-	if (avalon->results > miner_count)
+	avalon->results += info->nonces;
+	if (avalon->results > miner_count || info->idle)
 		avalon->results = miner_count;
 	if (!info->reset)
 		avalon->results--;
@@ -1580,6 +1580,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 		if (avalon->results < -miner_count && !info->reset) {
 			applog(LOG_ERR, "%s%d: Result return rate low, resetting!",
 				avalon->drv->name, avalon->device_id);
+			avalon->results = miner_count;
 			info->reset = true;
 		}
 	}
