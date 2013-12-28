@@ -110,57 +110,12 @@ static int avalon_init_task(struct avalon_task *at,
 	buf[10] = 0x00;
 	buf[11] = 0x00;
 
-	if (asic == AVALON_A3256) {
-		lefreq16 = (uint16_t *)&buf[6];
+	/* With 55nm, this is the real clock in Mhz, 1Mhz means 2Mhs */
+	lefreq16 = (uint16_t *)&buf[6];
+	if (asic == AVALON_A3256)
 		*lefreq16 = htole16(frequency * 8);
-	} else {
-		switch (frequency / 2) { /* This is the real clock in Mhz, 1Mhz means 2Mhs */
-		case 1000:
-			buf[6] = 0xe0;
-			buf[7] = 0x84;
-			break;
-		case 950:
-			buf[6] = 0xa0;
-			buf[7] = 0x84;
-			break;
-		case 900:
-			buf[6] = 0x60;
-			buf[7] = 0x84;
-			break;
-		case 850:
-			buf[6] = 0x20;
-			buf[7] = 0x84;
-			break;
-		case 800:
-			buf[6] = 0xe0;
-			buf[7] = 0x83;
-			break;
-		case 750:
-			buf[6] = 0xa0;
-			buf[7] = 0x83;
-			break;
-		case 700:
-			buf[6] = 0x60;
-			buf[7] = 0x83;
-			break;
-		case 650:
-			buf[6] = 0x20;
-			buf[7] = 0x83;
-			break;
-		case 600:
-			buf[6] = 0xe0;
-			buf[7] = 0x82;
-			break;
-		case 550:
-			buf[6] = 0xa0;
-			buf[7] = 0x82;
-			break;
-		default:	/* 500Mhz etc */
-			buf[6] = 0xe0;
-			buf[7] = 0x94;
-			break;
-		}
-	}
+	else
+		*lefreq16 = htole16(frequency / 50 * 0x20 + 0x7FE0);
 
 	return 0;
 }
