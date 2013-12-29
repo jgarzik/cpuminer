@@ -491,8 +491,10 @@ static bool hfa_get_packet(struct cgpu_info *hashfast, struct hf_header *h)
 	if (unlikely(!ret))
 		goto out;
 	if (unlikely(h->crc8 != hcrc)) {
-		applog(LOG_WARNING, "HFA %d: Bad CRC %d vs %d, attempting to process anyway",
+		applog(LOG_WARNING, "HFA %d: Bad CRC %d vs %d, discarding packet",
 		       hashfast->device_id, h->crc8, hcrc);
+		ret = false;
+		goto out;
 	}
 	if (h->data_length > 0)
 		ret = hfa_get_data(hashfast, (char *)(h + 1), h->data_length);
