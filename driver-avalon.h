@@ -157,6 +157,8 @@ struct avalon_info {
 	int auto_queued;
 	int auto_nonces;
 	int auto_hw;
+	int increment;
+	int decrement;
 
 	int idle;
 	bool reset;

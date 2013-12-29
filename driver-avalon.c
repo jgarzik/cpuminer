@@ -113,9 +113,10 @@ static int avalon_init_task(struct avalon_task *at,
 	/* With 55nm, this is the real clock in Mhz, 1Mhz means 2Mhs */
 	lefreq16 = (uint16_t *)&buf[6];
 	if (asic == AVALON_A3256)
-		*lefreq16 = htole16(frequency * 8);
+		frequency *= 8;
 	else
-		*lefreq16 = htole16(frequency / 50 * 0x20 + 0x7FE0);
+		frequency = frequency * 32 / 50 + 0x7FE0;
+	*lefreq16 = htole16(frequency);
 
 	return 0;
 }
@@ -834,6 +835,12 @@ static struct cgpu_info *avalon_detect_one(libusb_device *dev, struct usb_find_d
 			info->frequency = AVALON_DEFAULT_FREQUENCY;
 		}
 	}
+	if (info->asic == AVALON_A3255)
+		info->increment = info->decrement = 50;
+	else {
+		info->increment = 2;
+		info->decrement = 1;
+	}
 
 	info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
 	info->temp_max = 0;
@@ -1085,7 +1092,7 @@ static void avalon_set_freq(struct cgpu_info *avalon, int frequency)
 
 static void avalon_inc_freq(struct avalon_info *info)
 {
-	info->frequency += 2;
+	info->frequency += info->increment;
 	if (info->frequency > opt_avalon_freq_max)
 		info->frequency = opt_avalon_freq_max;
 	avalon_set_timeout(info);
@@ -1095,7 +1102,7 @@ static void avalon_inc_freq(struct avalon_info *info)
 
 static void avalon_dec_freq(struct avalon_info *info)
 {
-	info->frequency -= 1;
+	info->frequency -= info->decrement;
 	if (info->frequency < opt_avalon_freq_min)
 		info->frequency = opt_avalon_freq_min;
 	avalon_set_timeout(info);
@@ -1121,15 +1128,14 @@ static void avalon_adjust_freq(struct avalon_info *info, struct cgpu_info *avalo
 				       avalon->drv->name, avalon->device_id);
 				avalon_dec_freq(info);
 			}
-		} else if (info->auto_nonces >= (AVALON_AUTO_CYCLE * 19 / 20) &&
-			   info->auto_nonces <= (AVALON_AUTO_CYCLE * 21 / 20)) {
-				int total = info->auto_nonces + info->auto_hw;
+		} else if (info->auto_nonces >= AVALON_AUTO_CYCLE / 2) {
+			int total = info->auto_nonces + info->auto_hw;
 
-				/* Try to keep hw errors < 2% */
-				if (info->auto_hw * 100 < total)
-					avalon_inc_freq(info);
-				else if (info->auto_hw * 66 > total)
-					avalon_dec_freq(info);
+			/* Try to keep hw errors < 2% */
+			if (info->auto_hw * 100 < total)
+				avalon_inc_freq(info);
+			else if (info->auto_hw * 66 > total)
+				avalon_dec_freq(info);
 		}
 		avalon_reset_auto(info);
 		mutex_unlock(&info->lock);
