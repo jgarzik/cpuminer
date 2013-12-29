@@ -125,7 +125,7 @@ ASIC SPECIFIC COMMANDS
 --avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
 --avalon-fan <arg> Set fanspeed percentage for avalon, single value or range (default: 20-100)
 --avalon-freq <arg> Set frequency range for avalon-auto, single value or range
---avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq
+--avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq:tech
 --avalon-temp <arg> Set avalon target temperature (default: 50)
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
@@ -156,7 +156,7 @@ Avalon commands:
 --avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
 --avalon-fan <arg> Set fanspeed percentage for avalon, single value or range (default: 20-100)
 --avalon-freq <arg> Set frequency range for avalon-auto, single value or range
---avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq
+--avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq:tech
 --avalon-temp <arg> Set avalon target temperature (default: 50)
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
 --bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
@@ -199,9 +199,9 @@ This will cut off the avalon should it get up to 65 degrees and will then
 re-enable it when it gets to the target temperature as specified by avalon-temp.
 
 eg:
---avalon-options 115200:24:10:45:282
+--avalon-options 115200:24:10:D:1500:55
 
-The values are baud : miners : asic count : timeout : frequency.
+The values are baud : miners : asic count : timeout : frequency : technology.
 
 Baud:
 The device is pretty much hard coded to emulate 115200 baud so you shouldn't
@@ -228,23 +228,29 @@ It is possible to set this a little lower if you are trying to tune for short
 block mining (eg p2pool) but much lower and the device will start creating
 duplicate shares.
 A value of 'd' means cgminer will calculate it for you based on the frequency
+and is highly recommended.
 
-Sample settings for valid different frequencies (last 2 values):
-34:375 *
-36:350 *
-39:325 *
-43:300
-45:282 (default)
-47:270
-50:256
-
-Frequency:
-This is the clock speed of the devices. For Avalon devices, only specific
-values work, 256, 270, 282 (default), 300, 325, 350 and 375.  For BitBurner
-devices, other values can be used.
+Sample settings for valid different frequencies (last 3 values) for 110nm AVAs:
+34:375:110 *
+36:350:110 *
+43:300:110
+45:282:110 (default)
+50:256:110
 
 Note that setting a value with an asterisk next to it will be using your
 avalon outside its spec and you do so at your own risk.
+
+For 55nm AVAs, the usual values are 8:1500
+
+Frequency:
+This is the clock speed of the devices. For Avalon 110nm devices, values from
+256 upwards are valid with the default being 282 and the maximum practical
+being approximately 350. For 55nm devices values from 1000-2000 are valid with
+1500 being the default.
+
+Technology:
+What sized technology ASICs are in use in the avalon, choices are 55 or 110,
+corresponding to the nm technology chips in use.
 
 The default frequency for BitBurner X and BitBurner XX boards is 282.  The
 default frequency for BitBurner Fury boards is 256.  Overclocking is

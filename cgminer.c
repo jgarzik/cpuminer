@@ -1192,7 +1192,7 @@ static struct opt_table opt_config_table[] = {
 		     "Set frequency range for avalon-auto, single value or range"),
 	OPT_WITH_ARG("--avalon-options",
 		     set_avalon_options, NULL, NULL,
-		     "Set avalon options baud:miners:asic:timeout:freq"),
+		     "Set avalon options baud:miners:asic:timeout:freq:tech"),
 	OPT_WITH_ARG("--avalon-temp",
 		     set_int_0_to_100, opt_show_intval, &opt_avalon_temp,
 		     "Set avalon target temperature"),
