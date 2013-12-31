@@ -92,6 +92,10 @@ if HAS_BAB
 cgminer_SOURCES += driver-bab.c
 endif
 
+if HAS_MINION
+cgminer_SOURCES += driver-minion.c
+endif
+
 if HAS_MODMINER
 cgminer_SOURCES += driver-modminer.c
 bitstreamsdir = $(bindir)/bitstreams
