@@ -1,6 +1,5 @@
 /*
- * Copyright 2013 BitMain <xlc1985@126.com>
- * Copyright 2012-2013 LingchaoXu <xlc1985@126.com>
+ * Copyright 2012-2013 Lingchao Xu <lingchao.xu@bitmaintech.com>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -50,7 +49,6 @@ int opt_bitmain_freq_max = BITMAIN_MAX_FREQUENCY;
 bool opt_bitmain_auto;
 
 static int option_offset = -1;
-struct device_drv bitmain_drv;
 
 // --------------------------------------------------------------
 //      CRC16 check table
@@ -911,17 +909,21 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 						applog(LOG_ERR, "work %d data2: %s", work->id, ob_hex);
 						free(ob_hex);*/
 
-						if (bitmain_decode_nonce(thr, bitmain, info, rxnoncedata.nonces[j].nonce, work)) {
-					 		applog(LOG_DEBUG, "bitmain_decode_nonce info->qlock start");
-					 		mutex_lock(&info->qlock);
-					 		info->nonces++;
-							info->auto_nonces++;
-							mutex_unlock(&info->qlock);
-							applog(LOG_DEBUG, "bitmain_decode_nonce info->qlock stop");
-					 	} else {
-					 		//bitmain_inc_nvw(info, thr);
-					 		applog(LOG_ERR, "BitMain: bitmain_decode_nonce error work(%d)", rxnoncedata.nonces[j].work_id);
-					 	}
+						if(work->work_block < info->last_work_block) {
+							applog(LOG_ERR, "BitMain: bitmain_parse_rxnonce work(%d) nonce stale", rxnoncedata.nonces[j].work_id);
+						} else {
+							if (bitmain_decode_nonce(thr, bitmain, info, rxnoncedata.nonces[j].nonce, work)) {
+						 		applog(LOG_DEBUG, "bitmain_decode_nonce info->qlock start");
+						 		mutex_lock(&info->qlock);
+						 		info->nonces++;
+								info->auto_nonces++;
+								mutex_unlock(&info->qlock);
+								applog(LOG_DEBUG, "bitmain_decode_nonce info->qlock stop");
+						 	} else {
+						 		//bitmain_inc_nvw(info, thr);
+						 		applog(LOG_ERR, "BitMain: bitmain_decode_nonce error work(%d)", rxnoncedata.nonces[j].work_id);
+						 	}
+						}
 					 	free_work(work);
 					} else {
 						//bitmain_inc_nvw(info, thr);
@@ -973,13 +975,11 @@ static void *bitmain_get_results(void *userdata)
 	const int rsize = BITMAIN_FTDI_READSIZE;
 	char readbuf[BITMAIN_READBUF_SIZE];
 	struct thr_info *thr = info->thr;
-	cgtimer_t ts_start;
 	char threadname[24];
 	int errorcount = 0;
 
 	snprintf(threadname, 24, "btm_recv/%d", bitmain->device_id);
 	RenameThread(threadname);
-	cgsleep_prepare_r(&ts_start);
 
 	while (likely(!bitmain->shutdown)) {
 		unsigned char buf[rsize];
@@ -1020,12 +1020,9 @@ static void *bitmain_get_results(void *userdata)
 			errorcount++;
 			if(errorcount > 100) {
 				applog(LOG_ERR, "bitmain_read errorcount ret=%d", ret);
-				cgsleep_prepare_r(&ts_start);
-				cgsleep_ms_r(&ts_start, 20);
+				cgsleep_ms(20);
 				errorcount = 0;
 			}
-			//cgsleep_prepare_r(&ts_start);
-			//cgsleep_ms_r(&ts_start, 200);
 			continue;
 		}
 
@@ -1230,10 +1227,15 @@ static void bitmain_usb_init(struct cgpu_info *bitmain)
 {
 	int err, interface;
 
+#ifndef WIN32
+	return;
+#endif
+
 	if (bitmain->usbinfo.nodev)
 		return;
 
-	interface = bitmain->usbdev->found->interface;
+	interface = usb_interface(bitmain);
+
 	// Reset
 	err = usb_transfer(bitmain, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
 		FTDI_VALUE_RESET, interface, C_RESET);
@@ -1314,7 +1316,7 @@ static void bitmain_usb_init(struct cgpu_info *bitmain)
 		bitmain->drv->name, bitmain->device_id, err);
 }
 
-static bool bitmain_usb_detect_one(libusb_device *dev, struct usb_find_devices *found)
+static struct cgpu_info * bitmain_usb_detect_one(libusb_device *dev, struct usb_find_devices *found)
 {
 	int baud, chain_num, asic_num, timeout, frequency = 0;
 	uint8_t reg_data[4] = {0};
@@ -1325,20 +1327,25 @@ static bool bitmain_usb_detect_one(libusb_device *dev, struct usb_find_devices *
 	int ret;
 
 	if (opt_bitmain_options == NULL)
-		return false;
+		return NULL;
 
 	bitmain = usb_alloc_cgpu(&bitmain_drv, BITMAIN_MINER_THREADS);
 
-	configured = get_options(this_option_offset, &baud, &chain_num,
-				 &asic_num, &timeout, &frequency, reg_data);
+	baud = BITMAIN_IO_SPEED;
+	chain_num = BITMAIN_DEFAULT_CHAIN_NUM;
+	asic_num = BITMAIN_DEFAULT_ASIC_NUM;
+	timeout = BITMAIN_DEFAULT_TIMEOUT;
+	frequency = BITMAIN_DEFAULT_FREQUENCY;
 
 	if (!usb_init(bitmain, dev, found))
 		goto shin;
 
+	configured = get_options(this_option_offset, &baud, &chain_num,
+				 &asic_num, &timeout, &frequency, reg_data);
+
 	/* Even though this is an FTDI type chip, we want to do the parsing
 	 * all ourselves so set it to std usb type */
 	bitmain->usbdev->usb_type = USB_TYPE_STD;
-	bitmain->usbdev->PrefPacketSize = BITMAIN_USB_PACKETSIZE;
 
 	/* We have a real BitMain! */
 	bitmain_usb_init(bitmain);
@@ -1393,7 +1400,7 @@ static bool bitmain_usb_detect_one(libusb_device *dev, struct usb_find_devices *
 	       bitmain->device_path, info->chain_num, info->asic_num, info->timeout,
 	       info->frequency);
 
-	return true;
+	return bitmain;
 
 unshin:
 
@@ -1406,7 +1413,7 @@ shin:
 
 	bitmain = usb_free_cgpu(bitmain);
 
-	return false;
+	return NULL;
 }
 
 static bool bitmain_detect_one(const char * devpath)
@@ -1493,7 +1500,7 @@ shin:
 	return false;
 }
 
-static void bitmain_detect(void)
+static void bitmain_detect(bool __maybe_unused hotplug)
 {
 	applog(LOG_DEBUG, "BTM detect dev: %s", opt_bitmain_dev);
 	if(strlen(opt_bitmain_dev) <= 0) {
@@ -1872,8 +1879,8 @@ char *set_bitmain_freq(char *arg)
 }
 
 struct device_drv bitmain_drv = {
-	.drv_id = DRIVER_BITMAIN,
-	.dname = "bitmain",
+	.drv_id = DRIVER_bitmain,
+	.dname = "Bitmain",
 	.name = "BTM",
 	.drv_detect = bitmain_detect,
 	.thread_prepare = bitmain_prepare,
