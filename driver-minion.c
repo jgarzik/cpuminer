@@ -1451,7 +1451,7 @@ static bool minion_init_gpio_interrupt(struct cgpu_info *minioncgpu, struct mini
 			applog(LOG_ERR, "%s: failed3 to enable GPIO pin %d interrupt (%d:%d)",
 					minioncgpu->drv->dname,
 					MINION_GPIO_RESULT_INT_PIN,
-					err, strlen(pin));
+					err, (int)strlen(pin));
 			return false;
 		}
 		close(file);
@@ -1490,7 +1490,7 @@ static bool minion_init_gpio_interrupt(struct cgpu_info *minioncgpu, struct mini
 		applog(LOG_ERR, "%s: failed6 to enable GPIO pin %d interrupt (%d:%d)",
 				minioncgpu->drv->dname,
 				MINION_GPIO_RESULT_INT_PIN,
-				err, strlen(MINION_GPIO_DIR_READ));
+				err, (int)strlen(MINION_GPIO_DIR_READ));
 		return false;
 	}
 	close(file);
@@ -1516,7 +1516,7 @@ static bool minion_init_gpio_interrupt(struct cgpu_info *minioncgpu, struct mini
 		applog(LOG_ERR, "%s: failed8 to enable GPIO pin %d interrupt (%d:%d)",
 				minioncgpu->drv->dname,
 				MINION_GPIO_RESULT_INT_PIN,
-				err, strlen(MINION_GPIO_EDGE_RISING));
+				err, (int)strlen(MINION_GPIO_EDGE_RISING));
 		return false;
 	}
 	close(file);
@@ -1542,7 +1542,7 @@ static bool minion_init_gpio_interrupt(struct cgpu_info *minioncgpu, struct mini
 		applog(LOG_ERR, "%s: failed10 to enable GPIO pin %d interrupt (%d:%d)",
 				minioncgpu->drv->dname,
 				MINION_GPIO_RESULT_INT_PIN,
-				err, strlen(MINION_GPIO_ACT_HI));
+				err, (int)strlen(MINION_GPIO_ACT_HI));
 		return false;
 	}
 	close(file);
@@ -1860,7 +1860,7 @@ static void *minion_spi_reply(void *userdata)
 							char *buf = bin2hex((unsigned char *)(&(res_task.rbuf[res_task.osiz - res_task.rsiz])), (int)(res_task.rsiz));
 							applog(LOG_ERR, "%s%i: Bad work reply (%s) size %d, should be at least %d",
 									minioncgpu->drv->name, minioncgpu->device_id, buf,
-									res_task.reply, MINION_RES_DATA_SIZ);
+									res_task.reply, (int)MINION_RES_DATA_SIZ);
 							free(buf);
 						} else {
 							if (res_task.reply != (int)(res_task.osiz)) {
