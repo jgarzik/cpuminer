@@ -389,7 +389,7 @@ static bool bxf_send_clock(struct cgpu_info *bitfury, struct bitfury_info *info,
 
 static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info, char *buf)
 {
-	uint8_t clockspeed = BXF_CLOCK_DEFAULT;
+	uint8_t clockspeed = info->clocks;
 	int decitemp;
 
 	if (!sscanf(&buf[5], "%d", &decitemp)) {
