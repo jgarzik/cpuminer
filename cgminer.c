@@ -1532,6 +1532,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #ifdef USE_BAB
 		"BaB "
 #endif
+#ifdef USE_MINION
+		"minion "
+#endif
 #ifdef USE_MODMINER
 		"modminer "
 #endif
