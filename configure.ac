@@ -236,6 +236,17 @@ if test "x$knc" = xyes; then
 fi
 AM_CONDITIONAL([HAS_KNC], [test x$knc = xyes])
 
+minion="no"
+
+AC_ARG_ENABLE([minion],
+	[AC_HELP_STRING([--enable-minion],[Compile support for BlackArrow Bitfury (default disabled)])],
+	[minion=$enableval]
+	)
+if test "x$minion" = xyes; then
+	AC_DEFINE([USE_MINION], [1], [Defined to 1 if Minion BlackArrow ASIC support is wanted])
+fi
+AM_CONDITIONAL([HAS_MINION], [test x$minion = xyes])
+
 modminer="no"
 
 AC_ARG_ENABLE([modminer],
@@ -450,6 +461,12 @@ else
 	echo "  Avalon.ASICs.........: Disabled"
 fi
 
+if test "x$minion" = xyes; then
+	echo "  BlackArrowMinion.ASIC: Enabled"
+else
+	echo "  BlackArrowMinion.ASIC: Disabled"
+fi
+
 if test "x$bab" = xyes; then
 	echo "  BlackArrow.ASICs.....: Enabled"
 else
@@ -510,7 +527,7 @@ else
 	echo "  ModMiner.FPGAs.......: Disabled"
 fi
 
-if test "x$avalon$bab$bflsc$bitforce$bitfury$hashfast$icarus$klondike$knc$modminer$drillbit" = xnonononononononononono; then
+if test "x$avalon$bab$bflsc$bitforce$bitfury$hashfast$icarus$klondike$knc$modminer$drillbit$minion" = xnononononononononononono; then
 	AC_MSG_ERROR([No mining configured in])
 fi
 
