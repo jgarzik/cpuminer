@@ -592,7 +592,7 @@ format:
 For example (this is wrapped, but it's all on one line for real):
     1335313090,reject,
     ffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000,
-    http://localhost:8337,GPU0,0,
+    http://localhost:8337,ASC0,0,
     6f983c918f3299b58febf95ec4d0c7094ed634bc13754553ec34fc3800000000,
     00000001a0980aff4ce4a96d53f4b89a2d5f0e765c978640fe24372a000001c5
     000000004a4366808f81d44f26df3d69d7dc4b3473385930462d9ab707b50498
