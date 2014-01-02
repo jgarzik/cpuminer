@@ -73,7 +73,7 @@ cgminer_SOURCES += driver-hashfast.c driver-hashfast.h hf_protocol.h hf_protocol
 endif
 
 if HAS_BITFURY
-cgminer_SOURCES += driver-bitfury.c driver-bitfury.h
+cgminer_SOURCES += driver-bitfury.c driver-bitfury.h mcp2210.c mcp2210.h
 endif
 
 if HAS_DRILLBIT
