@@ -31,7 +31,7 @@ static void minion_detect(__maybe_unused bool hotplug)
 #define MINION_SPI_BUFSIZ 1024
 
 #define MINION_CHIPS 32
-#define MINION_CORES 64
+#define MINION_CORES 99
 
 #define MINION_QUE_HIGH 4
 #define MINION_QUE_LOW 2
@@ -1127,12 +1127,12 @@ static void enable_chip_cores(struct cgpu_info *minioncgpu, struct minion_info *
 			  chip, READ_ADDR(MINION_CORE_ENA96_98),
 			  rbuf, MINION_CORE_SIZ, data);
 
-/*
+
 	data[0] = 0xff;
 	data[1] = 0xff;
 	data[2] = 0xff;
 	data[3] = 0xff;
-*/
+
 	/*
 	 * there really is no reason to do this except in testing
 	 * since when mining with real data it will still mine at
@@ -1144,35 +1144,36 @@ static void enable_chip_cores(struct cgpu_info *minioncgpu, struct minion_info *
 	 * of working cores isn't all of them? (and redoing if the number changes)
 	 * See the idle_cnt register ...
 	 */
-	data[0] = 0x02; // core 1
-	data[1] = 0x00;
-	data[2] = 0x00;
-	data[3] = 0x00;
+//	data[0] = 0x02; // core 1
+//	data[1] = 0x00;
+//	data[2] = 0x00;
+//	data[3] = 0x00;
 
 	reply = build_cmd(minioncgpu, minioninfo,
 			  chip, WRITE_ADDR(MINION_CORE_ENA0_31),
 			  rbuf, 0, data);
 
-	data[0] = 0x00;
-	data[1] = 0x00;
+//	data[0] = 0x00;
+//	data[1] = 0x00;
 //	data[2] = 0x01; // core 48
-	data[2] = 0x00;
-	data[3] = 0x00;
+//	data[2] = 0x00;
+//	data[3] = 0x00;
 
 	reply = build_cmd(minioncgpu, minioninfo,
 			  chip, WRITE_ADDR(MINION_CORE_ENA32_63),
 			  rbuf, 0, data);
 
-	data[0] = 0x00;
-	data[1] = 0x00;
-	data[2] = 0x00;
-	data[3] = 0x00;
+//	data[0] = 0x00;
+//	data[1] = 0x00;
+//	data[2] = 0x00;
+//	data[3] = 0x00;
 
 	reply = build_cmd(minioncgpu, minioninfo,
 			  chip, WRITE_ADDR(MINION_CORE_ENA64_95),
 			  rbuf, 0, data);
 
-	data[0] = 0x04; // core 98
+	data[0] = 0x07; // core 96,97,98
+//	data[0] = 0x04; // core 98
 	data[1] = 0x00;
 	data[2] = 0x00;
 	data[3] = 0x00;
@@ -1181,6 +1182,7 @@ static void enable_chip_cores(struct cgpu_info *minioncgpu, struct minion_info *
 			  chip, WRITE_ADDR(MINION_CORE_ENA96_98),
 			  rbuf, 0, data);
 
+/* Use default
 	// 1/3 range for each of the 3 cores
 //	data[0] = 0x55;
 //	data[1] = 0x55;
@@ -1225,6 +1227,7 @@ static void enable_chip_cores(struct cgpu_info *minioncgpu, struct minion_info *
 	reply = build_cmd(minioncgpu, minioninfo,
 			  chip, WRITE_ADDR(MINION_NONCE_START),
 			  rbuf, 0, data);
+*/
 }
 
 // TODO: hard coded for now
