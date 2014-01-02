@@ -153,6 +153,15 @@ static struct usb_intinfo bxf_ints[] = {
 	USB_EPS(1,  bxf1_epinfos),
 	USB_EPS(0,  bxf0_epinfos)
 };
+
+static struct usb_epinfo nf1_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	64,	EPO(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	64,	EPI(1), 0, 0 },
+};
+
+static struct usb_intinfo nf1_ints[] = {
+	USB_EPS(0, nf1_epinfos)
+};
 #endif
 
 #ifdef USE_DRILLBIT
@@ -367,6 +376,17 @@ static struct usb_find_devices find_dev[] = {
 		.iManufacturer = "c-scape",
 		.iProduct = "bi?fury",
 		INTINFO(bxf_ints)
+	},
+	{
+		.drv = DRIVER_bitfury,
+		.name = "NF1",
+		.ident = IDENT_NF1,
+		.idVendor = 0x04d8,
+		.idProduct = 0x00de,
+		.config = 1,
+		.timeout = BITFURY_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		INTINFO(nf1_ints)
 	},
 #endif
 #ifdef USE_DRILLBIT
