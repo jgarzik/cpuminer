@@ -12,6 +12,9 @@
 
 #define MCP2210_BUFFER_LENGTH		64
 
+#define MCP2210_GPIO_PIN_LOW		0
+#define MCP2210_GPIO_PIN_HIGH		1
+
 #define MCP2210_GPIO_OUTPUT		0
 #define MCP2210_GPIO_INPUT		1
 
@@ -29,6 +32,12 @@
 #define MCP2210_SPI_TRANSFER_ERROR_NA	0xF7	// SPI not available due to external owner
 #define MCP2210_SPI_TRANSFER_ERROR_IP	0xF8	// SPI not available due to transfer in progress
 
+struct gpio_pin {
+	int pin[9];
+};
+
 bool mcp2210_send_recv(struct cgpu_info *cgpu, char *buf, enum usb_cmds cmd);
+bool mcp2210_get_gpio_pinvals(struct cgpu_info *cgpu, struct gpio_pin *gp);
+bool mcp2210_get_gpio_pindirs(struct cgpu_info *cgpu, struct gpio_pin *gp);
 
 #endif /* MCP2210_H */

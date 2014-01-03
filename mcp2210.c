@@ -42,3 +42,37 @@ bool mcp2210_send_recv(struct cgpu_info *cgpu, char *buf, enum usb_cmds cmd)
 	}
 	return true;
 }
+
+bool mcp2210_get_gpio_pinvals(struct cgpu_info *cgpu, struct gpio_pin *gp)
+{
+	char buf[MCP2210_BUFFER_LENGTH];
+	int i;
+
+	memset(buf, 0, MCP2210_BUFFER_LENGTH);
+	buf[0] = MCP2210_GET_GPIO_PIN_VAL;
+	if (!mcp2210_send_recv(cgpu, buf, C_MCP_GETGPIOPINVAL))
+		return false;
+
+	for (i = 0; i < 8; i++)
+		gp->pin[i] = buf[4] & (0x01u << i);
+	gp->pin[8] = buf[5] & 0x01u;
+
+	return true;
+}
+
+bool mcp2210_get_gpio_pindirs(struct cgpu_info *cgpu, struct gpio_pin *gp)
+{
+	char buf[MCP2210_BUFFER_LENGTH];
+	int i;
+
+	memset(buf, 0, MCP2210_BUFFER_LENGTH);
+	buf[0] = MCP2210_GET_GPIO_PIN_DIR;
+	if (!mcp2210_send_recv(cgpu, buf, C_MCP_GETGPIOPINDIR))
+		return false;
+
+	for (i = 0; i < 8; i++)
+		gp->pin[i] = buf[4] & (0x01u << i);
+	gp->pin[8] = buf[5] & 0x01u;
+
+	return true;
+}
