@@ -218,3 +218,12 @@ bool mcp2210_set_gpio_pindir(struct cgpu_info *cgpu, int pin, int dir)
 	}
 	return mcp2210_send_recv(cgpu, buf, C_MCP_SETGPIOPINDIR);
 }
+
+bool mcp2210_spi_cancel(struct cgpu_info *cgpu)
+{
+	char buf[MCP2210_BUFFER_LENGTH];
+
+	memset(buf, 0, MCP2210_BUFFER_LENGTH);
+	buf[0] = MCP2210_SPI_CANCEL;
+	return mcp2210_send_recv(cgpu, buf, C_MCP_SPICANCEL);
+}
