@@ -39,5 +39,9 @@ struct gpio_pin {
 bool mcp2210_send_recv(struct cgpu_info *cgpu, char *buf, enum usb_cmds cmd);
 bool mcp2210_get_gpio_pinvals(struct cgpu_info *cgpu, struct gpio_pin *gp);
 bool mcp2210_get_gpio_pindirs(struct cgpu_info *cgpu, struct gpio_pin *gp);
+bool mcp2210_get_gpio_pinval(struct cgpu_info *cgpu, int pin, int *val);
+bool mcp2210_set_gpio_pinval(struct cgpu_info *cgpu, int pin, int val);
+bool mcp2210_get_gpio_pindir(struct cgpu_info *cgpu, int pin, int *dir);
+bool mcp2210_set_gpio_pindir(struct cgpu_info *cgpu, int pin, int dir);
 
 #endif /* MCP2210_H */
