@@ -2677,11 +2677,14 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 				       cgpu->drv->name, cgpu->device_id, err, libusb_error_name(err));
 			}
 		}
+		ptr += got;
+		bufleft -= got;
+		if (bufleft < 1)
+			err = LIBUSB_SUCCESS;
+
 		if (err || readonce)
 			break;
 
-		ptr += got;
-		bufleft -= got;
 
 		first = false;
 
