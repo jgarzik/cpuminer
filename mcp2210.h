@@ -12,6 +12,10 @@
 
 #define MCP2210_BUFFER_LENGTH		64
 
+#define MCP2210_PIN_GPIO		0x0
+#define MCP2210_PIN_CS			0x1
+#define MCP2210_PIN_DEDICATED		0x2
+
 #define MCP2210_GPIO_PIN_LOW		0
 #define MCP2210_GPIO_PIN_HIGH		1
 
@@ -37,8 +41,11 @@ struct gpio_pin {
 };
 
 bool mcp2210_send_recv(struct cgpu_info *cgpu, char *buf, enum usb_cmds cmd);
+bool mcp2210_get_gpio_pindes(struct cgpu_info *cgpu, struct gpio_pin *gp);
 bool mcp2210_get_gpio_pinvals(struct cgpu_info *cgpu, struct gpio_pin *gp);
 bool mcp2210_get_gpio_pindirs(struct cgpu_info *cgpu, struct gpio_pin *gp);
+bool mcp2210_get_gpio_pin(struct cgpu_info *cgpu, int pin, int *des);
+bool mcp2210_set_gpio_pindes(struct cgpu_info *cgpu, int pin, int des);
 bool mcp2210_get_gpio_pinval(struct cgpu_info *cgpu, int pin, int *val);
 bool mcp2210_set_gpio_pinval(struct cgpu_info *cgpu, int pin, int val);
 bool mcp2210_get_gpio_pindir(struct cgpu_info *cgpu, int pin, int *dir);
