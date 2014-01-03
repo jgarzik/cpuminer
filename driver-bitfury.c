@@ -12,6 +12,7 @@
 #include "miner.h"
 #include "driver-bitfury.h"
 #include "sha2.h"
+#include "mcp2210.h"
 
 int opt_bxf_temp_target = BXF_TEMP_TARGET / 10;
 

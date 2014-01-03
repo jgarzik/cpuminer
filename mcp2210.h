@@ -29,4 +29,4 @@
 #define MCP2210_SPI_TRANSFER_ERROR_NA	0xF7	// SPI not available due to external owner
 #define MCP2210_SPI_TRANSFER_ERROR_IP	0xF8	// SPI not available due to transfer in progress
 
-#endif MCP2210_H
+#endif /* MCP2210_H */
