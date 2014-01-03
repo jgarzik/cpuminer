@@ -291,3 +291,42 @@ mcp2210_set_spi_transfer_settings(struct cgpu_info *cgpu, unsigned int bitrate, 
 	buf[20] = spimode;
 	return mcp2210_send_recv(cgpu, buf, C_MCP_SETSPISETTING);
 }
+
+/* Perform an spi transfer of *length bytes and return the amount of data
+ * returned in the same buffer in *length */
+bool mcp2210_spi_transfer(struct cgpu_info *cgpu, char *data, unsigned int *length)
+{
+	char buf[MCP2210_BUFFER_LENGTH];
+	uint8_t res;
+
+	if (unlikely(*length > 60 || !*length)) {
+		applog(LOG_ERR, "%s %d: Unable to spi transfer %u bytes", cgpu->drv->name,
+		       cgpu->device_id, *length);
+		return false;
+	}
+retry:
+	memset(buf, 0, MCP2210_BUFFER_LENGTH);
+	buf[0] = MCP2210_SPI_TRANSFER;
+	buf[1] = *length;
+
+	memcpy(buf + 4, data, *length);
+	if (!mcp2210_send_recv(cgpu, buf, C_MCP_SPITRANSFER))
+		return false;
+
+	res = (uint8_t)buf[1];
+	switch(res) {
+		case MCP2210_SPI_TRANSFER_SUCCESS:
+			*length = buf[2];
+			if (*length)
+				memcpy(data, buf + 4, *length);
+			return true;
+		case MCP2210_SPI_TRANSFER_ERROR_IP:
+			cgsleep_ms(40);
+			goto retry;
+		case MCP2210_SPI_TRANSFER_ERROR_NA:
+			applog(LOG_WARNING, "%s %d: External owner error on mcp2210 spi transfer",
+			       cgpu->drv->name, cgpu->device_id);
+		default:
+			return false;
+	}
+}
