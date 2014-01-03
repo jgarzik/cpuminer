@@ -279,6 +279,7 @@ out_close:
 
 static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info __maybe_unused *info)
 {
+	unsigned int bitrate, icsv, acsv, cstdd, ldbtcsd, sdbd, bpst, spimode;
 	bool ret = false;
 	int i;
 
@@ -325,6 +326,16 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info __mayb
 
 	/* Cancel any transfers in progress */
 	if (!mcp2210_spi_cancel(bitfury))
+		goto out;
+	if (!mcp2210_get_spi_transfer_settings(bitfury, &bitrate, &icsv, &acsv, &cstdd,
+	    &ldbtcsd, &sdbd, &bpst, &spimode))
+		goto out;
+	bitrate = 200000;
+	icsv = 0xffff;
+	acsv = 0xffef;
+	cstdd = ldbtcsd = sdbd = spimode = 0;
+	if (!mcp2210_set_spi_transfer_settings(bitfury, bitrate, icsv, acsv, cstdd,
+	    ldbtcsd, sdbd, bpst, spimode))
 		goto out;
 out:
 	return ret;
