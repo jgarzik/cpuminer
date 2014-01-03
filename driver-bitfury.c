@@ -294,7 +294,11 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	}
 	if (!mcp2210_set_gpio_pindir(bitfury, NF1_PIN_LED, MCP2210_GPIO_OUTPUT))
 		return ret;
+	if (!mcp2210_set_gpio_pinval(bitfury, NF1_PIN_LED, MCP2210_GPIO_PIN_HIGH))
+		return ret;
 	if (!mcp2210_set_gpio_pindir(bitfury, NF1_PIN_PWR_EN, MCP2210_GPIO_OUTPUT))
+		return ret;
+	if (!mcp2210_set_gpio_pinval(bitfury, NF1_PIN_PWR_EN, MCP2210_GPIO_PIN_HIGH))
 		return ret;
 
 	if (opt_debug) {
