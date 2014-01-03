@@ -233,6 +233,29 @@ bool mcp2210_spi_cancel(struct cgpu_info *cgpu)
  * SubsequentDataByteDelay, BytesPerSPITransfer
  */
 bool
+mcp2210_get_spi_transfer_settings(struct cgpu_info *cgpu, unsigned int *bitrate, unsigned int *icsv,
+				  unsigned int *acsv, unsigned int *cstdd, unsigned int *ldbtcsd,
+				  unsigned int *sdbd, unsigned int *bpst, unsigned int *spimode)
+{
+	char buf[MCP2210_BUFFER_LENGTH];
+
+	memset(buf, 0, MCP2210_BUFFER_LENGTH);
+	buf[0] = MCP2210_GET_SPI_SETTING;
+
+	if (!mcp2210_send_recv(cgpu, buf, C_MCP_GETSPISETTING))
+		return false;
+	*bitrate = buf[7] << 24 | buf[6] << 16 | buf[5] << 8 | buf[4];
+	*icsv = (buf[9] & 0x1) << 8 | buf[8];
+	*acsv = (buf[11] & 0x1) << 8 | buf[10];
+	*cstdd = buf[13] << 8 | buf[12];
+	*ldbtcsd = buf[15] << 8 | buf[14];
+	*sdbd = buf[17] << 8 | buf[16];
+	*bpst = buf[19] << 8 | buf[18];
+	*spimode = buf[20];
+	return true;
+}
+
+bool
 mcp2210_set_spi_transfer_settings(struct cgpu_info *cgpu, unsigned int bitrate, unsigned int icsv,
 				  unsigned int acsv, unsigned int cstdd, unsigned int ldbtcsd,
 				  unsigned int sdbd, unsigned int bpst, unsigned int spimode)
