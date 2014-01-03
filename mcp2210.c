@@ -55,7 +55,7 @@ bool mcp2210_get_gpio_pindes(struct cgpu_info *cgpu, struct gpio_pin *gp)
 		return false;
 
 	for (i = 0; i < 9; i++)
-		gp->pin[i] = buf[4 + i];
+		gp->pin[i] = !!(buf[4 + i]);
 	return true;
 }
 
@@ -72,7 +72,7 @@ bool mcp2210_get_gpio_pinvals(struct cgpu_info *cgpu, struct gpio_pin *gp)
 		return false;
 
 	for (i = 0; i < 8; i++)
-		gp->pin[i] = buf[4] & (0x01u << i);
+		gp->pin[i] = !!(buf[4] & (0x01u << i));
 	gp->pin[8] = buf[5] & 0x01u;
 
 	return true;
@@ -90,7 +90,7 @@ bool mcp2210_get_gpio_pindirs(struct cgpu_info *cgpu, struct gpio_pin *gp)
 		return false;
 
 	for (i = 0; i < 8; i++)
-		gp->pin[i] = buf[4] & (0x01u << i);
+		gp->pin[i] = !!(buf[4] & (0x01u << i));
 	gp->pin[8] = buf[5] & 0x01u;
 
 	return true;
