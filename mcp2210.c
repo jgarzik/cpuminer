@@ -12,6 +12,7 @@
 
 bool mcp2210_send_recv(struct cgpu_info *cgpu, char *buf, enum usb_cmds cmd)
 {
+	uint8_t mcp_cmd = buf[0];
 	int amount, err;
 
 	if (unlikely(cgpu->usbinfo.nodev))
@@ -33,5 +34,11 @@ bool mcp2210_send_recv(struct cgpu_info *cgpu, char *buf, enum usb_cmds cmd)
 		return false;
 	}
 
+	/* Return code should always echo original command */
+	if (buf[0] != mcp_cmd) {
+		applog(LOG_WARNING, "%s %d: Response code mismatch, asked for %u got %u",
+		       cgpu->drv->name, cgpu->device_id, mcp_cmd, buf[0]);
+		return false;
+	}
 	return true;
 }
