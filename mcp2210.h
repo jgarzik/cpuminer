@@ -52,5 +52,9 @@ bool mcp2210_set_gpio_pinval(struct cgpu_info *cgpu, int pin, int val);
 bool mcp2210_get_gpio_pindir(struct cgpu_info *cgpu, int pin, int *dir);
 bool mcp2210_set_gpio_pindir(struct cgpu_info *cgpu, int pin, int dir);
 bool mcp2210_spi_cancel(struct cgpu_info *cgpu);
+bool
+mcp2210_set_spi_transfer_settings(struct cgpu_info *cgpu, unsigned int bitrate, unsigned int icsv,
+				  unsigned int acsv, unsigned int cstdd, unsigned int ldbtcsd,
+				  unsigned int sdbd, unsigned int bpst, unsigned int spimode);
 
 #endif /* MCP2210_H */

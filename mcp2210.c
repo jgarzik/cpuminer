@@ -227,3 +227,44 @@ bool mcp2210_spi_cancel(struct cgpu_info *cgpu)
 	buf[0] = MCP2210_SPI_CANCEL;
 	return mcp2210_send_recv(cgpu, buf, C_MCP_SPICANCEL);
 }
+
+/* Abbreviations correspond to:
+ * IdleChipSelectValue, ActiveChipSelectValue, CSToDataDelay, LastDataByteToCSDelay,
+ * SubsequentDataByteDelay, BytesPerSPITransfer
+ */
+bool
+mcp2210_set_spi_transfer_settings(struct cgpu_info *cgpu, unsigned int bitrate, unsigned int icsv,
+				  unsigned int acsv, unsigned int cstdd, unsigned int ldbtcsd,
+				  unsigned int sdbd, unsigned int bpst, unsigned int spimode)
+{
+	char buf[MCP2210_BUFFER_LENGTH];
+
+	memset(buf, 0, MCP2210_BUFFER_LENGTH);
+	buf[0] = MCP2210_SET_SPI_SETTING;
+
+	buf[4] = bitrate & 0xfful;
+	buf[5] = (bitrate & 0xff00ul) >> 8;
+	buf[6] = (bitrate & 0xff0000ul) >> 16;
+	buf[7] = (bitrate & 0xff000000ul) >> 24;
+
+	buf[8] = icsv & 0xff;
+	buf[9] = (icsv & 0x100) >> 8;
+
+	buf[10] = acsv & 0xff;
+	buf[11] = (acsv & 0x100) >> 8;
+
+	buf[12] = cstdd & 0xff;
+	buf[13] = (cstdd & 0xff00) >> 8;
+
+	buf[14] = ldbtcsd & 0xff;
+	buf[15] = (ldbtcsd & 0xff00) >> 8;
+
+	buf[16] = sdbd & 0xff;
+	buf[17] = (sdbd & 0xff00) >> 8;
+
+	buf[18] = bpst & 0xff;
+	buf[19] = (bpst & 0xff00) >> 8;
+
+	buf[20] = spimode;
+	return mcp2210_send_recv(cgpu, buf, C_MCP_SETSPISETTING);
+}
