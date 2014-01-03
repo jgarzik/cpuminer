@@ -155,8 +155,8 @@ static struct usb_intinfo bxf_ints[] = {
 };
 
 static struct usb_epinfo nf1_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	64,	EPO(1), 0, 0 },
 	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	64,	EPO(1), 0, 0 },
 };
 
 static struct usb_intinfo nf1_ints[] = {
