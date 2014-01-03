@@ -24,6 +24,10 @@
 
 extern int opt_bxf_temp_target;
 
+#define NF1_PIN_LED 0
+#define NF1_PIN_SCK_OVR 5
+#define NF1_PIN_PWR_EN 6
+
 struct bitfury_info {
 	struct cgpu_info *base_cgpu;
 	struct thr_info *thr;

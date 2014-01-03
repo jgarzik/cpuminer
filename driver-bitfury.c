@@ -277,6 +277,49 @@ out_close:
 	return false;
 }
 
+static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	bool ret = false;
+	int i;
+
+	/* Set all pins to GPIO mode */
+	for (i = 0; i < 9; i++) {
+		if (!mcp2210_set_gpio_pindes(bitfury, i, MCP2210_PIN_GPIO))
+			return ret;
+	}
+	/* Set all pins to input mode */
+	for (i = 0; i < 9; i++) {
+		if (!mcp2210_set_gpio_pindir(bitfury, i, MCP2210_GPIO_INPUT))
+			return ret;
+	}
+	if (!mcp2210_set_gpio_pindir(bitfury, NF1_PIN_LED, MCP2210_GPIO_OUTPUT))
+		return ret;
+	if (!mcp2210_set_gpio_pindir(bitfury, NF1_PIN_PWR_EN, MCP2210_GPIO_OUTPUT))
+		return ret;
+
+	if (opt_debug) {
+		struct gpio_pin gp;
+
+		mcp2210_get_gpio_pindirs(bitfury, &gp);
+		for (i = 0; i < 9; i++) {
+			applog(LOG_DEBUG, "%s %d: Pin dir %d %d", bitfury->drv->name,
+			       bitfury->device_id, i, gp.pin[i]);
+		}
+		mcp2210_get_gpio_pinvals(bitfury, &gp);
+		for (i = 0; i < 9; i++) {
+			applog(LOG_DEBUG, "%s %d: Pin val %d %d", bitfury->drv->name,
+			       bitfury->device_id, i, gp.pin[i]);
+		}
+		mcp2210_get_gpio_pindes(bitfury, &gp);
+		for (i = 0; i < 9; i++) {
+			applog(LOG_DEBUG, "%s %d: Pin des %d %d", bitfury->drv->name,
+			       bitfury->device_id, i, gp.pin[i]);
+		}
+	}
+out:
+	return ret;
+}
+
 static struct cgpu_info *bitfury_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *bitfury;
@@ -302,6 +345,9 @@ static struct cgpu_info *bitfury_detect_one(struct libusb_device *dev, struct us
 			break;
 		case IDENT_BXF:
 			ret = bxf_detect_one(bitfury, info);
+			break;
+		case IDENT_NF1:
+			ret = nf1_detect_one(bitfury, info);
 			break;
 		default:
 			applog(LOG_INFO, "%s %d: Unrecognised bitfury device",
