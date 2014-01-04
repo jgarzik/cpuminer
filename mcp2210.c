@@ -279,6 +279,7 @@ mcp2210_set_spi_transfer_settings(struct cgpu_info *cgpu, unsigned int bitrate, 
 				  unsigned int sdbd, unsigned int bpst, unsigned int spimode)
 {
 	char buf[MCP2210_BUFFER_LENGTH];
+	bool ret;
 
 	memset(buf, 0, MCP2210_BUFFER_LENGTH);
 	buf[0] = MCP2210_SET_SPI_SETTING;
@@ -307,7 +308,14 @@ mcp2210_set_spi_transfer_settings(struct cgpu_info *cgpu, unsigned int bitrate, 
 	buf[19] = (bpst & 0xff00) >> 8;
 
 	buf[20] = spimode;
-	return mcp2210_send_recv(cgpu, buf, C_MCP_SETSPISETTING);
+	ret = mcp2210_send_recv(cgpu, buf, C_MCP_SETSPISETTING);
+	if (!ret)
+		return ret;
+	if (buf[1] != 0) {
+		applog(LOG_DEBUG, "Failed to set spi settings");
+		return false;
+	}
+	return true;
 }
 
 /* Perform an spi transfer of *length bytes and return the amount of data

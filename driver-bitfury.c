@@ -479,7 +479,7 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	unsigned int bitrate, icsv, acsv, cstdd, ldbtcsd, sdbd, bpst, spimode, length;
 	char buf[MCP2210_BUFFER_LENGTH];
 	bool ret = false;
-	int i;
+	int i, val;
 
 	/* Set all pins to GPIO mode */
 	for (i = 0; i < 9; i++) {
@@ -536,7 +536,14 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	length = 1;
 	if (!mcp2210_spi_transfer(bitfury, buf, &length))
 		goto out;
+	/* after this command SCK_OVRRIDE should read the same as current SCK
+	 * value (which for mode 0 should be 0) */
+	if (!mcp2210_get_gpio_pinval(bitfury, NF1_PIN_SCK_OVR, &val))
+		goto out;
+	if (val != MCP2210_GPIO_PIN_LOW)
+		goto out;
 
+	/* switch SCK to polarity (default SCK=1 in mode 2) */
 	spimode = 2;
 	if (!mcp2210_set_spi_transfer_settings(bitfury, bitrate, icsv, acsv, cstdd,
 	    ldbtcsd, sdbd, bpst, spimode))
@@ -545,7 +552,14 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	length = 1;
 	if (!mcp2210_spi_transfer(bitfury, buf, &length))
 		goto out;
+	/* after this command SCK_OVRRIDE should read the same as current SCK
+	 * value (which for mode 2 should be 1) */
+	if (!mcp2210_get_gpio_pinval(bitfury, NF1_PIN_SCK_OVR, &val))
+		goto out;
+	if (val != MCP2210_GPIO_PIN_HIGH)
+		goto out;
 
+	/* switch SCK to polarity (default SCK=0 in mode 0) */
 	spimode = 0;
 	if (!mcp2210_set_spi_transfer_settings(bitfury, bitrate, icsv, acsv, cstdd,
 	    ldbtcsd, sdbd, bpst, spimode))
@@ -553,6 +567,10 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	buf[0] = 0;
 	length = 1;
 	if (!mcp2210_spi_transfer(bitfury, buf, &length))
+		goto out;
+	if (!mcp2210_get_gpio_pinval(bitfury, NF1_PIN_SCK_OVR, &val))
+		goto out;
+	if (val != MCP2210_GPIO_PIN_LOW)
 		goto out;
 
 	info->osc6_bits = 50;
