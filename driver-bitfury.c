@@ -408,6 +408,37 @@ static void nf1_send_init(struct bitfury_info *info)
 	spi_add_data(info, 0x3000, atrvec, 19 * 4);
 }
 
+static bool nf1_set_gpio_output(struct cgpu_info *bitfury, int pin, int val)
+{
+	if (!mcp2210_set_gpio_pindir(bitfury, pin, MCP2210_GPIO_OUTPUT))
+		return false;
+	if (!mcp2210_set_gpio_pinval(bitfury, pin, val))
+		return false;
+	return true;
+}
+
+// Bit-banging reset... Each 3 reset cycles reset first chip in chain
+static bool nf1_spi_reset(struct cgpu_info *bitfury)
+{
+	char buf[1] = {0x81}; // will send this waveform: - _ _ _ _ _ _ -
+	unsigned int length = 1;
+	int r;
+
+	// SCK_OVRRIDE
+	if (!nf1_set_gpio_output(bitfury, NF1_PIN_SCK_OVR, MCP2210_GPIO_PIN_HIGH))
+		return false;
+
+	for (r = 0; r < 16; ++r) {
+		if (!mcp2210_spi_transfer(bitfury, buf, &length))
+			return false;
+	}
+
+	if (!mcp2210_set_gpio_pindir(bitfury, NF1_PIN_SCK_OVR, MCP2210_GPIO_INPUT))
+		return false;
+
+	return true;
+}
+
 static void nf1_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	spi_clear_buf(info);
@@ -437,13 +468,9 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	}
 
 	/* Set LED and PWR pins to output and high */
-	if (!mcp2210_set_gpio_pindir(bitfury, NF1_PIN_LED, MCP2210_GPIO_OUTPUT))
+	if (!nf1_set_gpio_output(bitfury, NF1_PIN_LED, MCP2210_GPIO_PIN_HIGH))
 		goto out;
-	if (!mcp2210_set_gpio_pinval(bitfury, NF1_PIN_LED, MCP2210_GPIO_PIN_HIGH))
-		goto out;
-	if (!mcp2210_set_gpio_pindir(bitfury, NF1_PIN_PWR_EN, MCP2210_GPIO_OUTPUT))
-		goto out;
-	if (!mcp2210_set_gpio_pinval(bitfury, NF1_PIN_PWR_EN, MCP2210_GPIO_PIN_HIGH))
+	if (!nf1_set_gpio_output(bitfury, NF1_PIN_PWR_EN, MCP2210_GPIO_PIN_HIGH))
 		goto out;
 
 	if (opt_debug) {
