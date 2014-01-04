@@ -172,6 +172,18 @@ bool mcp2210_set_gpio_pinval(struct cgpu_info *cgpu, int pin, int val)
 	return mcp2210_send_recv(cgpu, buf, C_MCP_SETGPIOPINVAL);
 }
 
+/* Set one pin to gpio output and set the value */
+bool mcp2210_set_gpio_output(struct cgpu_info *cgpu, int pin, int val)
+{
+	if (!mcp2210_set_gpio_pindes(cgpu, pin, MCP2210_PIN_GPIO))
+		return false;
+	if (!mcp2210_set_gpio_pindir(cgpu, pin, MCP2210_GPIO_OUTPUT))
+		return false;
+	if (!mcp2210_set_gpio_pinval(cgpu, pin, val))
+		return false;
+	return true;
+}
+
 /* Get one pindir */
 bool mcp2210_get_gpio_pindir(struct cgpu_info *cgpu, int pin, int *dir)
 {
