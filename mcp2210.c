@@ -184,6 +184,28 @@ bool mcp2210_get_gpio_pinval(struct cgpu_info *cgpu, int pin, int *val)
 	return true;
 }
 
+/* Set all pinvals */
+bool mcp2210_set_gpio_pinvals(struct cgpu_info *cgpu, struct gpio_pin *gp)
+{
+	char buf[MCP2210_BUFFER_LENGTH];
+	int pin;
+
+	memset(buf, 0, MCP2210_BUFFER_LENGTH);
+	buf[0] = MCP2210_SET_GPIO_PIN_VAL;
+
+	for (pin = 0; pin < 8; pin++) {
+		if (gp->pin[pin])
+			buf[4] |= (0x01u << pin);
+		else
+			buf[4] &= ~(0x01u << pin);
+	}
+	if (gp->pin[pin])
+		buf[5] |= 0x01u;
+	else
+		buf[5] &= ~0x01u;
+	return mcp2210_send_recv(cgpu, buf, C_MCP_SETGPIOPINVAL);
+}
+
 /* Set one pinval */
 bool mcp2210_set_gpio_pinval(struct cgpu_info *cgpu, int pin, int val)
 {
@@ -247,6 +269,28 @@ bool mcp2210_get_gpio_pindir(struct cgpu_info *cgpu, int pin, int *dir)
 		*dir = !!(buf[5] & 0x01u);
 
 	return true;
+}
+
+/* Set all pindirs */
+bool mcp2210_set_gpio_pindirs(struct cgpu_info *cgpu, struct gpio_pin *gp)
+{
+	char buf[MCP2210_BUFFER_LENGTH];
+	int pin;
+
+	memset(buf, 0, MCP2210_BUFFER_LENGTH);
+	buf[0] = MCP2210_SET_GPIO_PIN_DIR;
+
+	for (pin = 0; pin < 8; pin++) {
+		if (gp->pin[pin])
+			buf[4] |= (0x01u << pin);
+		else
+			buf[4] &= ~(0x01u << pin);
+	}
+	if (gp->pin[pin])
+		buf[5] |= 0x01u;
+	else
+		buf[5] &= ~0x01u;
+	return mcp2210_send_recv(cgpu, buf, C_MCP_SETGPIOPINDIR);
 }
 
 /* Set one pindir */
