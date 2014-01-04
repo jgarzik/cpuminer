@@ -279,7 +279,8 @@ out_close:
 
 static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info __maybe_unused *info)
 {
-	unsigned int bitrate, icsv, acsv, cstdd, ldbtcsd, sdbd, bpst, spimode;
+	unsigned int bitrate, icsv, acsv, cstdd, ldbtcsd, sdbd, bpst, spimode, length;
+	char buf[MCP2210_BUFFER_LENGTH];
 	bool ret = false;
 	int i;
 
@@ -337,6 +338,14 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info __mayb
 	if (!mcp2210_set_spi_transfer_settings(bitfury, bitrate, icsv, acsv, cstdd,
 	    ldbtcsd, sdbd, bpst, spimode))
 		goto out;
+
+	buf[0] = 0;
+	length = 1;
+	if (!mcp2210_spi_transfer(bitfury, buf, &length))
+		goto out;
+	if (length > 0) {
+		applog(LOG_WARNING, "Got %d bytes back of %s", length, buf);
+	}
 out:
 	return ret;
 }
