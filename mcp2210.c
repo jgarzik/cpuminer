@@ -108,7 +108,7 @@ bool mcp2210_get_gpio_pin(struct cgpu_info *cgpu, int pin, int *des)
 	return true;
 }
 
-/* Set the designation of one pin */
+/* Set the designation of one pin. This will reset direction and values. */
 bool mcp2210_set_gpio_pindes(struct cgpu_info *cgpu, int pin, int des)
 {
 	char buf[MCP2210_BUFFER_LENGTH];
@@ -175,8 +175,6 @@ bool mcp2210_set_gpio_pinval(struct cgpu_info *cgpu, int pin, int val)
 /* Set one pin to gpio output and set the value */
 bool mcp2210_set_gpio_output(struct cgpu_info *cgpu, int pin, int val)
 {
-	if (!mcp2210_set_gpio_pindes(cgpu, pin, MCP2210_PIN_GPIO))
-		return false;
 	if (!mcp2210_set_gpio_pindir(cgpu, pin, MCP2210_GPIO_OUTPUT))
 		return false;
 	if (!mcp2210_set_gpio_pinval(cgpu, pin, val))
@@ -187,8 +185,6 @@ bool mcp2210_set_gpio_output(struct cgpu_info *cgpu, int pin, int val)
 /* Set one pin to gpio input */
 bool mcp2210_set_gpio_input(struct cgpu_info *cgpu, int pin)
 {
-	if (!mcp2210_set_gpio_pindes(cgpu, pin, MCP2210_PIN_GPIO))
-		return false;
 	if (!mcp2210_set_gpio_pindir(cgpu, pin, MCP2210_GPIO_INPUT))
 		return false;
 	return true;
