@@ -179,8 +179,14 @@ static bool hfa_get_header(struct cgpu_info *hashfast, struct hf_header *h, uint
 			return false;
 		ofs += amount;
 		header = memchr(buf, HF_PREAMBLE, ofs);
-		if (header)
-			len -= ofs - (header - buf);
+		if (header) {
+			/* Toss any leading data we can't use */
+			if (header != buf) {
+				memmove(buf, header, ofs);
+				ofs -= header - buf;
+			}
+			len -= ofs;
+		}
 	} while (len > 0);
 
 	memcpy(h, header, orig_len);
