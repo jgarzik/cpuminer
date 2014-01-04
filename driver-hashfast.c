@@ -154,6 +154,9 @@ static bool hfa_get_header(struct cgpu_info *hashfast, struct hf_header *h, uint
 	char buf[512];
 	char *header;
 
+	if (unlikely(hashfast->usbinfo.nodev))
+		return false;
+
 	orig_len = len = sizeof(*h);
 
 	/* Read for up to 200ms till we find the first occurrence of HF_PREAMBLE
@@ -168,7 +171,10 @@ static bool hfa_get_header(struct cgpu_info *hashfast, struct hf_header *h, uint
 		if (cgtimer_to_ms(&ts_diff) > 200)
 			return false;
 
+		if (unlikely(hashfast->usbinfo.nodev))
+			return false;
 		ret = usb_read(hashfast, buf + ofs, len, &amount, C_HF_GETHEADER);
+
 		if (unlikely(ret && ret != LIBUSB_ERROR_TIMEOUT))
 			return false;
 		ofs += amount;
@@ -486,6 +492,9 @@ static bool hfa_get_packet(struct cgpu_info *hashfast, struct hf_header *h)
 {
 	uint8_t hcrc;
 	bool ret;
+
+	if (unlikely(hashfast->usbinfo.nodev))
+		return false;
 
 	ret = hfa_get_header(hashfast, h, &hcrc);
 	if (unlikely(!ret))
