@@ -344,7 +344,7 @@ bool mcp2210_spi_transfer(struct cgpu_info *cgpu, char *data, unsigned int *leng
 {
 	unsigned int bitrate, icsv, acsv, cstdd, ldbtcsd, sdbd, bpst, spimode;
 	char buf[MCP2210_BUFFER_LENGTH];
-	uint8_t res;
+	uint8_t res, status;
 
 	if (unlikely(*length > MCP2210_TRANSFER_MAX || !*length)) {
 		applog(LOG_ERR, "%s %d: Unable to spi transfer %u bytes", cgpu->drv->name,
@@ -365,7 +365,8 @@ retry:
 	buf[0] = MCP2210_SPI_TRANSFER;
 	buf[1] = *length;
 
-	memcpy(buf + 4, data, *length);
+	if (*length)
+		memcpy(buf + 4, data, *length);
 	if (!mcp2210_send_recv(cgpu, buf, C_MCP_SPITRANSFER))
 		return false;
 
@@ -373,15 +374,19 @@ retry:
 	switch(res) {
 		case MCP2210_SPI_TRANSFER_SUCCESS:
 			*length = buf[2];
+			status = buf[3];
 			applog(LOG_DEBUG, "%s %d: SPI transfer success, received %u bytes status 0x%x",
-			       cgpu->drv->name, cgpu->device_id, *length, buf[3]);
+			       cgpu->drv->name, cgpu->device_id, *length, status);
+			if (status == 0x20) {
+				*length = 0;
+				goto retry;
+			}
 			if (*length)
 				memcpy(data, buf + 4, *length);
 			return true;
 		case MCP2210_SPI_TRANSFER_ERROR_IP:
 			applog(LOG_DEBUG, "%s %d: SPI transfer error in progress",
 			       cgpu->drv->name, cgpu->device_id);
-			cgsleep_ms(40);
 			goto retry;
 		case MCP2210_SPI_TRANSFER_ERROR_NA:
 			applog(LOG_WARNING, "%s %d: External owner error on mcp2210 spi transfer",
