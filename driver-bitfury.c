@@ -362,13 +362,59 @@ static void nf1_set_freq(struct bitfury_info *info)
 	nf1_config_reg(info, 4, 1);
 }
 
+#define FIRST_BASE 61
+#define SECOND_BASE 4
+
+static void nf1_send_conf(struct bitfury_info *info)
+{
+	const int8_t nf1_counters[16] = { 64, 64, SECOND_BASE, SECOND_BASE+4, SECOND_BASE+2,
+		SECOND_BASE+2+16, SECOND_BASE, SECOND_BASE+1, (FIRST_BASE)%65, (FIRST_BASE+1)%65,
+		(FIRST_BASE+3)%65, (FIRST_BASE+3+16)%65, (FIRST_BASE+4)%65, (FIRST_BASE+4+4)%65,
+		(FIRST_BASE+3+3)%65, (FIRST_BASE+3+1+3)%65 };
+	int i;
+
+	for (i = 7; i <= 11; i++)
+		nf1_config_reg(info, i, 0);
+	nf1_config_reg(info, 6, 0); /* disable OUTSLK */
+	nf1_config_reg(info, 4, 1); /* Enable slow oscillator */
+	for (i = 1; i <= 3; ++i)
+		nf1_config_reg(info, i, 0);
+	/* Program counters correctly for rounds processing, here it should
+	 * start consuming power */
+	spi_add_data(info, 0x0100, nf1_counters, 16);
+}
+
+static void nf1_send_init(struct bitfury_info *info)
+{
+	/* Prepare internal buffers */
+	/* PREPARE BUFFERS (INITIAL PROGRAMMING) */
+	unsigned int w[16];
+	unsigned int atrvec[] = {
+		0xb0e72d8e, 0x1dc5b862, 0xe9e7c4a6, 0x3050f1f5, 0x8a1a6b7e, 0x7ec384e8, 0x42c1c3fc, 0x8ed158a1, /* MIDSTATE */
+		0,0,0,0,0,0,0,0,
+		0x8a0bb7b7, 0x33af304f, 0x0b290c1a, 0xf0c4e61f, /* WDATA: hashMerleRoot[7], nTime, nBits, nNonce */
+        };
+	ms3steps(atrvec);
+	memset(&w, 0, sizeof(w));
+	w[3] = 0xffffffff;
+	w[4] = 0x80000000;
+	w[15] = 0x00000280;
+	spi_add_data(info, 0x1000, w, 16 * 4);
+	spi_add_data(info, 0x1400, w, 8 * 4);
+	memset(w, 0, sizeof(w));
+	w[0] = 0x80000000;
+	w[7] = 0x100;
+	spi_add_data(info, 0x1900, w, 8 * 4); /* Prepare MS and W buffers! */
+	spi_add_data(info, 0x3000, atrvec, 19 * 4);
+}
+
 static void nf1_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	spi_clear_buf(info);
 	spi_add_break(info);
 	nf1_set_freq(info);
-	//nf1_send_conf(info);
-	//nf1_send_init(info);
+	nf1_send_conf(info);
+	nf1_send_init(info);
 	//nf1_txrx(bitfury, info);
 }
 
