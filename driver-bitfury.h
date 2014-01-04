@@ -32,6 +32,9 @@ extern int opt_bxf_temp_target;
 #define NF1_SPIBUF_SIZE 16384
 
 struct mcp_settings {
+	struct gpio_pin designation;
+	struct gpio_pin value;
+	struct gpio_pin direction;
 	unsigned int bitrate, icsv, acsv, cstdd, ldbtcsd, sdbd, bpst, spimode;
 };
 

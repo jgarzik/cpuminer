@@ -47,6 +47,7 @@ bool mcp2210_get_gpio_pindes(struct cgpu_info *cgpu, struct gpio_pin *gp);
 bool mcp2210_get_gpio_pinvals(struct cgpu_info *cgpu, struct gpio_pin *gp);
 bool mcp2210_get_gpio_pindirs(struct cgpu_info *cgpu, struct gpio_pin *gp);
 bool mcp2210_get_gpio_pin(struct cgpu_info *cgpu, int pin, int *des);
+bool mcp2210_set_gpio_pin_designations(struct cgpu_info *cgpu, struct gpio_pin *gp);
 bool mcp2210_set_gpio_pindes(struct cgpu_info *cgpu, int pin, int des);
 bool mcp2210_get_gpio_pinval(struct cgpu_info *cgpu, int pin, int *val);
 bool mcp2210_set_gpio_pinval(struct cgpu_info *cgpu, int pin, int val);

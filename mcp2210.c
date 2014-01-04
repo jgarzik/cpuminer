@@ -128,6 +128,25 @@ bool mcp2210_get_gpio_pin(struct cgpu_info *cgpu, int pin, int *des)
 	return true;
 }
 
+/* Set the designation of all pins. This will reset direction and values. */
+bool mcp2210_set_gpio_pin_designations(struct cgpu_info *cgpu, struct gpio_pin *gp)
+{
+	char buf[MCP2210_BUFFER_LENGTH];
+	int i;
+
+	/* Copy the current values */
+	memset(buf, 0, MCP2210_BUFFER_LENGTH);
+	buf[0] = MCP2210_GET_GPIO_SETTING;
+	if (!mcp2210_send_recv(cgpu, buf, C_MCP_GETGPIOSETTING))
+		return false;
+
+	for (i = 0; i < 9; i++)
+		buf[4 + i] = gp->pin[i];
+	memset(buf + 18, 0, 45);
+	buf[0] = MCP2210_SET_GPIO_SETTING;
+	return (mcp2210_send_recv(cgpu, buf, C_MCP_SETGPIOSETTING));
+}
+
 /* Set the designation of one pin. This will reset direction and values. */
 bool mcp2210_set_gpio_pindes(struct cgpu_info *cgpu, int pin, int des)
 {
