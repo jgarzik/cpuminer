@@ -287,7 +287,92 @@ static void nf1_close(struct cgpu_info *bitfury)
 		mcp2210_set_gpio_pindir(bitfury, i, MCP2210_GPIO_INPUT);
 }
 
-static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info __maybe_unused *info)
+static void spi_clear_buf(struct bitfury_info *info)
+{
+	info->spibufsz = 0;
+}
+
+static void spi_add_buf(struct bitfury_info *info, const void *buf, const int sz)
+{
+	if (unlikely(info->spibufsz + sz > MCP2210_BUFFER_LENGTH)) {
+		applog(LOG_WARNING, "SPI bufsize overflow!");
+		return;
+	}
+	memcpy(&info->spibuf[info->spibufsz], buf, sz);
+	info->spibufsz += sz;
+}
+
+static void spi_add_break(struct bitfury_info *info)
+{
+	spi_add_buf(info, "\x4", 1);
+}
+
+static void spi_add_buf_reverse(struct bitfury_info *info, const char *buf, const int sz)
+{
+	int i;
+
+	for (i = 0; i < sz; i++) { // Reverse bit order in each byte!
+		unsigned char p = buf[i];
+
+		p = ((p & 0xaa) >> 1) | ((p & 0x55) << 1);
+		p = ((p & 0xcc) >> 2) | ((p & 0x33) << 2);
+		p = ((p & 0xf0) >> 4) | ((p & 0x0f) << 4);
+		info->spibuf[info->spibufsz + i] = p;
+	}
+	info->spibufsz += sz;
+}
+
+static void spi_add_data(struct bitfury_info *info, uint16_t addr, const void *buf, int len)
+{
+	unsigned char otmp[3];
+
+	if (len < 4 || len > 128) {
+		applog(LOG_WARNING, "Can't add SPI data size %d", len);
+		return;
+	}
+	len /= 4; /* Strip */
+	otmp[0] = (len - 1) | 0xE0;
+	otmp[1] = addr >> 8;
+	otmp[2] = addr & 0xFF;
+	spi_add_buf(info, otmp, 3);
+	len *= 4;
+	spi_add_buf_reverse(info, buf, len);
+}
+
+/* Configuration registers - control oscillators and such stuff. PROGRAMMED when
+ * magic number matches, UNPROGRAMMED (default) otherwise */
+static void nf1_config_reg(struct bitfury_info *info, int cfgreg, int ena)
+{
+	static const uint8_t enaconf[4] = { 0xc1, 0x6a, 0x59, 0xe3 };
+	static const uint8_t disconf[4] = { 0, 0, 0, 0 };
+
+	if (ena)
+		spi_add_data(info, 0x7000 + cfgreg * 32, enaconf, 4);
+	else
+		spi_add_data(info, 0x7000 + cfgreg * 32, disconf, 4);
+}
+
+static void nf1_set_freq(struct bitfury_info *info)
+{
+	uint64_t freq;
+	const uint8_t *osc6 = (unsigned char *)&freq;
+
+	freq = (1ULL << info->osc6_bits) - 1ULL;
+	spi_add_data(info, 0x6000, osc6, 8); /* Program internal on-die slow oscillator frequency */
+	nf1_config_reg(info, 4, 1);
+}
+
+static void nf1_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	spi_clear_buf(info);
+	spi_add_break(info);
+	nf1_set_freq(info);
+	//nf1_send_conf(info);
+	//nf1_send_init(info);
+	//nf1_txrx(bitfury, info);
+}
+
+static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	unsigned int bitrate, icsv, acsv, cstdd, ldbtcsd, sdbd, bpst, spimode, length;
 	char buf[MCP2210_BUFFER_LENGTH];
@@ -371,6 +456,9 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info __mayb
 	length = 1;
 	if (!mcp2210_spi_transfer(bitfury, buf, &length))
 		goto out;
+
+	info->osc6_bits = 50;
+	nf1_reinit(bitfury, info);
 	ret = true;
 out:
 	if (!ret)

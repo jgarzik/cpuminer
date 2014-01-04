@@ -12,6 +12,7 @@
 
 #include "miner.h"
 #include "usbutils.h"
+#include "mcp2210.h"
 
 #define BXF_CLOCK_DEFAULT 54
 #define BXF_CLOCK_OFF 0
@@ -62,6 +63,11 @@ struct bitfury_info {
 	int filtered_hw[2]; // Hardware errors we're told about but are filtered
 	int job[2]; // Completed jobs we're told about
 	int submits[2]; // Submitted responses
+
+	/* NF1 specific data */
+	char spibuf[MCP2210_BUFFER_LENGTH];
+	int spibufsz;
+	int osc6_bits;
 };
 
 #endif /* BITFURY_H */
