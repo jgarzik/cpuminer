@@ -181,7 +181,7 @@ static bool hfa_get_header(struct cgpu_info *hashfast, struct hf_header *h, uint
 		header = memchr(buf, HF_PREAMBLE, ofs);
 		if (header)
 			len -= ofs - (header - buf);
-	} while (len);
+	} while (len > 0);
 
 	memcpy(h, header, orig_len);
 	*computed_crc = hfa_crc8((uint8_t *)h);
