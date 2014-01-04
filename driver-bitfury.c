@@ -280,11 +280,13 @@ out_close:
 
 static void nf1_close(struct cgpu_info *bitfury)
 {
+	struct gpio_pin gp;
 	int i;
 
 	/* Set all pins to input mode, ignoring return code */
 	for (i = 0; i < 9; i++)
-		mcp2210_set_gpio_input(bitfury, i);
+		gp.pin[i] = MCP2210_GPIO_INPUT;
+	mcp2210_set_gpio_pindirs(bitfury, &gp);
 }
 
 static void spi_clear_buf(struct bitfury_info *info)
@@ -486,20 +488,20 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	char buf[MCP2210_BUFFER_LENGTH];
 	unsigned int length;
+	struct gpio_pin gp;
 	bool ret = false;
 	int i, val;
 
 	/* Set all pins to GPIO mode */
 	for (i = 0; i < 9; i++)
-		info->mcp.designation.pin[i] = MCP2210_PIN_GPIO;
-	if (!mcp2210_set_gpio_pin_designations(bitfury, &info->mcp.designation))
+		gp.pin[i] = MCP2210_PIN_GPIO;
+	if (!mcp2210_set_gpio_pin_designations(bitfury, &gp))
 		goto out;
 
 	/* Set all pins to input mode */
-	for (i = 0; i < 9; i++) {
-		if (!mcp2210_set_gpio_input(bitfury, i))
-			goto out;
-	}
+	for (i = 0; i < 9; i++)
+		gp.pin[i] = MCP2210_GPIO_INPUT;
+	if (!mcp2210_set_gpio_pindirs(bitfury, &gp))
 
 	/* Set LED and PWR pins to output and high */
 	if (!mcp2210_set_gpio_output(bitfury, NF1_PIN_LED, MCP2210_GPIO_PIN_HIGH))
