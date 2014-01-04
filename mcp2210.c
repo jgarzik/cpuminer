@@ -342,6 +342,7 @@ mcp2210_set_spi_transfer_settings(struct cgpu_info *cgpu, unsigned int bitrate, 
  * returned in the same buffer in *length */
 bool mcp2210_spi_transfer(struct cgpu_info *cgpu, char *data, unsigned int *length)
 {
+	unsigned int bitrate, icsv, acsv, cstdd, ldbtcsd, sdbd, bpst, spimode;
 	char buf[MCP2210_BUFFER_LENGTH];
 	uint8_t res;
 
@@ -350,6 +351,13 @@ bool mcp2210_spi_transfer(struct cgpu_info *cgpu, char *data, unsigned int *leng
 		       cgpu->device_id, *length);
 		return false;
 	}
+	if (!mcp2210_get_spi_transfer_settings(cgpu, &bitrate, &icsv, &acsv, &cstdd,
+	    &ldbtcsd, &sdbd, &bpst, &spimode))
+		return false;
+	bpst = *length;
+	if (!mcp2210_set_spi_transfer_settings(cgpu, bitrate, icsv, acsv, cstdd,
+	    ldbtcsd, sdbd, bpst, spimode))
+		return false;
 retry:
 	applog(LOG_DEBUG, "%s %d: SPI sending %u bytes", cgpu->drv->name, cgpu->device_id,
 	       *length);
