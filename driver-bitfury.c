@@ -277,6 +277,15 @@ out_close:
 	return false;
 }
 
+static void nf1_close(struct cgpu_info *bitfury)
+{
+	int i;
+
+	/* Set all pins to input mode, ignoring return code */
+	for (i = 0; i < 9; i++)
+		mcp2210_set_gpio_pindir(bitfury, i, MCP2210_GPIO_INPUT);
+}
+
 static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info __maybe_unused *info)
 {
 	unsigned int bitrate, icsv, acsv, cstdd, ldbtcsd, sdbd, bpst, spimode, length;
@@ -353,7 +362,19 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info __mayb
 	if (!mcp2210_spi_transfer(bitfury, buf, &length))
 		goto out;
 
+	spimode = 0;
+	if (!mcp2210_set_spi_transfer_settings(bitfury, bitrate, icsv, acsv, cstdd,
+	    ldbtcsd, sdbd, bpst, spimode))
+		goto out;
+	buf[0] = 0;
+	length = 1;
+	if (!mcp2210_spi_transfer(bitfury, buf, &length))
+		goto out;
+	ret = true;
 out:
+	if (!ret)
+		nf1_close(bitfury);
+
 	return ret;
 }
 
