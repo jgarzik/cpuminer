@@ -490,10 +490,11 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	int i, val;
 
 	/* Set all pins to GPIO mode */
-	for (i = 0; i < 9; i++) {
-		if (!mcp2210_set_gpio_pindes(bitfury, i, MCP2210_PIN_GPIO))
-			goto out;
-	}
+	for (i = 0; i < 9; i++)
+		info->mcp.designation.pin[i] = MCP2210_PIN_GPIO;
+	if (!mcp2210_set_gpio_pin_designations(bitfury, &info->mcp.designation))
+		goto out;
+
 	/* Set all pins to input mode */
 	for (i = 0; i < 9; i++) {
 		if (!mcp2210_set_gpio_input(bitfury, i))
