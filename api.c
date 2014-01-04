@@ -614,7 +614,6 @@ struct io_data {
 	char *ptr;
 	char *cur;
 	bool sock;
-	bool full;
 	bool close;
 };
 
@@ -626,14 +625,15 @@ struct io_list {
 
 static struct io_list *io_head = NULL;
 
+#define SOCKBUFALLOCSIZ 65536
+
 #define io_new(init) _io_new(init, false)
-#define sock_io_new() _io_new(SOCKBUFSIZ, true)
+#define sock_io_new() _io_new(SOCKBUFALLOCSIZ, true)
 
 static void io_reinit(struct io_data *io_data)
 {
 	io_data->cur = io_data->ptr;
 	*(io_data->ptr) = '\0';
-	io_data->full = false;
 	io_data->close = false;
 }
 
@@ -670,29 +670,16 @@ static bool io_add(struct io_data *io_data, char *buf)
 {
 	size_t len, dif, tot;
 
-	if (io_data->full)
-		return false;
-
 	len = strlen(buf);
 	dif = io_data->cur - io_data->ptr;
-	tot = len + 1 + dif;
+	// send will always have enough space to add the JSON
+	tot = len + 1 + dif + sizeof(JSON_CLOSE) + sizeof(JSON_END);
 
 	if (tot > io_data->siz) {
-		size_t new = io_data->siz * 2;
+		size_t new = io_data->siz + (2 * SOCKBUFALLOCSIZ);
 
 		if (new < tot)
-			new = tot * 2;
-
-		if (io_data->sock) {
-			if (new > SOCKBUFSIZ) {
-				if (tot > SOCKBUFSIZ) {
-					io_data->full = true;
-					return false;
-				}
-
-				new = SOCKBUFSIZ;
-			}
-		}
+			new = (2 + (size_t)((float)tot / (float)SOCKBUFALLOCSIZ)) * SOCKBUFALLOCSIZ;
 
 		io_data->ptr = realloc(io_data->ptr, new);
 		io_data->cur = io_data->ptr + dif;
@@ -838,8 +825,7 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 		root = api_data;
 		root->prev = root;
 		root->next = root;
-	}
-	else {
+	} else {
 		api_data->prev = root->prev;
 		root->prev = api_data;
 		api_data->next = root;
@@ -3828,28 +3814,24 @@ static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, c
 
 static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 {
-	char buf[SOCKBUFSIZ + sizeof(JSON_CLOSE) + sizeof(JSON_END)];
-	int count, res, tosend, len, n;
+	int count, sendc, res, tosend, len, n;
+	char *buf = io_data->ptr;
 
 	strcpy(buf, io_data->ptr);
 
 	if (io_data->close)
 		strcat(buf, JSON_CLOSE);
 
-	if (isjson) {
-		if (io_data->full)
-			strcat(buf, JSON_END_TRUNCATED);
-		else
-			strcat(buf, JSON_END);
-	}
+	if (isjson)
+		strcat(buf, JSON_END);
 
 	len = strlen(buf);
 	tosend = len+1;
 
 	applog(LOG_DEBUG, "API: send reply: (%d) '%.10s%s'", tosend, buf, len > 10 ? "..." : BLANK);
 
-	count = 0;
-	while (count++ < 5 && tosend > 0) {
+	count = sendc = 0;
+	while (count < 5 && tosend > 0) {
 		// allow 50ms per attempt
 		struct timeval timeout = {0, 50000};
 		fd_set wd;
@@ -3862,28 +3844,34 @@ static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 		}
 
 		n = send(c, buf, tosend, 0);
+		sendc++;
 
 		if (SOCKETFAIL(n)) {
+			count++;
 			if (sock_blocks())
 				continue;
 
-			applog(LOG_WARNING, "API: send (%d) failed: %s", tosend, SOCKERRMSG);
+			applog(LOG_WARNING, "API: send (%d:%d) failed: %s", len+1, (len+1 - tosend), SOCKERRMSG);
 
 			return;
 		} else {
-			if (count <= 1) {
+			if (sendc <= 1) {
 				if (n == tosend)
 					applog(LOG_DEBUG, "API: sent all of %d first go", tosend);
 				else
 					applog(LOG_DEBUG, "API: sent %d of %d first go", n, tosend);
 			} else {
 				if (n == tosend)
-					applog(LOG_DEBUG, "API: sent all of remaining %d (count=%d)", tosend, count);
+					applog(LOG_DEBUG, "API: sent all of remaining %d (sendc=%d)", tosend, sendc);
 				else
-					applog(LOG_DEBUG, "API: sent %d of remaining %d (count=%d)", n, tosend, count);
+					applog(LOG_DEBUG, "API: sent %d of remaining %d (sendc=%d)", n, tosend, sendc);
 			}
 
 			tosend -= n;
+			buf += n;
+
+			if (n == 0)
+				count++;
 		}
 	}
 }
