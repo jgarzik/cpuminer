@@ -474,10 +474,18 @@ static void nf1_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
 	nf1_spi_txrx(bitfury, info);
 }
 
+static bool nf1_set_spi_settings(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	struct mcp_settings *mcp = &info->mcp;
+
+	return mcp2210_set_spi_transfer_settings(bitfury, mcp->bitrate, mcp->icsv,
+		mcp->acsv, mcp->cstdd, mcp->ldbtcsd, mcp->sdbd, mcp->bpst, mcp->spimode);
+}
+
 static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
-	unsigned int bitrate, icsv, acsv, cstdd, ldbtcsd, sdbd, bpst, spimode, length;
 	char buf[MCP2210_BUFFER_LENGTH];
+	unsigned int length;
 	bool ret = false;
 	int i, val;
 
@@ -521,15 +529,16 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	/* Cancel any transfers in progress */
 	if (!mcp2210_spi_cancel(bitfury))
 		goto out;
-	if (!mcp2210_get_spi_transfer_settings(bitfury, &bitrate, &icsv, &acsv, &cstdd,
-	    &ldbtcsd, &sdbd, &bpst, &spimode))
+	if (!mcp2210_get_spi_transfer_settings(bitfury, &info->mcp.bitrate, &info->mcp.icsv,
+	    &info->mcp.acsv, &info->mcp.cstdd, &info->mcp.ldbtcsd, &info->mcp.sdbd,
+	    &info->mcp.bpst, &info->mcp.spimode))
 		goto out;
-	bitrate = 200000;
-	icsv = 0xffff;
-	acsv = 0xffef;
-	cstdd = ldbtcsd = sdbd = spimode = 0;
-	if (!mcp2210_set_spi_transfer_settings(bitfury, bitrate, icsv, acsv, cstdd,
-	    ldbtcsd, sdbd, bpst, spimode))
+	info->mcp.bitrate = 12000000;
+	info->mcp.icsv = 0xffff;
+	info->mcp.acsv = 0xffef;
+	info->mcp.cstdd = info->mcp.ldbtcsd = info->mcp.sdbd = info->mcp.spimode = 0;
+	info->mcp.sdbd = 1;
+	if (!nf1_set_spi_settings(bitfury, info))
 		goto out;
 
 	buf[0] = 0;
@@ -544,9 +553,8 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 		goto out;
 
 	/* switch SCK to polarity (default SCK=1 in mode 2) */
-	spimode = 2;
-	if (!mcp2210_set_spi_transfer_settings(bitfury, bitrate, icsv, acsv, cstdd,
-	    ldbtcsd, sdbd, bpst, spimode))
+	info->mcp.spimode = 2;
+	if (!nf1_set_spi_settings(bitfury, info))
 		goto out;
 	buf[0] = 0;
 	length = 1;
@@ -560,9 +568,8 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 		goto out;
 
 	/* switch SCK to polarity (default SCK=0 in mode 0) */
-	spimode = 0;
-	if (!mcp2210_set_spi_transfer_settings(bitfury, bitrate, icsv, acsv, cstdd,
-	    ldbtcsd, sdbd, bpst, spimode))
+	info->mcp.spimode = 0;
+	if (!nf1_set_spi_settings(bitfury, info))
 		goto out;
 	buf[0] = 0;
 	length = 1;

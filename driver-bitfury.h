@@ -31,6 +31,10 @@ extern int opt_bxf_temp_target;
 
 #define NF1_SPIBUF_SIZE 16384
 
+struct mcp_settings {
+	unsigned int bitrate, icsv, acsv, cstdd, ldbtcsd, sdbd, bpst, spimode;
+};
+
 struct bitfury_info {
 	struct cgpu_info *base_cgpu;
 	struct thr_info *thr;
@@ -67,6 +71,7 @@ struct bitfury_info {
 	int submits[2]; // Submitted responses
 
 	/* NF1 specific data */
+	struct mcp_settings mcp;
 	char spibuf[NF1_SPIBUF_SIZE];
 	unsigned int spibufsz;
 	int osc6_bits;
