@@ -13,6 +13,7 @@
 #include "driver-bitfury.h"
 #include "sha2.h"
 #include "mcp2210.h"
+#include "libbitfury.h"
 
 int opt_bxf_temp_target = BXF_TEMP_TARGET / 10;
 
@@ -689,28 +690,6 @@ static bool bitfury_prepare(struct thr_info *thr)
 		default:
 			return true;
 	}
-}
-
-static uint32_t decnonce(uint32_t in)
-{
-	uint32_t out;
-
-	/* First part load */
-	out = (in & 0xFF) << 24; in >>= 8;
-
-	/* Byte reversal */
-	in = (((in & 0xaaaaaaaa) >> 1) | ((in & 0x55555555) << 1));
-	in = (((in & 0xcccccccc) >> 2) | ((in & 0x33333333) << 2));
-	in = (((in & 0xf0f0f0f0) >> 4) | ((in & 0x0f0f0f0f) << 4));
-
-	out |= (in >> 2)&0x3FFFFF;
-
-	/* Extraction */
-	if (in & 1) out |= (1 << 23);
-	if (in & 2) out |= (1 << 22);
-
-	out -= 0x800004;
-	return out;
 }
 
 #define BT_OFFSETS 3

@@ -288,8 +288,15 @@ else
 	want_usbutils=false
 fi
 
+if test x$bab$bitfury != xnono; then
+	want_libbitfury = true
+else
+	want_libbitfury = false
+fi
+
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$modminer != xno])
 AM_CONDITIONAL([WANT_USBUTILS], [test x$want_usbutils != xfalse])
+AM_CONDITIONAL([WANT_LIBBITFURY], [test x$want_libbitfury != xfalse])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])

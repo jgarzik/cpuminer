@@ -51,6 +51,10 @@ if WANT_USBUTILS
 cgminer_SOURCES += usbutils.c usbutils.h
 endif
 
+if WANT_LIBBITFURY
+cgminer_SOURCES += libbitfury.c libbitfury.h
+endif
+
 # Device drivers
 if HAS_AVALON
 cgminer_SOURCES += driver-avalon.c driver-avalon.h
