@@ -10,9 +10,8 @@
 #include "usbutils.h"
 #include "mcp2210.h"
 
-bool mcp2210_send_recv(struct cgpu_info *cgpu, char *buf, enum usb_cmds cmd)
+static bool mcp2210_send(struct cgpu_info *cgpu, char *buf, enum usb_cmds cmd)
 {
-	uint8_t mcp_cmd = buf[0];
 	int amount, err;
 
 	if (unlikely(cgpu->usbinfo.nodev))
@@ -25,14 +24,35 @@ bool mcp2210_send_recv(struct cgpu_info *cgpu, char *buf, enum usb_cmds cmd)
 		       amount, MCP2210_BUFFER_LENGTH);
 		return false;
 	}
+	return true;
+}
 
-	err = usb_read_timeout(cgpu, buf, MCP2210_BUFFER_LENGTH, &amount, 10, cmd);
+static bool mcp2210_recv(struct cgpu_info *cgpu, char *buf, enum usb_cmds cmd)
+{
+	int amount, err;
+
+	if (unlikely(cgpu->usbinfo.nodev))
+		return false;
+
+	err = usb_read_once_timeout(cgpu, buf, MCP2210_BUFFER_LENGTH, &amount, 1, cmd);
 	if (err || amount != MCP2210_BUFFER_LENGTH) {
 		applog(LOG_WARNING, "%s %d: Error %d receiving %s received %d of %d",
 		       cgpu->drv->name, cgpu->device_id, err, usb_cmdname(cmd),
 		       amount, MCP2210_BUFFER_LENGTH);
 		return false;
 	}
+	return true;
+}
+
+bool mcp2210_send_recv(struct cgpu_info *cgpu, char *buf, enum usb_cmds cmd)
+{
+	uint8_t mcp_cmd = buf[0];
+
+	if (!mcp2210_send(cgpu, buf, cmd))
+		return false;
+
+	if (!mcp2210_recv(cgpu, buf, cmd))
+		return false;
 
 	/* Return code should always echo original command */
 	if (buf[0] != mcp_cmd) {
@@ -345,8 +365,8 @@ retry:
 	switch(res) {
 		case MCP2210_SPI_TRANSFER_SUCCESS:
 			*length = buf[2];
-			applog(LOG_DEBUG, "%s %d: SPI transfer success, received %u bytes",
-			       cgpu->drv->name, cgpu->device_id, *length);
+			applog(LOG_DEBUG, "%s %d: SPI transfer success, received %u bytes status 0x%x",
+			       cgpu->drv->name, cgpu->device_id, *length, buf[3]);
 			if (*length)
 				memcpy(data, buf + 4, *length);
 			return true;
