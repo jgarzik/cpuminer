@@ -11,6 +11,7 @@
 #define MCP2210_H
 
 #define MCP2210_BUFFER_LENGTH		64
+#define MCP2210_TRANSFER_MAX		60
 
 #define MCP2210_PIN_GPIO		0x0
 #define MCP2210_PIN_CS			0x1

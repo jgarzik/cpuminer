@@ -294,7 +294,7 @@ static void spi_clear_buf(struct bitfury_info *info)
 
 static void spi_add_buf(struct bitfury_info *info, const void *buf, const int sz)
 {
-	if (unlikely(info->spibufsz + sz > MCP2210_BUFFER_LENGTH)) {
+	if (unlikely(info->spibufsz + sz > NF1_SPIBUF_SIZE)) {
 		applog(LOG_WARNING, "SPI bufsize overflow!");
 		return;
 	}
@@ -421,7 +421,6 @@ static bool nf1_set_gpio_output(struct cgpu_info *bitfury, int pin, int val)
 static bool nf1_spi_reset(struct cgpu_info *bitfury)
 {
 	char buf[1] = {0x81}; // will send this waveform: - _ _ _ _ _ _ -
-	unsigned int length = 1;
 	int r;
 
 	// SCK_OVRRIDE
@@ -429,6 +428,7 @@ static bool nf1_spi_reset(struct cgpu_info *bitfury)
 		return false;
 
 	for (r = 0; r < 16; ++r) {
+		unsigned int length = 1;
 		if (!mcp2210_spi_transfer(bitfury, buf, &length))
 			return false;
 	}
@@ -439,6 +439,40 @@ static bool nf1_spi_reset(struct cgpu_info *bitfury)
 	return true;
 }
 
+static bool nf1_spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	unsigned int length, sendrcv;
+	int offset = 0, roffset = 0;
+
+	if (!nf1_spi_reset(bitfury))
+		return false;
+	length = info->spibufsz;
+	applog(LOG_DEBUG, "%s %d: SPI sending %u bytes", bitfury->drv->name, bitfury->device_id,
+	       length);
+	while (length > MCP2210_TRANSFER_MAX) {
+		sendrcv = MCP2210_TRANSFER_MAX;
+		if (!mcp2210_spi_transfer(bitfury, info->spibuf + offset, &sendrcv))
+			return false;
+		if (sendrcv != MCP2210_TRANSFER_MAX) {
+			applog(LOG_DEBUG, "%s %d: Send/Receive size mismatch sent %d received %d",
+			       bitfury->drv->name, bitfury->device_id, MCP2210_TRANSFER_MAX, sendrcv);
+		}
+		length -= MCP2210_TRANSFER_MAX;
+		offset += MCP2210_TRANSFER_MAX;
+		roffset += sendrcv;
+	}
+	sendrcv = length;
+	if (!mcp2210_spi_transfer(bitfury, info->spibuf + offset, &sendrcv))
+		return false;
+	if (sendrcv != length) {
+		applog(LOG_WARNING, "%s %d: Send/Receive size mismatch sent %d received %d",
+		       bitfury->drv->name, bitfury->device_id, length, sendrcv);
+	}
+	roffset += sendrcv;
+	info->spibufsz = roffset;
+	return true;
+}
+
 static void nf1_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	spi_clear_buf(info);
@@ -446,7 +480,7 @@ static void nf1_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
 	nf1_set_freq(info);
 	nf1_send_conf(info);
 	nf1_send_init(info);
-	//nf1_txrx(bitfury, info);
+	nf1_spi_txrx(bitfury, info);
 }
 
 static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)

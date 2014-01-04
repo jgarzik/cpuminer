@@ -29,6 +29,8 @@ extern int opt_bxf_temp_target;
 #define NF1_PIN_SCK_OVR 5
 #define NF1_PIN_PWR_EN 6
 
+#define NF1_SPIBUF_SIZE 16384
+
 struct bitfury_info {
 	struct cgpu_info *base_cgpu;
 	struct thr_info *thr;
@@ -65,8 +67,8 @@ struct bitfury_info {
 	int submits[2]; // Submitted responses
 
 	/* NF1 specific data */
-	char spibuf[MCP2210_BUFFER_LENGTH];
-	int spibufsz;
+	char spibuf[NF1_SPIBUF_SIZE];
+	unsigned int spibufsz;
 	int osc6_bits;
 };
 
