@@ -85,7 +85,7 @@ struct bitfury_info {
 	unsigned newbuf[20];
 	unsigned oldbuf[20];
 	int job_switched;
-	int results[16];
+	unsigned int results[16];
 	int results_n;
 	struct work *work;
 	struct work *owork;

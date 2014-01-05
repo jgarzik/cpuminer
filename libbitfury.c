@@ -209,6 +209,7 @@ bool spi_reset(struct cgpu_info *bitfury, struct bitfury_info *info)
 	// SCK_OVRRIDE
 	mcp->value.pin[NF1_PIN_SCK_OVR] = MCP2210_GPIO_PIN_HIGH;
 	mcp->direction.pin[NF1_PIN_SCK_OVR] = MCP2210_GPIO_OUTPUT;
+	mcp->designation.pin[NF1_PIN_SCK_OVR] = MCP2210_PIN_GPIO;
 	if (!mcp2210_set_gpio_settings(bitfury, mcp))
 		return false;
 
@@ -220,10 +221,9 @@ bool spi_reset(struct cgpu_info *bitfury, struct bitfury_info *info)
 			return false;
 	}
 
+	// Deactivate override
 	mcp->direction.pin[NF1_PIN_SCK_OVR] = MCP2210_GPIO_INPUT;
 	if (!mcp2210_set_gpio_settings(bitfury, mcp))
-		return false;
-	if (!mcp2210_get_gpio_pinval(bitfury, NF1_PIN_SCK_OVR, &r))
 		return false;
 
 	return true;
@@ -288,7 +288,7 @@ void libbitfury_sendHashData(struct cgpu_info *bf)
 	if (second_run && info->job_switched) {
 		int i;
 		int results_num = 0;
-		unsigned *results = info->results;
+		unsigned int *results = info->results;
 
 		for (i = 0; i < 16; i++) {
 			if (oldbuf[i] != newbuf[i]) {
