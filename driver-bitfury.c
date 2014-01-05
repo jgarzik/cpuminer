@@ -414,7 +414,6 @@ static void nf1_send_init(struct bitfury_info *info)
 // Bit-banging reset... Each 3 reset cycles reset first chip in chain
 static bool nf1_spi_reset(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
-	char buf[1] = {0x81}; // will send this waveform: - _ _ _ _ _ _ -
 	struct mcp_settings *mcp = &info->mcp;
 	int r;
 
@@ -425,7 +424,9 @@ static bool nf1_spi_reset(struct cgpu_info *bitfury, struct bitfury_info *info)
 		return false;
 
 	for (r = 0; r < 16; ++r) {
+		char buf[1] = {0x81}; // will send this waveform: - _ _ _ _ _ _ -
 		unsigned int length = 1;
+
 		if (!mcp2210_spi_transfer(bitfury, buf, &length))
 			return false;
 	}
