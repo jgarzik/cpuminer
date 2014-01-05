@@ -2585,19 +2585,25 @@ pipe_retry:
 	return err;
 }
 
-int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, int timeout, const char *end, enum usb_cmds cmd, bool readonce, bool cancellable)
+int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz,
+	      int *processed, int timeout, const char *end, enum usb_cmds cmd, bool readonce, bool cancellable, bool limit)
 {
 	unsigned char *ptr, usbbuf[USB_READ_BUFSIZE];
 	struct timeval read_start, tv_finish;
 	int bufleft, err, got, tot, pstate;
-	const size_t usbbufread = 512; /* Always read full size */
 	struct cg_usb_device *usbdev;
 	unsigned int initial_timeout;
 	bool first = true;
+	size_t usbbufread;
 	int endlen = 0;
 	char *eom = NULL;
 	double done;
 	bool ftdi;
+
+	if (limit)
+		usbbufread = bufsiz;
+	else
+		usbbufread = 512; /* Always read full size unless specified */
 
 	memset(usbbuf, 0, USB_READ_BUFSIZE);
 	memset(buf, 0, bufsiz);
