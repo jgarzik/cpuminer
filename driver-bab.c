@@ -51,9 +51,13 @@ static void bab_detect(__maybe_unused bool hotplug)
 #define BAB_GPIO_CLR BAB_ADDR(10)
 #define BAB_GPIO_LEVEL BAB_ADDR(13)
 
+// If the V1 test of this many chips finds no chips it will try V2
+#define BAB_V1_CHIP_TEST 32
+
 #define BAB_MAXCHIPS 256
 #define BAB_MAXBUF (BAB_MAXCHIPS * 512)
 #define BAB_MAXBANKS 4
+#define BAB_BANKCHIPS 64
 #define BAB_CORES 16
 #define BAB_X_COORD 21
 #define BAB_Y_COORD 36
@@ -123,7 +127,7 @@ static const uint32_t bab_test_data[BAB_TEST_DATA] = {
 };
 
 //maximum number of chips on alternative bank
-// #define BANKCHIPS 64
+#define BANKCHIPS 64
 
 /*
  * maximum chip speed available for auto tuner
@@ -620,7 +624,7 @@ static bool oldest_nonce(struct cgpu_info *babcgpu, int *chip, uint32_t *nonce, 
 
 static void _bab_reset(__maybe_unused struct cgpu_info *babcgpu, struct bab_info *babinfo, int bank, int times)
 {
-	const int banks[4] = { 18, 23, 24, 25 };
+	const int banks[BAB_MAXBANKS] = { 18, 23, 24, 25 };
 	int i;
 
 	BAB_INP_GPIO(10);
@@ -629,7 +633,7 @@ static void _bab_reset(__maybe_unused struct cgpu_info *babcgpu, struct bab_info
 	BAB_OUT_GPIO(11);
 
 	if (bank) {
-		for (i = 0; i < 4; i++) {
+		for (i = 0; i < BAB_MAXBANKS; i++) {
 			BAB_INP_GPIO(banks[i]);
 			BAB_OUT_GPIO(banks[i]);
 			if (bank == i+1)
@@ -639,7 +643,7 @@ static void _bab_reset(__maybe_unused struct cgpu_info *babcgpu, struct bab_info
 		}
 		cgsleep_us(4096);
 	} else {
-		for (i = 0; i < 4; i++)
+		for (i = 0; i < BAB_MAXBANKS; i++)
 			BAB_INP_GPIO(banks[i]);
 	}
 
@@ -999,9 +1003,8 @@ void bab_detect_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo, int b
 			    (int)sizeof(bab_test_data));
 	}
 
-	memset(babinfo->bank_off, 0, sizeof(babinfo->bank_off));
-
 	buf = babinfo->buffer = 0;
+	memset(babinfo->bank_off[buf], 0, sizeof(babinfo->bank_off) / BAB_SPI_BUFFERS);
 	babinfo->buf_used[buf] = 0;
 	BAB_ADD_BREAK();
 	for (i = first; i < last && i < BAB_MAXCHIPS; i++) {
@@ -1033,6 +1036,7 @@ void bab_detect_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo, int b
 	}
 
 	buf = babinfo->buffer = 1;
+	memset(babinfo->bank_off[buf], 0, sizeof(babinfo->bank_off) / BAB_SPI_BUFFERS);
 	babinfo->buf_used[buf] = 0;
 	BAB_ADD_BREAK();
 	for (i = first; i < last && i < BAB_MAXCHIPS; i++) {
@@ -1167,7 +1171,36 @@ bad_out:
 
 static void bab_init_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 {
-	bab_detect_chips(babcgpu, babinfo, 0, 0, BAB_MAXCHIPS);
+	int chip, chipoff, bank;
+
+	memset(babinfo->bank_off, 0, sizeof(babinfo->bank_off));
+
+	applog(LOG_WARNING, "%s V1 first test for %d chips ...",
+			    babcgpu->drv->dname, BAB_V1_CHIP_TEST);
+
+	bab_detect_chips(babcgpu, babinfo, 0, 0, BAB_V1_CHIP_TEST);
+	if (babinfo->chips != 0) {
+		if (babinfo->chips == BAB_V1_CHIP_TEST) {
+			applog(LOG_WARNING, "%s V1 test for %d more chips ...",
+					    babcgpu->drv->dname, BAB_MAXCHIPS - BAB_V1_CHIP_TEST);
+
+			bab_detect_chips(babcgpu, babinfo, 0, BAB_V1_CHIP_TEST, BAB_MAXCHIPS);
+		}
+	} else {
+		applog(LOG_WARNING, "%s V2 test %d banks %d chips ...",
+				    babcgpu->drv->dname, BAB_MAXBANKS, BAB_MAXCHIPS);
+
+		for (bank = 1; bank <= BAB_MAXBANKS; bank++) {
+			for (chipoff = 0; chipoff < BAB_BANKCHIPS; chipoff++) {
+				chip = babinfo->chips + chipoff;
+				babinfo->chip_spis[chip] = 625000;
+			}
+			bab_reset(bank, 64);
+			bab_detect_chips(babcgpu, babinfo, bank, babinfo->chips, babinfo->chips + BAB_BANKCHIPS);
+		}
+		bab_reset(0, 8);
+	}
+
 	memcpy(babinfo->old_conf, babinfo->chip_conf, sizeof(babinfo->old_conf));
 	memcpy(babinfo->old_fast, babinfo->chip_fast, sizeof(babinfo->old_fast));
 }
@@ -1203,8 +1236,6 @@ static void bab_detect(bool hotplug)
 
 	if (!bab_init_gpio(babcgpu, babinfo, BAB_SPI_BUS, BAB_SPI_CHIP))
 		goto unalloc;
-
-	applog(LOG_WARNING, "%s V1 testing for %d chips ...", babcgpu->drv->dname, BAB_MAXCHIPS);
 
 	bab_init_chips(babcgpu, babinfo);
 
