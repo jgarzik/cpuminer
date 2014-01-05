@@ -42,7 +42,15 @@ struct gpio_pin {
 	int pin[9];
 };
 
+struct mcp_settings {
+	struct gpio_pin designation;
+	struct gpio_pin value;
+	struct gpio_pin direction;
+	unsigned int bitrate, icsv, acsv, cstdd, ldbtcsd, sdbd, bpst, spimode;
+};
+
 bool mcp2210_send_recv(struct cgpu_info *cgpu, char *buf, enum usb_cmds cmd);
+bool mcp2210_get_gpio_settings(struct cgpu_info *cgpu, struct mcp_settings *mcp);
 bool mcp2210_get_gpio_pindes(struct cgpu_info *cgpu, struct gpio_pin *gp);
 bool mcp2210_get_gpio_pinvals(struct cgpu_info *cgpu, struct gpio_pin *gp);
 bool mcp2210_get_gpio_pindirs(struct cgpu_info *cgpu, struct gpio_pin *gp);

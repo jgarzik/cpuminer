@@ -63,6 +63,28 @@ bool mcp2210_send_recv(struct cgpu_info *cgpu, char *buf, enum usb_cmds cmd)
 	return true;
 }
 
+bool mcp2210_get_gpio_settings(struct cgpu_info *cgpu, struct mcp_settings *mcp)
+{
+	char buf[MCP2210_BUFFER_LENGTH];
+	int i;
+
+	memset(buf, 0, MCP2210_BUFFER_LENGTH);
+	buf[0] = MCP2210_GET_GPIO_SETTING;
+	if (!mcp2210_send_recv(cgpu, buf, C_MCP_GETGPIOSETTING))
+		return false;
+
+	for (i = 0; i < 8; i++) {
+		mcp->designation.pin[i] = !!(buf[4 + i]);
+		mcp->value.pin[i] = !!(buf[13] & (0x01u << i));
+		mcp->direction.pin[i] = !!(buf[15] & (0x01u << i));
+	}
+	mcp->designation.pin[8] = !!(buf[12]);
+	mcp->value.pin[8] = buf[14] & 0x01u;
+	mcp->direction.pin[8] = buf[16] & 0x01u;
+
+	return true;
+}
+
 /* Get all the pin designations and store them in a gpio_pin struct */
 bool mcp2210_get_gpio_pindes(struct cgpu_info *cgpu, struct gpio_pin *gp)
 {
