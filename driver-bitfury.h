@@ -31,6 +31,15 @@ extern int opt_bxf_temp_target;
 
 #define NF1_SPIBUF_SIZE 16384
 
+struct bitfury_payload {
+	unsigned char midstate[32];
+	unsigned int junk[8];
+	unsigned m7;
+	unsigned ntime;
+	unsigned nbits;
+	unsigned nnonce;
+};
+
 struct bitfury_info {
 	struct cgpu_info *base_cgpu;
 	struct thr_info *thr;
@@ -71,6 +80,13 @@ struct bitfury_info {
 	char spibuf[NF1_SPIBUF_SIZE];
 	unsigned int spibufsz;
 	int osc6_bits;
+	struct bitfury_payload payload;
+	struct bitfury_payload opayload;
+	unsigned newbuf[20];
+	unsigned oldbuf[20];
+	int job_switched;
+	unsigned int results[16];
+	int results_n;
 };
 
 #endif /* BITFURY_H */

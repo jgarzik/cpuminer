@@ -9,16 +9,16 @@
 
 #ifndef LIBBITFURY_H
 #define LIBBITFURY_H
-struct bitfury_payload {
-	unsigned char midstate[32];
-	unsigned int junk[8];
-	unsigned m7;
-	unsigned ntime;
-	unsigned nbits;
-	unsigned nnonce;
-};
+#include "miner.h"
+#include "driver-bitfury.h"
 
 void ms3steps(uint32_t *p);
 uint32_t decnonce(uint32_t in);
+void spi_clear_buf(struct bitfury_info *info);
+void spi_add_buf(struct bitfury_info *info, const void *buf, const int sz);
+void spi_add_break(struct bitfury_info *info);
+void spi_add_data(struct bitfury_info *info, uint16_t addr, const void *buf, int len);
+bool spi_reset(struct cgpu_info *bitfury, struct bitfury_info *info);
+bool spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info);
 
 #endif /* LIBBITFURY_H */

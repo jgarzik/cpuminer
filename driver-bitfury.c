@@ -290,58 +290,6 @@ static void nf1_close(struct cgpu_info *bitfury)
 	mcp2210_set_gpio_settings(bitfury, mcp);
 }
 
-static void spi_clear_buf(struct bitfury_info *info)
-{
-	info->spibufsz = 0;
-}
-
-static void spi_add_buf(struct bitfury_info *info, const void *buf, const int sz)
-{
-	if (unlikely(info->spibufsz + sz > NF1_SPIBUF_SIZE)) {
-		applog(LOG_WARNING, "SPI bufsize overflow!");
-		return;
-	}
-	memcpy(&info->spibuf[info->spibufsz], buf, sz);
-	info->spibufsz += sz;
-}
-
-static void spi_add_break(struct bitfury_info *info)
-{
-	spi_add_buf(info, "\x4", 1);
-}
-
-static void spi_add_buf_reverse(struct bitfury_info *info, const char *buf, const int sz)
-{
-	int i;
-
-	for (i = 0; i < sz; i++) { // Reverse bit order in each byte!
-		unsigned char p = buf[i];
-
-		p = ((p & 0xaa) >> 1) | ((p & 0x55) << 1);
-		p = ((p & 0xcc) >> 2) | ((p & 0x33) << 2);
-		p = ((p & 0xf0) >> 4) | ((p & 0x0f) << 4);
-		info->spibuf[info->spibufsz + i] = p;
-	}
-	info->spibufsz += sz;
-}
-
-static void spi_add_data(struct bitfury_info *info, uint16_t addr, const void *buf, int len)
-{
-	unsigned char otmp[3];
-
-	if (len < 4 || len > 128) {
-		applog(LOG_WARNING, "Can't add SPI data size %d", len);
-		return;
-	}
-	len /= 4; /* Strip */
-	otmp[0] = (len - 1) | 0xE0;
-	otmp[1] = addr >> 8;
-	otmp[2] = addr & 0xFF;
-	spi_add_buf(info, otmp, 3);
-	len *= 4;
-	spi_add_buf_reverse(info, buf, len);
-}
-
 /* Configuration registers - control oscillators and such stuff. PROGRAMMED when
  * magic number matches, UNPROGRAMMED (default) otherwise */
 static void nf1_config_reg(struct bitfury_info *info, int cfgreg, int ena)
@@ -411,68 +359,8 @@ static void nf1_send_init(struct bitfury_info *info)
 	spi_add_data(info, 0x3000, atrvec, 19 * 4);
 }
 
-// Bit-banging reset... Each 3 reset cycles reset first chip in chain
-static bool nf1_spi_reset(struct cgpu_info *bitfury, struct bitfury_info *info)
-{
-	struct mcp_settings *mcp = &info->mcp;
-	int r;
-
-	// SCK_OVRRIDE
-	mcp->value.pin[NF1_PIN_SCK_OVR] = MCP2210_GPIO_PIN_HIGH;
-	mcp->direction.pin[NF1_PIN_SCK_OVR] = MCP2210_GPIO_OUTPUT;
-	if (!mcp2210_set_gpio_settings(bitfury, mcp))
-		return false;
-
-	for (r = 0; r < 16; ++r) {
-		char buf[1] = {0x81}; // will send this waveform: - _ _ _ _ _ _ -
-		unsigned int length = 1;
-
-		if (!mcp2210_spi_transfer(bitfury, buf, &length))
-			return false;
-	}
-
-	mcp->direction.pin[NF1_PIN_SCK_OVR] = MCP2210_GPIO_INPUT;
-	if (!mcp2210_set_gpio_settings(bitfury, mcp))
-		return false;
-	if (!mcp2210_get_gpio_pinval(bitfury, NF1_PIN_SCK_OVR, &r))
-		return false;
-
-	return true;
-}
-
-static bool nf1_spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
-{
-	unsigned int length, sendrcv;
-	int offset = 0, roffset = 0;
-
-	if (!nf1_spi_reset(bitfury, info))
-		return false;
-	length = info->spibufsz;
-	applog(LOG_DEBUG, "%s %d: SPI sending %u bytes", bitfury->drv->name, bitfury->device_id,
-	       length);
-	while (length > MCP2210_TRANSFER_MAX) {
-		sendrcv = MCP2210_TRANSFER_MAX;
-		if (!mcp2210_spi_transfer(bitfury, info->spibuf + offset, &sendrcv))
-			return false;
-		if (sendrcv != MCP2210_TRANSFER_MAX) {
-			applog(LOG_DEBUG, "%s %d: Send/Receive size mismatch sent %d received %d",
-			       bitfury->drv->name, bitfury->device_id, MCP2210_TRANSFER_MAX, sendrcv);
-		}
-		length -= MCP2210_TRANSFER_MAX;
-		offset += MCP2210_TRANSFER_MAX;
-		roffset += sendrcv;
-	}
-	sendrcv = length;
-	if (!mcp2210_spi_transfer(bitfury, info->spibuf + offset, &sendrcv))
-		return false;
-	if (sendrcv != length) {
-		applog(LOG_WARNING, "%s %d: Send/Receive size mismatch sent %d received %d",
-		       bitfury->drv->name, bitfury->device_id, length, sendrcv);
-	}
-	roffset += sendrcv;
-	info->spibufsz = roffset;
-	return true;
-}
+#define nf1_spi_reset(bitfury, info) (spi_reset(bitfury, info))
+#define nf1_spi_txrx(bitfury, info) (spi_txrx(bitfury, info))
 
 static bool nf1_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
