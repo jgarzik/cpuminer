@@ -54,10 +54,17 @@ static void bab_detect(__maybe_unused bool hotplug)
 // If the V1 test of this many chips finds no chips it will try V2
 #define BAB_V1_CHIP_TEST 32
 
-#define BAB_MAXCHIPS 256
+//maximum number of chips per board
+#define BAB_BOARDCHIPS 16
 #define BAB_MAXBUF (BAB_MAXCHIPS * 512)
+//maximum number of alternative banks
 #define BAB_MAXBANKS 4
-#define BAB_BANKCHIPS 64
+//maximum number of boards in a bank
+#define BAB_BANKBOARDS 6
+//maximum number of chips on alternative bank
+#define BAB_BANKCHIPS (BAB_BOARDCHIPS * BAB_BANKBOARDS)
+//maximum number of chips
+#define BAB_MAXCHIPS (BAB_MAXBANKS * BAB_BANKCHIPS)
 #define BAB_CORES 16
 #define BAB_X_COORD 21
 #define BAB_Y_COORD 36
