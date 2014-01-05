@@ -324,6 +324,16 @@ struct bab_info {
 	uint64_t max_tests_per_nonce;
 	uint64_t total_links;
 	uint64_t max_links;
+	uint64_t total_work_links;
+
+	uint64_t fail;
+	uint64_t fail_total_tests;
+	uint64_t fail_total_links;
+	uint64_t fail_total_work_links;
+
+	uint64_t ign_total_tests;
+	uint64_t ign_total_links;
+	uint64_t ign_total_work_links;
 
 	int blist_count;
 	int bfree_count;
@@ -1187,6 +1197,7 @@ static void bab_init_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 			bab_detect_chips(babcgpu, babinfo, 0, BAB_V1_CHIP_TEST, BAB_MAXCHIPS);
 		}
 	} else {
+		applog(LOG_WARNING, "%s no chips found with V1", babcgpu->drv->dname);
 		applog(LOG_WARNING, "%s V2 test %d banks %d chips ...",
 				    babcgpu->drv->dname, BAB_MAXBANKS, BAB_MAXCHIPS);
 
@@ -1269,8 +1280,8 @@ static void bab_identify(__maybe_unused struct cgpu_info *babcgpu)
 }
 
 #define BAB_LONG_WAIT_uS 1200000
-#define BAB_WAIT_MSG_EVERY 10
-#define BAB_LONG_WAIT_SLEEP_uS 100000
+#define BAB_WAIT_MSG_EVERY 200
+#define BAB_LONG_WAIT_SLEEP_uS 5000
 #define BAB_STD_WAIT_uS 3000
 
 // thread to do spi txrx
@@ -1373,8 +1384,8 @@ static void bab_flush_work(struct cgpu_info *babcgpu)
 static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, uint32_t nonce)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	BLIST *bitem;
-	unsigned int links, tests;
+	BLIST *bitem, *btail;
+	unsigned int links, work_links, tests;
 	int i;
 
 	babinfo->chip_nonces[chip]++;
@@ -1404,8 +1415,14 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 
 	tests = 0;
 	links = 0;
-	while (bitem) {
-		if (!bitem->work) {
+	work_links = 0;
+	btail = bitem;
+	while (btail && btail->next) {
+		work_links++;
+		btail = btail->next;
+	}
+	while (btail) {
+		if (!btail->work) {
 			applog(LOG_ERR, "%s%i: chip %d bitem links %d has no work!",
 					babcgpu->drv->name,
 					babcgpu->device_id,
@@ -1413,33 +1430,45 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 		} else {
 			for (i = 0; i < BAB_NONCE_OFFSETS; i++) {
 				tests++;
-				if (test_nonce(bitem->work, nonce + bab_nonce_offsets[i])) {
-					submit_tested_work(thr, bitem->work);
+				if (test_nonce(btail->work, nonce + bab_nonce_offsets[i])) {
+					submit_tested_work(thr, btail->work);
 					babinfo->nonce_offset_count[i]++;
 					babinfo->chip_good[chip]++;
-					bitem->nonces++;
+					btail->nonces++;
 					babinfo->new_nonces++;
 					babinfo->ok_nonces++;
-					free_blist(babcgpu, bitem->next, chip);
+					free_blist(babcgpu, btail->next, chip);
 					babinfo->total_tests += tests;
 					if (babinfo->max_tests_per_nonce < tests)
 						babinfo->max_tests_per_nonce = tests;
 					babinfo->total_links += links;
 					if (babinfo->max_links < links)
 						babinfo->max_links = links;
+					babinfo->total_work_links += work_links;
 					return true;
 				}
 			}
 		}
-		bitem = bitem->next;
+		if (btail == bitem)
+			break;
+		btail = btail->prev;
 		links++;
 	}
 
 	if (babinfo->not_first_reply[chip]) {
 		babinfo->chip_bad[chip]++;
 		inc_hw_errors(thr);
-	} else
+
+		babinfo->fail++;
+		babinfo->fail_total_tests += tests;
+		babinfo->fail_total_links += links;
+		babinfo->fail_total_work_links += work_links;
+	} else {
 		babinfo->initial_ignored++;
+		babinfo->ign_total_tests += tests;
+		babinfo->ign_total_links += links;
+		babinfo->ign_total_work_links += work_links;
+	}
 
 	return false;
 }
@@ -1794,21 +1823,33 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	}
 
 	root = api_add_uint64(root, "Tested", &(babinfo->tested_nonces), true);
+	root = api_add_uint64(root, "OK", &(babinfo->ok_nonces), true);
 	root = api_add_uint64(root, "Total Tests", &(babinfo->total_tests), true);
 	root = api_add_uint64(root, "Max Tests", &(babinfo->max_tests_per_nonce), true);
-	float avg = babinfo->tested_nonces ? (float)(babinfo->total_tests) /
-					     (float)(babinfo->tested_nonces) : 0;
-// TODO: add a API_AVG which is 3 places - double/float?
-	root = api_add_volts(root, "Avg Tests", &avg, true);
+	float avg = babinfo->ok_nonces ? (float)(babinfo->total_tests) /
+					     (float)(babinfo->ok_nonces) : 0;
+	root = api_add_avg(root, "Avg Tests", &avg, true);
 	root = api_add_uint64(root, "Untested", &(babinfo->untested_nonces), true);
 
 	root = api_add_uint64(root, "Work Links", &(babinfo->total_links), true);
 	root = api_add_uint64(root, "Max Links", &(babinfo->max_links), true);
-	avg = babinfo->tested_nonces ? (float)(babinfo->total_links) /
-					(float)(babinfo->tested_nonces) : 0;
-	root = api_add_volts(root, "Avg Links", &avg, true);
+	root = api_add_uint64(root, "Total Work Links", &(babinfo->total_work_links), true);
+	avg = babinfo->ok_nonces ? (float)(babinfo->total_links) /
+					(float)(babinfo->ok_nonces) : 0;
+	root = api_add_avg(root, "Avg Links", &avg, true);
+	avg = babinfo->ok_nonces ? (float)(babinfo->total_work_links) /
+					(float)(babinfo->ok_nonces) : 0;
+	root = api_add_avg(root, "Avg Work Links", &avg, true);
+
+	root = api_add_uint64(root, "Fail", &(babinfo->fail), true);
+	root = api_add_uint64(root, "Fail Total Tests", &(babinfo->fail_total_tests), true);
+	root = api_add_uint64(root, "Fail Work Links", &(babinfo->fail_total_links), true);
+	root = api_add_uint64(root, "Fail Total Work Links", &(babinfo->fail_total_work_links), true);
 
 	root = api_add_uint32(root, "Initial Ignored", &(babinfo->initial_ignored), true);
+	root = api_add_uint64(root, "Ign Total Tests", &(babinfo->ign_total_tests), true);
+	root = api_add_uint64(root, "Ign Work Links", &(babinfo->ign_total_links), true);
+	root = api_add_uint64(root, "Ign Total Work Links", &(babinfo->ign_total_work_links), true);
 
 	root = api_add_int(root, "BList Count", &(babinfo->blist_count), true);
 	root = api_add_int(root, "BFree Count", &(babinfo->bfree_count), true);
