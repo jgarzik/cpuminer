@@ -193,7 +193,7 @@ void spi_add_data(struct bitfury_info *info, uint16_t addr, const void *buf, int
 	}
 	len /= 4; /* Strip */
 	otmp[0] = (len - 1) | 0xE0;
-	otmp[1] = addr >> 8;
+	otmp[1] = (addr >> 8) & 0xFF;
 	otmp[2] = addr & 0xFF;
 	spi_add_buf(info, otmp, 3);
 	len *= 4;
