@@ -88,10 +88,18 @@ bool mcp2210_get_gpio_settings(struct cgpu_info *cgpu, struct mcp_settings *mcp)
 bool mcp2210_set_gpio_settings(struct cgpu_info *cgpu, struct mcp_settings *mcp)
 {
 	char buf[MCP2210_BUFFER_LENGTH];
+	uint8_t buf17;
 	int i;
 
 	memset(buf, 0, MCP2210_BUFFER_LENGTH);
+	buf[0] = MCP2210_GET_GPIO_SETTING;
+	if (!mcp2210_send_recv(cgpu, buf, C_MCP_GETGPIOSETTING))
+		return false;
+	buf17 = buf[17];
+
+	memset(buf, 0, MCP2210_BUFFER_LENGTH);
 	buf[0] = MCP2210_SET_GPIO_SETTING;
+	buf[17] = buf17;
 	for (i = 0; i < 8; i++) {
 		buf[4 + i] = mcp->designation.pin[i];
 		buf[13] |= mcp->value.pin[i] << i;

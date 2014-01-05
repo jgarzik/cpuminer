@@ -39,7 +39,7 @@
 #define MCP2210_SPI_TRANSFER_ERROR_IP	0xF8	// SPI not available due to transfer in progress
 
 struct gpio_pin {
-	int pin[9];
+	uint8_t pin[9];
 };
 
 struct mcp_settings {
