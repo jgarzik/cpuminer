@@ -359,9 +359,6 @@ static void nf1_send_init(struct bitfury_info *info)
 	spi_add_data(info, 0x3000, atrvec, 19 * 4);
 }
 
-#define nf1_spi_reset(bitfury, info) (spi_reset(bitfury, info))
-#define nf1_spi_txrx(bitfury, info) (spi_txrx(bitfury, info))
-
 static bool nf1_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	spi_clear_buf(info);
@@ -369,7 +366,7 @@ static bool nf1_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
 	nf1_set_freq(info);
 	nf1_send_conf(info);
 	nf1_send_init(info);
-	return nf1_spi_txrx(bitfury, info);
+	return spi_txrx(bitfury, info);
 }
 
 static bool nf1_set_spi_settings(struct cgpu_info *bitfury, struct bitfury_info *info)
@@ -482,6 +479,15 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 
 	info->osc6_bits = 50;
 	ret = nf1_reinit(bitfury, info);
+	if (ret) {
+		if (!add_cgpu(bitfury))
+			quit(1, "Failed to add_cgpu in nf1_detect_one");
+
+		update_usb_stats(bitfury);
+		applog(LOG_INFO, "%s %d: Successfully initialised %s",
+		bitfury->drv->name, bitfury->device_id, bitfury->device_path);
+		spi_clear_buf(info);
+	}
 out:
 	if (!ret)
 		nf1_close(bitfury);
@@ -1204,6 +1210,9 @@ static void bitfury_shutdown(struct thr_info *thr)
 			break;
 		case IDENT_BXF:
 			bxf_close(info);
+			break;
+		case IDENT_NF1:
+			nf1_close(bitfury);
 			break;
 		default:
 			break;
