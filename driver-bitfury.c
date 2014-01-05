@@ -474,14 +474,14 @@ static bool nf1_spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
 	return true;
 }
 
-static void nf1_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
+static bool nf1_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	spi_clear_buf(info);
 	spi_add_break(info);
 	nf1_set_freq(info);
 	nf1_send_conf(info);
 	nf1_send_init(info);
-	nf1_spi_txrx(bitfury, info);
+	return nf1_spi_txrx(bitfury, info);
 }
 
 static bool nf1_set_spi_settings(struct cgpu_info *bitfury, struct bitfury_info *info)
@@ -593,8 +593,7 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 		goto out;
 
 	info->osc6_bits = 50;
-	nf1_reinit(bitfury, info);
-	ret = true;
+	ret = nf1_reinit(bitfury, info);
 out:
 	if (!ret)
 		nf1_close(bitfury);

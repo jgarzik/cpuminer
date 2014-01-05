@@ -9,6 +9,15 @@
 
 #ifndef LIBBITFURY_H
 #define LIBBITFURY_H
+struct bitfury_payload {
+	unsigned char midstate[32];
+	unsigned int junk[8];
+	unsigned m7;
+	unsigned ntime;
+	unsigned nbits;
+	unsigned nnonce;
+};
+
 void ms3steps(uint32_t *p);
 uint32_t decnonce(uint32_t in);
 
