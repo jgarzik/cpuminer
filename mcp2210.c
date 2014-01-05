@@ -34,7 +34,7 @@ static bool mcp2210_recv(struct cgpu_info *cgpu, char *buf, enum usb_cmds cmd)
 	if (unlikely(cgpu->usbinfo.nodev))
 		return false;
 
-	err = usb_read_once_timeout(cgpu, buf, MCP2210_BUFFER_LENGTH, &amount, 1, cmd);
+	err = usb_read_limit(cgpu, buf, MCP2210_BUFFER_LENGTH, &amount, cmd);
 	if (err || amount != MCP2210_BUFFER_LENGTH) {
 		applog(LOG_WARNING, "%s %d: Error %d receiving %s received %d of %d",
 		       cgpu->drv->name, cgpu->device_id, err, usb_cmdname(cmd),
