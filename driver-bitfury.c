@@ -434,6 +434,8 @@ static bool nf1_spi_reset(struct cgpu_info *bitfury, struct bitfury_info *info)
 	mcp->direction.pin[NF1_PIN_SCK_OVR] = MCP2210_GPIO_INPUT;
 	if (!mcp2210_set_gpio_settings(bitfury, mcp))
 		return false;
+	if (!mcp2210_get_gpio_pinval(bitfury, NF1_PIN_SCK_OVR, &r))
+		return false;
 
 	return true;
 }
