@@ -973,6 +973,39 @@ static int64_t bxf_scan(struct cgpu_info *bitfury, struct bitfury_info *info)
 	return ret;
 }
 
+static int64_t nf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
+			struct bitfury_info *info)
+{
+	struct work *work;
+	int64_t ret = 0;
+
+	work = get_queue_work(thr, bitfury, thr->id);
+	if (unlikely(thr->work_restart)) {
+		work_completed(bitfury, work);
+		return 0;
+	}
+	info->work = work;
+	bitfury_work_to_payload(&info->payload, work);
+	libbitfury_sendHashData(bitfury);
+	if (info->job_switched) {
+		int i, j;
+		int *res = info->results;
+		struct work *owork = info->owork;
+
+		i = info->results_n;
+		for (j = i - 1; j >= 0; j--) {
+			if (owork)
+				submit_nonce(thr, owork, bswap_32(res[j]));
+		}
+		if (owork)
+			work_completed(bitfury, owork);
+		info->owork = info->work;
+		info->work = NULL;
+		ret += 0xffffffffull * i;
+	}
+	return ret;
+}
+
 static int64_t bitfury_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *bitfury = thr->cgpu;
@@ -981,10 +1014,10 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 	switch(info->ident) {
 		case IDENT_BF1:
 			return bf1_scan(thr, bitfury, info);
-			break;
 		case IDENT_BXF:
 			return bxf_scan(bitfury, info);
-			break;
+		case IDENT_NF1:
+			return nf1_scan(thr, bitfury, info);
 		default:
 			return 0;
 	}
