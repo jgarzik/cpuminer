@@ -232,13 +232,13 @@ bool spi_reset(struct cgpu_info *bitfury, struct bitfury_info *info)
 bool spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	unsigned int length, sendrcv;
-	int offset = 0, roffset = 0;
+	int offset = 0;
 
 	if (!spi_reset(bitfury, info))
 		return false;
 	length = info->spibufsz;
-	applog(LOG_DEBUG, "%s %d: SPI sending %u bytes", bitfury->drv->name, bitfury->device_id,
-	       length);
+	applog(LOG_DEBUG, "%s %d: SPI sending %u bytes total", bitfury->drv->name,
+	       bitfury->device_id, length);
 	while (length > MCP2210_TRANSFER_MAX) {
 		sendrcv = MCP2210_TRANSFER_MAX;
 		if (!mcp2210_spi_transfer(bitfury, info->spibuf + offset, &sendrcv))
@@ -249,7 +249,6 @@ bool spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
 		}
 		length -= MCP2210_TRANSFER_MAX;
 		offset += MCP2210_TRANSFER_MAX;
-		roffset += sendrcv;
 	}
 	sendrcv = length;
 	if (!mcp2210_spi_transfer(bitfury, info->spibuf + offset, &sendrcv))
@@ -257,9 +256,8 @@ bool spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
 	if (sendrcv != length) {
 		applog(LOG_WARNING, "%s %d: Send/Receive size mismatch sent %d received %d",
 		       bitfury->drv->name, bitfury->device_id, length, sendrcv);
+		return false;
 	}
-	roffset += sendrcv;
-	info->spibufsz = roffset;
 	return true;
 }
 
