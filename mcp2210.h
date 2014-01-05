@@ -51,6 +51,7 @@ struct mcp_settings {
 
 bool mcp2210_send_recv(struct cgpu_info *cgpu, char *buf, enum usb_cmds cmd);
 bool mcp2210_get_gpio_settings(struct cgpu_info *cgpu, struct mcp_settings *mcp);
+bool mcp2210_set_gpio_settings(struct cgpu_info *cgpu, struct mcp_settings *mcp);
 bool mcp2210_get_gpio_pindes(struct cgpu_info *cgpu, struct gpio_pin *gp);
 bool mcp2210_get_gpio_pinvals(struct cgpu_info *cgpu, struct gpio_pin *gp);
 bool mcp2210_get_gpio_pindirs(struct cgpu_info *cgpu, struct gpio_pin *gp);
