@@ -280,13 +280,14 @@ out_close:
 
 static void nf1_close(struct cgpu_info *bitfury)
 {
-	struct gpio_pin gp;
+	struct bitfury_info *info = bitfury->device_data;
+	struct mcp_settings *mcp = &info->mcp;
 	int i;
 
 	/* Set all pins to input mode, ignoring return code */
 	for (i = 0; i < 9; i++)
-		gp.pin[i] = MCP2210_GPIO_INPUT;
-	mcp2210_set_gpio_pindirs(bitfury, &gp);
+		mcp->direction.pin[i] = MCP2210_GPIO_INPUT;
+	mcp2210_set_gpio_settings(bitfury, mcp);
 }
 
 static void spi_clear_buf(struct bitfury_info *info)
@@ -411,13 +412,16 @@ static void nf1_send_init(struct bitfury_info *info)
 }
 
 // Bit-banging reset... Each 3 reset cycles reset first chip in chain
-static bool nf1_spi_reset(struct cgpu_info *bitfury)
+static bool nf1_spi_reset(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	char buf[1] = {0x81}; // will send this waveform: - _ _ _ _ _ _ -
+	struct mcp_settings *mcp = &info->mcp;
 	int r;
 
 	// SCK_OVRRIDE
-	if (!mcp2210_set_gpio_output(bitfury, NF1_PIN_SCK_OVR, MCP2210_GPIO_PIN_HIGH))
+	mcp->value.pin[NF1_PIN_SCK_OVR] = MCP2210_GPIO_PIN_HIGH;
+	mcp->direction.pin[NF1_PIN_SCK_OVR] = MCP2210_GPIO_OUTPUT;
+	if (!mcp2210_set_gpio_settings(bitfury, mcp))
 		return false;
 
 	for (r = 0; r < 16; ++r) {
@@ -426,7 +430,8 @@ static bool nf1_spi_reset(struct cgpu_info *bitfury)
 			return false;
 	}
 
-	if (!mcp2210_set_gpio_input(bitfury, NF1_PIN_SCK_OVR))
+	mcp->direction.pin[NF1_PIN_SCK_OVR] = MCP2210_GPIO_INPUT;
+	if (!mcp2210_set_gpio_settings(bitfury, mcp))
 		return false;
 
 	return true;
@@ -437,7 +442,7 @@ static bool nf1_spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
 	unsigned int length, sendrcv;
 	int offset = 0, roffset = 0;
 
-	if (!nf1_spi_reset(bitfury))
+	if (!nf1_spi_reset(bitfury, info))
 		return false;
 	length = info->spibufsz;
 	applog(LOG_DEBUG, "%s %d: SPI sending %u bytes", bitfury->drv->name, bitfury->device_id,
