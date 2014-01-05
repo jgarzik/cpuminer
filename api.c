@@ -156,6 +156,9 @@ static const char *DEVICECODE = ""
 #ifdef USE_AVALON
 			"AVA "
 #endif
+#ifdef USE_BAB
+			"BaB "
+#endif
 #ifdef USE_BFLSC
 			"BAS "
 #endif
@@ -165,23 +168,17 @@ static const char *DEVICECODE = ""
 #ifdef USE_BITFURY
 			"BFU "
 #endif
-#ifdef USE_HASHFAST
-			"HFA "
-#endif
 #ifdef USE_DRILLBIT
 			"DRB "
+#endif
+#ifdef USE_HASHFAST
+			"HFA "
 #endif
 #ifdef USE_ICARUS
 			"ICA "
 #endif
-#ifdef USE_MODMINER
-			"MMQ "
-#endif
 #ifdef USE_KNC
 			"KnC "
-#endif
-#ifdef USE_BAB
-			"BaB "
 #endif
 #ifdef USE_MINION
 			"MBA "
