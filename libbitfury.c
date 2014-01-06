@@ -97,6 +97,7 @@ static unsigned int atrvec[] = {
 	0,0,0,0,0,0,0,0,
 	0x6f3806c3, 0x41f82a4f, 0x3fd40c1a, 0x00334b39, /* WDATA: hashMerleRoot[7], nTime, nBits, nNonce */
 };
+static bool atrvec_set;
 
 static int rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned nbits,
 		  unsigned nnonce)
@@ -197,9 +198,12 @@ void spi_send_init(struct bitfury_info *info)
 	/* PREPARE BUFFERS (INITIAL PROGRAMMING) */
 	unsigned int w[16];
 
-	ms3steps(atrvec);
-	ms3steps(&atrvec[20]);
-	ms3steps(&atrvec[40]);
+	if (!atrvec_set) {
+		atrvec_set = true;
+		ms3steps(atrvec);
+		ms3steps(&atrvec[20]);
+		ms3steps(&atrvec[40]);
+	}
 	memset(w, 0, sizeof(w));
 	w[3] = 0xffffffff;
 	w[4] = 0x80000000;
@@ -358,14 +362,15 @@ bool libbitfury_sendHashData(struct cgpu_info *bf)
 	unsigned *oldbuf = info->oldbuf;
 	struct bitfury_payload *p = &(info->payload);
 	struct bitfury_payload *op = &(info->opayload);
+	unsigned int localvec[80];
 
 	/* Programming next value */
-	memcpy(atrvec, p, 20 * 4);
-	ms3steps(atrvec);
+	memcpy(localvec, p, 20 * 4);
+	ms3steps(localvec);
 
 	spi_clear_buf(info);
 	spi_add_break(info);
-	spi_add_data(info, 0x3000, (void*)&atrvec[0], 19 * 4);
+	spi_add_data(info, 0x3000, (void*)localvec, 19 * 4);
 	if (!spi_txrx(bf, info))
 		return false;
 
