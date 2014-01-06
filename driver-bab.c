@@ -126,9 +126,6 @@ static const uint32_t bab_test_data[BAB_TEST_DATA] = {
 	0x8a0bb7b7,	0x33af304f,	0x0b290c1a //,	0xf0c4e61f
 };
 
-//maximum number of chips on alternative bank
-#define BANKCHIPS 64
-
 /*
  * maximum chip speed available for auto tuner
  * speed/nrate/hrate/watt
