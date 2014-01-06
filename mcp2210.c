@@ -323,8 +323,6 @@ retry:
 	       *length);
 	memset(buf, 0, MCP2210_BUFFER_LENGTH);
 	buf[0] = MCP2210_SPI_TRANSFER;
-	if (*length > 2)
-		*length = 2;
 	buf[1] = *length;
 
 	if (*length)
@@ -335,21 +333,17 @@ retry:
 	res = (uint8_t)buf[1];
 	switch(res) {
 		case MCP2210_SPI_TRANSFER_SUCCESS:
+			len -= *length;
 			*length = buf[2];
 			status = buf[3];
 			applog(LOG_DEBUG, "%s %d: SPI transfer success, received %u bytes status 0x%x",
 			       cgpu->drv->name, cgpu->device_id, *length, status);
-			if (status == 0x20) {
-				*length = 0;
-				goto retry;
-			}
 			if (*length) {
 				memcpy(data + offset, buf + 4, *length);
-				len -= *length;
 				offset += *length;
 			}
-			if (len) {
-				*length = len;
+			if (offset < orig_len) {
+				*length = 0;
 				goto retry;
 			}
 			*length = orig_len;
