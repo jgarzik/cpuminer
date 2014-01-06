@@ -302,8 +302,8 @@ mcp2210_set_spi_transfer_settings(struct cgpu_info *cgpu, unsigned int bitrate, 
 bool mcp2210_spi_transfer(struct cgpu_info *cgpu, char *data, unsigned int *length)
 {
 	unsigned int bitrate, icsv, acsv, cstdd, ldbtcsd, sdbd, bpst, spimode;
-	uint8_t res, status, orig_len, len, offset = 0;
 	char buf[MCP2210_BUFFER_LENGTH];
+	uint8_t res, status, orig_len;
 
 	if (unlikely(*length > MCP2210_TRANSFER_MAX || !*length)) {
 		applog(LOG_ERR, "%s %d: Unable to spi transfer %u bytes", cgpu->drv->name,
@@ -313,34 +313,34 @@ bool mcp2210_spi_transfer(struct cgpu_info *cgpu, char *data, unsigned int *leng
 	if (!mcp2210_get_spi_transfer_settings(cgpu, &bitrate, &icsv, &acsv, &cstdd,
 	    &ldbtcsd, &sdbd, &bpst, &spimode))
 		return false;
-	bpst = *length;
+	orig_len = *length;
+	bpst = *length > 2 ? MCP2210_TRANSFER_MAX : *length;
 	if (!mcp2210_set_spi_transfer_settings(cgpu, bitrate, icsv, acsv, cstdd,
 	    ldbtcsd, sdbd, bpst, spimode))
 		return false;
-	orig_len = len = *length;
 retry:
 	applog(LOG_DEBUG, "%s %d: SPI sending %u bytes", cgpu->drv->name, cgpu->device_id,
 	       *length);
 	memset(buf, 0, MCP2210_BUFFER_LENGTH);
 	buf[0] = MCP2210_SPI_TRANSFER;
-	buf[1] = *length;
+	buf[1] = *length > 2 ? MCP2210_TRANSFER_MAX : *length;
 
 	if (*length)
-		memcpy(buf + 4, data + offset, *length);
+		memcpy(buf + 4, data, *length);
 	if (!mcp2210_send_recv(cgpu, buf, C_MCP_SPITRANSFER))
 		return false;
 
 	res = (uint8_t)buf[1];
 	switch(res) {
 		case MCP2210_SPI_TRANSFER_SUCCESS:
-			len -= *length;
 			*length = buf[2];
 			status = buf[3];
 			applog(LOG_DEBUG, "%s %d: SPI transfer success, received %u bytes status 0x%x",
 			       cgpu->drv->name, cgpu->device_id, *length, status);
 			if (*length) {
-				memcpy(data + offset, buf + 4, *length);
-				offset += *length;
+				memcpy(data, buf + 4, orig_len);
+				*length = orig_len;
+				return true;
 			}
 			if (status == 0x30) {
 				/* This shouldn't happen */
@@ -348,12 +348,8 @@ retry:
 				       cgpu->drv->name, cgpu->device_id);
 				return false;
 			}
-			if (offset < orig_len) {
-				*length = 0;
-				goto retry;
-			}
-			*length = orig_len;
-			return true;
+			*length = 0;
+			goto retry;
 		case MCP2210_SPI_TRANSFER_ERROR_IP:
 			applog(LOG_DEBUG, "%s %d: SPI transfer error in progress",
 			       cgpu->drv->name, cgpu->device_id);
