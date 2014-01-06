@@ -27,7 +27,8 @@ static void k_alloc_items(K_LIST *list, KLIST_FFL_ARGS)
 		allocate = list->limit - list->total;
 
 	list->item_mem_count++;
-	if (!realloc(list->item_memory, list->item_mem_count * sizeof(*(list->item_memory)))) {
+	if (!(list->item_memory = realloc(list->item_memory,
+					  list->item_mem_count * sizeof(*(list->item_memory))))) {
 		quithere(1, "List %s item_memory failed to realloc count=%d",
 				list->name, list->item_mem_count);
 	}
@@ -61,7 +62,9 @@ static void k_alloc_items(K_LIST *list, KLIST_FFL_ARGS)
 	item = list->head;
 	while (item) {
 		list->data_mem_count++;
-		if (!realloc(list->data_memory, list->data_mem_count * sizeof(*(list->data_memory)))) {
+		if (!(list->data_memory = realloc(list->data_memory,
+						  list->data_mem_count *
+						  sizeof(*(list->data_memory))))) {
 			quithere(1, "List %s data_memory failed to realloc count=%d",
 					list->name, list->data_mem_count);
 		}
