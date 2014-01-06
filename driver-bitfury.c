@@ -312,7 +312,6 @@ static void nf1_set_freq(struct bitfury_info *info)
 
 	freq = (1ULL << info->osc6_bits) - 1ULL;
 	spi_add_data(info, 0x6000, osc6, 8); /* Program internal on-die slow oscillator frequency */
-	nf1_config_reg(info, 4, 1);
 }
 
 #define FIRST_BASE 61
@@ -998,7 +997,7 @@ static int64_t nf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 	libbitfury_sendHashData(bitfury);
 	if (info->job_switched) {
 		int i, j;
-		int *res = info->results;
+		unsigned int *res = info->results;
 		struct work *owork = info->owork;
 
 		i = info->results_n;
