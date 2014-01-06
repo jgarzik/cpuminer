@@ -412,7 +412,10 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 		goto out;
 
 	info->osc6_bits = 54;
-	ret = nf1_reinit(bitfury, info);
+	if (!nf1_reinit(bitfury, info))
+		goto out;
+
+	ret = spi_detect_bitfury(bitfury, info);
 	if (ret) {
 		if (!add_cgpu(bitfury))
 			quit(1, "Failed to add_cgpu in nf1_detect_one");

@@ -14,8 +14,6 @@
 #include "libbitfury.h"
 #include "sha2.h"
 
-#define BITFURY_REFRESH_DELAY 100
-
 void ms3steps(uint32_t *p)
 {
 	uint32_t a, b, c, d, e, f, g, h, new_e, new_a;
@@ -202,7 +200,7 @@ void spi_send_init(struct bitfury_info *info)
 	ms3steps(atrvec);
 	ms3steps(&atrvec[20]);
 	ms3steps(&atrvec[40]);
-	memset(&w, 0, sizeof(w));
+	memset(w, 0, sizeof(w));
 	w[3] = 0xffffffff;
 	w[4] = 0x80000000;
 	w[15] = 0x00000280;
@@ -264,6 +262,31 @@ void spi_add_data(struct bitfury_info *info, uint16_t addr, const void *buf, int
 	spi_add_buf(info, otmp, 3);
 	len *= 4;
 	spi_add_buf_reverse(info, buf, len);
+}
+
+bool spi_detect_bitfury(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	unsigned int newbuf[17], oldbuf[17];
+	int i;
+
+	memset(newbuf, 0, 17 * 4);
+	memset(oldbuf, 0, 17 * 4);
+
+	for (i = 0; i < BITFURY_DETECT_TRIES; i++) {
+		spi_clear_buf(info);
+		spi_add_break(info);
+		spi_add_data(info, 0x3000, atrvec, 19 * 4);
+		if (!spi_txrx(bitfury, info))
+			return false;
+		memcpy(newbuf, info->spibuf + 4, 17 * 4);
+		if (newbuf[16] != 0 && newbuf[16] != 0xFFFFFFFF)
+			return false;
+		if (i && newbuf[16] != oldbuf[16])
+			return true;
+		cgsleep_ms(BITFURY_REFRESH_DELAY);
+		memcpy(oldbuf, newbuf, 17 * 4);
+	}
+	return false;
 }
 
 // Bit-banging reset... Each 3 reset cycles reset first chip in chain
