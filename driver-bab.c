@@ -1,8 +1,8 @@
 /*
- * Copyright 2013 Andrew Smith
+ * Copyright 2013-2014 Andrew Smith
  * Copyright 2013 bitfury
  *
- * BitFury GPIO code based on chainminer code:
+ * BitFury GPIO code originally based on chainminer code:
  *	https://github.com/bfsb/chainminer
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -16,6 +16,7 @@
 #include "miner.h"
 #include "sha2.h"
 #include "libbitfury.h"
+#include "klist.h"
 
 /*
  * Tested on RPi running both Raspbian and Arch
@@ -78,23 +79,15 @@ static void bab_detect(__maybe_unused bool hotplug)
 #define BAB_FFL_PASS file, func, line
 
 #define bab_reset(_bank, _times) _bab_reset(babcgpu, babinfo, _bank, _times)
-#define bab_txrx(_buf, _siz, _det) _bab_txrx(babcgpu, babinfo, _buf, _siz, _det, BAB_FFL_HERE)
-#define bab_add_buf(_data) _bab_add_buf(babcgpu, babinfo, _data, sizeof(_data)-1, BAB_FFL_HERE)
-#define BAB_ADD_BREAK() _bab_add_buf(babcgpu, babinfo, BAB_BREAK, 1, BAB_FFL_HERE)
-#define BAB_ADD_ASYNC() _bab_add_buf(babcgpu, babinfo, BAB_ASYNC, 1, BAB_FFL_HERE)
-#define bab_config_reg(_reg, _ena) _bab_config_reg(babcgpu, babinfo, _reg, _ena, BAB_FFL_HERE)
-#define bab_add_data(_addr, _data, _siz) _bab_add_data(babcgpu, babinfo, _addr, (const uint8_t *)(_data), _siz, BAB_FFL_HERE)
+#define bab_txrx(_item, _det) _bab_txrx(babcgpu, babinfo, _item, _det, BAB_FFL_HERE)
+#define bab_add_buf(_item, _data) _bab_add_buf(_item, _data, sizeof(_data)-1, BAB_FFL_HERE)
+#define BAB_ADD_BREAK(_item) _bab_add_buf(_item, BAB_BREAK, 1, BAB_FFL_HERE)
+#define BAB_ADD_ASYNC(_item) _bab_add_buf(_item, BAB_ASYNC, 1, BAB_FFL_HERE)
+#define bab_config_reg(_item, _reg, _ena) _bab_config_reg(_item, _reg, _ena, BAB_FFL_HERE)
+#define bab_add_data(_item, _addr, _data, _siz) _bab_add_data(_item, _addr, (const uint8_t *)(_data), _siz, BAB_FFL_HERE)
 
 #define BAB_ADD_MIN 4
 #define BAB_ADD_MAX 128
-
-#define BAB_STATE_DONE 0
-#define BAB_STATE_READY 1
-#define BAB_STATE_SENDING 2
-#define BAB_STATE_SENT 3
-#define BAB_STATE_READING 4
-
-#define BAB_SPI_BUFFERS 2
 
 #define BAB_BASEA 4
 #define BAB_BASEB 61
@@ -242,6 +235,7 @@ struct bab_work_reply {
 	uint32_t jobsel;
 };
 
+// TODO: convert blist/rlist to klist
 #define MAX_BLISTS 4096
 
 typedef struct blist {
@@ -261,11 +255,24 @@ typedef struct rlist {
 	bool first_second;
 } RLIST;
 
+#define ALLOC_SITEMS 8
+#define LIMIT_SITEMS 0
+
+// SPI I/O
+typedef struct sitem {
+	uint32_t siz;
+	uint8_t wbuf[BAB_MAXBUF];
+	uint8_t rbuf[BAB_MAXBUF];
+	uint32_t chip_off[BAB_MAXCHIPS+1];
+	uint32_t bank_off[BAB_MAXBANKS+2];
+} SITEM;
+
+#define DATAS(_item) ((SITEM *)(_item->data))
+
 struct bab_info {
 	struct thr_info spi_thr;
 	struct thr_info res_thr;
 
-	pthread_mutex_t spi_lock;
 	pthread_mutex_t res_lock;
 	pthread_mutex_t did_lock;
 	cglock_t blist_lock;
@@ -277,13 +284,17 @@ struct bab_info {
 	int chips;
 	uint32_t chip_spis[BAB_MAXCHIPS+1];
 
-	int buffer;
-	int buf_status[BAB_SPI_BUFFERS];
-	uint8_t buf_write[BAB_SPI_BUFFERS][BAB_MAXBUF];
-	uint8_t buf_read[BAB_SPI_BUFFERS][BAB_MAXBUF];
-	uint32_t buf_used[BAB_SPI_BUFFERS];
-	uint32_t chip_off[BAB_SPI_BUFFERS][BAB_MAXCHIPS+1];
-	uint32_t bank_off[BAB_SPI_BUFFERS][BAB_MAXBANKS+2];
+	cgsem_t scan_work;
+	cgsem_t spi_work;
+	cgsem_t spi_reply;
+
+	// SPI I/O
+	K_LIST *sfree_list;
+	// Waiting to send
+	K_STORE *spi_list;
+	// Sent
+	K_STORE *spi_sent;
+
 
 	struct bab_work_send chip_input[BAB_MAXCHIPS];
 	struct bab_work_reply chip_results[BAB_MAXCHIPS];
@@ -361,6 +372,12 @@ struct bab_info {
 
 	bool initialised;
 };
+
+#define BAB_LONG_uS 1200000
+#define BAB_LONG_WAIT_mS 888
+#define BAB_STD_WAIT_mS 888
+
+#define BAB_REPLY_WAIT_mS 188
 
 static BLIST *new_blist_set(struct cgpu_info *babcgpu)
 {
@@ -681,15 +698,16 @@ static void _bab_reset(__maybe_unused struct cgpu_info *babcgpu, struct bab_info
 }
 
 // TODO: handle a false return where this is called?
-static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, int buf, uint32_t siz, bool detect_ignore, const char *file, const char *func, const int line)
+static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, K_ITEM *item, bool detect_ignore, const char *file, const char *func, const int line)
 {
 	int bank, i;
-	uint32_t pos;
+	uint32_t siz, pos;
 	struct spi_ioc_transfer tran;
 	uintptr_t rbuf, wbuf;
 
-	wbuf = (uintptr_t)(babinfo->buf_write[buf]);
-	rbuf = (uintptr_t)(babinfo->buf_read[buf]);
+	wbuf = (uintptr_t)(DATAS(item)->wbuf);
+	rbuf = (uintptr_t)(DATAS(item)->rbuf);
+	siz = (uint32_t)(DATAS(item)->siz);
 
 	memset(&tran, 0, sizeof(tran));
 	tran.delay_usecs = 0;
@@ -698,7 +716,7 @@ static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, int b
 	i = 0;
 	pos = 0;
 	for (bank = 0; bank <= BAB_MAXBANKS; bank++) {
-		if (babinfo->bank_off[buf][bank]) {
+		if (DATAS(item)->bank_off[bank]) {
 			bab_reset(bank, 64);
 			break;
 		}
@@ -715,9 +733,9 @@ static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, int b
 		tran.tx_buf = wbuf;
 		tran.rx_buf = rbuf;
 		tran.speed_hz = BAB_SPI_SPEED;
-		if (pos == babinfo->bank_off[buf][bank]) {
+		if (pos == DATAS(item)->bank_off[bank]) {
 			for (; ++bank <= BAB_MAXBANKS; ) {
-				if (babinfo->bank_off[buf][bank] > pos) {
+				if (DATAS(item)->bank_off[bank] > pos) {
 					bab_reset(bank, 64);
 					break;
 				}
@@ -728,14 +746,14 @@ static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, int b
 		else
 			tran.len = BAB_SPI_BUFSIZ;
 
-		if (pos < babinfo->bank_off[buf][bank] &&
-		    babinfo->bank_off[buf][bank] < (pos + tran.len))
-			tran.len = babinfo->bank_off[buf][bank] - pos;
+		if (pos < DATAS(item)->bank_off[bank] &&
+		    DATAS(item)->bank_off[bank] < (pos + tran.len))
+			tran.len = DATAS(item)->bank_off[bank] - pos;
 
 		for (; i < babinfo->chips; i++) {
-			if (!babinfo->chip_off[buf][i])
+			if (!DATAS(item)->chip_off[i])
 				continue;
-			if (babinfo->chip_off[buf][i] >= pos + tran.len) {
+			if (DATAS(item)->chip_off[i] >= pos + tran.len) {
 				tran.speed_hz = babinfo->chip_spis[i];
 				break;
 			}
@@ -782,18 +800,16 @@ static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, int b
 	return true;
 }
 
-static void _bab_add_buf_rev(__maybe_unused struct cgpu_info *babcgpu, struct bab_info *babinfo, const uint8_t *data, uint32_t siz, const char *file, const char *func, const int line)
+static void _bab_add_buf_rev(K_ITEM *item, const uint8_t *data, uint32_t siz, const char *file, const char *func, const int line)
 {
-	uint8_t tmp;
 	uint32_t now_used, i;
-	int buf;
+	uint8_t tmp;
 
-	buf = babinfo->buffer;
-	now_used = babinfo->buf_used[buf];
+	now_used = DATAS(item)->siz;
 	if (now_used + siz >= BAB_MAXBUF) {
 		quitfrom(1, file, func, line,
-			"%s() buffer %d limit of %d exceeded=%d siz=%d",
-			__func__, buf, BAB_MAXBUF, now_used + siz, siz);
+			"%s() buffer limit of %d exceeded=%d siz=%d",
+			__func__, BAB_MAXBUF, (int)(now_used + siz), (int)siz);
 	}
 
 	for (i = 0; i < siz; i++) {
@@ -801,30 +817,28 @@ static void _bab_add_buf_rev(__maybe_unused struct cgpu_info *babcgpu, struct ba
 		tmp = ((tmp & 0xaa)>>1) | ((tmp & 0x55) << 1);
 		tmp = ((tmp & 0xcc)>>2) | ((tmp & 0x33) << 2);
 		tmp = ((tmp & 0xf0)>>4) | ((tmp & 0x0f) << 4);
-		babinfo->buf_write[buf][now_used + i] = tmp;
+		DATAS(item)->wbuf[now_used + i] = tmp;
 	}
 
-	babinfo->buf_used[buf] += siz;
+	DATAS(item)->siz += siz;
 }
 
-static void _bab_add_buf(__maybe_unused struct cgpu_info *babcgpu, struct bab_info *babinfo, const uint8_t *data, size_t siz, const char *file, const char *func, const int line)
+static void _bab_add_buf(K_ITEM *item, const uint8_t *data, size_t siz, const char *file, const char *func, const int line)
 {
 	uint32_t now_used;
-	int buf;
 
-	buf = babinfo->buffer;
-	now_used = babinfo->buf_used[buf];
+	now_used = DATAS(item)->siz;
 	if (now_used + siz >= BAB_MAXBUF) {
 		quitfrom(1, file, func, line,
-			"%s() buffer %d limit of %d exceeded=%d siz=%d",
-			__func__, buf, BAB_MAXBUF, (int)(now_used + siz), (int)siz);
+			"%s() DATAS buffer limit of %d exceeded=%d siz=%d",
+			__func__, BAB_MAXBUF, (int)(now_used + siz), (int)siz);
 	}
 
-	memcpy(&(babinfo->buf_write[buf][now_used]), data, siz);
-	babinfo->buf_used[buf] += siz;
+	memcpy(&(DATAS(item)->wbuf[now_used]), data, siz);
+	DATAS(item)->siz += siz;
 }
 
-static void _bab_add_data(struct cgpu_info *babcgpu, struct bab_info *babinfo, uint32_t addr, const uint8_t *data, size_t siz, const char *file, const char *func, const int line)
+static void _bab_add_data(K_ITEM *item, uint32_t addr, const uint8_t *data, size_t siz, const char *file, const char *func, const int line)
 {
 	uint8_t tmp[3];
 	int trf_siz;
@@ -838,17 +852,17 @@ static void _bab_add_data(struct cgpu_info *babcgpu, struct bab_info *babinfo, u
 	tmp[0] = (trf_siz - 1) | 0xE0;
 	tmp[1] = (addr >> 8) & 0xff;
 	tmp[2] = addr & 0xff;
-	_bab_add_buf(babcgpu, babinfo, tmp, sizeof(tmp), BAB_FFL_PASS);
-	_bab_add_buf_rev(babcgpu, babinfo, data, siz, BAB_FFL_PASS);
+	_bab_add_buf(item, tmp, sizeof(tmp), BAB_FFL_PASS);
+	_bab_add_buf_rev(item, data, siz, BAB_FFL_PASS);
 }
 
-static void _bab_config_reg(struct cgpu_info *babcgpu, struct bab_info *babinfo, uint32_t reg, bool enable, const char *file, const char *func, const int line)
+static void _bab_config_reg(K_ITEM *item, uint32_t reg, bool enable, const char *file, const char *func, const int line)
 {
 	if (enable) {
-		_bab_add_data(babcgpu, babinfo, BAB_REG_ADDR + reg*32,
+		_bab_add_data(item, BAB_REG_ADDR + reg*32,
 				bab_reg_ena, sizeof(bab_reg_ena), BAB_FFL_PASS);
 	} else {
-		_bab_add_data(babcgpu, babinfo, BAB_REG_ADDR + reg*32,
+		_bab_add_data(item, BAB_REG_ADDR + reg*32,
 				bab_reg_dis, sizeof(bab_reg_dis), BAB_FFL_PASS);
 	}
 
@@ -871,57 +885,39 @@ static void bab_set_osc(struct bab_info *babinfo, int chip)
 	applog(LOG_DEBUG, "@osc(chip=%d) fast=%d 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x", chip, fast, babinfo->osc[0], babinfo->osc[1], babinfo->osc[2], babinfo->osc[3], babinfo->osc[4], babinfo->osc[5], babinfo->osc[6], babinfo->osc[7]);
 }
 
-static bool bab_put(struct cgpu_info *babcgpu, struct bab_info *babinfo)
+static bool bab_put(struct bab_info *babinfo)
 {
-	int buf, i, reg, bank = 0;
+	int i, reg, bank = 0;
+	K_ITEM *item;
 
-	babinfo->buffer = -1;
+	K_WLOCK(babinfo->sfree_list);
+	item = k_unlink_head_zero(babinfo->sfree_list);
+	K_WUNLOCK(babinfo->sfree_list);
 
-	mutex_lock(&(babinfo->spi_lock));
-	if (babinfo->buf_status[0] == BAB_STATE_DONE) {
-		babinfo->buffer = 0;
-	} else if (babinfo->buf_status[1] == BAB_STATE_DONE) {
-		babinfo->buffer = 1;
-	} else if (babinfo->buf_status[0] == BAB_STATE_READY) {
-		babinfo->buf_status[0] = BAB_STATE_DONE;
-		babinfo->buffer = 0;
-	} else if (babinfo->buf_status[1] == BAB_STATE_READY) {
-		babinfo->buf_status[1] = BAB_STATE_DONE;
-		babinfo->buffer = 1;
-	}
-	mutex_unlock(&(babinfo->spi_lock));
-
-	if (babinfo->buffer == -1)
-		return false;
-
-	buf = babinfo->buffer;
-	babinfo->buf_used[buf] = 0;
-	memset(babinfo->bank_off[buf], 0, sizeof(babinfo->bank_off) / BAB_SPI_BUFFERS);
-
-	BAB_ADD_BREAK();
+	BAB_ADD_BREAK(item);
 	for (i = 0; i < babinfo->chips; i++) {
 		if (babinfo->chip_bank[i] != bank) {
-			babinfo->bank_off[buf][bank] = babinfo->buf_used[buf];
+			DATAS(item)->bank_off[bank] = DATAS(item)->siz;
 			bank = babinfo->chip_bank[i];
-			BAB_ADD_BREAK();
+			BAB_ADD_BREAK(item);
 		}
 		if (i == babinfo->fixchip &&
 		    (BAB_CFGD_SET(babinfo->chip_conf[i]) ||
 		     !babinfo->chip_conf[i])) {
 			bab_set_osc(babinfo, i);
-			bab_add_data(BAB_OSC_ADDR, babinfo->osc, sizeof(babinfo->osc));
-			bab_config_reg(BAB_ICLK_REG, BAB_ICLK_BIT(babinfo->chip_conf[i]));
-			bab_config_reg(BAB_FAST_REG, BAB_FAST_BIT(babinfo->chip_conf[i]));
-			bab_config_reg(BAB_DIV2_REG, BAB_DIV2_BIT(babinfo->chip_conf[i]));
-			bab_config_reg(BAB_SLOW_REG, BAB_SLOW_BIT(babinfo->chip_conf[i]));
-			bab_config_reg(BAB_OCLK_REG, BAB_OCLK_BIT(babinfo->chip_conf[i]));
+			bab_add_data(item, BAB_OSC_ADDR, babinfo->osc, sizeof(babinfo->osc));
+			bab_config_reg(item, BAB_ICLK_REG, BAB_ICLK_BIT(babinfo->chip_conf[i]));
+			bab_config_reg(item, BAB_FAST_REG, BAB_FAST_BIT(babinfo->chip_conf[i]));
+			bab_config_reg(item, BAB_DIV2_REG, BAB_DIV2_BIT(babinfo->chip_conf[i]));
+			bab_config_reg(item, BAB_SLOW_REG, BAB_SLOW_BIT(babinfo->chip_conf[i]));
+			bab_config_reg(item, BAB_OCLK_REG, BAB_OCLK_BIT(babinfo->chip_conf[i]));
 			for (reg = BAB_REG_CLR_FROM; reg <= BAB_REG_CLR_TO; reg++)
-				bab_config_reg(reg, false);
+				bab_config_reg(item, reg, false);
 			if (babinfo->chip_conf[i]) {
-				bab_add_data(BAB_COUNT_ADDR, bab_counters, sizeof(bab_counters));
-				bab_add_data(BAB_W1A_ADDR, bab_w1, sizeof(bab_w1));
-				bab_add_data(BAB_W1B_ADDR, bab_w1, sizeof(bab_w1)/2);
-				bab_add_data(BAB_W2_ADDR, bab_w2, sizeof(bab_w2));
+				bab_add_data(item, BAB_COUNT_ADDR, bab_counters, sizeof(bab_counters));
+				bab_add_data(item, BAB_W1A_ADDR, bab_w1, sizeof(bab_w1));
+				bab_add_data(item, BAB_W1B_ADDR, bab_w1, sizeof(bab_w1)/2);
+				bab_add_data(item, BAB_W2_ADDR, bab_w2, sizeof(bab_w2));
 				babinfo->chip_conf[i] ^= BAB_CFGD_VAL;
 			}
 			babinfo->old_fast[i] = babinfo->chip_fast[i];
@@ -929,46 +925,48 @@ static bool bab_put(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 		} else {
 			if (babinfo->old_fast[i] != babinfo->chip_fast[i]) {
 				bab_set_osc(babinfo, i);
-				bab_add_data(BAB_OSC_ADDR, babinfo->osc, sizeof(babinfo->osc));
+				bab_add_data(item, BAB_OSC_ADDR, babinfo->osc, sizeof(babinfo->osc));
 				babinfo->old_fast[i] = babinfo->chip_fast[i];
 			}
 			if (babinfo->old_conf[i] != babinfo->chip_conf[i]) {
 				if (BAB_ICLK_SET(babinfo->old_conf[i]) !=
 						 BAB_ICLK_SET(babinfo->chip_conf[i]))
-					bab_config_reg(BAB_ICLK_REG,
+					bab_config_reg(item, BAB_ICLK_REG,
 							BAB_ICLK_BIT(babinfo->chip_conf[i]));
 				if (BAB_FAST_SET(babinfo->old_conf[i]) !=
 						 BAB_FAST_SET(babinfo->chip_conf[i]))
-					bab_config_reg(BAB_FAST_REG,
+					bab_config_reg(item, BAB_FAST_REG,
 							BAB_FAST_BIT(babinfo->chip_conf[i]));
 				if (BAB_DIV2_SET(babinfo->old_conf[i]) !=
 						 BAB_DIV2_SET(babinfo->chip_conf[i]))
-					bab_config_reg(BAB_DIV2_REG,
+					bab_config_reg(item, BAB_DIV2_REG,
 							BAB_DIV2_BIT(babinfo->chip_conf[i]));
 				if (BAB_SLOW_SET(babinfo->old_conf[i]) !=
 						 BAB_SLOW_SET(babinfo->chip_conf[i]))
-					bab_config_reg(BAB_SLOW_REG,
+					bab_config_reg(item, BAB_SLOW_REG,
 							BAB_SLOW_BIT(babinfo->chip_conf[i]));
 				if (BAB_OCLK_SET(babinfo->old_conf[i]) !=
 						 BAB_OCLK_SET(babinfo->chip_conf[i]))
-					bab_config_reg(BAB_OCLK_REG,
+					bab_config_reg(item, BAB_OCLK_REG,
 							BAB_OCLK_BIT(babinfo->chip_conf[i]));
 				babinfo->old_conf[i] = babinfo->chip_conf[i];
 			}
 		}
-		babinfo->chip_off[buf][i] = babinfo->buf_used[buf] + 3;
+		DATAS(item)->chip_off[i] = DATAS(item)->siz + 3;
 		if (babinfo->chip_conf[i])
-			bab_add_data(BAB_INP_ADDR, (uint8_t *)(&(babinfo->chip_input[i])),
+			bab_add_data(item, BAB_INP_ADDR, (uint8_t *)(&(babinfo->chip_input[i])),
 					sizeof(babinfo->chip_input[i]));
 
-		BAB_ADD_ASYNC();
+		BAB_ADD_ASYNC(item);
 	}
-	babinfo->chip_off[buf][i] = babinfo->buf_used[buf];
-	babinfo->bank_off[buf][bank] = babinfo->buf_used[buf];
+	DATAS(item)->chip_off[i] = DATAS(item)->siz;
+	DATAS(item)->bank_off[bank] = DATAS(item)->siz;
 
-	mutex_lock(&(babinfo->spi_lock));
-	babinfo->buf_status[buf] = BAB_STATE_READY;
-	mutex_unlock(&(babinfo->spi_lock));
+	K_WLOCK(babinfo->spi_list);
+	k_add_head(babinfo->spi_list, item);
+	K_WUNLOCK(babinfo->spi_list);
+
+	cgsem_post(&(babinfo->spi_work));
 
 	babinfo->fixchip = (babinfo->fixchip + 1) % babinfo->chips;
 	return true;
@@ -976,42 +974,37 @@ static bool bab_put(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 
 static bool bab_get(__maybe_unused struct cgpu_info *babcgpu, struct bab_info *babinfo)
 {
-	int buf, i;
+	K_ITEM *item;
+	int i;
 
-	babinfo->buffer = -1;
+	cgsem_mswait(&(babinfo->spi_reply), BAB_REPLY_WAIT_mS);
 
-	mutex_lock(&(babinfo->spi_lock));
-	if (babinfo->buf_status[0] == BAB_STATE_SENT) {
-		babinfo->buf_status[0] = BAB_STATE_READING;
-		babinfo->buffer = 0;
-	} else if (babinfo->buf_status[1] == BAB_STATE_SENT) {
-			babinfo->buf_status[1] = BAB_STATE_READING;
-			babinfo->buffer = 1;
-	}
-	mutex_unlock(&(babinfo->spi_lock));
+	K_WLOCK(babinfo->spi_sent);
+	item = k_unlink_tail(babinfo->spi_sent);
+	K_WUNLOCK(babinfo->spi_sent);
 
-	if (babinfo->buffer == -1)
+	if (!item)
 		return false;
 
-	buf = babinfo->buffer;
 	for (i = 0; i < babinfo->chips; i++) {
 		if (babinfo->chip_conf[i] & 0x7f) {
 			memcpy((void *)&(babinfo->chip_results[i]),
-				(void *)(babinfo->buf_read[buf] + babinfo->chip_off[buf][i]),
+				(void *)(DATAS(item)->rbuf + DATAS(item)->chip_off[i]),
 				sizeof(babinfo->chip_results[0]));
 		}
 	}
 
-	mutex_lock(&(babinfo->spi_lock));
-	babinfo->buf_status[buf] = BAB_STATE_DONE;
-	mutex_unlock(&(babinfo->spi_lock));
+	K_WLOCK(babinfo->sfree_list);
+	k_add_head(babinfo->sfree_list, item);
+	K_WUNLOCK(babinfo->sfree_list);
 
 	return true;
 }
 
 void bab_detect_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo, int bank, int first, int last)
 {
-	int buf, i, reg, j;
+	int i, reg, j;
+	K_ITEM *item;
 
 	if (sizeof(struct bab_work_send) != sizeof(bab_test_data)) {
 		quithere(1, "struct bab_work_send (%d) and bab_test_data (%d)"
@@ -1020,58 +1013,55 @@ void bab_detect_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo, int b
 			    (int)sizeof(bab_test_data));
 	}
 
-	buf = babinfo->buffer = 0;
-	memset(babinfo->bank_off[buf], 0, sizeof(babinfo->bank_off) / BAB_SPI_BUFFERS);
-	babinfo->buf_used[buf] = 0;
-	BAB_ADD_BREAK();
+	K_WLOCK(babinfo->sfree_list);
+	item = k_unlink_head_zero(babinfo->sfree_list);
+	K_WUNLOCK(babinfo->sfree_list);
+	BAB_ADD_BREAK(item);
 	for (i = first; i < last && i < BAB_MAXCHIPS; i++) {
 		bab_set_osc(babinfo, i);
-		bab_add_data(BAB_OSC_ADDR, babinfo->osc, sizeof(babinfo->osc));
-		bab_config_reg(BAB_ICLK_REG, BAB_ICLK_BIT(babinfo->chip_conf[i]));
-		bab_config_reg(BAB_FAST_REG, BAB_FAST_BIT(babinfo->chip_conf[i]));
-		bab_config_reg(BAB_DIV2_REG, BAB_DIV2_BIT(babinfo->chip_conf[i]));
-		bab_config_reg(BAB_SLOW_REG, BAB_SLOW_BIT(babinfo->chip_conf[i]));
-		bab_config_reg(BAB_OCLK_REG, BAB_OCLK_BIT(babinfo->chip_conf[i]));
+		bab_add_data(item, BAB_OSC_ADDR, babinfo->osc, sizeof(babinfo->osc));
+		bab_config_reg(item, BAB_ICLK_REG, BAB_ICLK_BIT(babinfo->chip_conf[i]));
+		bab_config_reg(item, BAB_FAST_REG, BAB_FAST_BIT(babinfo->chip_conf[i]));
+		bab_config_reg(item, BAB_DIV2_REG, BAB_DIV2_BIT(babinfo->chip_conf[i]));
+		bab_config_reg(item, BAB_SLOW_REG, BAB_SLOW_BIT(babinfo->chip_conf[i]));
+		bab_config_reg(item, BAB_OCLK_REG, BAB_OCLK_BIT(babinfo->chip_conf[i]));
 		for (reg = BAB_REG_CLR_FROM; reg <= BAB_REG_CLR_TO; reg++)
-			bab_config_reg(reg, false);
-		bab_add_data(BAB_COUNT_ADDR, bab_counters, sizeof(bab_counters));
-		bab_add_data(BAB_W1A_ADDR, bab_w1, sizeof(bab_w1));
-		bab_add_data(BAB_W1B_ADDR, bab_w1, sizeof(bab_w1)/2);
-		bab_add_data(BAB_W2_ADDR, bab_w2, sizeof(bab_w2));
-		babinfo->chip_off[buf][i] = babinfo->buf_used[buf] + 3;
-		bab_add_data(BAB_INP_ADDR, bab_test_data, sizeof(bab_test_data));
-		babinfo->chip_off[buf][i+1] = babinfo->buf_used[buf];
-		babinfo->bank_off[buf][bank] = babinfo->buf_used[buf];
+			bab_config_reg(item, reg, false);
+		bab_add_data(item, BAB_COUNT_ADDR, bab_counters, sizeof(bab_counters));
+		bab_add_data(item, BAB_W1A_ADDR, bab_w1, sizeof(bab_w1));
+		bab_add_data(item, BAB_W1B_ADDR, bab_w1, sizeof(bab_w1)/2);
+		bab_add_data(item, BAB_W2_ADDR, bab_w2, sizeof(bab_w2));
+		DATAS(item)->chip_off[i] = DATAS(item)->siz + 3;
+		bab_add_data(item, BAB_INP_ADDR, bab_test_data, sizeof(bab_test_data));
+		DATAS(item)->chip_off[i+1] = DATAS(item)->siz;
+		DATAS(item)->bank_off[bank] = DATAS(item)->siz;
 		babinfo->chips = i + 1;
-		bab_txrx(buf, babinfo->buf_used[buf], false);
-		babinfo->buf_used[buf] = 0;
-		BAB_ADD_BREAK();
+		bab_txrx(item, false);
+		DATAS(item)->siz = 0;
+		BAB_ADD_BREAK(item);
 		for (j = first; j <= i; j++) {
-			babinfo->chip_off[buf][j] = babinfo->buf_used[buf] + 3;
-			BAB_ADD_ASYNC();
+			DATAS(item)->chip_off[j] = DATAS(item)->siz + 3;
+			BAB_ADD_ASYNC(item);
 		}
 	}
 
-	buf = babinfo->buffer = 1;
-	memset(babinfo->bank_off[buf], 0, sizeof(babinfo->bank_off) / BAB_SPI_BUFFERS);
-	babinfo->buf_used[buf] = 0;
-	BAB_ADD_BREAK();
+	memset(item->data, 0, babinfo->sfree_list->siz);
+	BAB_ADD_BREAK(item);
 	for (i = first; i < last && i < BAB_MAXCHIPS; i++) {
-		babinfo->chip_off[buf][i] = babinfo->buf_used[buf] + 3;
-		bab_add_data(BAB_INP_ADDR, bab_test_data, sizeof(bab_test_data));
-		BAB_ADD_ASYNC();
+		DATAS(item)->chip_off[i] = DATAS(item)->siz + 3;
+		bab_add_data(item, BAB_INP_ADDR, bab_test_data, sizeof(bab_test_data));
+		BAB_ADD_ASYNC(item);
 	}
-	babinfo->chip_off[buf][i] = babinfo->buf_used[buf];
-	babinfo->bank_off[buf][bank] = babinfo->buf_used[buf];
+	DATAS(item)->chip_off[i] = DATAS(item)->siz;
+	DATAS(item)->bank_off[bank] = DATAS(item)->siz;
 	babinfo->chips = i;
-	bab_txrx(buf, babinfo->buf_used[buf], true);
-	babinfo->buf_used[buf] = 0;
+	bab_txrx(item, true);
+	DATAS(item)->siz = 0;
 	babinfo->chips = first;
 	for (i = first; i < last && i < BAB_MAXCHIPS; i++) {
 		uint32_t tmp[DATA_UINTS-1];
-		memcpy(tmp, babinfo->buf_read[buf]+babinfo->chip_off[buf][i], sizeof(tmp));
-		for (j = 0; j < BAB_SPI_BUFFERS; j++)
-			babinfo->chip_off[j][i] = 0;
+		memcpy(tmp, DATAS(item)->rbuf + DATAS(item)->chip_off[i], sizeof(tmp));
+		DATAS(item)->chip_off[i] = 0;
 		for (j = 0; j < BAB_REPLY_NONCES; j++) {
 			if (tmp[j] != 0xffffffff && tmp[j] != 0x00000000) {
 				babinfo->chip_bank[i] = bank;
@@ -1082,6 +1072,10 @@ void bab_detect_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo, int b
 	}
 	for (i = first ; i < babinfo->chips; i++)
 		babinfo->chip_bank[i] = bank;
+
+	K_WLOCK(babinfo->sfree_list);
+	k_add_head(babinfo->sfree_list, item);
+	K_WUNLOCK(babinfo->sfree_list);
 }
 
 static const char *bab_modules[] = {
@@ -1190,8 +1184,6 @@ static void bab_init_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 {
 	int chip, chipoff, bank;
 
-	memset(babinfo->bank_off, 0, sizeof(babinfo->bank_off));
-
 	applog(LOG_WARNING, "%s V1 first test for %d chips ...",
 			    babcgpu->drv->dname, BAB_V1_CHIP_TEST);
 
@@ -1250,10 +1242,13 @@ static void bab_detect(bool hotplug)
 		babinfo->chip_fast[i] = BAB_DEFSPEED;
 	}
 
-	mutex_init(&babinfo->spi_lock);
-
 	if (!bab_init_gpio(babcgpu, babinfo, BAB_SPI_BUS, BAB_SPI_CHIP))
 		goto unalloc;
+
+	babinfo->sfree_list = k_new_list("SPI I/O", sizeof(SITEM),
+					 ALLOC_SITEMS, LIMIT_SITEMS, true);
+	babinfo->spi_list = k_new_store(babinfo->sfree_list);
+	babinfo->spi_sent = k_new_store(babinfo->sfree_list);
 
 	bab_init_chips(babcgpu, babinfo);
 
@@ -1265,6 +1260,10 @@ static void bab_detect(bool hotplug)
 	if (!add_cgpu(babcgpu))
 		goto cleanup;
 
+	cgsem_init(&(babinfo->scan_work));
+	cgsem_init(&(babinfo->spi_work));
+	cgsem_init(&(babinfo->spi_reply));
+
 	mutex_init(&babinfo->res_lock);
 	mutex_init(&babinfo->did_lock);
 	cglock_init(&babinfo->blist_lock);
@@ -1274,10 +1273,12 @@ static void bab_detect(bool hotplug)
 	return;
 
 cleanup:
+	babinfo->spi_sent = k_free_store(babinfo->spi_sent);
+	babinfo->spi_list = k_free_store(babinfo->spi_list);
+	babinfo->sfree_list = k_free_list(babinfo->sfree_list);
 	close(babinfo->spifd);
 	munmap((void *)(babinfo->gpio), BAB_SPI_BUFSIZ);
 unalloc:
-	mutex_destroy(&babinfo->spi_lock);
 	free(babinfo);
 	free(babcgpu);
 }
@@ -1286,11 +1287,6 @@ static void bab_identify(__maybe_unused struct cgpu_info *babcgpu)
 {
 }
 
-#define BAB_LONG_WAIT_uS 1200000
-#define BAB_WAIT_MSG_EVERY 200
-#define BAB_LONG_WAIT_SLEEP_uS 5000
-#define BAB_STD_WAIT_uS 3000
-
 // thread to do spi txrx
 static void *bab_spi(void *userdata)
 {
@@ -1298,7 +1294,7 @@ static void *bab_spi(void *userdata)
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	struct timeval start, stop;
 	double wait;
-	int i, buf, msgs;
+	K_ITEM *item;
 
 	applog(LOG_DEBUG, "%s%i: SPIing...",
 			  babcgpu->drv->name, babcgpu->device_id);
@@ -1311,51 +1307,32 @@ static void *bab_spi(void *userdata)
 		cgsleep_ms(3);
 	}
 
-	msgs = 0;
 	cgtime(&start);
 	while (babcgpu->shutdown == false) {
-		buf = -1;
-		mutex_lock(&(babinfo->spi_lock));
-		for (i = 0; i < BAB_SPI_BUFFERS; i++) {
-			if (babinfo->buf_status[i] == BAB_STATE_READY) {
-				babinfo->buf_status[i] = BAB_STATE_SENDING;
-				buf = i;
-				cgtime(&start);
-				break;
-			}
-		}
-		mutex_unlock(&(babinfo->spi_lock));
+		K_WLOCK(babinfo->spi_list);
+		item = k_unlink_tail(babinfo->spi_list);
+		K_WUNLOCK(babinfo->spi_list);
 
-		if (buf == -1) {
+		if (!item) {
 			cgtime(&stop);
 			wait = us_tdiff(&stop, &start);
-			if (wait > BAB_LONG_WAIT_uS) {
-				if ((msgs++ % BAB_WAIT_MSG_EVERY) == 0) {
-					applog(LOG_WARNING, "%s%i: SPI waiting %.0fus ...",
-								babcgpu->drv->name,
-								babcgpu->device_id,
-								(float)wait);
-				}
+			if (wait > BAB_LONG_uS) {
+				applog(LOG_WARNING, "%s%i: SPI waiting %.0fus ...",
+							babcgpu->drv->name,
+							babcgpu->device_id,
+							(float)wait);
 			}
-			cgsleep_us(BAB_LONG_WAIT_SLEEP_uS);
+			cgsem_mswait(&(babinfo->spi_work), BAB_LONG_WAIT_mS);
 			continue;
 		}
 
-		bab_txrx(buf, babinfo->buf_used[buf], false);
-		cgtime(&stop);
-		wait = us_tdiff(&stop, &start);
-		if (wait < BAB_STD_WAIT_uS)
-			cgsleep_us((uint64_t)(BAB_STD_WAIT_uS - wait));
-		else if (wait > BAB_LONG_WAIT_uS) {
-			applog(LOG_DEBUG, "%s%i: SPI waited %.0fus",
-					  babcgpu->drv->name, babcgpu->device_id,
-					  (float)wait);
-		}
-
-		mutex_lock(&(babinfo->spi_lock));
-		babinfo->buf_status[i] = BAB_STATE_SENT;
-		mutex_unlock(&(babinfo->spi_lock));
-		msgs = 0;
+		bab_txrx(item, false);
+		cgtime(&start);
+		K_WLOCK(babinfo->spi_sent);
+		k_add_head(babinfo->spi_sent, item);
+		K_WUNLOCK(babinfo->spi_sent);
+		cgsem_post(&(babinfo->spi_reply));
+		cgsem_mswait(&(babinfo->spi_work), BAB_STD_WAIT_mS);
 	}
 
 	return NULL;
@@ -1371,6 +1348,8 @@ static void bab_flush_work(struct cgpu_info *babcgpu)
 	mutex_lock(&(babinfo->did_lock));
 	memset(&(babinfo->last_did), 0, sizeof(babinfo->last_did));
 	mutex_unlock(&(babinfo->did_lock));
+
+	cgsem_post(&(babinfo->scan_work));
 }
 
 #define DATA_MERKLE7 16
@@ -1546,7 +1525,7 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 	}
 
 	// Send
-	res = bab_put(babcgpu, babinfo);
+	res = bab_put(babinfo);
 	if (!res) {
 		applog(LOG_DEBUG, "%s%i: couldn't put work ...",
 				  babcgpu->drv->name, babcgpu->device_id);
@@ -1711,12 +1690,12 @@ static bool bab_queue_full(struct cgpu_info *babcgpu)
  */
 #define BAB_STD_WORK_uS 1000000
 
-#define BAB_STD_DELAY_uS 30000
+#define BAB_STD_DELAY_mS 30
 
 /*
  * TODO: allow this to run through more than once - the second+
  * time not sending any new work unless a flush occurs since:
- * at the moment we have BAB_STD_WORK_uS latency added to earliest replies
+ * at the moment we have BAB_STD_WORK_mS latency added to earliest replies
  */
 static int64_t bab_scanwork(__maybe_unused struct thr_info *thr)
 {
@@ -1734,9 +1713,10 @@ static int64_t bab_scanwork(__maybe_unused struct thr_info *thr)
 		mutex_lock(&(babinfo->did_lock));
 		delay = us_tdiff(&now, &(babinfo->last_did));
 		mutex_unlock(&(babinfo->did_lock));
-		if (delay < (BAB_STD_WORK_uS - BAB_STD_DELAY_uS))
-			cgsleep_us(BAB_STD_DELAY_uS);
-		else
+		if (delay < (BAB_STD_WORK_uS - (BAB_STD_DELAY_mS * 1000))) {
+			// So it can be interrupted early
+			cgsem_mswait(&(babinfo->scan_work), BAB_STD_DELAY_mS);
+		} else
 			break;
 	}
 
