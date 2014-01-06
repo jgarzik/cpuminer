@@ -342,6 +342,12 @@ retry:
 				memcpy(data + offset, buf + 4, *length);
 				offset += *length;
 			}
+			if (status == 0x30) {
+				/* This shouldn't happen */
+				applog(LOG_DEBUG, "%s %d: SPI expecting more data inappropriately",
+				       cgpu->drv->name, cgpu->device_id);
+				return false;
+			}
 			if (offset < orig_len) {
 				*length = 0;
 				goto retry;
