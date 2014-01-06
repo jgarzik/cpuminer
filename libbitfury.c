@@ -10,6 +10,7 @@
  */
 
 #include "miner.h"
+#include "driver-bitfury.h"
 #include "libbitfury.h"
 #include "sha2.h"
 
@@ -148,6 +149,71 @@ void bitfury_work_to_payload(struct bitfury_payload *p, struct work *w)
 	applog(LOG_INFO, "INFO merkle[7]: %08x, ntime: %08x, nbits: %08x", p->m7, p->ntime, p->nbits);
 }
 
+/* Configuration registers - control oscillators and such stuff. PROGRAMMED when
+ * magic number matches, UNPROGRAMMED (default) otherwise */
+void spi_config_reg(struct bitfury_info *info, int cfgreg, int ena)
+{
+	static const uint8_t enaconf[4] = { 0xc1, 0x6a, 0x59, 0xe3 };
+	static const uint8_t disconf[4] = { 0, 0, 0, 0 };
+
+	if (ena)
+		spi_add_data(info, 0x7000 + cfgreg * 32, enaconf, 4);
+	else
+		spi_add_data(info, 0x7000 + cfgreg * 32, disconf, 4);
+}
+
+void spi_set_freq(struct bitfury_info *info)
+{
+	uint64_t freq;
+	const uint8_t *osc6 = (unsigned char *)&freq;
+
+	freq = (1ULL << info->osc6_bits) - 1ULL;
+	spi_add_data(info, 0x6000, osc6, 8); /* Program internal on-die slow oscillator frequency */
+}
+
+#define FIRST_BASE 61
+#define SECOND_BASE 4
+
+void spi_send_conf(struct bitfury_info *info)
+{
+	const int8_t nf1_counters[16] = { 64, 64, SECOND_BASE, SECOND_BASE+4, SECOND_BASE+2,
+		SECOND_BASE+2+16, SECOND_BASE, SECOND_BASE+1, (FIRST_BASE)%65, (FIRST_BASE+1)%65,
+		(FIRST_BASE+3)%65, (FIRST_BASE+3+16)%65, (FIRST_BASE+4)%65, (FIRST_BASE+4+4)%65,
+		(FIRST_BASE+3+3)%65, (FIRST_BASE+3+1+3)%65 };
+	int i;
+
+	for (i = 7; i <= 11; i++)
+		spi_config_reg(info, i, 0);
+	spi_config_reg(info, 6, 0); /* disable OUTSLK */
+	spi_config_reg(info, 4, 1); /* Enable slow oscillator */
+	for (i = 1; i <= 3; ++i)
+		spi_config_reg(info, i, 0);
+	/* Program counters correctly for rounds processing, here it should
+	 * start consuming power */
+	spi_add_data(info, 0x0100, nf1_counters, 16);
+}
+
+void spi_send_init(struct bitfury_info *info)
+{
+	/* Prepare internal buffers */
+	/* PREPARE BUFFERS (INITIAL PROGRAMMING) */
+	unsigned int w[16];
+
+	ms3steps(atrvec);
+	ms3steps(&atrvec[20]);
+	ms3steps(&atrvec[40]);
+	memset(&w, 0, sizeof(w));
+	w[3] = 0xffffffff;
+	w[4] = 0x80000000;
+	w[15] = 0x00000280;
+	spi_add_data(info, 0x1000, w, 16 * 4);
+	spi_add_data(info, 0x1400, w, 8 * 4);
+	memset(w, 0, sizeof(w));
+	w[0] = 0x80000000;
+	w[7] = 0x100;
+	spi_add_data(info, 0x1900, w, 8 * 4); /* Prepare MS and W buffers! */
+	spi_add_data(info, 0x3000, atrvec, 19 * 4);
+}
 void spi_clear_buf(struct bitfury_info *info)
 {
 	info->spibufsz = 0;
@@ -155,7 +221,7 @@ void spi_clear_buf(struct bitfury_info *info)
 
 void spi_add_buf(struct bitfury_info *info, const void *buf, const int sz)
 {
-	if (unlikely(info->spibufsz + sz > NF1_SPIBUF_SIZE)) {
+	if (unlikely(info->spibufsz + sz > SPIBUF_SIZE)) {
 		applog(LOG_WARNING, "SPI bufsize overflow!");
 		return;
 	}
@@ -261,7 +327,7 @@ bool spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
 	return true;
 }
 
-void libbitfury_sendHashData(struct cgpu_info *bf)
+bool libbitfury_sendHashData(struct cgpu_info *bf)
 {
 	struct bitfury_info *info = bf->device_data;
 	static unsigned second_run;
@@ -277,7 +343,8 @@ void libbitfury_sendHashData(struct cgpu_info *bf)
 	spi_clear_buf(info);
 	spi_add_break(info);
 	spi_add_data(info, 0x3000, (void*)&atrvec[0], 19 * 4);
-	spi_txrx(bf, info);
+	if (!spi_txrx(bf, info))
+		return false;
 
 	memcpy(newbuf, info->spibuf + 4, 17 * 4);
 
@@ -312,4 +379,6 @@ void libbitfury_sendHashData(struct cgpu_info *bf)
 
 	cgsleep_ms(BITFURY_REFRESH_DELAY);
 	second_run = 1;
+
+	return true;
 }

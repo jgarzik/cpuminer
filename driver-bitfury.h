@@ -29,7 +29,7 @@ extern int opt_bxf_temp_target;
 #define NF1_PIN_SCK_OVR 5
 #define NF1_PIN_PWR_EN 6
 
-#define NF1_SPIBUF_SIZE 16384
+#define SPIBUF_SIZE 16384
 
 struct bitfury_payload {
 	unsigned char midstate[32];
@@ -77,7 +77,7 @@ struct bitfury_info {
 
 	/* NF1 specific data */
 	struct mcp_settings mcp;
-	char spibuf[NF1_SPIBUF_SIZE];
+	char spibuf[SPIBUF_SIZE];
 	unsigned int spibufsz;
 	int osc6_bits;
 	struct bitfury_payload payload;
