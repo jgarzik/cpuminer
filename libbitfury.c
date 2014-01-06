@@ -104,7 +104,6 @@ static int rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned
 {
 	unsigned char in[16];
 	unsigned int *in32 = (unsigned int *)in;
-	char *hex;
 	unsigned int *mid32 = (unsigned int *)midstate;
 	unsigned out32[8];
 	unsigned char *out = (unsigned char *) out32;
@@ -125,8 +124,9 @@ static int rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned
 	sha256(out, 32, out);
 
 	if (out32[7] == 0) {
-		hex = bin2hex(midstate, 32);
-		hex = bin2hex(out, 32);
+		char hex[68];
+
+		__bin2hex(hex, out, 32);
 		applog(LOG_INFO, "! MS0: %08x, m7: %08x, ntime: %08x, nbits: %08x, nnonce: %08x\n\t\t\t out: %s\n", mid32[0], m7, ntime, nbits, nnonce, hex);
 		return 1;
 	}
