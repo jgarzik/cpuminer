@@ -284,6 +284,8 @@ static void nf1_close(struct cgpu_info *bitfury)
 	struct mcp_settings *mcp = &info->mcp;
 	int i;
 
+	mcp2210_spi_cancel(bitfury);
+
 	/* Set all pins to input mode, ignoring return code */
 	for (i = 0; i < 9; i++) {
 		mcp->direction.pin[i] = MCP2210_GPIO_INPUT;
