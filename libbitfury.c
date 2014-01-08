@@ -163,10 +163,8 @@ void spi_config_reg(struct bitfury_info *info, int cfgreg, int ena)
 
 void spi_set_freq(struct bitfury_info *info)
 {
-	uint64_t freq;
-	const uint8_t *osc6 = (unsigned char *)&freq;
+	unsigned char osc6[8] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F, 0x00, 0x00 };
 
-	freq = (1ULL << info->osc6_bits) - 1ULL;
 	spi_add_data(info, 0x6000, osc6, 8); /* Program internal on-die slow oscillator frequency */
 }
 
