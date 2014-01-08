@@ -360,7 +360,7 @@ bool libbitfury_sendHashData(struct cgpu_info *bf)
 	unsigned *oldbuf = info->oldbuf;
 	struct bitfury_payload *p = &(info->payload);
 	struct bitfury_payload *op = &(info->opayload);
-	unsigned int localvec[80];
+	unsigned int localvec[20];
 
 	/* Programming next value */
 	memcpy(localvec, p, 20 * 4);
