@@ -181,7 +181,7 @@ void spi_send_conf(struct bitfury_info *info)
 
 	for (i = 7; i <= 11; i++)
 		spi_config_reg(info, i, 0);
-	spi_config_reg(info, 6, 0); /* disable OUTSLK */
+	spi_config_reg(info, 6, 1); /* disable OUTSLK */
 	spi_config_reg(info, 4, 1); /* Enable slow oscillator */
 	for (i = 1; i <= 3; ++i)
 		spi_config_reg(info, i, 0);
