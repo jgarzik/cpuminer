@@ -392,9 +392,6 @@ bool libbitfury_sendHashData(struct cgpu_info *bf)
 				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn) ? pn : 0;
 				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn-0x400000) ? pn - 0x400000 : 0;
 				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn-0x800000) ? pn - 0x800000 : 0;
-				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn+0x2800000)? pn + 0x2800000 : 0;
-				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn+0x2C00000)? pn + 0x2C00000 : 0;
-				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn+0x400000) ? pn + 0x400000 : 0;
 				if (s)
 					results[results_num++] = bswap_32(s);
 			}
