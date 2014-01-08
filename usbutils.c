@@ -2498,6 +2498,7 @@ usb_perform_transfer(struct cgpu_info *cgpu, struct cg_usb_device *usbdev, int i
 	struct usb_epinfo *usb_epinfo;
 	struct usb_transfer ut;
 	unsigned char endpoint;
+	bool interrupt;
 	int err, errn;
 #if DO_USB_STATS
 	struct timeval tv_start, tv_finish;
@@ -2514,6 +2515,7 @@ usb_perform_transfer(struct cgpu_info *cgpu, struct cg_usb_device *usbdev, int i
 #endif
 
 	usb_epinfo = &(usbdev->found->intinfos[intinfo].epinfos[epinfo]);
+	interrupt = usb_epinfo->att == LIBUSB_TRANSFER_TYPE_INTERRUPT;
 	endpoint = usb_epinfo->ep;
 
 	/* Avoid any async transfers during shutdown to allow the polling
@@ -2529,7 +2531,7 @@ pipe_retry:
 		/* Older versions may not have this feature so only enable it
 		 * when we know we're compiling with included static libusb. We
 		 * only do this for bulk transfer, not interrupt. */
-		if (usb_epinfo->att != LIBUSB_TRANSFER_TYPE_INTERRUPT)
+		if (!interrupt)
 			ut.transfer->flags |= LIBUSB_TRANSFER_ADD_ZERO_PACKET;
 #endif
 #ifdef WIN32
@@ -2543,8 +2545,14 @@ pipe_retry:
 
 	USBDEBUG("USB debug: @usb_perform_transfer(%s (nodev=%s),intinfo=%d,epinfo=%d,data=%p,length=%d,timeout=%u,mode=%d,cmd=%s,seq=%d) endpoint=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, data, length, timeout, mode, usb_cmdname(cmd), seq, (int)endpoint);
 
-	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
-				  transfer_callback, &ut, bulk_timeout);
+	if (interrupt) {
+		libusb_fill_interrupt_transfer(ut.transfer, dev_handle, endpoint,
+					       buf, length, transfer_callback, &ut,
+				 bulk_timeout);
+	} else {
+		libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf,
+					  length, transfer_callback, &ut, bulk_timeout);
+	}
 	STATS_TIMEVAL(&tv_start);
 	err = usb_submit_transfer(&ut, ut.transfer, cancellable, tt);
 	errn = errno;
