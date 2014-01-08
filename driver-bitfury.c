@@ -921,16 +921,16 @@ static int64_t bxf_scan(struct cgpu_info *bitfury, struct bitfury_info *info)
 static int64_t nf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 			struct bitfury_info *info)
 {
-	struct work *work;
 	int64_t ret = 0;
 
-	work = get_queue_work(thr, bitfury, thr->id);
-	if (unlikely(thr->work_restart)) {
-		work_completed(bitfury, work);
-		return 0;
+	if (!info->work) {
+		info->work = get_queue_work(thr, bitfury, thr->id);
+		if (unlikely(thr->work_restart)) {
+			work_completed(bitfury, info->work);
+			return 0;
+		}
+		bitfury_work_to_payload(&info->payload, info->work);
 	}
-	info->work = work;
-	bitfury_work_to_payload(&info->payload, work);
 	if (!libbitfury_sendHashData(bitfury))
 		return -1;
 
