@@ -15,7 +15,7 @@ static void k_alloc_items(K_LIST *list, KLIST_FFL_ARGS)
 	int allocate, i;
 
 	if (list->is_store) {
-		quithere(1, "List %s store can't %s" KLIST_FFL,
+		quithere(1, "List %s store can't %s()" KLIST_FFL,
 				list->name, __func__, KLIST_FFL_PASS);
 	}
 
@@ -177,7 +177,7 @@ K_ITEM *_k_unlink_tail(K_LIST *list, KLIST_FFL_ARGS)
 	K_ITEM *item;
 
 	if (!(list->do_tail)) {
-		quithere(1, "List %s do_tail false can't %s" KLIST_FFL,
+		quithere(1, "List %s can't %s() - do_tail is false" KLIST_FFL,
 				list->name, __func__, KLIST_FFL_PASS);
 	}
 
@@ -201,7 +201,7 @@ K_ITEM *_k_unlink_tail(K_LIST *list, KLIST_FFL_ARGS)
 void _k_add_head(K_LIST *list, K_ITEM *item, KLIST_FFL_ARGS)
 {
 	if (item->name != list->name) {
-		quithere(1, "List %s can't %s a %s item" KLIST_FFL,
+		quithere(1, "List %s can't %s() a %s item" KLIST_FFL,
 				list->name, __func__, item->name, KLIST_FFL_PASS);
 	}
 
@@ -228,6 +228,32 @@ void _k_free_head(K_LIST *list, K_ITEM *item, KLIST_FFL_ARGS)
 	_k_add_head(list, item, KLIST_FFL_PASS);
 }
 */
+
+void _k_add_tail(K_LIST *list, K_ITEM *item, KLIST_FFL_ARGS)
+{
+	if (item->name != list->name) {
+		quithere(1, "List %s can't %s() a %s item" KLIST_FFL,
+				list->name, __func__, item->name, KLIST_FFL_PASS);
+	}
+
+	if (!(list->do_tail)) {
+		quithere(1, "List %s can't %s() - do_tail is false" KLIST_FFL,
+				list->name, __func__, KLIST_FFL_PASS);
+	}
+
+	item->prev = list->tail;
+	item->next = NULL;
+	if (list->tail)
+		list->tail->next = item;
+
+	list->tail = item;
+
+	if (!(list->head))
+		list->head = item;
+
+	list->count++;
+	list->count_up++;
+}
 
 void k_unlink_item(K_LIST *list, K_ITEM *item)
 {

@@ -56,7 +56,6 @@ typedef struct k_list {
 /*
  * N.B. all locking is done in the code calling the k_ functions
  */
-
 #define K_WLOCK(_list) cg_wlock(_list->lock)
 #define K_WUNLOCK(_list) cg_wunlock(_list->lock)
 #define K_RLOCK(_list) cg_rlock(_list->lock)
@@ -75,6 +74,8 @@ extern void _k_add_head(K_LIST *list, K_ITEM *item, KLIST_FFL_ARGS);
 #define k_add_head(_list, _item) _k_add_head(_list, _item, KLIST_FFL_HERE)
 // extern void k_free_head(K_LIST *list, K_ITEM *item, KLIST_FFL_ARGS);
 #define k_free_head(__list, __item) _k_add_head(__list, __item, KLIST_FFL_HERE)
+extern void _k_add_tail(K_LIST *list, K_ITEM *item, KLIST_FFL_ARGS);
+#define k_add_tail(_list, _item) _k_add_tail(_list, _item, KLIST_FFL_HERE)
 extern void k_unlink_item(K_LIST *list, K_ITEM *item);
 extern K_LIST *_k_free_list(K_LIST *list, KLIST_FFL_ARGS);
 #define k_free_list(_list) _k_free_list(_list, KLIST_FFL_HERE)
