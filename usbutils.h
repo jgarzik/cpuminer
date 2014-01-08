@@ -421,7 +421,7 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 void usb_detect(struct device_drv *drv, struct cgpu_info *(*device_detect)(struct libusb_device *, struct usb_find_devices *));
 struct api_data *api_usb_stats(int *count);
 void update_usb_stats(struct cgpu_info *cgpu);
-int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, int timeout, const char *end, enum usb_cmds cmd, bool readonce, bool cancellable, bool limit);
+int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, int timeout, const char *end, enum usb_cmds cmd, bool readonce, bool cancellable);
 int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, int timeout, enum usb_cmds);
 int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, unsigned int timeout, enum usb_cmds cmd);
 int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, char *buf, int bufsiz, int *amount, unsigned int timeout, enum usb_cmds cmd);
@@ -440,61 +440,58 @@ void *usb_resource_thread(void *userdata);
 void initialise_usblocks(void);
 
 #define usb_read(cgpu, buf, bufsiz, read, cmd) \
-	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false, false, false)
-
-#define usb_read_limit(cgpu, buf, bufsiz, read, cmd) \
-	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false, false, true)
+	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false, false)
 
 #define usb_read_cancellable(cgpu, buf, bufsiz, read, cmd) \
-	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false, true, false)
+	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false, true)
 
 #define usb_read_ii(cgpu, intinfo, buf, bufsiz, read, cmd) \
-	_usb_read(cgpu, intinfo, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false, false, false)
+	_usb_read(cgpu, intinfo, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false, false)
 
 #define usb_read_once(cgpu, buf, bufsiz, read, cmd) \
-	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, true, false, false)
+	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, true, false)
 
 #define usb_read_ii_once(cgpu, intinfo, buf, bufsiz, read, cmd) \
-	_usb_read(cgpu, intinfo, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, true, false, false)
+	_usb_read(cgpu, intinfo, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, true, false)
 
 #define usb_read_once_timeout(cgpu, buf, bufsiz, read, timeout, cmd) \
-	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, true, false, false)
+	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, true, false)
 
 #define usb_read_once_timeout_cancellable(cgpu, buf, bufsiz, read, timeout, cmd) \
-	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, true, true, false)
+	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, true, true)
 
 #define usb_read_ii_once_timeout(cgpu, intinfo, buf, bufsiz, read, timeout, cmd) \
-	_usb_read(cgpu, intinfo, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, true, false, false)
+	_usb_read(cgpu, intinfo, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, true, false)
 
 #define usb_read_nl(cgpu, buf, bufsiz, read, cmd) \
-	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, "\n", cmd, false, false, false)
+	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, "\n", cmd, false, false)
 
 #define usb_read_nl_timeout(cgpu, buf, bufsiz, read, timeout, cmd) \
-	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, timeout, "\n", cmd, false, false, false)
+	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, timeout, "\n", cmd, false, false)
 
 #define usb_read_ok(cgpu, buf, bufsiz, read, cmd) \
-	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, "OK\n", cmd, false, false, false)
+	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, "OK\n", cmd, false, false)
 
 #define usb_read_ok_timeout(cgpu, buf, bufsiz, read, timeout, cmd) \
-	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, timeout, "OK\n", cmd, false, false, false)
+	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, timeout, "OK\n", cmd, false, false)
 
 #define usb_read_ep(cgpu, ep, buf, bufsiz, read, cmd) \
-	_usb_read(cgpu, DEFAULT_INTINFO, ep, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false, false, false)
+	_usb_read(cgpu, DEFAULT_INTINFO, ep, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false, false)
 
 #define usb_read_timeout(cgpu, buf, bufsiz, read, timeout, cmd) \
-	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, false, false, false)
+	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, false, false)
 
 #define usb_read_timeout_cancellable(cgpu, buf, bufsiz, read, timeout, cmd) \
-	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, false, true, false)
+	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, false, true)
 
 #define usb_read_ii_timeout(cgpu, intinfo, buf, bufsiz, read, timeout, cmd) \
-	_usb_read(cgpu, intinfo, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, false, false, false)
+	_usb_read(cgpu, intinfo, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, false, false)
 
 #define usb_read_ii_timeout_cancellable(cgpu, intinfo, buf, bufsiz, read, timeout, cmd) \
-	_usb_read(cgpu, intinfo, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, false, true, false)
+	_usb_read(cgpu, intinfo, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, false, true)
 
 #define usb_read_ep_timeout(cgpu, ep, buf, bufsiz, read, timeout, cmd) \
-	_usb_read(cgpu, DEFAULT_INTINFO, ep, buf, bufsiz, read, timeout, NULL, cmd, false, false, false)
+	_usb_read(cgpu, DEFAULT_INTINFO, ep, buf, bufsiz, read, timeout, NULL, cmd, false, false)
 
 #define usb_write(cgpu, buf, bufsiz, wrote, cmd) \
 	_usb_write(cgpu, DEFAULT_INTINFO, DEFAULT_EP_OUT, buf, bufsiz, wrote, DEVTIMEOUT, cmd)
