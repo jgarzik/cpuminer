@@ -20,7 +20,8 @@
 
 /*
  * Tested on RPi running both Raspbian and Arch
- *  with BlackArrow BitFury V1 16 chip GPIO board
+ *  with BlackArrow BitFury V1 & V2 GPIO Controller
+ *  with 16 chip BlackArrow BitFury boards
  */
 
 #ifndef LINUX
@@ -232,25 +233,16 @@ struct bab_work_reply {
 	uint32_t jobsel;
 };
 
-// TODO: convert blist/rlist to klist
-#define MAX_BLISTS 4096
+#define ALLOC_WITEMS 1024
+#define LIMIT_WITEMS 0
 
-typedef struct blist {
-	struct blist *prev;
-	struct blist *next;
+// Work
+typedef struct witem {
 	struct work *work;
+	struct bab_work_send chip_input;
+	bool ci_setup;
 	int nonces;
-} BLIST;
-
-#define MAX_RLISTS 256
-
-typedef struct rlist {
-	struct rlist *prev;
-	struct rlist *next;
-	int chip;
-	uint32_t nonce;
-	bool first_second;
-} RLIST;
+} WITEM;
 
 #define ALLOC_SITEMS 8
 #define LIMIT_SITEMS 0
@@ -262,17 +254,29 @@ typedef struct sitem {
 	uint8_t rbuf[BAB_MAXBUF];
 	uint32_t chip_off[BAB_MAXCHIPS+1];
 	uint32_t bank_off[BAB_MAXBANKS+2];
+	// WITEMs used to build the work
+	K_ITEM *witems[BAB_MAXCHIPS];
 } SITEM;
 
+#define ALLOC_RITEMS 256
+#define LIMIT_RITEMS 0
+
+// Results
+typedef struct ritem {
+	int chip;
+	uint32_t nonce;
+	bool first_second;
+} RITEM;
+
+#define DATAW(_item) ((WITEM *)(_item->data))
 #define DATAS(_item) ((SITEM *)(_item->data))
+#define DATAR(_item) ((RITEM *)(_item->data))
 
 struct bab_info {
 	struct thr_info spi_thr;
 	struct thr_info res_thr;
 
-	pthread_mutex_t res_lock;
 	pthread_mutex_t did_lock;
-	cglock_t blist_lock;
 
 	// All GPIO goes through this
 	volatile unsigned *gpio;
@@ -285,15 +289,7 @@ struct bab_info {
 	cgsem_t spi_work;
 	cgsem_t spi_reply;
 
-	// SPI I/O
-	K_LIST *sfree_list;
-	// Waiting to send
-	K_STORE *spi_list;
-	// Sent
-	K_STORE *spi_sent;
-
-
-	struct bab_work_send chip_input[BAB_MAXCHIPS];
+	// TODO: redesign these 2
 	struct bab_work_reply chip_results[BAB_MAXCHIPS];
 	struct bab_work_reply chip_prev[BAB_MAXCHIPS];
 
@@ -305,12 +301,13 @@ struct bab_info {
 
 	uint8_t osc[BAB_OSC];
 
+	// TODO: performance tuning
 	int fixchip;
 
 	/*
 	 * Ignore errors in the first work reply since
 	 * they may be from a previous run or random junk
-	 * There can be >100 with just a 16 chip board
+	 * There can be >100 with just one 16 chip board
 	 */
 	uint32_t initial_ignored;
 	bool nonce_before[BAB_MAXCHIPS];
@@ -350,20 +347,25 @@ struct bab_info {
 	uint64_t ign_total_links;
 	uint64_t ign_total_work_links;
 
-	int blist_count;
-	int bfree_count;
-	int work_count;
-	int chip_count;
-	BLIST *bfree_list;
-	BLIST *work_list;
+/*
 	BLIST *chip_list[BAB_MAXCHIPS];
+*/
 
-	int rlist_count;
-	int rfree_count;
-	int res_count;
-	RLIST *rfree_list;
-	RLIST *res_list_head;
-	RLIST *res_list_tail;
+	// Work
+	K_LIST *wfree_list;
+	K_STORE *available_work;
+	K_STORE *chip_work[BAB_MAXCHIPS];
+
+	// SPI I/O
+	K_LIST *sfree_list;
+	// Waiting to send
+	K_STORE *spi_list;
+	// Sent
+	K_STORE *spi_sent;
+
+	// Results
+	K_LIST *rfree_list;
+	K_STORE *res_list;
 
 	struct timeval last_did;
 
@@ -376,281 +378,69 @@ struct bab_info {
 
 #define BAB_REPLY_WAIT_mS 188
 
-static BLIST *new_blist_set(struct cgpu_info *babcgpu)
+/*
+ * TODO: add sent time to work so when there are a lot of errors
+ * in a row, work can be discarded earlier if it is older than some limit
+ * A bad nonce will be tested 3 times against every work item
+ * in the chip's work list (since it will fail every test)
+ */
+static void cleanup_older(struct cgpu_info *babcgpu, int chip, K_ITEM *item)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	BLIST *blist = NULL;
-	int i;
+	K_ITEM *tail;
 
-	blist = calloc(MAX_BLISTS, sizeof(*blist));
-	if (!blist)
-		quithere(1, "Failed to calloc blist - when old count=%d", babinfo->blist_count);
-
-	babinfo->blist_count += MAX_BLISTS;
-	babinfo->bfree_count = MAX_BLISTS;
-
-	blist[0].prev = NULL;
-	blist[0].next = &(blist[1]);
-	for (i = 1; i < MAX_BLISTS-1; i++) {
-		blist[i].prev = &blist[i-1];
-		blist[i].next = &blist[i+1];
-	}
-	blist[MAX_BLISTS-1].prev = &(blist[MAX_BLISTS-2]);
-	blist[MAX_BLISTS-1].next = NULL;
-
-	return blist;
-}
-
-static BLIST *next_work(struct cgpu_info *babcgpu, int chip)
-{
-	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	BLIST *bitem;
-
-	cg_wlock(&babinfo->blist_lock);
-	bitem = babinfo->work_list;
-	if (bitem) {
-		// Unlink it from work
-		if (bitem->next)
-			bitem->next->prev = NULL;
-		babinfo->work_list = bitem->next;
-		babinfo->work_count--;
-
-		// Add it to the chip
-		bitem->next = babinfo->chip_list[chip];
-		bitem->prev = NULL;
-		if (bitem->next)
-			bitem->next->prev = bitem;
-		babinfo->chip_list[chip] = bitem;
-		babinfo->chip_count++;
-	}
-	cg_wunlock(&babinfo->blist_lock);
-
-	return bitem;
-}
-
-static void discard_last(struct cgpu_info *babcgpu, int chip)
-{
-	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	BLIST *bitem;
-
-	cg_wlock(&babinfo->blist_lock);
-	bitem = babinfo->chip_list[chip];
-	if (bitem) {
-		// Unlink it from the chip
-		if (bitem->next)
-			bitem->next->prev = NULL;
-		babinfo->chip_list[chip] = bitem->next;
-		babinfo->chip_count--;
-
-		// Put it in the free list
-		bitem->next = babinfo->bfree_list;
-		bitem->prev = NULL;
-		if (bitem->next)
-			bitem->next->prev = bitem;
-		babinfo->bfree_list = bitem;
-		babinfo->bfree_count++;
-	}
-	cg_wunlock(&babinfo->blist_lock);
-}
-
-static BLIST *store_work(struct cgpu_info *babcgpu, struct work *work)
-{
-	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	BLIST *bitem = NULL;
-	int ran_out = 0;
-
-	cg_wlock(&babinfo->blist_lock);
-
-	if (babinfo->bfree_list == NULL) {
-		ran_out = babinfo->blist_count;
-		babinfo->bfree_list = new_blist_set(babcgpu);
-	}
-
-	// unlink from free
-	bitem = babinfo->bfree_list;
-	babinfo->bfree_list = babinfo->bfree_list->next;
-	if (babinfo->bfree_list)
-		babinfo->bfree_list->prev = NULL;
-	babinfo->bfree_count--;
-
-	// add to work
-	bitem->next = babinfo->work_list;
-	bitem->prev = NULL;
-	if (bitem->next)
-		bitem->next->prev = bitem;
-	babinfo->work_list = bitem;
-	babinfo->work_count++;
-
-	bitem->work = work;
-	bitem->nonces = 0;
-
-	cg_wunlock(&babinfo->blist_lock);
-
-	if (ran_out > 0) {
-		applog(LOG_ERR, "%s%i: BLIST used count exceeded %d, now %d (work=%d chip=%d)",
-				babcgpu->drv->name, babcgpu->device_id,
-				ran_out, babinfo->blist_count,
-				babinfo->work_count,
-				babinfo->chip_count);
-	}
-
-	return bitem;
-}
-
-static void free_blist(struct cgpu_info *babcgpu, BLIST *bhead, int chip)
-{
-	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	struct work *work;
-	BLIST *bitem;
-
-	if (!bhead)
+	if (!item || !(item->next))
 		return;
 
-	// Unlink it from the chip
-	cg_wlock(&babinfo->blist_lock);
-	if (unlikely(bhead == babinfo->chip_list[chip])) {
-		// Removing the chip head is an error
-		bhead = bhead->next;
-		babinfo->chip_list[chip]->next = NULL;
-	} else
-		bhead->prev->next = NULL;
-	bitem = bhead;
-	while (bitem) {
-		babinfo->chip_count--;
-		bitem = bitem->next;
+	K_WLOCK(babinfo->chip_work[chip]);
+	tail = babinfo->chip_work[chip]->tail;
+	while (tail && tail != item) {
+		k_unlink_item(babinfo->chip_work[chip], tail);
+		K_WUNLOCK(babinfo->chip_work[chip]);
+		work_completed(babcgpu, DATAW(tail)->work);
+		K_WLOCK(babinfo->chip_work[chip]);
+		k_add_head(babinfo->wfree_list, tail);
+		tail = babinfo->chip_work[chip]->tail;
 	}
-	cg_wunlock(&babinfo->blist_lock);
-
-	while (bhead) {
-		bitem = bhead;
-		bhead = bitem->next;
-
-		// add to free
-		cg_wlock(&babinfo->blist_lock);
-		bitem->next = babinfo->bfree_list;
-		if (babinfo->bfree_list)
-			babinfo->bfree_list->prev = bitem;
-		bitem->prev = NULL;
-		babinfo->bfree_list = bitem;
-		babinfo->bfree_count++;
-		work = bitem->work;
-		cg_wunlock(&babinfo->blist_lock);
-
-		work_completed(babcgpu, work);
-	}
-
+	K_WUNLOCK(babinfo->chip_work[chip]);
 }
 
-static RLIST *new_rlist_set(struct cgpu_info *babcgpu)
+static void store_nonce(struct bab_info *babinfo, int chip, uint32_t nonce, bool first_second)
 {
-	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	RLIST *rlist = NULL;
-	int i;
+	K_ITEM *item = NULL;
 
-	rlist = calloc(MAX_RLISTS, sizeof(*rlist));
-	if (!rlist)
-		quithere(1, "Failed to calloc rlist - when old count=%d", babinfo->rlist_count);
+	K_WLOCK(babinfo->rfree_list);
 
-	babinfo->rlist_count += MAX_RLISTS;
-	babinfo->rfree_count = MAX_RLISTS;
+	item = k_unlink_head_zero(babinfo->rfree_list);
 
-	rlist[0].prev = NULL;
-	rlist[0].next = &(rlist[1]);
-	for (i = 1; i < MAX_RLISTS-1; i++) {
-		rlist[i].prev = &rlist[i-1];
-		rlist[i].next = &rlist[i+1];
-	}
-	rlist[MAX_RLISTS-1].prev = &(rlist[MAX_RLISTS-2]);
-	rlist[MAX_RLISTS-1].next = NULL;
+	DATAR(item)->chip = chip;
+	DATAR(item)->nonce = nonce;
+	DATAR(item)->first_second = first_second;
 
-	return rlist;
+	k_add_head(babinfo->res_list, item);
+
+	K_WUNLOCK(babinfo->rfree_list);
 }
 
-static RLIST *store_nonce(struct cgpu_info *babcgpu, int chip, uint32_t nonce, bool first_second)
+static bool oldest_nonce(struct bab_info *babinfo, int *chip, uint32_t *nonce, bool *first_second)
 {
-	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	RLIST *ritem = NULL;
-	int ran_out = 0;
+	K_ITEM *item = NULL;
 
-	mutex_lock(&(babinfo->res_lock));
+	K_WLOCK(babinfo->res_list);
 
-	if (babinfo->rfree_list == NULL) {
-		ran_out = babinfo->rlist_count;
-		babinfo->rfree_list = new_rlist_set(babcgpu);
+	item = k_unlink_tail(babinfo->res_list);
+
+	if (item) {
+		*chip = DATAR(item)->chip;
+		*nonce = DATAR(item)->nonce;
+		*first_second = DATAR(item)->first_second;
+
+		k_add_head(babinfo->rfree_list, item);
 	}
 
-	// unlink from rfree
-	ritem = babinfo->rfree_list;
-	babinfo->rfree_list = babinfo->rfree_list->next;
-	if (babinfo->rfree_list)
-		babinfo->rfree_list->prev = NULL;
-	babinfo->rfree_count--;
+	K_WUNLOCK(babinfo->res_list);
 
-	// add to head of results
-	ritem->next = babinfo->res_list_head;
-	ritem->prev = NULL;
-	babinfo->res_list_head = ritem;
-	if (ritem->next)
-		ritem->next->prev = ritem;
-	else
-		babinfo->res_list_tail = ritem;
-
-	babinfo->res_count++;
-
-	ritem->chip = chip;
-	ritem->nonce = nonce;
-	ritem->first_second = first_second;
-
-	mutex_unlock(&(babinfo->res_lock));
-
-	if (ran_out > 0) {
-		applog(LOG_ERR, "%s%i: RLIST used count exceeded %d, now %d (work=%d chip=%d)",
-				babcgpu->drv->name, babcgpu->device_id,
-				ran_out, babinfo->rlist_count,
-				babinfo->work_count,
-				babinfo->chip_count);
-	}
-
-	return ritem;
-}
-
-static bool oldest_nonce(struct cgpu_info *babcgpu, int *chip, uint32_t *nonce, bool *first_second)
-{
-	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	RLIST *ritem = NULL;
-	bool found = false;
-
-	mutex_lock(&(babinfo->res_lock));
-
-	if (babinfo->res_list_tail) {
-		// unlink from res
-		ritem = babinfo->res_list_tail;
-		if (ritem->prev) {
-			ritem->prev->next = NULL;
-			babinfo->res_list_tail = ritem->prev;
-		} else
-			babinfo->res_list_head = babinfo->res_list_tail = NULL;
-
-		babinfo->res_count--;
-
-		found = true;
-		*chip = ritem->chip;
-		*nonce = ritem->nonce;
-		*first_second = ritem->first_second;
-
-		// add to rfree
-		ritem->next = babinfo->rfree_list;
-		ritem->prev = NULL;
-		if (ritem->next)
-			ritem->next->prev = ritem;
-		babinfo->rfree_list = ritem;
-
-		babinfo->rfree_count++;
-	}
-
-	mutex_unlock(&(babinfo->res_lock));
-
-	return found;
+	return (item != NULL);
 }
 
 static void _bab_reset(__maybe_unused struct cgpu_info *babcgpu, struct bab_info *babinfo, int bank, int times)
@@ -697,7 +487,7 @@ static void _bab_reset(__maybe_unused struct cgpu_info *babcgpu, struct bab_info
 // TODO: handle a false return where this is called?
 static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, K_ITEM *item, bool detect_ignore, const char *file, const char *func, const int line)
 {
-	int bank, i;
+	int bank, i, count;
 	uint32_t siz, pos;
 	struct spi_ioc_transfer tran;
 	uintptr_t rbuf, wbuf;
@@ -726,6 +516,7 @@ static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, K_ITE
 		return false;
 	}
 
+	count = 0;
 	while (siz > 0) {
 		tran.tx_buf = wbuf;
 		tran.rx_buf = rbuf;
@@ -777,11 +568,12 @@ static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, K_ITE
 						BAB_SPI_SPEED, BAB_FFL_PASS);
 		}
 
+		count++;
 		if (ioctl(babinfo->spifd, SPI_IOC_MESSAGE(1), (void *)&tran) < 0) {
 			if (!detect_ignore || errno != 110) {
-				applog(LOG_ERR, "%s%d: ioctl failed err=%d" BAB_FFL,
+				applog(LOG_ERR, "%s%d: ioctl (%d) failed err=%d" BAB_FFL,
 						babcgpu->drv->name, babcgpu->device_id,
-						errno, BAB_FFL_PASS);
+						count, errno, BAB_FFL_PASS);
 			}
 			return false;
 		}
@@ -882,39 +674,35 @@ static void bab_set_osc(struct bab_info *babinfo, int chip)
 	applog(LOG_DEBUG, "@osc(chip=%d) fast=%d 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x", chip, fast, babinfo->osc[0], babinfo->osc[1], babinfo->osc[2], babinfo->osc[3], babinfo->osc[4], babinfo->osc[5], babinfo->osc[6], babinfo->osc[7]);
 }
 
-static bool bab_put(struct bab_info *babinfo)
+static void bab_put(struct bab_info *babinfo, K_ITEM *sitem)
 {
+	struct bab_work_send *chip_input;
 	int i, reg, bank = 0;
-	K_ITEM *item;
 
-	K_WLOCK(babinfo->sfree_list);
-	item = k_unlink_head_zero(babinfo->sfree_list);
-	K_WUNLOCK(babinfo->sfree_list);
-
-	BAB_ADD_BREAK(item);
+	BAB_ADD_BREAK(sitem);
 	for (i = 0; i < babinfo->chips; i++) {
 		if (babinfo->chip_bank[i] != bank) {
-			DATAS(item)->bank_off[bank] = DATAS(item)->siz;
+			DATAS(sitem)->bank_off[bank] = DATAS(sitem)->siz;
 			bank = babinfo->chip_bank[i];
-			BAB_ADD_BREAK(item);
+			BAB_ADD_BREAK(sitem);
 		}
 		if (i == babinfo->fixchip &&
 		    (BAB_CFGD_SET(babinfo->chip_conf[i]) ||
 		     !babinfo->chip_conf[i])) {
 			bab_set_osc(babinfo, i);
-			bab_add_data(item, BAB_OSC_ADDR, babinfo->osc, sizeof(babinfo->osc));
-			bab_config_reg(item, BAB_ICLK_REG, BAB_ICLK_BIT(babinfo->chip_conf[i]));
-			bab_config_reg(item, BAB_FAST_REG, BAB_FAST_BIT(babinfo->chip_conf[i]));
-			bab_config_reg(item, BAB_DIV2_REG, BAB_DIV2_BIT(babinfo->chip_conf[i]));
-			bab_config_reg(item, BAB_SLOW_REG, BAB_SLOW_BIT(babinfo->chip_conf[i]));
-			bab_config_reg(item, BAB_OCLK_REG, BAB_OCLK_BIT(babinfo->chip_conf[i]));
+			bab_add_data(sitem, BAB_OSC_ADDR, babinfo->osc, sizeof(babinfo->osc));
+			bab_config_reg(sitem, BAB_ICLK_REG, BAB_ICLK_BIT(babinfo->chip_conf[i]));
+			bab_config_reg(sitem, BAB_FAST_REG, BAB_FAST_BIT(babinfo->chip_conf[i]));
+			bab_config_reg(sitem, BAB_DIV2_REG, BAB_DIV2_BIT(babinfo->chip_conf[i]));
+			bab_config_reg(sitem, BAB_SLOW_REG, BAB_SLOW_BIT(babinfo->chip_conf[i]));
+			bab_config_reg(sitem, BAB_OCLK_REG, BAB_OCLK_BIT(babinfo->chip_conf[i]));
 			for (reg = BAB_REG_CLR_FROM; reg <= BAB_REG_CLR_TO; reg++)
-				bab_config_reg(item, reg, false);
+				bab_config_reg(sitem, reg, false);
 			if (babinfo->chip_conf[i]) {
-				bab_add_data(item, BAB_COUNT_ADDR, bab_counters, sizeof(bab_counters));
-				bab_add_data(item, BAB_W1A_ADDR, bab_w1, sizeof(bab_w1));
-				bab_add_data(item, BAB_W1B_ADDR, bab_w1, sizeof(bab_w1)/2);
-				bab_add_data(item, BAB_W2_ADDR, bab_w2, sizeof(bab_w2));
+				bab_add_data(sitem, BAB_COUNT_ADDR, bab_counters, sizeof(bab_counters));
+				bab_add_data(sitem, BAB_W1A_ADDR, bab_w1, sizeof(bab_w1));
+				bab_add_data(sitem, BAB_W1B_ADDR, bab_w1, sizeof(bab_w1)/2);
+				bab_add_data(sitem, BAB_W2_ADDR, bab_w2, sizeof(bab_w2));
 				babinfo->chip_conf[i] ^= BAB_CFGD_VAL;
 			}
 			babinfo->old_fast[i] = babinfo->chip_fast[i];
@@ -922,51 +710,51 @@ static bool bab_put(struct bab_info *babinfo)
 		} else {
 			if (babinfo->old_fast[i] != babinfo->chip_fast[i]) {
 				bab_set_osc(babinfo, i);
-				bab_add_data(item, BAB_OSC_ADDR, babinfo->osc, sizeof(babinfo->osc));
+				bab_add_data(sitem, BAB_OSC_ADDR, babinfo->osc, sizeof(babinfo->osc));
 				babinfo->old_fast[i] = babinfo->chip_fast[i];
 			}
 			if (babinfo->old_conf[i] != babinfo->chip_conf[i]) {
 				if (BAB_ICLK_SET(babinfo->old_conf[i]) !=
 						 BAB_ICLK_SET(babinfo->chip_conf[i]))
-					bab_config_reg(item, BAB_ICLK_REG,
+					bab_config_reg(sitem, BAB_ICLK_REG,
 							BAB_ICLK_BIT(babinfo->chip_conf[i]));
 				if (BAB_FAST_SET(babinfo->old_conf[i]) !=
 						 BAB_FAST_SET(babinfo->chip_conf[i]))
-					bab_config_reg(item, BAB_FAST_REG,
+					bab_config_reg(sitem, BAB_FAST_REG,
 							BAB_FAST_BIT(babinfo->chip_conf[i]));
 				if (BAB_DIV2_SET(babinfo->old_conf[i]) !=
 						 BAB_DIV2_SET(babinfo->chip_conf[i]))
-					bab_config_reg(item, BAB_DIV2_REG,
+					bab_config_reg(sitem, BAB_DIV2_REG,
 							BAB_DIV2_BIT(babinfo->chip_conf[i]));
 				if (BAB_SLOW_SET(babinfo->old_conf[i]) !=
 						 BAB_SLOW_SET(babinfo->chip_conf[i]))
-					bab_config_reg(item, BAB_SLOW_REG,
+					bab_config_reg(sitem, BAB_SLOW_REG,
 							BAB_SLOW_BIT(babinfo->chip_conf[i]));
 				if (BAB_OCLK_SET(babinfo->old_conf[i]) !=
 						 BAB_OCLK_SET(babinfo->chip_conf[i]))
-					bab_config_reg(item, BAB_OCLK_REG,
+					bab_config_reg(sitem, BAB_OCLK_REG,
 							BAB_OCLK_BIT(babinfo->chip_conf[i]));
 				babinfo->old_conf[i] = babinfo->chip_conf[i];
 			}
 		}
-		DATAS(item)->chip_off[i] = DATAS(item)->siz + 3;
+		DATAS(sitem)->chip_off[i] = DATAS(sitem)->siz + 3;
+		chip_input = &(DATAW(DATAS(sitem)->witems[i])->chip_input);
+		// Would no-ops need to be added if a chip gets disabled?
 		if (babinfo->chip_conf[i])
-			bab_add_data(item, BAB_INP_ADDR, (uint8_t *)(&(babinfo->chip_input[i])),
-					sizeof(babinfo->chip_input[i]));
+			bab_add_data(sitem, BAB_INP_ADDR, (uint8_t *)chip_input, sizeof(*chip_input));
 
-		BAB_ADD_ASYNC(item);
+		BAB_ADD_ASYNC(sitem);
 	}
-	DATAS(item)->chip_off[i] = DATAS(item)->siz;
-	DATAS(item)->bank_off[bank] = DATAS(item)->siz;
+	DATAS(sitem)->chip_off[i] = DATAS(sitem)->siz;
+	DATAS(sitem)->bank_off[bank] = DATAS(sitem)->siz;
 
 	K_WLOCK(babinfo->spi_list);
-	k_add_head(babinfo->spi_list, item);
+	k_add_head(babinfo->spi_list, sitem);
 	K_WUNLOCK(babinfo->spi_list);
 
 	cgsem_post(&(babinfo->spi_work));
 
 	babinfo->fixchip = (babinfo->fixchip + 1) % babinfo->chips;
-	return true;
 }
 
 static bool bab_get(__maybe_unused struct cgpu_info *babcgpu, struct bab_info *babinfo)
@@ -1261,18 +1049,23 @@ static void bab_detect(bool hotplug)
 	cgsem_init(&(babinfo->spi_work));
 	cgsem_init(&(babinfo->spi_reply));
 
-	mutex_init(&babinfo->res_lock);
 	mutex_init(&babinfo->did_lock);
-	cglock_init(&babinfo->blist_lock);
+
+	babinfo->rfree_list = k_new_list("Results", sizeof(RITEM),
+					 ALLOC_RITEMS, LIMIT_RITEMS, true);
+	babinfo->res_list = k_new_store(babinfo->rfree_list);
+
+	babinfo->wfree_list = k_new_list("Work", sizeof(WITEM),
+					 ALLOC_WITEMS, LIMIT_WITEMS, true);
+	babinfo->available_work = k_new_store(babinfo->wfree_list);
+	for (i = 0; i < BAB_MAXCHIPS; i++)
+		babinfo->chip_work[i] = k_new_store(babinfo->wfree_list);
 
 	babinfo->initialised = true;
 
 	return;
 
 cleanup:
-	babinfo->spi_sent = k_free_store(babinfo->spi_sent);
-	babinfo->spi_list = k_free_store(babinfo->spi_list);
-	babinfo->sfree_list = k_free_list(babinfo->sfree_list);
 	close(babinfo->spifd);
 	munmap((void *)(babinfo->gpio), BAB_SPI_BUFSIZ);
 unalloc:
@@ -1290,8 +1083,9 @@ static void *bab_spi(void *userdata)
 	struct cgpu_info *babcgpu = (struct cgpu_info *)userdata;
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	struct timeval start, stop;
+	K_ITEM *sitem, *witem;
 	double wait;
-	K_ITEM *item;
+	int chip;
 
 	applog(LOG_DEBUG, "%s%i: SPIing...",
 			  babcgpu->drv->name, babcgpu->device_id);
@@ -1307,10 +1101,10 @@ static void *bab_spi(void *userdata)
 	cgtime(&start);
 	while (babcgpu->shutdown == false) {
 		K_WLOCK(babinfo->spi_list);
-		item = k_unlink_tail(babinfo->spi_list);
+		sitem = k_unlink_tail(babinfo->spi_list);
 		K_WUNLOCK(babinfo->spi_list);
 
-		if (!item) {
+		if (!sitem) {
 			cgtime(&stop);
 			wait = us_tdiff(&stop, &start);
 			if (wait > BAB_LONG_uS) {
@@ -1323,10 +1117,26 @@ static void *bab_spi(void *userdata)
 			continue;
 		}
 
-		bab_txrx(item, false);
+		/*
+		 * TODO: handle if an LP happened after bab_do_work() started
+		 * i.e. we don't want to send the work
+		 * Have an LP counter that at this point would show the work
+		 * is stale - so don't send it
+		 */
+		bab_txrx(sitem, false);
 		cgtime(&start);
+
+		// The work isn't added to the chip until it has been sent
+		K_WLOCK(babinfo->wfree_list);
+		for (chip = 0; chip < babinfo->chips; chip++) {
+			witem = DATAS(sitem)->witems[chip];
+			if (witem)
+				k_add_head(babinfo->chip_work[chip], witem);
+		}
+		K_WUNLOCK(babinfo->wfree_list);
+
 		K_WLOCK(babinfo->spi_sent);
-		k_add_head(babinfo->spi_sent, item);
+		k_add_head(babinfo->spi_sent, sitem);
 		K_WUNLOCK(babinfo->spi_sent);
 		cgsem_post(&(babinfo->spi_reply));
 		cgsem_mswait(&(babinfo->spi_work), BAB_STD_WAIT_mS);
@@ -1367,8 +1177,8 @@ static void bab_flush_work(struct cgpu_info *babcgpu)
 static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, uint32_t nonce)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	BLIST *bitem, *btail;
 	unsigned int links, work_links, tests;
+	K_ITEM *witem, *wtail;
 	int i;
 
 	babinfo->chip_nonces[chip]++;
@@ -1376,18 +1186,17 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 	nonce = decnonce(nonce);
 
 	/*
-	 * We can grab the head of the chip work queue and then
-	 * release the lock and follow it to the end
-	 * since the other thread will only add items above the
-	 * head - it wont touch the list->next pointers from the
-	 * head to the end - only the head->prev pointer may get
-	 * changed
+	 * We can grab the head of the chip work queue and then release
+	 * the lock and follow it to the end and back, since the other
+	 * thread will only add items above the head - it wont touch
+	 * any of the prev/next pointers from the head to the end -
+	 * except the head->prev pointer may get changed
 	 */
-	cg_rlock(&babinfo->blist_lock);
-	bitem = babinfo->chip_list[chip];
-	cg_runlock(&babinfo->blist_lock);
+	K_RLOCK(babinfo->chip_work[chip]);
+	witem = babinfo->chip_work[chip]->head;
+	K_RUNLOCK(babinfo->chip_work[chip]);
 
-	if (!bitem) {
+	if (!witem) {
 		applog(LOG_ERR, "%s%i: chip %d has no work!",
 				babcgpu->drv->name, babcgpu->device_id, chip);
 		babinfo->untested_nonces++;
@@ -1399,28 +1208,28 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 	tests = 0;
 	links = 0;
 	work_links = 0;
-	btail = bitem;
-	while (btail && btail->next) {
+	wtail = witem;
+	while (wtail && wtail->next) {
 		work_links++;
-		btail = btail->next;
+		wtail = wtail->next;
 	}
-	while (btail) {
-		if (!btail->work) {
-			applog(LOG_ERR, "%s%i: chip %d bitem links %d has no work!",
+	while (wtail) {
+		if (!(DATAW(wtail)->work)) {
+			applog(LOG_ERR, "%s%i: chip %d witem links %d has no work!",
 					babcgpu->drv->name,
 					babcgpu->device_id,
 					chip, links);
 		} else {
 			for (i = 0; i < BAB_NONCE_OFFSETS; i++) {
 				tests++;
-				if (test_nonce(btail->work, nonce + bab_nonce_offsets[i])) {
-					submit_tested_work(thr, btail->work);
+				if (test_nonce(DATAW(wtail)->work, nonce + bab_nonce_offsets[i])) {
+					submit_tested_work(thr, DATAW(wtail)->work);
 					babinfo->nonce_offset_count[i]++;
 					babinfo->chip_good[chip]++;
-					btail->nonces++;
+					DATAW(wtail)->nonces++;
 					babinfo->new_nonces++;
 					babinfo->ok_nonces++;
-					free_blist(babcgpu, btail->next, chip);
+					cleanup_older(babcgpu, chip, wtail);
 					babinfo->total_tests += tests;
 					if (babinfo->max_tests_per_nonce < tests)
 						babinfo->max_tests_per_nonce = tests;
@@ -1432,9 +1241,9 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 				}
 			}
 		}
-		if (btail == bitem)
+		if (wtail == witem)
 			break;
-		btail = btail->prev;
+		wtail = wtail->prev;
 		links++;
 	}
 
@@ -1478,7 +1287,8 @@ static void *bab_res(void *userdata)
 	}
 
 	while (babcgpu->shutdown == false) {
-		if (!oldest_nonce(babcgpu, &chip, &nonce, &first_second)) {
+// TODO: not polling
+		if (!oldest_nonce(babinfo, &chip, &nonce, &first_second)) {
 			cgsleep_ms(3);
 			continue;
 		}
@@ -1496,37 +1306,57 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	int busy, newbusy, match, work_items = 0;
-	int spi, mis, miso;
-	int i, j;
-	BLIST *bitem;
 	bool res, got_a_nonce;
+	int spi, mis, miso;
+	K_ITEM *witem, *sitem;
+	int i, j;
+
+	K_WLOCK(babinfo->sfree_list);
+	sitem = k_unlink_head_zero(babinfo->sfree_list);
+	K_WUNLOCK(babinfo->sfree_list);
 
 	for (i = 0; i < babinfo->chips; i++) {
-		bitem = next_work(babcgpu, i);
-		if (!bitem) {
-			applog(LOG_ERR, "%s%i: short work list (%i) expected %d - discarded",
+		// TODO: ignore stale work
+		K_WLOCK(babinfo->available_work);
+		witem = k_unlink_tail(babinfo->available_work);
+		K_WUNLOCK(babinfo->available_work);
+		if (!witem) {
+			applog(LOG_ERR, "%s%i: short work list (%d) expected %d - reset",
 					babcgpu->drv->name, babcgpu->device_id,
 					i, babinfo->chips);
-			for (j = 0; j < i; i++)
-				discard_last(babcgpu, j);
+
+			// Put them back in the order they were taken
+			K_WLOCK(babinfo->available_work);
+			for (j = i-1; j >= 0; j--) {
+				witem = DATAS(sitem)->witems[j];
+				k_add_tail(babinfo->available_work, witem);
+			}
+			K_WUNLOCK(babinfo->available_work);
+
+			K_WLOCK(babinfo->sfree_list);
+			k_add_head(babinfo->sfree_list, sitem);
+			K_WUNLOCK(babinfo->sfree_list);
 
 			return false;
 		}
-		memcpy((void *)&(babinfo->chip_input[i].midstate[0]),
-			bitem->work->midstate, sizeof(bitem->work->midstate));
-		memcpy((void *)&(babinfo->chip_input[i].merkle7),
-			(void *)&(bitem->work->data[WORK_MERKLE7]), 12);
 
-		ms3steps((void *)&(babinfo->chip_input[i]));
+		if (DATAW(witem)->ci_setup == false) {
+			memcpy((void *)&(DATAW(witem)->chip_input.midstate[0]),
+				DATAW(witem)->work->midstate, sizeof(DATAW(witem)->work->midstate));
+			memcpy((void *)&(DATAW(witem)->chip_input.merkle7),
+				(void *)&(DATAW(witem)->work->data[WORK_MERKLE7]), MERKLE_BYTES);
+
+			ms3steps((void *)&(DATAW(witem)->chip_input));
+
+			DATAW(witem)->ci_setup = true;
+		}
+
+		DATAS(sitem)->witems[i] = witem;
 		work_items++;
 	}
 
 	// Send
-	res = bab_put(babinfo);
-	if (!res) {
-		applog(LOG_DEBUG, "%s%i: couldn't put work ...",
-				  babcgpu->drv->name, babcgpu->device_id);
-	}
+	bab_put(babinfo, sitem);
 
 	// Receive
 	res = bab_get(babcgpu, babinfo);
@@ -1587,7 +1417,7 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 				continue;
 			}
 
-			store_nonce(babcgpu, i,
+			store_nonce(babinfo, i,
 				    babinfo->chip_results[i].nonce[busy],
 				    babinfo->nonce_before[i]);
 
@@ -1663,17 +1493,27 @@ static bool bab_queue_full(struct cgpu_info *babcgpu)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	struct work *work;
+	K_ITEM *item;
+	int count;
 	bool ret;
 
-	if (babinfo->work_count >= babinfo->chips)
+	K_RLOCK(babinfo->available_work);
+	count = babinfo->available_work->count;
+	K_RUNLOCK(babinfo->available_work);
+
+	if (count >= babinfo->chips)
 		ret = true;
 	else {
 		work = get_queued(babcgpu);
-		if (work)
-			store_work(babcgpu, work);
-		else
+		if (work) {
+			K_WLOCK(babinfo->wfree_list);
+			item = k_unlink_head_zero(babinfo->wfree_list);
+			DATAW(item)->work = work;
+			k_add_head(babinfo->available_work, item);
+			K_WUNLOCK(babinfo->wfree_list);
+		} else
 			// Avoid a hard loop when we can't get work fast enough
-			cgsleep_ms(10);
+			cgsleep_us(42);
 
 		ret = false;
 	}
@@ -1733,7 +1573,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	struct api_data *root = NULL;
 	char data[2048];
 	char buf[32];
-	int i, to, j;
+	int chip_work, i, to, j;
 
 	if (babinfo->initialised == false)
 		return NULL;
@@ -1835,14 +1675,23 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	root = api_add_uint64(root, "Ign Work Links", &(babinfo->ign_total_links), true);
 	root = api_add_uint64(root, "Ign Total Work Links", &(babinfo->ign_total_work_links), true);
 
-	root = api_add_int(root, "BList Count", &(babinfo->blist_count), true);
-	root = api_add_int(root, "BFree Count", &(babinfo->bfree_count), true);
-	root = api_add_int(root, "Work Count", &(babinfo->work_count), true);
-	root = api_add_int(root, "Chip Count", &(babinfo->chip_count), true);
+	chip_work = 0;
+	for (i = 0; i < babinfo->chips; i++)
+		chip_work += babinfo->chip_work[i]->count;
 
-	root = api_add_int(root, "RList Count", &(babinfo->rlist_count), true);
-	root = api_add_int(root, "RFree Count", &(babinfo->rfree_count), true);
-	root = api_add_int(root, "Result Count", &(babinfo->res_count), true);
+	root = api_add_int(root, "WFree Total", &(babinfo->wfree_list->total), true);
+	root = api_add_int(root, "WFree Count", &(babinfo->wfree_list->count), true);
+	root = api_add_int(root, "Available Work", &(babinfo->available_work->count), true);
+	root = api_add_int(root, "Chip Work", &chip_work, true);
+
+	root = api_add_int(root, "SFree Total", &(babinfo->sfree_list->total), true);
+	root = api_add_int(root, "SFree Count", &(babinfo->sfree_list->count), true);
+	root = api_add_int(root, "SPI Waiting", &(babinfo->spi_list->count), true);
+	root = api_add_int(root, "SPI Sent", &(babinfo->spi_sent->count), true);
+
+	root = api_add_int(root, "RFree Total", &(babinfo->rfree_list->total), true);
+	root = api_add_int(root, "RFree Count", &(babinfo->rfree_list->count), true);
+	root = api_add_int(root, "Result Count", &(babinfo->res_list->count), true);
 
 	return root;
 }
