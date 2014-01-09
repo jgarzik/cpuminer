@@ -943,7 +943,7 @@ static int64_t nf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 		i = info->results_n;
 		for (j = i - 1; j >= 0; j--) {
 			if (owork)
-				submit_nonce(thr, owork, bswap_32(res[j]));
+				submit_nonce(thr, owork, res[j]);
 		}
 		info->owork = info->work;
 		info->work = NULL;

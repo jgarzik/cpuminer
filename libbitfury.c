@@ -378,7 +378,7 @@ bool libbitfury_sendHashData(struct cgpu_info *bf)
 					found = true;
 out_found:
 				if (found)
-					results[results_num++] = bswap_32(nonce);
+					results[results_num++] = nonce;
 			}
 		}
 		info->results_n = results_num;
