@@ -25,6 +25,7 @@ void spi_add_data(struct bitfury_info *info, uint16_t addr, const void *buf, int
 bool spi_detect_bitfury(struct cgpu_info *bitfury, struct bitfury_info *info);
 bool spi_reset(struct cgpu_info *bitfury, struct bitfury_info *info);
 bool spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info);
-bool libbitfury_sendHashData(struct cgpu_info *bf);
+bool libbitfury_sendHashData(struct thr_info *thr, struct cgpu_info *bitfury,
+			     struct bitfury_info *info);
 
 #endif /* LIBBITFURY_H */

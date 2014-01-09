@@ -316,9 +316,9 @@ bool spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
 	return true;
 }
 
-bool libbitfury_sendHashData(struct cgpu_info *bf)
+bool libbitfury_sendHashData(struct thr_info *thr, struct cgpu_info *bitfury,
+			     struct bitfury_info *info)
 {
-	struct bitfury_info *info = bf->device_data;
 	static unsigned second_run;
 	unsigned *newbuf = info->newbuf;
 	unsigned *oldbuf = info->oldbuf;
@@ -333,7 +333,7 @@ bool libbitfury_sendHashData(struct cgpu_info *bf)
 	spi_clear_buf(info);
 	spi_add_break(info);
 	spi_add_data(info, 0x3000, (void*)localvec, 19 * 4);
-	if (!spi_txrx(bf, info))
+	if (!spi_txrx(bitfury, info))
 		return false;
 
 	memcpy(newbuf, info->spibuf + 4, 17 * 4);

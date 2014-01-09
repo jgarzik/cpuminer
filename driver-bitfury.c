@@ -932,7 +932,7 @@ static int64_t nf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 		}
 		bitfury_work_to_payload(&info->payload, info->work);
 	}
-	if (!libbitfury_sendHashData(bitfury))
+	if (!libbitfury_sendHashData(thr, bitfury, info))
 		return -1;
 
 	if (info->job_switched) {
