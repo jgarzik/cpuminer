@@ -366,7 +366,7 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	if (!mcp2210_get_spi_transfer_settings(bitfury, &mcp->bitrate, &mcp->icsv,
 	    &mcp->acsv, &mcp->cstdd, &mcp->ldbtcsd, &mcp->sdbd, &mcp->bpst, &mcp->spimode))
 		goto out;
-	mcp->bitrate = 12000000;
+	mcp->bitrate = 200000; // default to 200kHz
 	mcp->icsv = 0xffff;
 	mcp->acsv = 0xffef;
 	mcp->cstdd = mcp->ldbtcsd = mcp->sdbd = mcp->spimode = 0;
