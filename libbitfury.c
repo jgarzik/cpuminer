@@ -247,8 +247,6 @@ bool spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
 	unsigned int length, sendrcv;
 	int offset = 0;
 
-	if (!spi_reset(bitfury, info))
-		return false;
 	length = info->spibufsz;
 	applog(LOG_DEBUG, "%s %d: SPI sending %u bytes total", bitfury->drv->name,
 	       bitfury->device_id, length);

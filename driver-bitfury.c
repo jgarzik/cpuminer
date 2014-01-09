@@ -301,6 +301,7 @@ static bool nf1_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
 	spi_set_freq(info);
 	spi_send_conf(info);
 	spi_send_init(info);
+	spi_reset(bitfury, info);
 	return spi_txrx(bitfury, info);
 }
 
