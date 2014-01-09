@@ -377,7 +377,7 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 
 	buf[0] = 0;
 	length = 1;
-	if (!mcp2210_spi_transfer(bitfury, buf, &length))
+	if (!mcp2210_spi_transfer(bitfury, mcp, buf, &length))
 		goto out;
 	/* after this command SCK_OVRRIDE should read the same as current SCK
 	 * value (which for mode 0 should be 0) */
@@ -392,7 +392,7 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 		goto out;
 	buf[0] = 0;
 	length = 1;
-	if (!mcp2210_spi_transfer(bitfury, buf, &length))
+	if (!mcp2210_spi_transfer(bitfury, mcp, buf, &length))
 		goto out;
 	/* after this command SCK_OVRRIDE should read the same as current SCK
 	 * value (which for mode 2 should be 1) */
@@ -407,7 +407,7 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 		goto out;
 	buf[0] = 0;
 	length = 1;
-	if (!mcp2210_spi_transfer(bitfury, buf, &length))
+	if (!mcp2210_spi_transfer(bitfury, mcp, buf, &length))
 		goto out;
 	if (!mcp2210_get_gpio_pinval(bitfury, NF1_PIN_SCK_OVR, &val))
 		goto out;
