@@ -12,6 +12,7 @@
 
 #include "miner.h"
 #include "usbutils.h"
+#include "mcp2210.h"
 
 #define BXF_CLOCK_DEFAULT 54
 #define BXF_CLOCK_OFF 0
@@ -23,6 +24,22 @@
 #define BXF_TEMP_HYSTERESIS 30
 
 extern int opt_bxf_temp_target;
+
+#define NF1_PIN_LED 0
+#define NF1_PIN_SCK_OVR 5
+#define NF1_PIN_PWR_EN 6
+
+#define SPIBUF_SIZE 16384
+#define BITFURY_REFRESH_DELAY 100
+
+struct bitfury_payload {
+	unsigned char midstate[32];
+	unsigned int junk[8];
+	unsigned m7;
+	unsigned ntime;
+	unsigned nbits;
+	unsigned nnonce;
+};
 
 struct bitfury_info {
 	struct cgpu_info *base_cgpu;
@@ -58,6 +75,20 @@ struct bitfury_info {
 	int filtered_hw[2]; // Hardware errors we're told about but are filtered
 	int job[2]; // Completed jobs we're told about
 	int submits[2]; // Submitted responses
+
+	/* NF1 specific data */
+	struct mcp_settings mcp;
+	char spibuf[SPIBUF_SIZE];
+	unsigned int spibufsz;
+	int osc6_bits;
+	struct bitfury_payload payload;
+	struct bitfury_payload opayload;
+	unsigned newbuf[17];
+	unsigned oldbuf[17];
+	int job_switched;
+	unsigned int results[16];
+	struct work *work;
+	struct work *owork;
 };
 
 #endif /* BITFURY_H */

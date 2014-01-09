@@ -299,6 +299,12 @@ modem and the driver needs to be unloaded for cgminer to work:
 sudo kextunload -b com.apple.driver.AppleUSBCDC
 sudo kextunload -b com.apple.driver.AppleUSBCDCACMData
 
+Some devices need superuser access to mine on them so cgminer may need to
+be started with sudo
+i.e.:
+sudo cgminer <insert commands here>
+
+
 
 ---
 

@@ -12,6 +12,8 @@
 #include "miner.h"
 #include "driver-bitfury.h"
 #include "sha2.h"
+#include "mcp2210.h"
+#include "libbitfury.h"
 
 int opt_bxf_temp_target = BXF_TEMP_TARGET / 10;
 
@@ -276,6 +278,163 @@ out_close:
 	return false;
 }
 
+static void nf1_close(struct cgpu_info *bitfury)
+{
+	struct bitfury_info *info = bitfury->device_data;
+	struct mcp_settings *mcp = &info->mcp;
+	int i;
+
+	mcp2210_spi_cancel(bitfury);
+
+	/* Set all pins to input mode, ignoring return code */
+	for (i = 0; i < 9; i++) {
+		mcp->direction.pin[i] = MCP2210_GPIO_INPUT;
+		mcp->value.pin[i] = MCP2210_GPIO_PIN_LOW;
+	}
+	mcp2210_set_gpio_settings(bitfury, mcp);
+}
+
+static bool nf1_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	spi_clear_buf(info);
+	spi_add_break(info);
+	spi_set_freq(info);
+	spi_send_conf(info);
+	spi_send_init(info);
+	spi_reset(bitfury, info);
+	return spi_txrx(bitfury, info);
+}
+
+static bool nf1_set_spi_settings(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	struct mcp_settings *mcp = &info->mcp;
+
+	return mcp2210_set_spi_transfer_settings(bitfury, mcp->bitrate, mcp->icsv,
+		mcp->acsv, mcp->cstdd, mcp->ldbtcsd, mcp->sdbd, mcp->bpst, mcp->spimode);
+}
+
+static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	struct mcp_settings *mcp = &info->mcp;
+	char buf[MCP2210_BUFFER_LENGTH];
+	unsigned int length;
+	bool ret = false;
+	int i, val;
+
+	mcp2210_get_gpio_settings(bitfury, mcp);
+
+	for (i = 0; i < 9; i++) {
+		/* Set all pins to GPIO mode */
+		mcp->designation.pin[i] = MCP2210_PIN_GPIO;
+		/* Set all pins to input mode */
+		mcp->direction.pin[i] = MCP2210_GPIO_INPUT;
+		mcp->value.pin[i] = MCP2210_GPIO_PIN_LOW;
+	}
+
+	/* Set LED and PWR pins to output and high */
+	mcp->direction.pin[NF1_PIN_LED] = mcp->direction.pin[NF1_PIN_PWR_EN] = MCP2210_GPIO_OUTPUT;
+	mcp->value.pin[NF1_PIN_LED] = mcp->value.pin[NF1_PIN_PWR_EN] = MCP2210_GPIO_PIN_HIGH;
+
+	mcp->direction.pin[4] = MCP2210_GPIO_OUTPUT;
+	mcp->designation.pin[4] = MCP2210_PIN_CS;
+
+	if (!mcp2210_set_gpio_settings(bitfury, mcp))
+		goto out;
+
+	if (opt_debug) {
+		struct gpio_pin gp;
+
+		mcp2210_get_gpio_pindirs(bitfury, &gp);
+		for (i = 0; i < 9; i++) {
+			applog(LOG_DEBUG, "%s %d: Pin dir %d %d", bitfury->drv->name,
+			       bitfury->device_id, i, gp.pin[i]);
+		}
+		mcp2210_get_gpio_pinvals(bitfury, &gp);
+		for (i = 0; i < 9; i++) {
+			applog(LOG_DEBUG, "%s %d: Pin val %d %d", bitfury->drv->name,
+			       bitfury->device_id, i, gp.pin[i]);
+		}
+		mcp2210_get_gpio_pindes(bitfury, &gp);
+		for (i = 0; i < 9; i++) {
+			applog(LOG_DEBUG, "%s %d: Pin des %d %d", bitfury->drv->name,
+			       bitfury->device_id, i, gp.pin[i]);
+		}
+	}
+
+	/* Cancel any transfers in progress */
+	if (!mcp2210_spi_cancel(bitfury))
+		goto out;
+	if (!mcp2210_get_spi_transfer_settings(bitfury, &mcp->bitrate, &mcp->icsv,
+	    &mcp->acsv, &mcp->cstdd, &mcp->ldbtcsd, &mcp->sdbd, &mcp->bpst, &mcp->spimode))
+		goto out;
+	mcp->bitrate = 200000; // default to 200kHz
+	mcp->icsv = 0xffff;
+	mcp->acsv = 0xffef;
+	mcp->cstdd = mcp->ldbtcsd = mcp->sdbd = mcp->spimode = 0;
+	mcp->bpst = 1;
+	if (!nf1_set_spi_settings(bitfury, info))
+		goto out;
+
+	buf[0] = 0;
+	length = 1;
+	if (!mcp2210_spi_transfer(bitfury, mcp, buf, &length))
+		goto out;
+	/* after this command SCK_OVRRIDE should read the same as current SCK
+	 * value (which for mode 0 should be 0) */
+	if (!mcp2210_get_gpio_pinval(bitfury, NF1_PIN_SCK_OVR, &val))
+		goto out;
+	if (val != MCP2210_GPIO_PIN_LOW)
+		goto out;
+
+	/* switch SCK to polarity (default SCK=1 in mode 2) */
+	mcp->spimode = 2;
+	if (!nf1_set_spi_settings(bitfury, info))
+		goto out;
+	buf[0] = 0;
+	length = 1;
+	if (!mcp2210_spi_transfer(bitfury, mcp, buf, &length))
+		goto out;
+	/* after this command SCK_OVRRIDE should read the same as current SCK
+	 * value (which for mode 2 should be 1) */
+	if (!mcp2210_get_gpio_pinval(bitfury, NF1_PIN_SCK_OVR, &val))
+		goto out;
+	if (val != MCP2210_GPIO_PIN_HIGH)
+		goto out;
+
+	/* switch SCK to polarity (default SCK=0 in mode 0) */
+	mcp->spimode = 0;
+	if (!nf1_set_spi_settings(bitfury, info))
+		goto out;
+	buf[0] = 0;
+	length = 1;
+	if (!mcp2210_spi_transfer(bitfury, mcp, buf, &length))
+		goto out;
+	if (!mcp2210_get_gpio_pinval(bitfury, NF1_PIN_SCK_OVR, &val))
+		goto out;
+	if (val != MCP2210_GPIO_PIN_LOW)
+		goto out;
+
+	info->osc6_bits = 54;
+	if (!nf1_reinit(bitfury, info))
+		goto out;
+
+	ret = true;
+	if (!add_cgpu(bitfury))
+		quit(1, "Failed to add_cgpu in nf1_detect_one");
+
+	update_usb_stats(bitfury);
+	applog(LOG_INFO, "%s %d: Successfully initialised %s",
+	bitfury->drv->name, bitfury->device_id, bitfury->device_path);
+	spi_clear_buf(info);
+
+	info->total_nonces = 1;
+out:
+	if (!ret)
+		nf1_close(bitfury);
+
+	return ret;
+}
+
 static struct cgpu_info *bitfury_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *bitfury;
@@ -301,6 +460,9 @@ static struct cgpu_info *bitfury_detect_one(struct libusb_device *dev, struct us
 			break;
 		case IDENT_BXF:
 			ret = bxf_detect_one(bitfury, info);
+			break;
+		case IDENT_NF1:
+			ret = nf1_detect_one(bitfury, info);
 			break;
 		default:
 			applog(LOG_INFO, "%s %d: Unrecognised bitfury device",
@@ -586,46 +748,6 @@ static bool bitfury_prepare(struct thr_info *thr)
 	}
 }
 
-static uint32_t decnonce(uint32_t in)
-{
-	uint32_t out;
-
-	/* First part load */
-	out = (in & 0xFF) << 24; in >>= 8;
-
-	/* Byte reversal */
-	in = (((in & 0xaaaaaaaa) >> 1) | ((in & 0x55555555) << 1));
-	in = (((in & 0xcccccccc) >> 2) | ((in & 0x33333333) << 2));
-	in = (((in & 0xf0f0f0f0) >> 4) | ((in & 0x0f0f0f0f) << 4));
-
-	out |= (in >> 2)&0x3FFFFF;
-
-	/* Extraction */
-	if (in & 1) out |= (1 << 23);
-	if (in & 2) out |= (1 << 22);
-
-	out -= 0x800004;
-	return out;
-}
-
-#define BT_OFFSETS 3
-const uint32_t bf_offsets[] = {-0x800000, 0, -0x400000};
-
-static bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32_t nonce)
-{
-	int i;
-
-	for (i = 0; i < BT_OFFSETS; i++) {
-		uint32_t noffset = nonce + bf_offsets[i];
-
-		if (test_nonce(work, noffset)) {
-			submit_tested_work(thr, work);
-			return true;
-		}
-	}
-	return false;
-}
-
 static int64_t bitfury_rate(struct bitfury_info *info)
 {
 	double nonce_rate;
@@ -779,6 +901,40 @@ static int64_t bxf_scan(struct cgpu_info *bitfury, struct bitfury_info *info)
 	return ret;
 }
 
+static int64_t nf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
+			struct bitfury_info *info)
+{
+	int64_t ret = 0;
+
+	if (!info->work) {
+		info->work = get_work(thr, thr->id);
+		if (unlikely(thr->work_restart)) {
+			free_work(info->work);
+			return 0;
+		}
+		bitfury_work_to_payload(&info->payload, info->work);
+	}
+	if (!libbitfury_sendHashData(thr, bitfury, info))
+		return -1;
+
+	if (info->job_switched) {
+		if (likely(info->owork))
+			free_work(info->owork);
+		info->owork = info->work;
+		info->work = NULL;
+	}
+
+	ret = bitfury_rate(info);
+
+	if (unlikely(bitfury->usbinfo.nodev)) {
+		applog(LOG_WARNING, "%s %d: Device disappeared, disabling thread",
+		       bitfury->drv->name, bitfury->device_id);
+		ret = -1;
+	}
+
+	return ret;
+}
+
 static int64_t bitfury_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *bitfury = thr->cgpu;
@@ -787,10 +943,10 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 	switch(info->ident) {
 		case IDENT_BF1:
 			return bf1_scan(thr, bitfury, info);
-			break;
 		case IDENT_BXF:
 			return bxf_scan(bitfury, info);
-			break;
+		case IDENT_NF1:
+			return nf1_scan(thr, bitfury, info);
 		default:
 			return 0;
 	}
@@ -977,6 +1133,9 @@ static void bitfury_shutdown(struct thr_info *thr)
 			break;
 		case IDENT_BXF:
 			bxf_close(info);
+			break;
+		case IDENT_NF1:
+			nf1_close(bitfury);
 			break;
 		default:
 			break;

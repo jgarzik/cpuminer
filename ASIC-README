@@ -3,8 +3,8 @@ SUPPORTED DEVICES
 Currently supported devices include the Avalon (including BitBurner and
 Klondike), the Butterfly Labs SC range of devices, the ASICMINER block
 erupters, the BF1 (bitfury) USB (red and blue) devices, KnCminer Mercury,
-Saturn and Jupiter devices, BlackArrow Bitfury devices, Bi*fury USB devices
-and upcoming Hashfast devices.
+Saturn and Jupiter devices, BlackArrow Bitfury devices, Bi*fury USB devices,
+Nanofury USB devices and Hashfast devices.
 
 No COM ports on windows or TTY devices will be used by cgminer as it
 communicates directly with them via USB so it is normal for them to not exist or
@@ -49,6 +49,8 @@ Bitfury devices need the --enable-bitfury option when compiling cgminer.
 
 Currently the BPMC/BGMC BF1 devices AKA redfury/bluefury are supported and
 come up as BF1, along with the Bi*fury USB devices which come up as BXF.
+Nanofury devices come up as NF1.
+
 Bitfury USB devices are also set up as per the USB ASICs below.
 
 
