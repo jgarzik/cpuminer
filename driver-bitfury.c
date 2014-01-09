@@ -417,16 +417,14 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	if (!nf1_reinit(bitfury, info))
 		goto out;
 
-	ret = spi_detect_bitfury(bitfury, info);
-	if (ret) {
-		if (!add_cgpu(bitfury))
-			quit(1, "Failed to add_cgpu in nf1_detect_one");
+	ret = true;
+	if (!add_cgpu(bitfury))
+		quit(1, "Failed to add_cgpu in nf1_detect_one");
 
-		update_usb_stats(bitfury);
-		applog(LOG_INFO, "%s %d: Successfully initialised %s",
-		bitfury->drv->name, bitfury->device_id, bitfury->device_path);
-		spi_clear_buf(info);
-	}
+	update_usb_stats(bitfury);
+	applog(LOG_INFO, "%s %d: Successfully initialised %s",
+	bitfury->drv->name, bitfury->device_id, bitfury->device_path);
+	spi_clear_buf(info);
 
 	info->total_nonces = 1;
 out:

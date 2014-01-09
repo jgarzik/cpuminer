@@ -30,8 +30,7 @@ extern int opt_bxf_temp_target;
 #define NF1_PIN_PWR_EN 6
 
 #define SPIBUF_SIZE 16384
-#define BITFURY_REFRESH_DELAY 1200
-#define BITFURY_DETECT_TRIES 3000 / BITFURY_REFRESH_DELAY
+#define BITFURY_REFRESH_DELAY 100
 
 struct bitfury_payload {
 	unsigned char midstate[32];

@@ -22,7 +22,6 @@ void spi_clear_buf(struct bitfury_info *info);
 void spi_add_buf(struct bitfury_info *info, const void *buf, const int sz);
 void spi_add_break(struct bitfury_info *info);
 void spi_add_data(struct bitfury_info *info, uint16_t addr, const void *buf, int len);
-bool spi_detect_bitfury(struct cgpu_info *bitfury, struct bitfury_info *info);
 bool spi_reset(struct cgpu_info *bitfury, struct bitfury_info *info);
 bool spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info);
 bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32_t nonce);
