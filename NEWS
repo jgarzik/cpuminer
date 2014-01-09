@@ -1,3 +1,144 @@
+Version 3.10.0 - 9th January 2014
+
+- Set the mcp2210 transfer setting only when it changes.
+- Buffer sizes in nanofury device data are unnecessarily large.
+- Only perform spi reset on init, not with each transaction.
+- Remove spi_detect_bitfury at nanofury startup and fix incorrect refresh time.
+- Use a simple serialised work model for nanofury
+- Use bitfury_checkresults to avoid hashing results twice in nanofury.
+- Export bitfury_checkresults in libbitfury
+- Pass extra parameters for later use in libbitfury_sendHashData
+- Avoid double handling bswap of the nonce value in nanofury
+- Avoid unnecessary rehashing in nanofury nonce checking.
+- Remove the unused portions of atrvec in the nanofury driver
+- Age work in nf1_scan to avoid risk of losing a work item and leaking memory.
+- bitfury_work_to_payload is double handling the data unnecessarily
+- Default bitrate on nanofury should be 200kHz
+- localvec should be only 80 bytes not 80 words
+- Wrong init value for nanofury
+- Remove unused rehash values from nanofury driver.
+- Only update info work in nanofury driver when it's empty.
+- Fill the appropriate type of usb transfer when we know if it's an interrupt
+transfer instead of a bulk one.
+- Use the internal knowledge of the usb epinfo to determine whether we should be
+doing an interrupt instead of a bulk transfer, and do not send a ZLP if so, and
+limit read transfer to expected size automatically.
+- Avoid bin2hex memleak when we start getting nanofury nonces
+- Set atrvec only once and use a local array for each device's work.
+- Cancel any spi transfers on nf1 close
+- Add bitfury detection loop to nanofury startup
+- Move spi init code to libbitfury
+- Remove inappropriate extra config reg in nanofury setup.
+- Status 0x30 should never happen with spi transfers.
+- Fix spi transfer data size transmission mistakes.
+- Minor correctness change in spi_add_data
+- spi_txrx should always send and receive the same size message
+- Random libbitfury changes.
+- Set value of gpio pins to low on closing nanofury.
+- Fix more init sequence for nanofury.
+- Add basic initialisation for nf1 devices
+- Add basic nf1_scan function.
+- Basic import of libbitfury functions from nanofury branch
+- Import functions from nanofury fork for libbitfury
+- Meter out spi sends to only 2 bytes at a time, offsetting according to how
+much data returns.
+- Use the usb read limit function for mcp2210 reads.
+- Provide a way for usb reads to just read the size asked for with a limit bool.
+- Get pin value after an nf1 spi reset.
+- Make sure what we send in the buffer doesn't change during spi reset for
+nanofury
+- Remove all standalone gpio setting change functions in mcp2210 and just use
+the one global setting function.
+- Set gpio values in the one function with all values for nanofury.
+- Provide a helper function for setting all mcp2210 gpio settings.
+- Add a helper function for getting all mcp2210 gpio settings.
+- Set all pin designations and directions in one call for nanofury and don't
+bother storing their values in the info struct.
+- Provide helper functions for setting all pins and dirs on mcp2210
+- Set all nanofury pin designations in one call
+- Provide a helper function for setting all pin designations on mcp2210
+- Store the spi settings in a struct for nanofury devices.
+- Check the received status in mcp2210 spi transfers and repeat a zero byte send
+if it's in progress.
+- Set the bytes per spi transfer prior to each mcp2210 transfer.
+- Separate out the send and receive functions for mcp2210 and check response
+value in return.
+- Check that mcp2210 spi settings have taken and check the value of the pin
+during nanofury setup.
+- Don't set GPIO pin designations after initial setting in nanofury since the
+direction and values will be changed.
+- Provide an mcp 2210 set gpio input helper function that sets a pin to gpio and
+input.
+- Move the set gpio output function to a generic mcp2210 version from nanofury
+which also sets the pin to gpio.
+- Implement a nanofury txrx with a larger buffer and cycling over data too large
+to send.
+- Implement magic spi reset sequence for nanofury.
+- Add more spi magic to the nanofury init sequence.
+- Add lots of magic spi initialisation to nanofury.
+- Export reused components of bitfury management into a libbitfury and use for
+bab and bitfury drivers.
+- More init sequence for nanofury and implement a close function that sets all
+pins to input.
+- Reword offset header handling in hfa_get_header
+- Sanity check in hfa_get_header
+- Add more checks in hashfast driver for lost devices.
+- Change spimode and send more data in nanofury setup.
+- Add basic setup  comms to nanofury.
+- Implement an mcp2210 spi transfer function.
+- Set the initial spi settings for nanofury driver.
+- Provide a helper function for gettings mcp2210 spi settings.
+- Implement an mcp2210 set spi transfer settings function.
+- Cancel any SPI transfers in progress in nanofury after initial setup.
+- Implement an mcp2210 spi cancel function.
+- Return only binary values for mcp2210 GPIO values.
+- Set GPIO LED and power to high in nanofury driver.
+- Implement initial part of nanofury init sequence for GPIO pin settings and add
+output debugging of set values.
+- Add helper functions for getting and setting mcp2210 gpio pin designations.
+- Don't return an error in usb read if we've managed to get the whole read
+length we've asked for.
+- Use correct endpoint order for nanofury devices and read with a short timeout
+on return loop from send_recv.
+- Add mcp2210 helper functions for getting and setting one GPIO pin val and
+direction.
+- Create a generic gpio pin struct and add helpers for mcp get pin val and dirs.
+- Check the receive msg of a send/receive cycle on mcp2210 matches the send
+message.
+- Add a set of usb commands to the usbutils defines for mcp2210 comms, and use
+the same command name for send and receive.
+- Create a generic mcp2210 send_rcv function.
+- Include mcp header for bitfury and fix extra params in macro.
+- Add basic SPI comms defines for mcp2210 and build rules for bitfury.
+- Minion set some core defaults similar to final requirements
+- minion compile warnings
+- move driver-minion.c to main directory
+- Minion with ioctl() stats, settings to attempt to emulate 21TH/s
+- minion driver with results interrupt working
+- tested working driver-minion.c without interrupts
+- Working driver-minion.c v0.1
+- driver-minion.c compilable untested
+- minion driver - incomplete
+- Add minion driver into cgminer
+- Add basic device detection and updated udev rules for nanofury devices.
+- Remove GPU from share logging example.
+- Don't keep resetting BXF clockspeed to default.
+- If no pools are active on startup wait 60s before trying to reconnect since we
+likely have the wrong credentials rather than all the pools being out.
+- Discard bad crc packets for hashfast driver instead of trying to process them.
+- Update documentation for modified avalon options syntax and document relevant
+55nm details.
+- Modify the auto tuning sequence to work with the 50MHz changes required to
+work with 55nm Avalon.
+- 55nm avalon requires the delays between writes reinstated for stability.
+- Use an equation instead of a lookup table to set the frequency for 55nm avalon
+allowing arbitrary values to be used.
+- Make the result return rate low detection on avalon less trigger happy.
+- Always send the bxf device a clockspeed after parsing the temperature in case
+the device has changed the clockspeed itself without notification.
+- Fix BXF being inappropriately dependent on drillbit.
+
+
 Version 3.9.0 - 23rd December 2013
 
 - drillbit asic - enable in api.c
