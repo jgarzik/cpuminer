@@ -83,8 +83,8 @@ struct bitfury_info {
 	int osc6_bits;
 	struct bitfury_payload payload;
 	struct bitfury_payload opayload;
-	unsigned newbuf[20];
-	unsigned oldbuf[20];
+	unsigned newbuf[17];
+	unsigned oldbuf[17];
 	int job_switched;
 	unsigned int results[16];
 	int results_n;
