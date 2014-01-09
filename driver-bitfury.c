@@ -747,24 +747,6 @@ static bool bitfury_prepare(struct thr_info *thr)
 	}
 }
 
-#define BT_OFFSETS 3
-const uint32_t bf_offsets[] = {-0x800000, 0, -0x400000};
-
-static bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32_t nonce)
-{
-	int i;
-
-	for (i = 0; i < BT_OFFSETS; i++) {
-		uint32_t noffset = nonce + bf_offsets[i];
-
-		if (test_nonce(work, noffset)) {
-			submit_tested_work(thr, work);
-			return true;
-		}
-	}
-	return false;
-}
-
 static int64_t bitfury_rate(struct bitfury_info *info)
 {
 	double nonce_rate;

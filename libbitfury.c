@@ -316,6 +316,24 @@ bool spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
 	return true;
 }
 
+#define BT_OFFSETS 3
+
+bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32_t nonce)
+{
+	const uint32_t bf_offsets[] = {-0x800000, 0, -0x400000};
+	int i;
+
+	for (i = 0; i < BT_OFFSETS; i++) {
+		uint32_t noffset = nonce + bf_offsets[i];
+
+		if (test_nonce(work, noffset)) {
+			submit_tested_work(thr, work);
+			return true;
+		}
+	}
+	return false;
+}
+
 bool libbitfury_sendHashData(struct thr_info *thr, struct cgpu_info *bitfury,
 			     struct bitfury_info *info)
 {
