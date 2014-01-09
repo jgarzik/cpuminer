@@ -83,38 +83,21 @@ static unsigned int atrvec[] = {
 };
 static bool atrvec_set;
 
-static int rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned nbits,
-		  unsigned nnonce)
+static bool rehash(unsigned int *mid32, unsigned char *in)
 {
-	unsigned char in[16];
-	unsigned int *in32 = (unsigned int *)in;
-	unsigned int *mid32 = (unsigned int *)midstate;
 	unsigned out32[8];
 	unsigned char *out = (unsigned char *) out32;
 	sha256_ctx ctx;
 
-	memset( &ctx, 0, sizeof( sha256_ctx ) );
-	memcpy(ctx.h, mid32, 8*4);
+	memset(&ctx, 0, sizeof( sha256_ctx ));
+	memcpy(ctx.h, mid32, 8 * 4);
 	ctx.tot_len = 64;
-
-	nnonce = bswap_32(nnonce);
-	in32[0] = bswap_32(m7);
-	in32[1] = bswap_32(ntime);
-	in32[2] = bswap_32(nbits);
-	in32[3] = nnonce;
 
 	sha256_update(&ctx, in, 16);
 	sha256_final(&ctx, out);
 	sha256(out, 32, out);
 
-	if (out32[7] == 0) {
-		char hex[68];
-
-		__bin2hex(hex, out, 32);
-		applog(LOG_INFO, "! MS0: %08x, m7: %08x, ntime: %08x, nbits: %08x, nnonce: %08x\n\t\t\t out: %s\n", mid32[0], m7, ntime, nbits, nnonce, hex);
-		return 1;
-	}
-	return 0;
+	return (out32[7] == 0);
 }
 
 void bitfury_work_to_payload(struct bitfury_payload *p, struct work *work)
@@ -364,15 +347,38 @@ bool libbitfury_sendHashData(struct cgpu_info *bf)
 
 		for (i = 0; i < 16; i++) {
 			if (oldbuf[i] != newbuf[i]) {
-				unsigned pn; //possible nonce
-				unsigned int s = 0; //TODO zero may be solution
+				unsigned char in[16];
+				unsigned int *in32 = (unsigned int *)in;
+				unsigned int *mid32;
+				uint32_t nonce, pn; //possible nonce
+				bool found = false;
 
+				mid32 = (unsigned int *)op->midstate;
 				pn = decnonce(newbuf[i]);
-				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn) ? pn : 0;
-				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn-0x400000) ? pn - 0x400000 : 0;
-				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn-0x800000) ? pn - 0x800000 : 0;
-				if (s)
-					results[results_num++] = bswap_32(s);
+				in32[0] = bswap_32(op->m7);
+				in32[1] = bswap_32(op->ntime);
+				in32[2] = bswap_32(op->nbits);
+
+				nonce = pn - 0x800000;
+				in32[3] = bswap_32(nonce);
+				if (rehash(mid32, in)) {
+					found = true;
+					goto out_found;
+				}
+				nonce = pn;
+				in32[3] = bswap_32(nonce);
+				if (rehash(mid32, in)) {
+					found = true;
+					goto out_found;
+
+				}
+				nonce = pn - 0x400000;
+				in32[3] = bswap_32(nonce);
+				if (rehash(mid32, in))
+					found = true;
+out_found:
+				if (found)
+					results[results_num++] = bswap_32(nonce);
 			}
 		}
 		info->results_n = results_num;
