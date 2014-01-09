@@ -83,23 +83,6 @@ static unsigned int atrvec[] = {
 };
 static bool atrvec_set;
 
-static bool rehash(unsigned int *mid32, unsigned char *in)
-{
-	unsigned out32[8];
-	unsigned char *out = (unsigned char *) out32;
-	sha256_ctx ctx;
-
-	memset(&ctx, 0, sizeof( sha256_ctx ));
-	memcpy(ctx.h, mid32, 8 * 4);
-	ctx.tot_len = 64;
-
-	sha256_update(&ctx, in, 16);
-	sha256_final(&ctx, out);
-	sha256(out, 32, out);
-
-	return (out32[7] == 0);
-}
-
 void bitfury_work_to_payload(struct bitfury_payload *p, struct work *work)
 {
 	memcpy(p->midstate, work->midstate, 32);
@@ -360,46 +343,16 @@ bool libbitfury_sendHashData(struct thr_info *thr, struct cgpu_info *bitfury,
 
 	if (second_run && info->job_switched) {
 		int i;
-		int results_num = 0;
-		unsigned int *results = info->results;
 
 		for (i = 0; i < 16; i++) {
-			if (oldbuf[i] != newbuf[i]) {
-				unsigned char in[16];
-				unsigned int *in32 = (unsigned int *)in;
-				unsigned int *mid32;
-				uint32_t nonce, pn; //possible nonce
-				bool found = false;
+			if (oldbuf[i] != newbuf[i] && info->owork) {
+				uint32_t nonce; //possible nonce
 
-				mid32 = (unsigned int *)op->midstate;
-				pn = decnonce(newbuf[i]);
-				in32[0] = bswap_32(op->m7);
-				in32[1] = bswap_32(op->ntime);
-				in32[2] = bswap_32(op->nbits);
-
-				nonce = pn - 0x800000;
-				in32[3] = bswap_32(nonce);
-				if (rehash(mid32, in)) {
-					found = true;
-					goto out_found;
-				}
-				nonce = pn;
-				in32[3] = bswap_32(nonce);
-				if (rehash(mid32, in)) {
-					found = true;
-					goto out_found;
-
-				}
-				nonce = pn - 0x400000;
-				in32[3] = bswap_32(nonce);
-				if (rehash(mid32, in))
-					found = true;
-out_found:
-				if (found)
-					results[results_num++] = nonce;
+				nonce = decnonce(newbuf[i]);
+				if (bitfury_checkresults(thr, info->owork, nonce))
+					info->nonces++;
 			}
 		}
-		info->results_n = results_num;
 
 		memcpy(op, p, sizeof(struct bitfury_payload));
 		memcpy(oldbuf, newbuf, 17 * 4);

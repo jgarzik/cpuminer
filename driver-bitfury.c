@@ -427,6 +427,8 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 		bitfury->drv->name, bitfury->device_id, bitfury->device_path);
 		spi_clear_buf(info);
 	}
+
+	info->total_nonces = 1;
 out:
 	if (!ret)
 		nf1_close(bitfury);
@@ -918,18 +920,8 @@ static int64_t nf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 		return -1;
 
 	if (info->job_switched) {
-		int i, j;
-		unsigned int *res = info->results;
-		struct work *owork = info->owork;
-
-		i = info->results_n;
-		for (j = i - 1; j >= 0; j--) {
-			if (owork)
-				submit_nonce(thr, owork, res[j]);
-		}
 		info->owork = info->work;
 		info->work = NULL;
-		ret += 0xffffffffull * i;
 	}
 
 	aged = age_queued_work(bitfury, 6.0);
@@ -937,6 +929,15 @@ static int64_t nf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 		applog(LOG_DEBUG, "%s %d: Aged %d work items", bitfury->drv->name,
 		       bitfury->device_id, aged);
 	}
+
+	ret = bitfury_rate(info);
+
+	if (unlikely(bitfury->usbinfo.nodev)) {
+		applog(LOG_WARNING, "%s %d: Device disappeared, disabling thread",
+		       bitfury->drv->name, bitfury->device_id);
+		ret = -1;
+	}
+
 	return ret;
 }
 
