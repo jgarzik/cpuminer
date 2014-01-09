@@ -133,19 +133,16 @@ static int rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned
 	return 0;
 }
 
-void bitfury_work_to_payload(struct bitfury_payload *p, struct work *w)
+void bitfury_work_to_payload(struct bitfury_payload *p, struct work *work)
 {
-	unsigned char flipped_data[80];
-
-	memset(p, 0, sizeof(struct bitfury_payload));
-	flip80(flipped_data, w->data);
-
-	memcpy(p->midstate, w->midstate, 32);
-	p->m7 = bswap_32(*(unsigned *)(flipped_data + 64));
-	p->ntime = bswap_32(*(unsigned *)(flipped_data + 68));
-	p->nbits = bswap_32(*(unsigned *)(flipped_data + 72));
-	applog(LOG_INFO, "INFO nonc: %08x bitfury_scanHash MS0: %08x, ", p->nnonce, ((unsigned int *)w->midstate)[0]);
-	applog(LOG_INFO, "INFO merkle[7]: %08x, ntime: %08x, nbits: %08x", p->m7, p->ntime, p->nbits);
+	memcpy(p->midstate, work->midstate, 32);
+	p->m7 = *(unsigned int *)(work->data + 64);
+	p->ntime = *(unsigned int *)(work->data + 68);
+	p->nbits = *(unsigned int *)(work->data + 72);
+	applog(LOG_INFO, "INFO nonc: %08x bitfury_scanHash MS0: %08x, ", p->nnonce,
+	       ((unsigned int *)work->midstate)[0]);
+	applog(LOG_INFO, "INFO merkle[7]: %08x, ntime: %08x, nbits: %08x", p->m7,
+	       p->ntime, p->nbits);
 }
 
 /* Configuration registers - control oscillators and such stuff. PROGRAMMED when
