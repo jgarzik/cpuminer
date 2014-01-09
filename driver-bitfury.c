@@ -906,12 +906,11 @@ static int64_t nf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 			struct bitfury_info *info)
 {
 	int64_t ret = 0;
-	int aged;
 
 	if (!info->work) {
-		info->work = get_queue_work(thr, bitfury, thr->id);
+		info->work = get_work(thr, thr->id);
 		if (unlikely(thr->work_restart)) {
-			work_completed(bitfury, info->work);
+			free_work(info->work);
 			return 0;
 		}
 		bitfury_work_to_payload(&info->payload, info->work);
@@ -920,14 +919,10 @@ static int64_t nf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 		return -1;
 
 	if (info->job_switched) {
+		if (likely(info->owork))
+			free_work(info->owork);
 		info->owork = info->work;
 		info->work = NULL;
-	}
-
-	aged = age_queued_work(bitfury, 6.0);
-	if (aged) {
-		applog(LOG_DEBUG, "%s %d: Aged %d work items", bitfury->drv->name,
-		       bitfury->device_id, aged);
 	}
 
 	ret = bitfury_rate(info);
