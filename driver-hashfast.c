@@ -963,7 +963,7 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 	varint = db->inflight_target;
 	root = api_add_int(root, "inflight target", &varint, true);
 	varint = db->sequence_modulus;
-	root = api_add_int(root, "sequence modules", &varint, true);
+	root = api_add_int(root, "sequence modulus", &varint, true);
 
 	s1 = &info->stats1;
 	root = api_add_uint64(root, "rx preambles", &s1->usb_rx_preambles, false);
