@@ -52,7 +52,7 @@ cgminer_SOURCES += usbutils.c usbutils.h
 endif
 
 if WANT_LIBBITFURY
-cgminer_SOURCES += libbitfury.c libbitfury.h
+cgminer_SOURCES += libbitfury.c libbitfury.h mcp2210.c mcp2210.h
 endif
 
 # Device drivers
@@ -77,7 +77,7 @@ cgminer_SOURCES += driver-hashfast.c driver-hashfast.h hf_protocol.h hf_protocol
 endif
 
 if HAS_BITFURY
-cgminer_SOURCES += driver-bitfury.c driver-bitfury.h mcp2210.c mcp2210.h
+cgminer_SOURCES += driver-bitfury.c driver-bitfury.h
 endif
 
 if HAS_DRILLBIT
