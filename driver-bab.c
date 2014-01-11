@@ -242,6 +242,7 @@ typedef struct witem {
 	struct bab_work_send chip_input;
 	bool ci_setup;
 	int nonces;
+	struct timeval work_start;
 } WITEM;
 
 #define ALLOC_SITEMS 8
@@ -256,6 +257,7 @@ typedef struct sitem {
 	uint32_t bank_off[BAB_MAXBANKS+2];
 	// WITEMs used to build the work
 	K_ITEM *witems[BAB_MAXCHIPS];
+	struct timeval work_start;
 } SITEM;
 
 #define ALLOC_RITEMS 256
@@ -347,10 +349,6 @@ struct bab_info {
 	uint64_t ign_total_links;
 	uint64_t ign_total_work_links;
 
-/*
-	BLIST *chip_list[BAB_MAXCHIPS];
-*/
-
 	// Work
 	K_LIST *wfree_list;
 	K_STORE *available_work;
@@ -372,35 +370,72 @@ struct bab_info {
 	bool initialised;
 };
 
+/*
+ * If the SPI I/O thread waits longer than this long for work
+ * it will report an error saying how long it's waiting
+ */
 #define BAB_LONG_uS 1200000
+
+/*
+ * If work wasn't available early enough,
+ * report every BAB_LONG_WAIT_mS until it is
+ */
 #define BAB_LONG_WAIT_mS 888
+
+/*
+ * Some amount of time to wait for work
+ * before checking how long we've waited
+ */
 #define BAB_STD_WAIT_mS 888
 
+/*
+ * How long to wait for the ioctl() to complete
+ * This is a failsafe in case the ioctl() fails
+ * bab_txrx() will post a wakeup when it completes
+ */
 #define BAB_REPLY_WAIT_mS 188
 
 /*
- * TODO: add sent time to work so when there are a lot of errors
- * in a row, work can be discarded earlier if it is older than some limit
- * A bad nonce will be tested 3 times against every work item
- * in the chip's work list (since it will fail every test)
+ * Work items older than this should not expect results
+ * It has to allow for the result buffer returned with the next result
+ * 0.75GH/s takes 5.727s to do a full nonce range
+ * If HW is too high, consider increasing this to see if work is being
+ * expired too early (due to slow chips)
  */
-static void cleanup_older(struct cgpu_info *babcgpu, int chip, K_ITEM *item)
+#define BAB_WORK_EXPIRE_mS 5800
+
+static void cleanup_older(struct cgpu_info *babcgpu, int chip, struct timeval *now, K_ITEM *item)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	K_ITEM *tail;
-
-	if (!item || !(item->next))
-		return;
+	bool expired_item;
 
 	K_WLOCK(babinfo->chip_work[chip]);
 	tail = babinfo->chip_work[chip]->tail;
-	while (tail && tail != item) {
+	expired_item = false;
+	while (tail) {
+		if (ms_tdiff(now, &(DATAW(tail)->work_start)) < BAB_WORK_EXPIRE_mS)
+			break;
+
+		if (tail == item)
+			expired_item = true;
 		k_unlink_item(babinfo->chip_work[chip], tail);
 		K_WUNLOCK(babinfo->chip_work[chip]);
 		work_completed(babcgpu, DATAW(tail)->work);
 		K_WLOCK(babinfo->chip_work[chip]);
 		k_add_head(babinfo->wfree_list, tail);
 		tail = babinfo->chip_work[chip]->tail;
+	}
+	if (!expired_item && item && item->next) {
+		tail = babinfo->chip_work[chip]->tail;
+		while (tail && tail != item) {
+			k_unlink_item(babinfo->chip_work[chip], tail);
+			K_WUNLOCK(babinfo->chip_work[chip]);
+			work_completed(babcgpu, DATAW(tail)->work);
+			K_WLOCK(babinfo->chip_work[chip]);
+			k_add_head(babinfo->wfree_list, tail);
+			tail = babinfo->chip_work[chip]->tail;
+		}
 	}
 	K_WUNLOCK(babinfo->chip_work[chip]);
 }
@@ -583,6 +618,7 @@ static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, K_ITE
 		rbuf += tran.len;
 		pos += tran.len;
 	}
+	cgtime(&(DATAS(item)->work_start));
 	mutex_lock(&(babinfo->did_lock));
 	cgtime(&(babinfo->last_did));
 	mutex_unlock(&(babinfo->did_lock));
@@ -875,6 +911,7 @@ static const char *bab_memory = "/dev/mem";
 
 static int bab_memory_addr = 0x20200000;
 
+// TODO: add --bab-options for SPEED_HZ, tran.delay_usecs and an inter transfer delay (default 0)
 static struct {
 	int request;
 	int value;
@@ -1130,8 +1167,11 @@ static void *bab_spi(void *userdata)
 		K_WLOCK(babinfo->wfree_list);
 		for (chip = 0; chip < babinfo->chips; chip++) {
 			witem = DATAS(sitem)->witems[chip];
-			if (witem)
+			if (witem) {
+				memcpy(&(DATAW(witem)->work_start), &(DATAS(sitem)->work_start),
+					sizeof(DATAW(witem)->work_start));
 				k_add_head(babinfo->chip_work[chip], witem);
+			}
 		}
 		K_WUNLOCK(babinfo->wfree_list);
 
@@ -1172,13 +1212,14 @@ static void bab_flush_work(struct cgpu_info *babcgpu)
 /*
  * Find the matching work item by checking the nonce against each work
  * item for the chip
- * Discard any work items older than a match
+ * Discard any work items older than a match or older than BAB_WORK_EXPIRE_mS
  */
 static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, uint32_t nonce)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	unsigned int links, work_links, tests;
-	K_ITEM *witem, *wtail;
+	K_ITEM *witem, *wtail, *wold;
+	struct timeval now;
 	int i;
 
 	babinfo->chip_nonces[chip]++;
@@ -1205,10 +1246,13 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 
 	babinfo->tested_nonces++;
 
+	cgtime(&now);
+
 	tests = 0;
 	links = 0;
 	work_links = 0;
 	wtail = witem;
+	wold = NULL;
 	while (wtail && wtail->next) {
 		work_links++;
 		wtail = wtail->next;
@@ -1220,24 +1264,28 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 					babcgpu->device_id,
 					chip, links);
 		} else {
-			for (i = 0; i < BAB_NONCE_OFFSETS; i++) {
-				tests++;
-				if (test_nonce(DATAW(wtail)->work, nonce + bab_nonce_offsets[i])) {
-					submit_tested_work(thr, DATAW(wtail)->work);
-					babinfo->nonce_offset_count[i]++;
-					babinfo->chip_good[chip]++;
-					DATAW(wtail)->nonces++;
-					babinfo->new_nonces++;
-					babinfo->ok_nonces++;
-					cleanup_older(babcgpu, chip, wtail);
-					babinfo->total_tests += tests;
-					if (babinfo->max_tests_per_nonce < tests)
-						babinfo->max_tests_per_nonce = tests;
-					babinfo->total_links += links;
-					if (babinfo->max_links < links)
-						babinfo->max_links = links;
-					babinfo->total_work_links += work_links;
-					return true;
+			if (ms_tdiff(&now, &(DATAW(wtail)->work_start)) >= BAB_WORK_EXPIRE_mS)
+				wold = wtail;
+			else {
+				for (i = 0; i < BAB_NONCE_OFFSETS; i++) {
+					tests++;
+					if (test_nonce(DATAW(wtail)->work, nonce + bab_nonce_offsets[i])) {
+						submit_tested_work(thr, DATAW(wtail)->work);
+						babinfo->nonce_offset_count[i]++;
+						babinfo->chip_good[chip]++;
+						DATAW(wtail)->nonces++;
+						babinfo->new_nonces++;
+						babinfo->ok_nonces++;
+						cleanup_older(babcgpu, chip, &now, wtail);
+						babinfo->total_tests += tests;
+						if (babinfo->max_tests_per_nonce < tests)
+							babinfo->max_tests_per_nonce = tests;
+						babinfo->total_links += links;
+						if (babinfo->max_links < links)
+							babinfo->max_links = links;
+						babinfo->total_work_links += work_links;
+						return true;
+					}
 				}
 			}
 		}
@@ -1246,6 +1294,9 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 		wtail = wtail->prev;
 		links++;
 	}
+
+	if (wold)
+		cleanup_older(babcgpu, chip, &now, wold);
 
 	if (babinfo->not_first_reply[chip]) {
 		babinfo->chip_bad[chip]++;
@@ -1340,6 +1391,11 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 			return false;
 		}
 
+		/*
+		 * TODO: do this when we get work except on LP?
+		 * (not LP so we only do ms3steps for work required)
+		 * Though that may more likely trigger the applog(short work list) above?
+		 */
 		if (DATAW(witem)->ci_setup == false) {
 			memcpy((void *)&(DATAW(witem)->chip_input.midstate[0]),
 				DATAW(witem)->work->midstate, sizeof(DATAW(witem)->work->midstate));
@@ -1573,7 +1629,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	struct api_data *root = NULL;
 	char data[2048];
 	char buf[32];
-	int chip_work, i, to, j;
+	int spi_work, chip_work, i, to, j;
 
 	if (babinfo->initialised == false)
 		return NULL;
@@ -1678,10 +1734,12 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	chip_work = 0;
 	for (i = 0; i < babinfo->chips; i++)
 		chip_work += babinfo->chip_work[i]->count;
+	spi_work = babinfo->spi_list->count * babinfo->chips;
 
 	root = api_add_int(root, "WFree Total", &(babinfo->wfree_list->total), true);
 	root = api_add_int(root, "WFree Count", &(babinfo->wfree_list->count), true);
 	root = api_add_int(root, "Available Work", &(babinfo->available_work->count), true);
+	root = api_add_int(root, "SPI Work", &spi_work, true);
 	root = api_add_int(root, "Chip Work", &chip_work, true);
 
 	root = api_add_int(root, "SFree Total", &(babinfo->sfree_list->total), true);
