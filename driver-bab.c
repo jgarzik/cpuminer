@@ -59,6 +59,7 @@ static void bab_detect(__maybe_unused bool hotplug)
 //maximum number of chips per board
 #define BAB_BOARDCHIPS 16
 #define BAB_MAXBUF (BAB_MAXCHIPS * 512)
+#define BAB_V1_BANK 0
 //maximum number of alternative banks
 #define BAB_MAXBANKS 4
 //maximum number of boards in a bank
@@ -286,6 +287,7 @@ struct bab_info {
 
 	int spifd;
 	int chips;
+	int chips_per_bank[BAB_MAXBANKS+1];
 	int boards;
 	uint32_t chip_spis[BAB_MAXCHIPS+1];
 
@@ -318,7 +320,6 @@ struct bab_info {
 	bool not_first_reply[BAB_MAXCHIPS];
 
 	// Stats
-	struct timeval chip_start[BAB_MAXCHIPS];
 	int chip_busy[BAB_MAXCHIPS];
 	uint64_t core_good[BAB_MAXCHIPS][BAB_CORES];
 	uint64_t core_bad[BAB_MAXCHIPS][BAB_CORES];
@@ -1019,6 +1020,7 @@ static void bab_init_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 
 			bab_detect_chips(babcgpu, babinfo, 0, BAB_V1_CHIP_TEST, BAB_MAXCHIPS);
 		}
+		babinfo->chips_per_bank[BAB_V1_BANK] = babinfo->chips;
 	} else {
 		applog(LOG_WARNING, "%s no chips found with V1", babcgpu->drv->dname);
 		applog(LOG_WARNING, "%s V2 test %d banks %d chips ...",
@@ -1033,6 +1035,7 @@ static void bab_init_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 			bab_reset(bank, 64);
 			bab_detect_chips(babcgpu, babinfo, bank, babinfo->chips, babinfo->chips + BAB_BANKCHIPS);
 			new_chips = babinfo->chips - chips;
+			babinfo->chips_per_bank[bank] = new_chips;
 			chips = babinfo->chips;
 			if (new_chips == 0)
 				boards = 0;
@@ -1120,6 +1123,8 @@ static void bab_detect(bool hotplug)
 	for (i = 0; i < BAB_MAXCHIPS; i++)
 		babinfo->chip_work[i] = k_new_store(babinfo->wfree_list);
 
+	// Exclude detection
+	cgtime(&(babcgpu->dev_start_tv));
 	babinfo->initialised = true;
 
 	return;
@@ -1658,11 +1663,25 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	char data[2048];
 	char buf[32];
 	int spi_work, chip_work, i, to, j;
+	struct timeval now;
+	double elapsed, ghs;
+	float tot, hw;
 
 	if (babinfo->initialised == false)
 		return NULL;
 
 	root = api_add_int(root, "Chips", &(babinfo->chips), true);
+	data[0] = '\0';
+	for (i = 0; i <= BAB_MAXBANKS; i++) {
+		snprintf(buf, sizeof(buf), "%s%d",
+					   (i == 0) ? "" : " ",
+					   babinfo->chips_per_bank[i]);
+		strcat(data, buf);
+	}
+	root = api_add_string(root, "Chips Per Bank", data, true);
+
+	cgtime(&now);
+	elapsed = tdiff(&now, &(babcgpu->dev_start_tv));
 
 	for (i = 0; i < babinfo->chips; i += CHIPS_PER_STAT) {
 		to = i + CHIPS_PER_STAT - 1;
@@ -1722,6 +1741,37 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 			strcat(data, buf);
 		}
 		snprintf(buf, sizeof(buf), "Fast %d - %d", i, to);
+		root = api_add_string(root, buf, data, true);
+
+		data[0] = '\0';
+		for (j = i; j <= to; j++) {
+			tot = (float)(babinfo->chip_good[j] + babinfo->chip_bad[j]);
+			if (tot != 0)
+				hw = 100.0 * (float)(babinfo->chip_bad[j]) / tot;
+			else
+				hw = 0;
+			snprintf(buf, sizeof(buf),
+					"%s%.3f",
+					j == i ? "" : " ", hw);
+			strcat(data, buf);
+		}
+		snprintf(buf, sizeof(buf), "HW%% %d - %d", i, to);
+		root = api_add_string(root, buf, data, true);
+
+		data[0] = '\0';
+		for (j = i; j <= to; j++) {
+			if (elapsed > 0) {
+				ghs = (double)(babinfo->chip_good[j]) * 0xffffffffull /
+					elapsed / 1000000000.0;
+			} else
+				ghs = 0;
+
+			snprintf(buf, sizeof(buf),
+					"%s%.3f",
+					j == i ? "" : " ", ghs);
+			strcat(data, buf);
+		}
+		snprintf(buf, sizeof(buf), "GHs %d - %d", i, to);
 		root = api_add_string(root, buf, data, true);
 	}
 
