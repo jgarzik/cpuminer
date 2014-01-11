@@ -2617,13 +2617,6 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		endlen = strlen(end);
 
 	DEVRLOCK(cgpu, pstate);
-	usbdev = cgpu->usbdev;
-	/* Interrupt transfers are guaranteed to be of an expected size (we hope) */
-	if (usbdev->found->intinfos[intinfo].epinfos[epinfo].att == LIBUSB_TRANSFER_TYPE_INTERRUPT)
-		usbbufread = bufsiz;
-	else
-		usbbufread = 512;
-
 	if (cgpu->usbinfo.nodev) {
 		*processed = 0;
 		USB_REJECT(cgpu, MODE_BULK_READ);
@@ -2631,6 +2624,13 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		err = LIBUSB_ERROR_NO_DEVICE;
 		goto out_noerrmsg;
 	}
+
+	usbdev = cgpu->usbdev;
+	/* Interrupt transfers are guaranteed to be of an expected size (we hope) */
+	if (usbdev->found->intinfos[intinfo].epinfos[epinfo].att == LIBUSB_TRANSFER_TYPE_INTERRUPT)
+		usbbufread = bufsiz;
+	else
+		usbbufread = 512;
 
 	ftdi = (usbdev->usb_type == USB_TYPE_FTDI);
 
