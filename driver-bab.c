@@ -279,6 +279,7 @@ struct bab_info {
 	struct thr_info res_thr;
 
 	pthread_mutex_t did_lock;
+	pthread_mutex_t nonce_lock;
 
 	// All GPIO goes through this
 	volatile unsigned *gpio;
@@ -1107,6 +1108,7 @@ static void bab_detect(bool hotplug)
 	cgsem_init(&(babinfo->spi_reply));
 
 	mutex_init(&babinfo->did_lock);
+	mutex_init(&babinfo->nonce_lock);
 
 	babinfo->rfree_list = k_new_list("Results", sizeof(RITEM),
 					 ALLOC_RITEMS, LIMIT_RITEMS, true);
@@ -1294,7 +1296,11 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 						babinfo->nonce_offset_count[i]++;
 						babinfo->chip_good[chip]++;
 						DATAW(wtail)->nonces++;
+
+						mutex_lock(&(babinfo->nonce_lock));
 						babinfo->new_nonces++;
+						mutex_unlock(&(babinfo->nonce_lock));
+
 						babinfo->ok_nonces++;
 						cleanup_older(babcgpu, chip, &now, wtail);
 						babinfo->total_tests += tests;
@@ -1633,10 +1639,12 @@ static int64_t bab_scanwork(__maybe_unused struct thr_info *thr)
 			break;
 	}
 
+	mutex_lock(&(babinfo->nonce_lock));
 	if (babinfo->new_nonces) {
 		hashcount += 0xffffffffull * babinfo->new_nonces;
 		babinfo->new_nonces = 0;
 	}
+	mutex_unlock(&(babinfo->nonce_lock));
 
 	return hashcount;
 }
