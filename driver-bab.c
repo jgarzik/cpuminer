@@ -340,7 +340,9 @@ struct bab_info {
 	uint64_t total_tests;
 	uint64_t max_tests_per_nonce;
 	uint64_t total_links;
+	uint64_t total_proc_links;
 	uint64_t max_links;
+	uint64_t max_proc_links;
 	uint64_t total_work_links;
 
 	uint64_t fail;
@@ -1244,7 +1246,7 @@ static void bab_flush_work(struct cgpu_info *babcgpu)
 static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, uint32_t nonce)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	unsigned int links, work_links, tests;
+	unsigned int links, proc_links, work_links, tests;
 	K_ITEM *witem, *wtail, *wold;
 	struct timeval now;
 	int i;
@@ -1276,7 +1278,7 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 	cgtime(&now);
 
 	tests = 0;
-	links = 0;
+	links = proc_links = 0;
 	work_links = 0;
 	wtail = witem;
 	wold = NULL;
@@ -1291,9 +1293,10 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 					babcgpu->device_id,
 					chip, links);
 		} else {
-			if (ms_tdiff(&now, &(DATAW(wtail)->work_start)) >= BAB_WORK_EXPIRE_mS)
+			if (ms_tdiff(&now, &(DATAW(wtail)->work_start)) >= BAB_WORK_EXPIRE_mS) {
 				wold = wtail;
-			else {
+				proc_links--;
+			} else {
 				for (i = 0; i < BAB_NONCE_OFFSETS; i++) {
 					tests++;
 					if (test_nonce(DATAW(wtail)->work, nonce + bab_nonce_offsets[i])) {
@@ -1312,8 +1315,11 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 						if (babinfo->max_tests_per_nonce < tests)
 							babinfo->max_tests_per_nonce = tests;
 						babinfo->total_links += links;
+						babinfo->total_proc_links += proc_links;
 						if (babinfo->max_links < links)
 							babinfo->max_links = links;
+						if (babinfo->max_proc_links < proc_links)
+							babinfo->max_proc_links = proc_links;
 						babinfo->total_work_links += work_links;
 						return true;
 					}
@@ -1324,6 +1330,7 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 			break;
 		wtail = wtail->prev;
 		links++;
+		proc_links++;
 	}
 
 	if (wold)
@@ -1790,11 +1797,16 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	root = api_add_uint64(root, "Untested", &(babinfo->untested_nonces), true);
 
 	root = api_add_uint64(root, "Work Links", &(babinfo->total_links), true);
+	root = api_add_uint64(root, "Work Processed Links", &(babinfo->total_proc_links), true);
 	root = api_add_uint64(root, "Max Links", &(babinfo->max_links), true);
+	root = api_add_uint64(root, "Max Processed Links", &(babinfo->max_proc_links), true);
 	root = api_add_uint64(root, "Total Work Links", &(babinfo->total_work_links), true);
 	avg = babinfo->ok_nonces ? (float)(babinfo->total_links) /
 					(float)(babinfo->ok_nonces) : 0;
 	root = api_add_avg(root, "Avg Links", &avg, true);
+	avg = babinfo->ok_nonces ? (float)(babinfo->total_proc_links) /
+					(float)(babinfo->ok_nonces) : 0;
+	root = api_add_avg(root, "Avg Proc Links", &avg, true);
 	avg = babinfo->ok_nonces ? (float)(babinfo->total_work_links) /
 					(float)(babinfo->ok_nonces) : 0;
 	root = api_add_avg(root, "Avg Work Links", &avg, true);
