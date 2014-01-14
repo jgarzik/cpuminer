@@ -43,9 +43,7 @@ cgminer_SOURCES	+= elist.h miner.h compat.h bench_block.h	\
 
 cgminer_SOURCES	+= logging.c
 
-if HAS_BAB
 cgminer_SOURCES	+= klist.h klist.c
-endif
 
 if NEED_FPGAUTILS
 cgminer_SOURCES += fpgautils.c fpgautils.h
