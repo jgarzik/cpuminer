@@ -379,7 +379,7 @@ struct bab_info {
 	uint64_t delay_bands[BAB_DELAY_BANDS+2];
 
 	uint64_t send_count;
-	double send_time;
+	double send_total;
 	double send_min;
 	double send_max;
 
@@ -1284,7 +1284,7 @@ static void *bab_spi(void *userdata)
 
 		delay = tdiff(&start, &send);
 		babinfo->send_count++;
-		babinfo->send_time += delay;
+		babinfo->send_total += delay;
 		if (babinfo->send_min == 0 || babinfo->send_min > delay)
 			babinfo->send_min = delay;
 		if (babinfo->send_max < delay)
@@ -1948,11 +1948,12 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	root = api_add_string(root, "Delay Bands", data, true);
 
 	root = api_add_uint64(root, "Send Count", &(babinfo->send_count), true);
-	avg = babinfo->send_count ? (float)(babinfo->send_time) /
+	root = api_add_double(root, "Send Total", &(babinfo->send_total), true);
+	avg = babinfo->send_count ? (float)(babinfo->send_total) /
 					(float)(babinfo->send_count) : 0;
 	root = api_add_avg(root, "Send Avg", &avg, true);
 	root = api_add_double(root, "Send Min", &(babinfo->send_min), true);
-	root = api_add_double(root, "Send Max", &(babinfo->send_min), true);
+	root = api_add_double(root, "Send Max", &(babinfo->send_max), true);
 
 	return root;
 }
