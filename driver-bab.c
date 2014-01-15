@@ -295,11 +295,15 @@ struct bab_info {
 	// All GPIO goes through this
 	volatile unsigned *gpio;
 
+	int version;
 	int spifd;
 	int chips;
 	int chips_per_bank[BAB_MAXBANKS+1];
 	int boards;
+	int banks;
 	uint32_t chip_spis[BAB_MAXCHIPS+1];
+
+	int reply_wait;
 
 	cgsem_t scan_work;
 	cgsem_t spi_work;
@@ -403,6 +407,7 @@ struct bab_info {
 /*
  * If the SPI I/O thread waits longer than this long for work
  * it will report an error saying how long it's waiting
+ * and again every BAB_STD_WAIT_mS after that
  */
 #define BAB_LONG_uS 1200000
 
@@ -419,11 +424,13 @@ struct bab_info {
 #define BAB_STD_WAIT_mS 888
 
 /*
- * How long to wait for the ioctl() to complete
+ * How long to wait for the ioctl() to complete (per BANK)
  * This is a failsafe in case the ioctl() fails
- * bab_txrx() will post a wakeup when it completes
+ * since bab_txrx() will already post a wakeup when it completes
+ * V1 is set to this x 2
+ * V2 is set to this x active banks
  */
-#define BAB_REPLY_WAIT_mS 188
+#define BAB_REPLY_WAIT_mS 160
 
 /*
  * Work items older than this should not expect results
@@ -432,7 +439,10 @@ struct bab_info {
  * If HW is too high, consider increasing this to see if work is being
  * expired too early (due to slow chips)
  */
-#define BAB_WORK_EXPIRE_mS 5800
+#define BAB_WORK_EXPIRE_mS 7800
+
+// Don't send work more often than this
+#define BAB_EXPECTED_WORK_DELAY_mS 899
 
 static void cleanup_older(struct cgpu_info *babcgpu, int chip, struct timeval *now, K_ITEM *item)
 {
@@ -828,7 +838,7 @@ static bool bab_get(__maybe_unused struct cgpu_info *babcgpu, struct bab_info *b
 	K_ITEM *item;
 	int i;
 
-	cgsem_mswait(&(babinfo->spi_reply), BAB_REPLY_WAIT_mS);
+	cgsem_mswait(&(babinfo->spi_reply), babinfo->reply_wait);
 
 	K_WLOCK(babinfo->spi_sent);
 	item = k_unlink_tail(babinfo->spi_sent);
@@ -1040,7 +1050,9 @@ static void bab_init_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 			    babcgpu->drv->dname, BAB_V1_CHIP_TEST);
 
 	bab_detect_chips(babcgpu, babinfo, 0, 0, BAB_V1_CHIP_TEST);
-	if (babinfo->chips != 0) {
+	if (babinfo->chips > 0) {
+		babinfo->version = 1;
+		babinfo->banks = 0;
 		if (babinfo->chips == BAB_V1_CHIP_TEST) {
 			applog(LOG_WARNING, "%s V1 test for %d more chips ...",
 					    babcgpu->drv->dname, BAB_MAXCHIPS - BAB_V1_CHIP_TEST);
@@ -1048,12 +1060,16 @@ static void bab_init_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 			bab_detect_chips(babcgpu, babinfo, 0, BAB_V1_CHIP_TEST, BAB_MAXCHIPS);
 		}
 		babinfo->chips_per_bank[BAB_V1_BANK] = babinfo->chips;
+		babinfo->boards = (int)((float)(babinfo->chips - 1) / BAB_BOARDCHIPS) + 1;
+		babinfo->reply_wait = BAB_REPLY_WAIT_mS * 2;
 	} else {
 		applog(LOG_WARNING, "%s no chips found with V1", babcgpu->drv->dname);
 		applog(LOG_WARNING, "%s V2 test %d banks %d chips ...",
 				    babcgpu->drv->dname, BAB_MAXBANKS, BAB_MAXCHIPS);
 
 		chips = 0;
+		babinfo->version = 2;
+		babinfo->banks = 0;
 		for (bank = 1; bank <= BAB_MAXBANKS; bank++) {
 			for (chipoff = 0; chipoff < BAB_BANKCHIPS; chipoff++) {
 				chip = babinfo->chips + chipoff;
@@ -1066,13 +1082,16 @@ static void bab_init_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 			chips = babinfo->chips;
 			if (new_chips == 0)
 				boards = 0;
-			else
+			else {
 				boards = (int)((float)(new_chips - 1) / BAB_BOARDCHIPS) + 1;
+				babinfo->banks++;
+			}
 			applog(LOG_WARNING, "%s V2 bank %d: %d chips %d board%s",
 					    babcgpu->drv->dname, bank, new_chips,
 					    boards, (boards == 1) ? "" : "s");
 			babinfo->boards += boards;
 		}
+		babinfo->reply_wait = BAB_REPLY_WAIT_mS * babinfo->banks;
 		bab_reset(0, 8);
 	}
 
@@ -1173,7 +1192,7 @@ static void *bab_spi(void *userdata)
 {
 	struct cgpu_info *babcgpu = (struct cgpu_info *)userdata;
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	struct timeval start, stop, send;
+	struct timeval start, stop, send, now;
 	K_ITEM *sitem, *witem;
 	double wait, delay;
 	int chip, band;
@@ -1203,9 +1222,18 @@ static void *bab_spi(void *userdata)
 							babcgpu->drv->name,
 							babcgpu->device_id,
 							(float)wait);
-			}
-			cgsem_mswait(&(babinfo->spi_work), BAB_LONG_WAIT_mS);
+				cgsem_mswait(&(babinfo->spi_work), BAB_LONG_WAIT_mS);
+			} else
+				cgsem_mswait(&(babinfo->spi_work), (int)((BAB_LONG_uS - wait) / 1000));
 			continue;
+		}
+
+		// TODO: need an LP/urgent flag to skip this possible cgsem_mswait()
+		if (babinfo->last_sent_work.tv_sec) {
+			cgtime(&now);
+			delay = tdiff(&now, &(babinfo->last_sent_work)) * 1000.0;
+			if (delay < BAB_EXPECTED_WORK_DELAY_mS)
+				cgsem_mswait(&(babinfo->spi_work), BAB_EXPECTED_WORK_DELAY_mS - delay);
 		}
 
 		/*
@@ -1731,7 +1759,11 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	if (babinfo->initialised == false)
 		return NULL;
 
+	root = api_add_int(root, "Version", &(babinfo->version), true);
 	root = api_add_int(root, "Chips", &(babinfo->chips), true);
+	root = api_add_int(root, "Boards", &(babinfo->boards), true);
+	root = api_add_int(root, "Banks", &(babinfo->banks), true);
+
 	data[0] = '\0';
 	for (i = 0; i <= BAB_MAXBANKS; i++) {
 		snprintf(buf, sizeof(buf), "%s%d",
