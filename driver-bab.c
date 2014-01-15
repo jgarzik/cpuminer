@@ -275,6 +275,16 @@ typedef struct ritem {
 #define DATAS(_item) ((SITEM *)(_item->data))
 #define DATAR(_item) ((RITEM *)(_item->data))
 
+// How long per history set in seconds 600 = 10min
+#define BAB_HISTORY_SET_TIME 600
+// How many history sets to keep
+#define BAB_HISTORY_SETS 10
+
+// Record the number of each band between work sends
+#define BAB_DELAY_BANDS 10
+#define BAB_DELAY_BASE 0.5
+#define BAB_DELAY_STEP 0.2
+
 struct bab_info {
 	struct thr_info spi_thr;
 	struct thr_info res_thr;
@@ -353,6 +363,21 @@ struct bab_info {
 	uint64_t ign_total_tests;
 	uint64_t ign_total_links;
 	uint64_t ign_total_work_links;
+
+	struct timeval last_sent_work;
+	uint64_t delay_count;
+	double delay_min;
+	double delay_max;
+	/*
+	 * 0 is below band ranges
+	 * BAB_DELAY_BANDS+1 is above band ranges
+	 */
+	uint64_t delay_bands[BAB_DELAY_BANDS+2];
+
+	uint64_t send_count;
+	double send_time;
+	double send_min;
+	double send_max;
 
 	// Work
 	K_LIST *wfree_list;
@@ -1148,10 +1173,10 @@ static void *bab_spi(void *userdata)
 {
 	struct cgpu_info *babcgpu = (struct cgpu_info *)userdata;
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	struct timeval start, stop;
+	struct timeval start, stop, send;
 	K_ITEM *sitem, *witem;
-	double wait;
-	int chip;
+	double wait, delay;
+	int chip, band;
 
 	applog(LOG_DEBUG, "%s%i: SPIing...",
 			  babcgpu->drv->name, babcgpu->device_id);
@@ -1189,6 +1214,7 @@ static void *bab_spi(void *userdata)
 		 * Have an LP counter that at this point would show the work
 		 * is stale - so don't send it
 		 */
+		cgtime(&send);
 		bab_txrx(sitem, false);
 		cgtime(&start);
 
@@ -1207,7 +1233,35 @@ static void *bab_spi(void *userdata)
 		K_WLOCK(babinfo->spi_sent);
 		k_add_head(babinfo->spi_sent, sitem);
 		K_WUNLOCK(babinfo->spi_sent);
+
 		cgsem_post(&(babinfo->spi_reply));
+
+		// Store stats
+		if (babinfo->last_sent_work.tv_sec) {
+			delay = tdiff(&start, &(babinfo->last_sent_work));
+			babinfo->delay_count++;
+			if (babinfo->delay_min == 0 || babinfo->delay_min > delay)
+				babinfo->delay_min = delay;
+			if (babinfo->delay_max < delay)
+				babinfo->delay_max = delay;
+			if (delay < BAB_DELAY_BASE)
+				band = 0;
+			else if (delay >= (BAB_DELAY_BASE+BAB_DELAY_STEP*(BAB_DELAY_BANDS+1)))
+				band = BAB_DELAY_BANDS+1;
+			else
+				band = (int)(((double)delay - BAB_DELAY_BASE) / BAB_DELAY_STEP) + 1;
+			babinfo->delay_bands[band]++;
+		}
+		memcpy(&(babinfo->last_sent_work), &start, sizeof(start));
+
+		delay = tdiff(&start, &send);
+		babinfo->send_count++;
+		babinfo->send_time += delay;
+		if (babinfo->send_min == 0 || babinfo->send_min > delay)
+			babinfo->send_min = delay;
+		if (babinfo->send_max < delay)
+			babinfo->send_max = delay;
+
 		cgsem_mswait(&(babinfo->spi_work), BAB_STD_WAIT_mS);
 	}
 
@@ -1840,6 +1894,33 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	root = api_add_int(root, "RFree Total", &(babinfo->rfree_list->total), true);
 	root = api_add_int(root, "RFree Count", &(babinfo->rfree_list->count), true);
 	root = api_add_int(root, "Result Count", &(babinfo->res_list->count), true);
+
+	root = api_add_uint64(root, "Delay Count", &(babinfo->delay_count), true);
+	root = api_add_double(root, "Delay Min", &(babinfo->delay_min), true);
+	root = api_add_double(root, "Delay Max", &(babinfo->delay_max), true);
+
+	data[0] = '\0';
+	for (i = 0; i <= BAB_DELAY_BANDS; i++) {
+		snprintf(buf, sizeof(buf),
+				"%s<%.1f=%"PRIu64,
+				i == 0 ? "" : " ",
+				BAB_DELAY_BASE+(BAB_DELAY_STEP*i),
+				babinfo->delay_bands[i]);
+		strcat(data, buf);
+	}
+	snprintf(buf, sizeof(buf),
+			" >=%.1f=%"PRIu64,
+			BAB_DELAY_BASE+BAB_DELAY_STEP*(BAB_DELAY_BANDS+1),
+			babinfo->delay_bands[BAB_DELAY_BANDS+1]);
+	strcat(data, buf);
+	root = api_add_string(root, "Delay Bands", data, true);
+
+	root = api_add_uint64(root, "Send Count", &(babinfo->send_count), true);
+	avg = babinfo->send_count ? (float)(babinfo->send_time) /
+					(float)(babinfo->send_count) : 0;
+	root = api_add_avg(root, "Send Avg", &avg, true);
+	root = api_add_double(root, "Send Min", &(babinfo->send_min), true);
+	root = api_add_double(root, "Send Max", &(babinfo->send_min), true);
 
 	return root;
 }
