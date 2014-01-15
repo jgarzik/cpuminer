@@ -72,6 +72,7 @@ static void bab_detect(__maybe_unused bool hotplug)
 #define BAB_X_COORD 21
 #define BAB_Y_COORD 36
 
+#define BAB_NOOP 0
 #define BAB_BREAK ((uint8_t *)"\04")
 #define BAB_ASYNC ((uint8_t *)"\05")
 #define BAB_SYNC ((uint8_t *)"\06")
@@ -87,6 +88,8 @@ static void bab_detect(__maybe_unused bool hotplug)
 #define BAB_ADD_ASYNC(_item) _bab_add_buf(_item, BAB_ASYNC, 1, BAB_FFL_HERE)
 #define bab_config_reg(_item, _reg, _ena) _bab_config_reg(_item, _reg, _ena, BAB_FFL_HERE)
 #define bab_add_data(_item, _addr, _data, _siz) _bab_add_data(_item, _addr, (const uint8_t *)(_data), _siz, BAB_FFL_HERE)
+
+#define BAB_ADD_NOOPs(_item, _count) _bab_add_noops(_item, _count, BAB_FFL_HERE)
 
 #define BAB_ADD_MIN 4
 #define BAB_ADD_MAX 128
@@ -233,6 +236,8 @@ struct bab_work_reply {
 	uint32_t nonce[BAB_REPLY_NONCES];
 	uint32_t jobsel;
 };
+
+#define BAB_CHIP_MIN sizeof(struct bab_work_reply)
 
 #define ALLOC_WITEMS 1024
 #define LIMIT_WITEMS 0
@@ -703,6 +708,21 @@ static void _bab_add_buf(K_ITEM *item, const uint8_t *data, size_t siz, const ch
 	DATAS(item)->siz += siz;
 }
 
+static void _bab_add_noops(K_ITEM *item, size_t siz, const char *file, const char *func, const int line)
+{
+	uint32_t now_used;
+
+	now_used = DATAS(item)->siz;
+	if (now_used + siz >= BAB_MAXBUF) {
+		quitfrom(1, file, func, line,
+			"%s() DATAS buffer limit of %d exceeded=%d siz=%d",
+			__func__, BAB_MAXBUF, (int)(now_used + siz), (int)siz);
+	}
+
+	memset(&(DATAS(item)->wbuf[now_used]), BAB_NOOP, siz);
+	DATAS(item)->siz += siz;
+}
+
 static void _bab_add_data(K_ITEM *item, uint32_t addr, const uint8_t *data, size_t siz, const char *file, const char *func, const int line)
 {
 	uint8_t tmp[3];
@@ -754,6 +774,7 @@ static void bab_put(struct bab_info *babinfo, K_ITEM *sitem)
 {
 	struct bab_work_send *chip_input;
 	int i, reg, bank = 0;
+	size_t chip_siz;
 
 	BAB_ADD_BREAK(sitem);
 	for (i = 0; i < babinfo->chips; i++) {
@@ -818,6 +839,10 @@ static void bab_put(struct bab_info *babinfo, K_ITEM *sitem)
 		// Would no-ops need to be added if a chip gets disabled?
 		if (babinfo->chip_conf[i])
 			bab_add_data(sitem, BAB_INP_ADDR, (uint8_t *)chip_input, sizeof(*chip_input));
+
+		chip_siz = DATAS(sitem)->siz - babinfo->chip_conf[i];
+		if (chip_siz < BAB_CHIP_MIN)
+			BAB_ADD_NOOPs(sitem, BAB_CHIP_MIN - chip_siz);
 
 		BAB_ADD_ASYNC(sitem);
 	}
