@@ -304,6 +304,7 @@ struct bab_info {
 	int spifd;
 	int chips;
 	int chips_per_bank[BAB_MAXBANKS+1];
+	int missing_chips_per_bank[BAB_MAXBANKS+1];
 	int boards;
 	int banks;
 	uint32_t chip_spis[BAB_MAXCHIPS+1];
@@ -1069,7 +1070,7 @@ bad_out:
 
 static void bab_init_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 {
-	int chip, chipoff, bank, chips, new_chips, boards;
+	int chip, chipoff, bank, chips, new_chips, boards, mis;
 
 	applog(LOG_WARNING, "%s V1 first test for %d chips ...",
 			    babcgpu->drv->dname, BAB_V1_CHIP_TEST);
@@ -1087,6 +1088,14 @@ static void bab_init_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 		babinfo->chips_per_bank[BAB_V1_BANK] = babinfo->chips;
 		babinfo->boards = (int)((float)(babinfo->chips - 1) / BAB_BOARDCHIPS) + 1;
 		babinfo->reply_wait = BAB_REPLY_WAIT_mS * 2;
+
+		if ((chip = (babinfo->chips_per_bank[BAB_V1_BANK] % BAB_BOARDCHIPS))) {
+			mis = BAB_BOARDCHIPS - chip;
+			babinfo->missing_chips_per_bank[BAB_V1_BANK] = mis;
+			applog(LOG_WARNING, "%s V1: missing %d chip%s",
+					    babcgpu->drv->dname, mis,
+					    (mis == 1) ? "" : "s");
+		}
 	} else {
 		applog(LOG_WARNING, "%s no chips found with V1", babcgpu->drv->dname);
 		applog(LOG_WARNING, "%s V2 test %d banks %d chips ...",
@@ -1115,6 +1124,14 @@ static void bab_init_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 					    babcgpu->drv->dname, bank, new_chips,
 					    boards, (boards == 1) ? "" : "s");
 			babinfo->boards += boards;
+
+			if ((chip = (babinfo->chips_per_bank[bank] % BAB_BOARDCHIPS))) {
+				mis = BAB_BOARDCHIPS - chip;
+				babinfo->missing_chips_per_bank[bank] = mis;
+				applog(LOG_WARNING, "%s V2: bank %d missing %d chip%s",
+						    babcgpu->drv->dname, bank,
+						    mis, (mis == 1) ? "" : "s");
+			}
 		}
 		babinfo->reply_wait = BAB_REPLY_WAIT_mS * babinfo->banks;
 		bab_reset(0, 8);
@@ -1797,6 +1814,15 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 		strcat(data, buf);
 	}
 	root = api_add_string(root, "Chips Per Bank", data, true);
+
+	data[0] = '\0';
+	for (i = 0; i <= BAB_MAXBANKS; i++) {
+		snprintf(buf, sizeof(buf), "%s%d",
+					   (i == 0) ? "" : " ",
+					   babinfo->missing_chips_per_bank[i]);
+		strcat(data, buf);
+	}
+	root = api_add_string(root, "Missing Chips Per Bank", data, true);
 
 	cgtime(&now);
 	elapsed = tdiff(&now, &(babcgpu->dev_start_tv));
