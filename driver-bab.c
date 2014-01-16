@@ -237,7 +237,7 @@ struct bab_work_reply {
 	uint32_t jobsel;
 };
 
-#define BAB_CHIP_MIN sizeof(struct bab_work_reply)
+#define BAB_CHIP_MIN (sizeof(struct bab_work_reply)+16)
 
 #define ALLOC_WITEMS 1024
 #define LIMIT_WITEMS 0
@@ -1260,10 +1260,10 @@ static void *bab_spi(void *userdata)
 			cgtime(&stop);
 			wait = us_tdiff(&stop, &start);
 			if (wait > BAB_LONG_uS) {
-				applog(LOG_WARNING, "%s%i: SPI waiting %.0fus ...",
+				applog(LOG_WARNING, "%s%i: SPI waiting %fs ...",
 							babcgpu->drv->name,
 							babcgpu->device_id,
-							(float)wait);
+							(float)wait / 1000000.0);
 				cgsem_mswait(&(babinfo->spi_work), BAB_LONG_WAIT_mS);
 			} else
 				cgsem_mswait(&(babinfo->spi_work), (int)((BAB_LONG_uS - wait) / 1000));
