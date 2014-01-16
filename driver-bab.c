@@ -314,6 +314,7 @@ struct bab_info {
 	cgsem_t scan_work;
 	cgsem_t spi_work;
 	cgsem_t spi_reply;
+	cgsem_t process_reply;
 
 	// TODO: redesign these 2
 	struct bab_work_reply chip_results[BAB_MAXCHIPS];
@@ -1197,6 +1198,7 @@ static void bab_detect(bool hotplug)
 	cgsem_init(&(babinfo->scan_work));
 	cgsem_init(&(babinfo->spi_work));
 	cgsem_init(&(babinfo->spi_reply));
+	cgsem_init(&(babinfo->process_reply));
 
 	mutex_init(&babinfo->did_lock);
 	mutex_init(&babinfo->nonce_lock);
@@ -1478,6 +1480,9 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 	return false;
 }
 
+// Check at least every ...
+#define BAB_RESULT_DELAY_mS 999
+
 // Results checking thread
 static void *bab_res(void *userdata)
 {
@@ -1500,9 +1505,8 @@ static void *bab_res(void *userdata)
 	}
 
 	while (babcgpu->shutdown == false) {
-// TODO: not polling
 		if (!oldest_nonce(babinfo, &chip, &nonce, &first_second)) {
-			cgsleep_ms(3);
+			cgsem_mswait(&(babinfo->process_reply), BAB_RESULT_DELAY_mS);
 			continue;
 		}
 
@@ -1641,6 +1645,9 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 
 			got_a_nonce = true;
 		}
+
+		if (got_a_nonce)
+			cgsem_post(&(babinfo->process_reply));
 
 		/*
 		 * We only care about this after the first reply we find a nonce
