@@ -310,8 +310,7 @@ sudo cgminer <insert commands here>
 
 Advanced USB options:
 
-The --usb option can restrict how many Avalon, BFL ASIC, BitForce FPGAs,
-Klondike ASIC, ModMiner FPGAs or Icarus bitstream FPGAs it finds:
+The --usb option can restrict how many USB devices are found:
 
   --usb 1:2,1:3,1:4,1:*
 or
@@ -343,11 +342,13 @@ If you wish to see all USB devices, include the --usb-list-all option
 The second version
   --usb BAS:1,BFL:1,MMQ:0,ICA:0,KLN:0
 allows you to specify how many devices to choose based on each device
-driver cgminer has - there are currently 5 USB drivers: BAS, BFL, MMQ.
-ICA & KLN
+driver cgminer has - the current USB drivers are:
+AVA, BAS, BFL, BF1, DRB, HFA, ICA, KLN and MMQ.
+
 N.B. you can only specify which device driver to limit, not the type of
 each device, e.g. with BAS:n you can limit how many BFL ASIC devices will
 be checked, but you cannot limit the number of each type of BFL ASIC
+
 Also note that the MMQ count is the number of MMQ backplanes you have
 not the number of MMQ FPGAs
 
