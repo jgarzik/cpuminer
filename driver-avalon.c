@@ -1012,9 +1012,9 @@ static void *avalon_get_results(void *userdata)
 	char readbuf[AVALON_READBUF_SIZE];
 	struct thr_info *thr = info->thr;
 	int offset = 0, ret = 0;
-	char threadname[24];
+	char threadname[16];
 
-	snprintf(threadname, 24, "ava_recv/%d", avalon->device_id);
+	snprintf(threadname, sizeof(threadname), "%d/AvaRecv", avalon->device_id);
 	RenameThread(threadname);
 
 	while (likely(!avalon->shutdown)) {
@@ -1147,9 +1147,9 @@ static void *avalon_send_tasks(void *userdata)
 	struct cgpu_info *avalon = (struct cgpu_info *)userdata;
 	struct avalon_info *info = avalon->device_data;
 	const int avalon_get_work_count = info->miner_count;
-	char threadname[24];
+	char threadname[16];
 
-	snprintf(threadname, 24, "ava_send/%d", avalon->device_id);
+	snprintf(threadname, sizeof(threadname), "%d/AvaSend", avalon->device_id);
 	RenameThread(threadname);
 
 	while (likely(!avalon->shutdown)) {
@@ -1236,9 +1236,9 @@ static void *bitburner_send_tasks(void *userdata)
 	struct cgpu_info *avalon = (struct cgpu_info *)userdata;
 	struct avalon_info *info = avalon->device_data;
 	const int avalon_get_work_count = info->miner_count;
-	char threadname[24];
+	char threadname[16];
 
-	snprintf(threadname, 24, "ava_send/%d", avalon->device_id);
+	snprintf(threadname, sizeof(threadname), "%d/AvaSend", avalon->device_id);
 	RenameThread(threadname);
 
 	while (likely(!avalon->shutdown)) {

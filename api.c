@@ -4388,7 +4388,7 @@ static void *mcast_thread(void *userdata)
 	pthread_detach(pthread_self());
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-	RenameThread("api_mcast");
+	RenameThread("APIMcast");
 
 	mcast();
 
