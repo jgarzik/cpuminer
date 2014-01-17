@@ -1312,11 +1312,14 @@ static void *bab_spi(void *userdata)
 		}
 
 		// TODO: need an LP/urgent flag to skip this possible cgsem_mswait()
-		if (babinfo->last_sent_work.tv_sec) {
+		// maybe zero last_sent_work.tv_sec ?
+		while (babinfo->last_sent_work.tv_sec) {
 			cgtime(&now);
 			delay = tdiff(&now, &(babinfo->last_sent_work)) * 1000.0;
 			if (delay < BAB_EXPECTED_WORK_DELAY_mS)
 				cgsem_mswait(&(babinfo->spi_work), BAB_EXPECTED_WORK_DELAY_mS - delay);
+			else
+				break;
 		}
 
 		/*
@@ -1349,7 +1352,7 @@ static void *bab_spi(void *userdata)
 
 		// Store stats
 		if (babinfo->last_sent_work.tv_sec) {
-			delay = tdiff(&start, &(babinfo->last_sent_work));
+			delay = tdiff(&send, &(babinfo->last_sent_work));
 			babinfo->delay_count++;
 			if (babinfo->delay_min == 0 || babinfo->delay_min > delay)
 				babinfo->delay_min = delay;
@@ -1363,7 +1366,7 @@ static void *bab_spi(void *userdata)
 				band = (int)(((double)delay - BAB_DELAY_BASE) / BAB_DELAY_STEP) + 1;
 			babinfo->delay_bands[band]++;
 		}
-		memcpy(&(babinfo->last_sent_work), &start, sizeof(start));
+		memcpy(&(babinfo->last_sent_work), &send, sizeof(start));
 
 		delay = tdiff(&start, &send);
 		babinfo->send_count++;
