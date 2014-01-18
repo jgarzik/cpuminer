@@ -1406,6 +1406,7 @@ static void bab_flush_work(struct cgpu_info *babcgpu)
 #define WORK_BITS (18*4)
 #define WORK_NONCE (19*4)
 
+#if 0
 static void process_history(struct bab_info *babinfo, int chip, struct timeval *when, bool good, struct timeval *now)
 {
 	K_ITEM *item;
@@ -1443,13 +1444,14 @@ static void process_history(struct bab_info *babinfo, int chip, struct timeval *
 	}
 	K_WUNLOCK(babinfo->nfree_list);
 }
+#endif
 
 /*
  * Find the matching work item by checking the nonce against each work
  * item for the chip
  * Discard any work items older than a match or older than BAB_WORK_EXPIRE_mS
  */
-static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, uint32_t nonce, struct timeval *when)
+static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, uint32_t nonce, __maybe_unused struct timeval *when)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	unsigned int links, proc_links, work_links, tests;
@@ -1528,7 +1530,7 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 							babinfo->max_proc_links = proc_links;
 						babinfo->total_work_links += work_links;
 
-						process_history(babinfo, chip, when, true, &now);
+						//process_history(babinfo, chip, when, true, &now);
 						return true;
 					}
 				}
@@ -1553,7 +1555,7 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 		babinfo->fail_total_links += links;
 		babinfo->fail_total_work_links += work_links;
 
-		process_history(babinfo, chip, when, false, &now);
+		//process_history(babinfo, chip, when, false, &now);
 	} else {
 		babinfo->initial_ignored++;
 		babinfo->ign_total_tests += tests;
