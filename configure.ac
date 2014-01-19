@@ -239,7 +239,7 @@ AM_CONDITIONAL([HAS_KNC], [test x$knc = xyes])
 minion="no"
 
 AC_ARG_ENABLE([minion],
-	[AC_HELP_STRING([--enable-minion],[Compile support for BlackArrow Bitfury (default disabled)])],
+	[AC_HELP_STRING([--enable-minion],[Compile support for Minion BlackArrow ASIC (default disabled)])],
 	[minion=$enableval]
 	)
 if test "x$minion" = xyes; then
