@@ -221,6 +221,11 @@ static const uint8_t bab_reg_ena[4] = { 0xc1, 0x6a, 0x59, 0xe3 };
 static const uint8_t bab_reg_dis[4] = { 0x00, 0x00, 0x00, 0x00 };
 
 #define BAB_NONCE_OFFSETS 3
+#define BAB_OFF_0x1C_STA 2
+#define BAB_OFF_0x1C_FIN 2
+#define BAB_OFF_OTHER_STA 0
+#define BAB_OFF_OTHER_FIN 1
+
 static const uint32_t bab_nonce_offsets[] = {-0x800000, 0, -0x400000};
 
 struct bab_work_send {
@@ -1391,7 +1396,7 @@ static void bab_flush_work(struct cgpu_info *babcgpu)
 			  babcgpu->drv->name, babcgpu->device_id);
 
 	mutex_lock(&(babinfo->did_lock));
-	memset(&(babinfo->last_did), 0, sizeof(babinfo->last_did));
+	babinfo->last_did.tv_sec = 0;
 	mutex_unlock(&(babinfo->did_lock));
 
 	cgsem_post(&(babinfo->scan_work));
@@ -1459,17 +1464,18 @@ static void process_history(struct bab_info *babinfo, int chip, struct timeval *
  * item for the chip
  * Discard any work items older than a match or older than BAB_WORK_EXPIRE_mS
  */
-static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, uint32_t nonce, __maybe_unused struct timeval *when)
+static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, uint32_t raw_nonce, struct timeval *when)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	unsigned int links, proc_links, work_links, tests;
 	K_ITEM *witem, *wtail, *wold;
 	struct timeval now;
-	int i;
+	uint32_t nonce;
+	int try_sta, try_fin, offset;
 
 	babinfo->chip_nonces[chip]++;
 
-	nonce = decnonce(nonce);
+	nonce = decnonce(raw_nonce);
 
 	/*
 	 * We can grab the head of the chip work queue and then release
@@ -1490,6 +1496,16 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 	}
 
 	babinfo->tested_nonces++;
+
+	if ((raw_nonce & 0xff) < 0x1c) {
+		// Will only be this offset
+		try_sta = BAB_OFF_0x1C_STA;
+		try_fin = BAB_OFF_0x1C_FIN;
+	} else {
+		// Will only be one of the other offsets
+		try_sta = BAB_OFF_OTHER_STA;
+		try_fin = BAB_OFF_OTHER_FIN;
+	}
 
 	cgtime(&now);
 
@@ -1513,11 +1529,11 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 				wold = wtail;
 				proc_links--;
 			} else {
-				for (i = 0; i < BAB_NONCE_OFFSETS; i++) {
+				for (offset = try_sta; offset <= try_fin; offset++) {
 					tests++;
-					if (test_nonce(DATAW(wtail)->work, nonce + bab_nonce_offsets[i])) {
+					if (test_nonce(DATAW(wtail)->work, nonce + bab_nonce_offsets[offset])) {
 						submit_tested_work(thr, DATAW(wtail)->work);
-						babinfo->nonce_offset_count[i]++;
+						babinfo->nonce_offset_count[offset]++;
 						babinfo->chip_good[chip]++;
 						DATAW(wtail)->nonces++;
 
