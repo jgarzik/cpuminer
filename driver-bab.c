@@ -364,6 +364,9 @@ struct bab_info {
 	uint64_t chip_bad[BAB_MAXCHIPS];
 	uint64_t chip_ncore[BAB_MAXCHIPS][BAB_X_COORD][BAB_Y_COORD];
 
+	uint64_t chip_cont_bad[BAB_MAXCHIPS];
+	uint64_t chip_max_bad[BAB_MAXCHIPS];
+
 	uint64_t untested_nonces;
 	uint64_t tested_nonces;
 
@@ -1535,6 +1538,8 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 							babinfo->max_proc_links = proc_links;
 						babinfo->total_work_links += work_links;
 
+						babinfo->chip_cont_bad[chip] = 0;
+
 #if UPDATE_HISTORY
 						process_history(babinfo, chip, when, true, &now);
 #endif
@@ -1561,6 +1566,10 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 		babinfo->fail_total_tests += tests;
 		babinfo->fail_total_links += links;
 		babinfo->fail_total_work_links += work_links;
+
+		babinfo->chip_cont_bad[chip]++;
+		if (babinfo->chip_max_bad[chip] < babinfo->chip_cont_bad[chip])
+			babinfo->chip_max_bad[chip] = babinfo->chip_cont_bad[chip];
 
 #if UPDATE_HISTORY
 		process_history(babinfo, chip, when, false, &now);
@@ -2071,6 +2080,28 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 
 		snprintf(buf, sizeof(buf), "Sum GHs %d - %d", i, to);
 		root = api_add_avg(root, buf, &ghs_sum, true);
+
+		data[0] = '\0';
+		for (j = i; j <= to; j++) {
+			snprintf(buf, sizeof(buf),
+					"%s%"PRIu64,
+					j == i ? "" : " ",
+					babinfo->chip_cont_bad[j]);
+			strcat(data, buf);
+		}
+		snprintf(buf, sizeof(buf), "Cont-Bad %d - %d", i, to);
+		root = api_add_string(root, buf, data, true);
+
+		data[0] = '\0';
+		for (j = i; j <= to; j++) {
+			snprintf(buf, sizeof(buf),
+					"%s%"PRIu64,
+					j == i ? "" : " ",
+					babinfo->chip_max_bad[j]);
+			strcat(data, buf);
+		}
+		snprintf(buf, sizeof(buf), "Max-Bad %d - %d", i, to);
+		root = api_add_string(root, buf, data, true);
 
 		data[0] = '\0';
 		for (j = i; j <= to; j++) {
