@@ -2256,6 +2256,16 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 
 	return root;
 }
+
+static void bab_get_statline_before(char *buf, size_t bufsiz, struct cgpu_info *babcgpu)
+{
+	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
+
+	tailsprintf(buf, bufsiz, "B:%d B:%02d C:%03d | ",
+				 babinfo->banks,
+				 babinfo->boards,
+				 babinfo->chips);
+}
 #endif
 
 struct device_drv bab_drv = {
@@ -2265,7 +2275,7 @@ struct device_drv bab_drv = {
 	.drv_detect = bab_detect,
 #ifdef LINUX
 	.get_api_stats = bab_api_stats,
-//TODO:	.get_statline_before = get_bab_statline_before,
+	.get_statline_before = bab_get_statline_before,
 	.identify_device = bab_identify,
 	.thread_prepare = bab_thread_prepare,
 	.hash_work = hash_queued_work,
