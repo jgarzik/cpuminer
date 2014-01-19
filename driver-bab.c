@@ -1464,7 +1464,7 @@ static void process_history(struct bab_info *babinfo, int chip, struct timeval *
  * item for the chip
  * Discard any work items older than a match or older than BAB_WORK_EXPIRE_mS
  */
-static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, uint32_t raw_nonce, struct timeval *when)
+static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, uint32_t raw_nonce, __maybe_unused struct timeval *when)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	unsigned int links, proc_links, work_links, tests;
