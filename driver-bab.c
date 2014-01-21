@@ -372,6 +372,8 @@ struct bab_info {
 	uint64_t chip_cont_bad[BAB_MAXCHIPS];
 	uint64_t chip_max_bad[BAB_MAXCHIPS];
 
+	uint64_t discarded_e0s;
+
 	uint64_t untested_nonces;
 	uint64_t tested_nonces;
 
@@ -1719,11 +1721,13 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 
 		for (rep = 0; rep < BAB_REPLY_NONCES; rep++) {
 			nonce = babinfo->chip_results[chip].nonce[rep];
-			if ((nonce != babinfo->chip_prev[chip].nonce[rep]) &&
-			    ((nonce & BAB_EVIL_MASK) != BAB_EVIL_NONCE)) {
-				store_nonce(babinfo, chip, nonce,
-					    babinfo->not_first_reply[chip], &when);
-				got_a_nonce = true;
+			if (nonce != babinfo->chip_prev[chip].nonce[rep]) {
+				if ((nonce & BAB_EVIL_MASK) != BAB_EVIL_NONCE) {
+					store_nonce(babinfo, chip, nonce,
+						    babinfo->not_first_reply[chip], &when);
+					got_a_nonce = true;
+				} else
+					babinfo->discarded_e0s++;
 			}
 		}
 
@@ -2166,6 +2170,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 		root = api_add_uint64(root, buf, &(babinfo->nonce_offset_count[i]), true);
 	}
 
+	root = api_add_uint64(root, "Discarded E0s", &(babinfo->discarded_e0s), true);
 	root = api_add_uint64(root, "Tested", &(babinfo->tested_nonces), true);
 	root = api_add_uint64(root, "OK", &(babinfo->ok_nonces), true);
 	root = api_add_uint64(root, "Total Tests", &(babinfo->total_tests), true);
