@@ -442,9 +442,9 @@ struct bab_info {
 /*
  * Amount of time for history
  * Older items in nonce_history are discarded
- * 600s / 10 minutes
+ * 300s / 5 minutes
  */
-#define HISTORY_TIME_S 600
+#define HISTORY_TIME_S 300
 
 /*
  * If the SPI I/O thread waits longer than this long for work
@@ -1264,6 +1264,9 @@ static void bab_detect(bool hotplug)
 
 	// Exclude detection
 	cgtime(&(babcgpu->dev_start_tv));
+	// Ignore detection tests
+	babinfo->last_did.tv_sec = 0;
+
 	babinfo->initialised = true;
 
 	return;
@@ -1640,15 +1643,31 @@ static void *bab_res(void *userdata)
 	return NULL;
 }
 
+/*
+ * 1.0s per nonce = 4.2GH/s
+ * 0.9s per nonce = 4.8GH/s
+ * On a slow mahcine, reducing this may resolve:
+ *  BaB0: SPI waiting 1.2...s
+ */
+#define BAB_STD_WORK_DELAY_uS 900000
+
 static bool bab_do_work(struct cgpu_info *babcgpu)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	int work_items = 0;
 	bool res, got_a_nonce;
 	K_ITEM *witem, *sitem;
-	struct timeval when;
+	struct timeval when, now;
+	double delay;
 	int chip, rep, j;
 	uint32_t nonce;
+
+	cgtime(&now);
+	mutex_lock(&(babinfo->did_lock));
+	delay = us_tdiff(&now, &(babinfo->last_did));
+	mutex_unlock(&(babinfo->did_lock));
+	if (delay < BAB_STD_WORK_DELAY_uS)
+		return false;
 
 	K_WLOCK(babinfo->sfree_list);
 	sitem = k_unlink_head_zero(babinfo->sfree_list);
@@ -1824,13 +1843,7 @@ static bool bab_queue_full(struct cgpu_info *babcgpu)
 	return ret;
 }
 
-/*
- * 1.0s per nonce = 4.2GH/s
- * So anything around 4GH/s or less per chip should be fine
- */
-#define BAB_STD_WORK_uS 1000000
-
-#define BAB_STD_DELAY_mS 30
+#define BAB_STD_DELAY_mS 100
 
 /*
  * TODO: allow this to run through more than once - the second+
@@ -1842,23 +1855,16 @@ static int64_t bab_scanwork(__maybe_unused struct thr_info *thr)
 	struct cgpu_info *babcgpu = thr->cgpu;
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	int64_t hashcount = 0;
-	struct timeval now;
-	double delay;
+	int count;
 
 	bab_do_work(babcgpu);
 
-	// Sleep now so we get the work "bab_queue_full()" just before we use it
-	while (80085) {
-		cgtime(&now);
-		mutex_lock(&(babinfo->did_lock));
-		delay = us_tdiff(&now, &(babinfo->last_did));
-		mutex_unlock(&(babinfo->did_lock));
-		if (delay < (BAB_STD_WORK_uS - (BAB_STD_DELAY_mS * 1000))) {
-			// So it can be interrupted early
-			cgsem_mswait(&(babinfo->scan_work), BAB_STD_DELAY_mS);
-		} else
-			break;
-	}
+	K_RLOCK(babinfo->available_work);
+	count = babinfo->available_work->count;
+	K_RUNLOCK(babinfo->available_work);
+
+	if (count >= babinfo->chips)
+		cgsem_mswait(&(babinfo->scan_work), BAB_STD_DELAY_mS);
 
 	mutex_lock(&(babinfo->nonce_lock));
 	if (babinfo->new_nonces) {
