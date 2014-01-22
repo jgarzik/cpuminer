@@ -2271,6 +2271,9 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 
 	root = api_add_uint64(root, "Fail", &(babinfo->fail), true);
 	root = api_add_uint64(root, "Fail Total Tests", &(babinfo->fail_total_tests), true);
+	avg = babinfo->fail ? (float)(babinfo->fail_total_tests) /
+					(float)(babinfo->fail) : 0;
+	root = api_add_avg(root, "Fail Avg Tests", &avg, true);
 	root = api_add_uint64(root, "Fail Work Links", &(babinfo->fail_total_links), true);
 	root = api_add_uint64(root, "Fail Total Work Links", &(babinfo->fail_total_work_links), true);
 
