@@ -1902,7 +1902,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	struct api_data *root = NULL;
 	char data[2048];
 	char buf[32];
-	int spi_work, chip_work, i, to, j, sp;
+	int spi_work, chip_work, i, to, j, sp, bank, chip_off;
 	struct timeval now;
 	double elapsed, ghs;
 	float ghs_sum, ghs_tot;
@@ -2028,7 +2028,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 		data[0] = '\0';
 		for (j = i; j <= to; j++) {
 			snprintf(buf, sizeof(buf),
-					"%s0x%02x",
+					"%s%d",
 					j == i ? "" : " ",
 					(int)(babinfo->chip_fast[j]));
 			strcat(data, buf);
@@ -2177,13 +2177,67 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 			ghs = chip_speed_ranges[sp];
 		else
 			ghs = chip_speed_ranges[BAB_CHIP_SPEEDS - 2];
-			
+
 		snprintf(buf, sizeof(buf), "History Speed %s%.1f %s",
 					   (sp < (BAB_CHIP_SPEEDS - 1)) ? "" : ">",
 					   ghs, chip_speed_names[sp]);
 
 		root = api_add_int(root, buf, &(speeds[sp]), true);
 	}
+
+	int len, str, siz = 1024;
+	char *tmp = malloc(siz);
+	if (!tmp)
+		quithere(1, "OOM tmp1");
+	for (sp = 0; sp < 2; sp++) {
+		tmp[0] = '\0';
+		len = 0;
+		for (i = 0; i < babinfo->chips; i++) {
+			if (history_elapsed[i] > 0) {
+				double num = history_good[i];
+				// exclude the first nonce?
+				if (elapsed_is_good[i])
+					num--;
+				ghs = num * 0xffffffffull /
+					history_elapsed[i] / 1000000000.0;
+			} else
+				ghs = 0;
+
+			if ((sp == 0 || ghs > chip_speed_ranges[sp-1]) &&
+			    (ghs <= chip_speed_ranges[sp])) {
+				bank = babinfo->chip_bank[i];
+				chip_off = i;
+				for (j = 0; j < babinfo->chip_bank[i]; j++)
+					chip_off -= babinfo->chips_per_bank[j];
+				/*
+				 * Bank/Board/Chip are all 1 based
+				 * except V1 Bank = BAB_V1_BANK (0)
+				 * If the bank has any missing chips then a "?"
+				 * is placed after the board number
+				 */
+				snprintf(buf, sizeof(buf), "%s%d/%d%s/%d",
+							   len ? " " : "", bank,
+							   (int)(chip_off / BAB_BOARDCHIPS)+1,
+							   babinfo->missing_chips_per_bank[bank] ?
+							   "?" : "",
+							   (chip_off % BAB_BOARDCHIPS)+1);
+				str = strlen(buf);
+				while ((len + str + 1) > siz) {
+					siz += 1024;
+					tmp = realloc(tmp, siz);
+					if (!tmp)
+						quithere(1, "OOM tmp2");
+				}
+				strcpy(tmp + len, buf);
+				len += str;
+			}
+		}
+		snprintf(buf, sizeof(buf), "History %s", chip_speed_names[sp]);
+
+		root = api_add_string(root, buf, len ? tmp : "None", true);
+	}
+	free(tmp);
+	tmp = NULL;
 
 	for (i = 0; i < BAB_NONCE_OFFSETS; i++) {
 		snprintf(buf, sizeof(buf), "Nonce Offset 0x%08x", bab_nonce_offsets[i]);
