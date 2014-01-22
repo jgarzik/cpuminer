@@ -280,7 +280,8 @@ typedef struct sitem {
 // Results
 typedef struct ritem {
 	int chip;
-	uint32_t nonce;
+	int nonces;
+	uint32_t nonce[BAB_REPLY_NONCES];
 	bool not_first_reply;
 	struct timeval when;
 } RITEM;
@@ -486,22 +487,26 @@ struct bab_info {
 // Don't send work more often than this
 #define BAB_EXPECTED_WORK_DELAY_mS 899
 
-static void cleanup_older(struct cgpu_info *babcgpu, int chip, struct timeval *now, K_ITEM *item)
+static void cleanup_older(struct cgpu_info *babcgpu, int chip, K_ITEM *witem)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	K_ITEM *tail;
+	struct timeval now;
 	bool expired_item;
+	K_ITEM *tail;
+
+	cgtime(&now);
 
 	K_WLOCK(babinfo->chip_work[chip]);
 	tail = babinfo->chip_work[chip]->tail;
 	expired_item = false;
 	// Discard expired work
 	while (tail) {
-		if (ms_tdiff(now, &(DATAW(tail)->work_start)) < BAB_WORK_EXPIRE_mS)
+		if (ms_tdiff(&now, &(DATAW(tail)->work_start)) < BAB_WORK_EXPIRE_mS)
 			break;
 
-		if (tail == item)
+		if (tail == witem)
 			expired_item = true;
+
 		k_unlink_item(babinfo->chip_work[chip], tail);
 		K_WUNLOCK(babinfo->chip_work[chip]);
 		work_completed(babcgpu, DATAW(tail)->work);
@@ -509,10 +514,10 @@ static void cleanup_older(struct cgpu_info *babcgpu, int chip, struct timeval *n
 		k_add_head(babinfo->wfree_list, tail);
 		tail = babinfo->chip_work[chip]->tail;
 	}
-	// If we didn't expire item, then remove 2 below and older
-	if (!expired_item && item && item->next && item->next->next) {
+	// If we didn't expire witem, then remove all older than it
+	if (!expired_item && witem && witem->next) {
 		tail = babinfo->chip_work[chip]->tail;
-		while (tail && tail != item && tail != item->next) {
+		while (tail && tail != witem) {
 			k_unlink_item(babinfo->chip_work[chip], tail);
 			K_WUNLOCK(babinfo->chip_work[chip]);
 			work_completed(babcgpu, DATAW(tail)->work);
@@ -522,46 +527,6 @@ static void cleanup_older(struct cgpu_info *babcgpu, int chip, struct timeval *n
 		}
 	}
 	K_WUNLOCK(babinfo->chip_work[chip]);
-}
-
-static void store_nonce(struct bab_info *babinfo, int chip, uint32_t nonce, bool not_first_reply, struct timeval *when)
-{
-	K_ITEM *item = NULL;
-
-	K_WLOCK(babinfo->rfree_list);
-
-	item = k_unlink_head(babinfo->rfree_list);
-
-	DATAR(item)->chip = chip;
-	DATAR(item)->nonce = nonce;
-	DATAR(item)->not_first_reply = not_first_reply;
-	memcpy(&(DATAR(item)->when), when, sizeof(*when));
-
-	k_add_head(babinfo->res_list, item);
-
-	K_WUNLOCK(babinfo->rfree_list);
-}
-
-static bool oldest_nonce(struct bab_info *babinfo, int *chip, uint32_t *nonce, bool *not_first_reply, struct timeval *when)
-{
-	K_ITEM *item = NULL;
-
-	K_WLOCK(babinfo->res_list);
-
-	item = k_unlink_tail(babinfo->res_list);
-
-	if (item) {
-		*chip = DATAR(item)->chip;
-		*nonce = DATAR(item)->nonce;
-		*not_first_reply = DATAR(item)->not_first_reply;
-		memcpy(when, &(DATAR(item)->when), sizeof(*when));
-
-		k_add_head(babinfo->rfree_list, item);
-	}
-
-	K_WUNLOCK(babinfo->res_list);
-
-	return (item != NULL);
 }
 
 static void _bab_reset(__maybe_unused struct cgpu_info *babcgpu, struct bab_info *babinfo, int bank, int times)
@@ -1467,22 +1432,24 @@ static void process_history(struct bab_info *babinfo, int chip, struct timeval *
 #endif
 
 /*
- * Find the matching work item by checking the nonce against each work
- * item for the chip
- * Discard any work items 2x older than a match or older than BAB_WORK_EXPIRE_mS
+ * Find the matching work item by checking each nonce against
+ * work items for the nonces chip
  */
-static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, uint32_t raw_nonce, bool not_first_reply, __maybe_unused struct timeval *when)
+static K_ITEM *process_nonce(struct thr_info *thr, struct cgpu_info *babcgpu, K_ITEM *ritem, uint32_t raw_nonce, K_ITEM *newest_witem)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	unsigned int links, proc_links, work_links, tests;
-	K_ITEM *witem, *wtail, *wold;
-	struct timeval now;
-	uint32_t nonce;
 	int try_sta, try_fin, offset;
+	K_ITEM *witem, *wtail;
+	struct timeval now;
+	bool not_first_reply;
+	uint32_t nonce;
+	int chip;
+
+	chip = DATAR(ritem)->chip;
+	not_first_reply = DATAR(ritem)->not_first_reply;
 
 	babinfo->chip_nonces[chip]++;
-
-	nonce = decnonce(raw_nonce);
 
 	/*
 	 * We can grab the head of the chip work queue and then release
@@ -1496,10 +1463,10 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 	K_RUNLOCK(babinfo->chip_work[chip]);
 
 	if (!witem) {
-		applog(LOG_ERR, "%s%i: chip %d has no work!",
+		applog(LOG_ERR, "%s%i: chip %d has no work, 1 nonce discarded!",
 				babcgpu->drv->name, babcgpu->device_id, chip);
 		babinfo->untested_nonces++;
-		return false;
+		return newest_witem;
 	}
 
 	babinfo->tested_nonces++;
@@ -1514,13 +1481,12 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 		try_fin = BAB_OFF_OTHER_FIN;
 	}
 
+	nonce = decnonce(raw_nonce);
+
 	cgtime(&now);
 
-	tests = 0;
-	links = proc_links = 0;
-	work_links = 0;
+	tests = links = proc_links = work_links = 0;
 	wtail = witem;
-	wold = NULL;
 	while (wtail && wtail->next) {
 		work_links++;
 		wtail = wtail->next;
@@ -1532,10 +1498,9 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 					babcgpu->device_id,
 					chip, links);
 		} else {
-			if (ms_tdiff(&now, &(DATAW(wtail)->work_start)) >= BAB_WORK_EXPIRE_mS) {
-				wold = wtail;
+			if (ms_tdiff(&now, &(DATAW(wtail)->work_start)) >= BAB_WORK_EXPIRE_mS)
 				proc_links--;
-			} else {
+			else {
 				for (offset = try_sta; offset <= try_fin; offset++) {
 					tests++;
 					if (test_nonce(DATAW(wtail)->work, nonce + bab_nonce_offsets[offset])) {
@@ -1549,7 +1514,6 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 						mutex_unlock(&(babinfo->nonce_lock));
 
 						babinfo->ok_nonces++;
-						cleanup_older(babcgpu, chip, &now, wtail);
 						babinfo->total_tests += tests;
 						if (babinfo->max_tests_per_nonce < tests)
 							babinfo->max_tests_per_nonce = tests;
@@ -1563,9 +1527,17 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 
 						babinfo->chip_cont_bad[chip] = 0;
 #if UPDATE_HISTORY
-						process_history(babinfo, chip, when, true, &now);
+						process_history(babinfo, chip,
+								&(DATAR(ritem)->when),
+								true, &now);
 #endif
-						return true;
+
+						if (newest_witem == NULL ||
+						    ms_tdiff(&(DATAW(wtail)->work_start),
+							&(DATAW(newest_witem)->work_start)) < 0)
+								return wtail;
+
+						return newest_witem;
 					}
 				}
 			}
@@ -1576,9 +1548,6 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 		links++;
 		proc_links++;
 	}
-
-	if (wold)
-		cleanup_older(babcgpu, chip, &now, wold);
 
 	if (not_first_reply) {
 		babinfo->chip_bad[chip]++;
@@ -1594,7 +1563,7 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 			babinfo->chip_max_bad[chip] = babinfo->chip_cont_bad[chip];
 
 #if UPDATE_HISTORY
-		process_history(babinfo, chip, when, false, &now);
+		process_history(babinfo, chip, &(DATAR(ritem)->when), false, &now);
 #endif
 	} else {
 		babinfo->initial_ignored++;
@@ -1603,7 +1572,28 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 		babinfo->ign_total_work_links += work_links;
 	}
 
-	return false;
+	return newest_witem;
+}
+
+/*
+ * On completion discard any work items older than BAB_WORK_EXPIRE_mS
+ * and any work items of the chip older than the work of the newest nonce work item
+ */
+static void oknonces(struct thr_info *thr, struct cgpu_info *babcgpu, K_ITEM *ritem)
+{
+	uint32_t raw_nonce;
+	K_ITEM *witem;
+	int nonces;
+
+	witem = NULL;
+
+	for (nonces = 0; nonces < DATAR(ritem)->nonces; nonces++) {
+		raw_nonce = DATAR(ritem)->nonce[nonces];
+
+		witem = process_nonce(thr, babcgpu, ritem, raw_nonce, witem);
+	}
+
+	cleanup_older(babcgpu, DATAR(ritem)->chip, witem);
 }
 
 // Check at least every ...
@@ -1615,10 +1605,7 @@ static void *bab_res(void *userdata)
 	struct cgpu_info *babcgpu = (struct cgpu_info *)userdata;
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	struct thr_info *thr = babcgpu->thr[0];
-	struct timeval when;
-	uint32_t nonce;
-	bool not_first_reply;
-	int chip;
+	K_ITEM *ritem;
 
 	applog(LOG_DEBUG, "%s%i: Results...",
 			  babcgpu->drv->name, babcgpu->device_id);
@@ -1631,13 +1618,24 @@ static void *bab_res(void *userdata)
 		cgsleep_ms(3);
 	}
 
+	ritem = NULL;
 	while (babcgpu->shutdown == false) {
-		if (!oldest_nonce(babinfo, &chip, &nonce, &not_first_reply, &when)) {
+		K_WLOCK(babinfo->res_list);
+		if (ritem) {
+			// Release the old one
+			k_add_head(babinfo->rfree_list, ritem);
+			ritem = NULL;
+		}
+		// Check for a new one
+		ritem = k_unlink_tail(babinfo->res_list);
+		K_WUNLOCK(babinfo->res_list);
+
+		if (!ritem) {
 			cgsem_mswait(&(babinfo->process_reply), BAB_RESULT_DELAY_mS);
 			continue;
 		}
 
-		oknonce(thr, babcgpu, chip, nonce, not_first_reply, &when);
+		oknonces(thr, babcgpu, ritem);
 	}
 
 	return NULL;
@@ -1646,7 +1644,7 @@ static void *bab_res(void *userdata)
 /*
  * 1.0s per nonce = 4.2GH/s
  * 0.9s per nonce = 4.8GH/s
- * On a slow mahcine, reducing this may resolve:
+ * On a slow machine, reducing this may resolve:
  *  BaB0: SPI waiting 1.2...s
  */
 #define BAB_STD_WORK_DELAY_uS 900000
@@ -1655,12 +1653,12 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	int work_items = 0;
-	bool res, got_a_nonce;
-	K_ITEM *witem, *sitem;
+	K_ITEM *witem, *sitem, *ritem;
 	struct timeval when, now;
 	double delay;
-	int chip, rep, j;
+	int chip, rep, j, nonces;
 	uint32_t nonce;
+	bool res;
 
 	cgtime(&now);
 	mutex_lock(&(babinfo->did_lock));
@@ -1732,25 +1730,41 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 	applog(LOG_DEBUG, "%s%i: Did get work reply ...",
 			  babcgpu->drv->name, babcgpu->device_id);
 
+	ritem = NULL;
 	for (chip = 0; chip < babinfo->chips; chip++) {
 /* TODO: For now just test it anyway
 		if (!babinfo->chip_conf[chip])
 			goto nexti;
 */
 
+		nonces = 0;
 		for (rep = 0; rep < BAB_REPLY_NONCES; rep++) {
 			nonce = babinfo->chip_results[chip].nonce[rep];
 			if (nonce != babinfo->chip_prev[chip].nonce[rep]) {
-				if ((nonce & BAB_EVIL_MASK) != BAB_EVIL_NONCE) {
-					store_nonce(babinfo, chip, nonce,
-						    babinfo->not_first_reply[chip], &when);
-					got_a_nonce = true;
-				} else
+				if ((nonce & BAB_EVIL_MASK) == BAB_EVIL_NONCE)
 					babinfo->discarded_e0s++;
+				else {
+					if (ritem == NULL) {
+						K_WLOCK(babinfo->rfree_list);
+						ritem = k_unlink_head(babinfo->rfree_list);
+						K_WUNLOCK(babinfo->rfree_list);
+
+						DATAR(ritem)->chip = chip;
+						DATAR(ritem)->not_first_reply = babinfo->not_first_reply[chip];
+						memcpy(&(DATAR(ritem)->when), &when, sizeof(when));
+					}
+					DATAR(ritem)->nonce[nonces++] = nonce;
+				}
 			}
 		}
 
-		if (got_a_nonce) {
+		if (ritem) {
+			DATAR(ritem)->nonces = nonces;
+			K_WLOCK(babinfo->res_list);
+			k_add_head(babinfo->res_list, ritem);
+			K_WUNLOCK(babinfo->res_list);
+			ritem = NULL;
+
 			cgsem_post(&(babinfo->process_reply));
 
 			babinfo->not_first_reply[chip] = true;
