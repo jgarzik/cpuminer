@@ -3713,8 +3713,6 @@ static struct pool *priority_pool(int choice)
 	return ret;
 }
 
-static void clear_pool_work(struct pool *pool);
-
 /* Specifies whether we can switch to this pool or not. */
 static bool pool_unusable(struct pool *pool)
 {
@@ -5180,7 +5178,7 @@ void clear_stratum_shares(struct pool *pool)
 	}
 }
 
-static void clear_pool_work(struct pool *pool)
+void clear_pool_work(struct pool *pool)
 {
 	struct work *work, *tmp;
 	int cleared = 0;
@@ -5194,6 +5192,9 @@ static void clear_pool_work(struct pool *pool)
 		}
 	}
 	mutex_unlock(stgd_lock);
+
+	if (cleared)
+		applog(LOG_INFO, "Cleared %d work items due to stratum disconnect on pool %d", cleared, pool->pool_no);
 }
 
 static int cp_prio(void)

@@ -1695,6 +1695,8 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 
 	applog(LOG_NOTICE, "Reconnect requested from pool %d to %s", pool->pool_no, address);
 
+	clear_pool_work(pool);
+
 	mutex_lock(&pool->stratum_lock);
 	__suspend_stratum(pool);
 	tmp = pool->sockaddr_url;
