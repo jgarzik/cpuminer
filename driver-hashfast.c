@@ -24,6 +24,7 @@
 #define GP8  0x107   /* x^8 + x^2 + x + 1 */
 #define DI8  0x07
 
+static bool hfa_crc8_set;
 static unsigned char crc8_table[256];	/* CRC-8 table */
 
 static void hfa_init_crc8(void)
@@ -31,6 +32,7 @@ static void hfa_init_crc8(void)
 	int i,j;
 	unsigned char crc;
 
+	hfa_crc8_set = true;
 	for (i = 0; i < 256; i++) {
 		crc = i;
 		for (j = 0; j < 8; j++)
@@ -489,7 +491,7 @@ static struct cgpu_info *hfa_detect_one(libusb_device *dev, struct usb_find_devi
 static void hfa_detect(bool hotplug)
 {
 	/* Set up the CRC tables only once. */
-	if (!hotplug)
+	if (!hfa_crc8_set)
 		hfa_init_crc8();
 	usb_detect(&hashfast_drv, hfa_detect_one);
 }
