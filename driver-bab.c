@@ -1730,12 +1730,14 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 	applog(LOG_DEBUG, "%s%i: Did get work reply ...",
 			  babcgpu->drv->name, babcgpu->device_id);
 
-	ritem = NULL;
 	for (chip = 0; chip < babinfo->chips; chip++) {
-/* TODO: For now just test it anyway
-		if (!babinfo->chip_conf[chip])
-			goto nexti;
-*/
+		K_WLOCK(babinfo->rfree_list);
+		ritem = k_unlink_head(babinfo->rfree_list);
+		K_WUNLOCK(babinfo->rfree_list);
+
+		DATAR(ritem)->chip = chip;
+		DATAR(ritem)->not_first_reply = babinfo->not_first_reply[chip];
+		memcpy(&(DATAR(ritem)->when), &when, sizeof(when));
 
 		nonces = 0;
 		for (rep = 0; rep < BAB_REPLY_NONCES; rep++) {
@@ -1743,34 +1745,24 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 			if (nonce != babinfo->chip_prev[chip].nonce[rep]) {
 				if ((nonce & BAB_EVIL_MASK) == BAB_EVIL_NONCE)
 					babinfo->discarded_e0s++;
-				else {
-					if (ritem == NULL) {
-						K_WLOCK(babinfo->rfree_list);
-						ritem = k_unlink_head(babinfo->rfree_list);
-						K_WUNLOCK(babinfo->rfree_list);
-
-						DATAR(ritem)->chip = chip;
-						DATAR(ritem)->not_first_reply = babinfo->not_first_reply[chip];
-						memcpy(&(DATAR(ritem)->when), &when, sizeof(when));
-					}
+				else
 					DATAR(ritem)->nonce[nonces++] = nonce;
-				}
 			}
 		}
 
-		if (ritem) {
-			DATAR(ritem)->nonces = nonces;
-			K_WLOCK(babinfo->res_list);
-			k_add_head(babinfo->res_list, ritem);
-			K_WUNLOCK(babinfo->res_list);
-			ritem = NULL;
+		/*
+		 * Send even with zero nonces
+		 * so cleanup_older() is called for the chip
+		 */
+		DATAR(ritem)->nonces = nonces;
+		K_WLOCK(babinfo->res_list);
+		k_add_head(babinfo->res_list, ritem);
+		K_WUNLOCK(babinfo->res_list);
 
-			cgsem_post(&(babinfo->process_reply));
+		cgsem_post(&(babinfo->process_reply));
 
-			babinfo->not_first_reply[chip] = true;
-		}
+		babinfo->not_first_reply[chip] = true;
 
-//nexti:
 		memcpy((void *)(&(babinfo->chip_prev[chip])),
 			(void *)(&(babinfo->chip_results[chip])),
 			sizeof(struct bab_work_reply));
