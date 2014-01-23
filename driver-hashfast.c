@@ -767,9 +767,9 @@ static void *hfa_read(void *arg)
 	struct thr_info *thr = (struct thr_info *)arg;
 	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
-	char threadname[24];
+	char threadname[16];
 
-	snprintf(threadname, 24, "hfa_read/%d", hashfast->device_id);
+	snprintf(threadname, sizeof(threadname), "%d/HfaRead", hashfast->device_id);
 	RenameThread(threadname);
 
 	while (likely(!hashfast->shutdown)) {

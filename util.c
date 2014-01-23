@@ -1695,6 +1695,8 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 
 	applog(LOG_NOTICE, "Reconnect requested from pool %d to %s", pool->pool_no, address);
 
+	clear_pool_work(pool);
+
 	mutex_lock(&pool->stratum_lock);
 	__suspend_stratum(pool);
 	tmp = pool->sockaddr_url;
@@ -2531,16 +2533,19 @@ void *str_text(char *ptr)
 
 void RenameThread(const char* name)
 {
+	char buf[16];
+
+	snprintf(buf, sizeof(buf), "cg@%s", name);
 #if defined(PR_SET_NAME)
 	// Only the first 15 characters are used (16 - NUL terminator)
-	prctl(PR_SET_NAME, name, 0, 0, 0);
+	prctl(PR_SET_NAME, buf, 0, 0, 0);
 #elif (defined(__FreeBSD__) || defined(__OpenBSD__))
-	pthread_set_name_np(pthread_self(), name);
+	pthread_set_name_np(pthread_self(), buf);
 #elif defined(MAC_OSX)
-	pthread_setname_np(name);
+	pthread_setname_np(buf);
 #else
-	// Prevent warnings for unused parameters...
-	(void)name;
+	// Prevent warnings
+	(void)buf;
 #endif
 }
 
