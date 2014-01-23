@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2013 Andrew Smith
+ * Copyright 2011-2014 Andrew Smith
  * Copyright 2011-2013 Con Kolivas
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -24,6 +24,7 @@
 #include "compat.h"
 #include "miner.h"
 #include "util.h"
+#include "klist.h"
 
 #if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_HASHFAST) || defined(USE_BITFURY) || defined(USE_KLONDIKE) || defined(USE_KNC) || defined(USE_BAB) || defined(USE_DRILLBIT) || defined(USE_MINION)
 #define HAVE_AN_ASIC 1
@@ -131,7 +132,7 @@ static const char *COMMA = ",";
 static const char SEPARATOR = '|';
 #define SEPSTR "|"
 
-static const char *APIVERSION = "2.0";
+static const char *APIVERSION = "3.0";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -156,6 +157,9 @@ static const char *DEVICECODE = ""
 #ifdef USE_AVALON
 			"AVA "
 #endif
+#ifdef USE_BAB
+			"BaB "
+#endif
 #ifdef USE_BFLSC
 			"BAS "
 #endif
@@ -165,23 +169,17 @@ static const char *DEVICECODE = ""
 #ifdef USE_BITFURY
 			"BFU "
 #endif
-#ifdef USE_HASHFAST
-			"HFA "
-#endif
 #ifdef USE_DRILLBIT
 			"DRB "
+#endif
+#ifdef USE_HASHFAST
+			"HFA "
 #endif
 #ifdef USE_ICARUS
 			"ICA "
 #endif
-#ifdef USE_MODMINER
-			"MMQ "
-#endif
 #ifdef USE_KNC
 			"KnC "
-#endif
-#ifdef USE_BAB
-			"BaB "
 #endif
 #ifdef USE_MINION
 			"MBA "
@@ -614,7 +612,6 @@ struct io_data {
 	char *ptr;
 	char *cur;
 	bool sock;
-	bool full;
 	bool close;
 };
 
@@ -626,14 +623,31 @@ struct io_list {
 
 static struct io_list *io_head = NULL;
 
+#define SOCKBUFALLOCSIZ 65536
+
 #define io_new(init) _io_new(init, false)
-#define sock_io_new() _io_new(SOCKBUFSIZ, true)
+#define sock_io_new() _io_new(SOCKBUFALLOCSIZ, true)
+
+#define ALLOC_SBITEMS 2
+#define LIMIT_SBITEMS 0
+
+typedef struct sbitem {
+	char *buf;
+	size_t siz;
+	size_t tot;
+} SBITEM;
+
+// Size to grow tot if exceeded
+#define SBEXTEND 4096
+
+#define DATASB(_item) ((SBITEM *)(_item->data))
+
+static K_LIST *strbufs;
 
 static void io_reinit(struct io_data *io_data)
 {
 	io_data->cur = io_data->ptr;
 	*(io_data->ptr) = '\0';
-	io_data->full = false;
 	io_data->close = false;
 }
 
@@ -670,29 +684,16 @@ static bool io_add(struct io_data *io_data, char *buf)
 {
 	size_t len, dif, tot;
 
-	if (io_data->full)
-		return false;
-
 	len = strlen(buf);
 	dif = io_data->cur - io_data->ptr;
-	tot = len + 1 + dif;
+	// send will always have enough space to add the JSON
+	tot = len + 1 + dif + sizeof(JSON_CLOSE) + sizeof(JSON_END);
 
 	if (tot > io_data->siz) {
-		size_t new = io_data->siz * 2;
+		size_t new = io_data->siz + (2 * SOCKBUFALLOCSIZ);
 
 		if (new < tot)
-			new = tot * 2;
-
-		if (io_data->sock) {
-			if (new > SOCKBUFSIZ) {
-				if (tot > SOCKBUFSIZ) {
-					io_data->full = true;
-					return false;
-				}
-
-				new = SOCKBUFSIZ;
-			}
-		}
+			new = (2 + (size_t)((float)tot / (float)SOCKBUFALLOCSIZ)) * SOCKBUFALLOCSIZ;
 
 		io_data->ptr = realloc(io_data->ptr, new);
 		io_data->cur = io_data->ptr + dif;
@@ -766,8 +767,10 @@ static char *escape_string(char *str, bool isjson)
 		return str;
 
 	buf = malloc(strlen(str) + count + 1);
-	if (unlikely(!buf))
-		quit(1, "Failed to malloc escape buf");
+	if (unlikely(!buf)) {
+		quithere(1, "Failed to malloc escape buf %d",
+			    (int)(strlen(str) + count + 1));
+	}
 
 	ptr = buf;
 	while (*str)
@@ -838,8 +841,7 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 		root = api_data;
 		root->prev = root;
 		root->next = root;
-	}
-	else {
+	} else {
 		api_data->prev = root->prev;
 		root->prev = api_data;
 		api_data->next = root;
@@ -917,6 +919,7 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 				break;
 			case API_VOLTS:
 			case API_TEMP:
+			case API_AVG:
 				api_data->data = (void *)malloc(sizeof(float));
 				*((float *)(api_data->data)) = *((float *)data);
 				break;
@@ -1046,114 +1049,171 @@ struct api_data *api_add_percent(struct api_data *root, char *name, double *data
 	return api_add_data_full(root, name, API_PERCENT, (void *)data, copy_data);
 }
 
-static struct api_data *print_data(struct api_data *root, char *buf, bool isjson, bool precom)
+struct api_data *api_add_avg(struct api_data *root, char *name, float *data, bool copy_data)
 {
-	struct api_data *tmp;
-	bool first = true;
-	char *original, *escape;
-	char *quote;
+	return api_add_data_full(root, name, API_AVG, (void *)data, copy_data);
+}
 
-	*buf = '\0';
+static void add_item_buf(K_ITEM *item, const char *str)
+{
+	size_t old_siz, new_siz, siz, ext;
+	char *buf;
 
-	if (precom) {
-		*(buf++) = *COMMA;
-		*buf = '\0';
+	buf = DATASB(item)->buf;
+	siz = (size_t)strlen(str);
+
+	old_siz = DATASB(item)->siz;
+	new_siz = old_siz + siz + 1; // include '\0'
+	if (DATASB(item)->tot < new_siz) {
+		ext = (siz + 1) + SBEXTEND - ((siz + 1) % SBEXTEND);
+		DATASB(item)->buf = buf = realloc(DATASB(item)->buf, DATASB(item)->tot + ext);
+		if (!buf) {
+			quithere(1, "OOM buf siz=%d tot=%d ext=%d",
+				    (int)siz, (int)(DATASB(item)->tot), (int)ext);
+		}
+		DATASB(item)->tot += ext;
 	}
+	memcpy(buf + old_siz, str, siz + 1);
+	DATASB(item)->siz += siz;
+}
 
-	if (isjson) {
-		strcpy(buf, JSON0);
-		buf = strchr(buf, '\0');
-		quote = JSON1;
-	} else
-		quote = (char *)BLANK;
+static struct api_data *print_data(struct io_data *io_data, struct api_data *root, bool isjson, bool precom)
+{
+	// N.B. strings don't use this buffer so 64 is enough (for now)
+	char buf[64];
+	struct api_data *tmp;
+	bool done, first = true;
+	char *original, *escape;
+	K_ITEM *item;
+
+	K_WLOCK(strbufs);
+	item = k_unlink_head(strbufs);
+	K_WUNLOCK(strbufs);
+
+	DATASB(item)->siz = 0;
+
+	if (precom)
+		add_item_buf(item, COMMA);
+
+	if (isjson)
+		add_item_buf(item, JSON0);
 
 	while (root) {
 		if (!first)
-			*(buf++) = *COMMA;
+			add_item_buf(item, COMMA);
 		else
 			first = false;
 
-		sprintf(buf, "%s%s%s%s", quote, root->name, quote, isjson ? ":" : "=");
+		if (isjson)
+			add_item_buf(item, JSON1);
 
-		buf = strchr(buf, '\0');
+		add_item_buf(item, root->name);
 
+		if (isjson)
+			add_item_buf(item, JSON1);
+
+		if (isjson)
+			add_item_buf(item, ":");
+		else
+			add_item_buf(item, "=");
+
+		first = false;
+
+		done = false;
 		switch(root->type) {
 			case API_STRING:
 			case API_CONST:
-				sprintf(buf, "%s%s%s", quote, (char *)(root->data), quote);
+				if (isjson)
+					add_item_buf(item, JSON1);
+				add_item_buf(item, (char *)(root->data));
+				if (isjson)
+					add_item_buf(item, JSON1);
+				done = true;
 				break;
 			case API_ESCAPE:
 				original = (char *)(root->data);
 				escape = escape_string((char *)(root->data), isjson);
-				sprintf(buf, "%s%s%s", quote, escape, quote);
+				if (isjson)
+					add_item_buf(item, JSON1);
+				add_item_buf(item, escape);
+				if (isjson)
+					add_item_buf(item, JSON1);
 				if (escape != original)
 					free(escape);
+				done = true;
 				break;
 			case API_UINT8:
-				sprintf(buf, "%u", *(uint8_t *)root->data);
+				snprintf(buf, sizeof(buf), "%u", *(uint8_t *)root->data);
 				break;
 			case API_UINT16:
-				sprintf(buf, "%u", *(uint16_t *)root->data);
+				snprintf(buf, sizeof(buf), "%u", *(uint16_t *)root->data);
 				break;
 			case API_INT:
-				sprintf(buf, "%d", *((int *)(root->data)));
+				snprintf(buf, sizeof(buf), "%d", *((int *)(root->data)));
 				break;
 			case API_UINT:
-				sprintf(buf, "%u", *((unsigned int *)(root->data)));
+				snprintf(buf, sizeof(buf), "%u", *((unsigned int *)(root->data)));
 				break;
 			case API_UINT32:
-				sprintf(buf, "%"PRIu32, *((uint32_t *)(root->data)));
+				snprintf(buf, sizeof(buf), "%"PRIu32, *((uint32_t *)(root->data)));
 				break;
 			case API_UINT64:
-				sprintf(buf, "%"PRIu64, *((uint64_t *)(root->data)));
+				snprintf(buf, sizeof(buf), "%"PRIu64, *((uint64_t *)(root->data)));
 				break;
 			case API_TIME:
-				sprintf(buf, "%lu", *((unsigned long *)(root->data)));
+				snprintf(buf, sizeof(buf), "%lu", *((unsigned long *)(root->data)));
 				break;
 			case API_DOUBLE:
-				sprintf(buf, "%f", *((double *)(root->data)));
+				snprintf(buf, sizeof(buf), "%f", *((double *)(root->data)));
 				break;
 			case API_ELAPSED:
-				sprintf(buf, "%.0f", *((double *)(root->data)));
+				snprintf(buf, sizeof(buf), "%.0f", *((double *)(root->data)));
 				break;
 			case API_UTILITY:
 			case API_FREQ:
 			case API_MHS:
-				sprintf(buf, "%.2f", *((double *)(root->data)));
+				snprintf(buf, sizeof(buf), "%.2f", *((double *)(root->data)));
 				break;
 			case API_VOLTS:
-				sprintf(buf, "%.3f", *((float *)(root->data)));
+			case API_AVG:
+				snprintf(buf, sizeof(buf), "%.3f", *((float *)(root->data)));
 				break;
 			case API_MHTOTAL:
-				sprintf(buf, "%.4f", *((double *)(root->data)));
+				snprintf(buf, sizeof(buf), "%.4f", *((double *)(root->data)));
 				break;
 			case API_HS:
-				sprintf(buf, "%.15f", *((double *)(root->data)));
+				snprintf(buf, sizeof(buf), "%.15f", *((double *)(root->data)));
 				break;
 			case API_DIFF:
-				sprintf(buf, "%.8f", *((double *)(root->data)));
+				snprintf(buf, sizeof(buf), "%.8f", *((double *)(root->data)));
 				break;
 			case API_BOOL:
-				sprintf(buf, "%s", *((bool *)(root->data)) ? TRUESTR : FALSESTR);
+				snprintf(buf, sizeof(buf), "%s", *((bool *)(root->data)) ? TRUESTR : FALSESTR);
 				break;
 			case API_TIMEVAL:
-				sprintf(buf, "%ld.%06ld",
+				snprintf(buf, sizeof(buf), "%ld.%06ld",
 					((struct timeval *)(root->data))->tv_sec,
 					((struct timeval *)(root->data))->tv_usec);
 				break;
 			case API_TEMP:
-				sprintf(buf, "%.2f", *((float *)(root->data)));
+				snprintf(buf, sizeof(buf), "%.2f", *((float *)(root->data)));
 				break;
 			case API_PERCENT:
-				sprintf(buf, "%.4f", *((double *)(root->data)) * 100.0);
+				snprintf(buf, sizeof(buf), "%.4f", *((double *)(root->data)) * 100.0);
 				break;
 			default:
 				applog(LOG_ERR, "API: unknown2 data type %d ignored", root->type);
-				sprintf(buf, "%s%s%s", quote, UNKNOWN, quote);
+				if (isjson)
+					add_item_buf(item, JSON1);
+				add_item_buf(item, UNKNOWN);
+				if (isjson)
+					add_item_buf(item, JSON1);
+				done = true;
 				break;
 		}
 
-		buf = strchr(buf, '\0');
+		if (!done)
+			add_item_buf(item, buf);
 
 		free(root->name);
 		if (root->data_was_malloc)
@@ -1171,7 +1231,16 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 		}
 	}
 
-	strcpy(buf, isjson ? JSON5 : SEPSTR);
+	if (isjson)
+		add_item_buf(item, JSON5);
+	else
+		add_item_buf(item, SEPSTR);
+
+	io_add(io_data, DATASB(item)->buf);
+
+	K_WLOCK(strbufs);
+	k_add_head(strbufs, item);
+	K_WUNLOCK(strbufs);
 
 	return root;
 }
@@ -1258,7 +1327,6 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
-	char buf2[TMPBUFSIZ];
 	char severity[2];
 #ifdef HAVE_AN_ASIC
 	int asc;
@@ -1363,8 +1431,7 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 			root = api_add_escape(root, "Msg", buf, false);
 			root = api_add_escape(root, "Description", opt_api_description, false);
 
-			root = print_data(root, buf2, isjson, false);
-			io_add(io_data, buf2);
+			root = print_data(io_data, root, isjson, false);
 			if (isjson)
 				io_add(io_data, JSON_CLOSE);
 			return;
@@ -1379,8 +1446,7 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 	root = api_add_escape(root, "Msg", buf, false);
 	root = api_add_escape(root, "Description", opt_api_description, false);
 
-	root = print_data(root, buf2, isjson, false);
-	io_add(io_data, buf2);
+	root = print_data(io_data, root, isjson, false);
 	if (isjson)
 		io_add(io_data, JSON_CLOSE);
 }
@@ -1785,7 +1851,6 @@ static void lockstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 static void apiversion(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
 	bool io_open;
 
 	message(io_data, MSG_VERSION, 0, NULL, isjson);
@@ -1794,8 +1859,7 @@ static void apiversion(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 	root = api_add_string(root, "CGMiner", VERSION, false);
 	root = api_add_const(root, "API", APIVERSION, false);
 
-	root = print_data(root, buf, isjson, false);
-	io_add(io_data, buf);
+	root = print_data(io_data, root, isjson, false);
 	if (isjson && io_open)
 		io_close(io_data);
 }
@@ -1803,7 +1867,6 @@ static void apiversion(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
 	bool io_open;
 	int asccount = 0;
 	int pgacount = 0;
@@ -1839,8 +1902,7 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	root = api_add_const(root, "Hotplug", NONE, false);
 #endif
 
-	root = print_data(root, buf, isjson, false);
-	io_add(io_data, buf);
+	root = print_data(io_data, root, isjson, false);
 	if (isjson && io_open)
 		io_close(io_data);
 }
@@ -1867,7 +1929,6 @@ static const char *status2str(enum alive status)
 static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom)
 {
 	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
 	char *enabled;
 	char *status;
 	int numasc = numascs();
@@ -1937,8 +1998,7 @@ static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom
 		root = api_add_percent(root, "Device Rejected%", &rejp, false);
 		root = api_add_elapsed(root, "Device Elapsed", &(dev_runtime), false);
 
-		root = print_data(root, buf, isjson, precom);
-		io_add(io_data, buf);
+		root = print_data(io_data, root, isjson, precom);
 	}
 }
 #endif
@@ -1947,7 +2007,6 @@ static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom
 static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom)
 {
 	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
 	char *enabled;
 	char *status;
 	int numpga = numpgas();
@@ -2024,8 +2083,7 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 		root = api_add_percent(root, "Device Rejected%", &rejp, false);
 		root = api_add_elapsed(root, "Device Elapsed", &(dev_runtime), false);
 
-		root = print_data(root, buf, isjson, precom);
-		io_add(io_data, buf);
+		root = print_data(io_data, root, isjson, precom);
 	}
 }
 #endif
@@ -2269,7 +2327,6 @@ static void pgaidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, ch
 static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
 	bool io_open = false;
 	char *status, *lp;
 	int i;
@@ -2356,8 +2413,7 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 				(double)(pool->diff_stale) / (double)(pool->diff_accepted + pool->diff_rejected + pool->diff_stale) : 0;
 		root = api_add_percent(root, "Pool Stale%", &stalep, false);
 
-		root = print_data(root, buf, isjson, isjson && (i > 0));
-		io_add(io_data, buf);
+		root = print_data(io_data, root, isjson, isjson && (i > 0));
 	}
 
 	if (isjson && io_open)
@@ -2367,7 +2423,6 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
 	bool io_open;
 	double utility, mhs, work_utility;
 
@@ -2419,8 +2474,7 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 
 	mutex_unlock(&hash_lock);
 
-	root = print_data(root, buf, isjson, false);
-	io_add(io_data, buf);
+	root = print_data(io_data, root, isjson, false);
 	if (isjson && io_open)
 		io_close(io_data);
 }
@@ -2428,7 +2482,6 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 static void pgacount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
 	bool io_open;
 	int count = 0;
 
@@ -2441,8 +2494,7 @@ static void pgacount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 
 	root = api_add_int(root, "Count", &count, false);
 
-	root = print_data(root, buf, isjson, false);
-	io_add(io_data, buf);
+	root = print_data(io_data, root, isjson, false);
 	if (isjson && io_open)
 		io_close(io_data);
 }
@@ -2826,7 +2878,6 @@ void privileged(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_un
 void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
 	char *reason;
 
 	if (cgpu->device_last_not_well == 0)
@@ -2884,8 +2935,7 @@ void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, b
 	root = api_add_int(root, "*Dev Comms Error", &(cgpu->dev_comms_error_count), false);
 	root = api_add_int(root, "*Dev Throttle", &(cgpu->dev_throttle_count), false);
 
-	root = print_data(root, buf, isjson, isjson && (device > 0));
-	io_add(io_data, buf);
+	root = print_data(io_data, root, isjson, isjson && (device > 0));
 }
 
 static void notify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, char group)
@@ -2916,7 +2966,6 @@ static void notify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 static void devdetails(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
 	bool io_open = false;
 	struct cgpu_info *cgpu;
 	int i;
@@ -2942,8 +2991,7 @@ static void devdetails(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		root = api_add_const(root, "Model", cgpu->name ? : BLANK, false);
 		root = api_add_const(root, "Device Path", cgpu->device_path ? : BLANK, false);
 
-		root = print_data(root, buf, isjson, isjson && (i > 0));
-		io_add(io_data, buf);
+		root = print_data(io_data, root, isjson, isjson && (i > 0));
 	}
 
 	if (isjson && io_open)
@@ -2984,7 +3032,6 @@ void dosave(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, b
 static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_stats *stats, struct cgminer_pool_stats *pool_stats, struct api_data *extra, struct cgpu_info *cgpu, bool isjson)
 {
 	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
 
 	root = api_add_int(root, "STATS", &i, false);
 	root = api_add_string(root, "ID", id, false);
@@ -3079,8 +3126,7 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 #endif
 	}
 
-	root = print_data(root, buf, isjson, isjson && (i > 0));
-	io_add(io_data, buf);
+	root = print_data(io_data, root, isjson, isjson && (i > 0));
 
 	return ++i;
 }
@@ -3148,7 +3194,6 @@ static void failoveronly(struct io_data *io_data, __maybe_unused SOCKETTYPE c, c
 static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
 	bool io_open;
 
 	message(io_data, MSG_MINECOIN, 0, NULL, isjson);
@@ -3164,8 +3209,7 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 	root = api_add_bool(root, "LP", &have_longpoll, false);
 	root = api_add_diff(root, "Network Difficulty", &current_diff, true);
 
-	root = print_data(root, buf, isjson, false);
-	io_add(io_data, buf);
+	root = print_data(io_data, root, isjson, false);
 	if (isjson && io_open)
 		io_close(io_data);
 }
@@ -3173,7 +3217,6 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 static void debugstate(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
 	bool io_open;
 
 	if (param == NULL)
@@ -3243,8 +3286,7 @@ static void debugstate(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	root = api_add_bool(root, "PerDevice", &want_per_device_stats, false);
 	root = api_add_bool(root, "WorkTime", &opt_worktime, false);
 
-	root = print_data(root, buf, isjson, false);
-	io_add(io_data, buf);
+	root = print_data(io_data, root, isjson, false);
 	if (isjson && io_open)
 		io_close(io_data);
 }
@@ -3291,7 +3333,6 @@ static void usbstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 	struct api_data *root = NULL;
 
 #ifdef USE_USBUTILS
-	char buf[TMPBUFSIZ];
 	bool io_open = false;
 	int count = 0;
 
@@ -3309,16 +3350,14 @@ static void usbstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 	if (isjson)
 		io_open = io_add(io_data, COMSTR JSON_USBSTATS);
 
-	root = print_data(root, buf, isjson, false);
-	io_add(io_data, buf);
+	root = print_data(io_data, root, isjson, false);
 
 	while (42) {
 		root = api_usb_stats(&count);
 		if (!root)
 			break;
 
-		root = print_data(root, buf, isjson, isjson);
-		io_add(io_data, buf);
+		root = print_data(io_data, root, isjson, isjson);
 	}
 
 	if (isjson && io_open)
@@ -3651,7 +3690,6 @@ static void ascidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, ch
 static void asccount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
 	bool io_open;
 	int count = 0;
 
@@ -3664,8 +3702,7 @@ static void asccount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 
 	root = api_add_int(root, "Count", &count, false);
 
-	root = print_data(root, buf, isjson, false);
-	io_add(io_data, buf);
+	root = print_data(io_data, root, isjson, false);
 	if (isjson && io_open)
 		io_close(io_data);
 }
@@ -3789,7 +3826,6 @@ struct CMDS {
 static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, char group)
 {
 	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
 	bool io_open;
 	char cmdbuf[100];
 	bool found, access;
@@ -3820,36 +3856,31 @@ static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, c
 	root = api_add_const(root, "Exists", found ? YES : NO, false);
 	root = api_add_const(root, "Access", access ? YES : NO, false);
 
-	root = print_data(root, buf, isjson, false);
-	io_add(io_data, buf);
+	root = print_data(io_data, root, isjson, false);
 	if (isjson && io_open)
 		io_close(io_data);
 }
 
 static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 {
-	char buf[SOCKBUFSIZ + sizeof(JSON_CLOSE) + sizeof(JSON_END)];
-	int count, res, tosend, len, n;
+	int count, sendc, res, tosend, len, n;
+	char *buf = io_data->ptr;
 
 	strcpy(buf, io_data->ptr);
 
 	if (io_data->close)
 		strcat(buf, JSON_CLOSE);
 
-	if (isjson) {
-		if (io_data->full)
-			strcat(buf, JSON_END_TRUNCATED);
-		else
-			strcat(buf, JSON_END);
-	}
+	if (isjson)
+		strcat(buf, JSON_END);
 
 	len = strlen(buf);
 	tosend = len+1;
 
 	applog(LOG_DEBUG, "API: send reply: (%d) '%.10s%s'", tosend, buf, len > 10 ? "..." : BLANK);
 
-	count = 0;
-	while (count++ < 5 && tosend > 0) {
+	count = sendc = 0;
+	while (count < 5 && tosend > 0) {
 		// allow 50ms per attempt
 		struct timeval timeout = {0, 50000};
 		fd_set wd;
@@ -3862,28 +3893,34 @@ static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 		}
 
 		n = send(c, buf, tosend, 0);
+		sendc++;
 
 		if (SOCKETFAIL(n)) {
+			count++;
 			if (sock_blocks())
 				continue;
 
-			applog(LOG_WARNING, "API: send (%d) failed: %s", tosend, SOCKERRMSG);
+			applog(LOG_WARNING, "API: send (%d:%d) failed: %s", len+1, (len+1 - tosend), SOCKERRMSG);
 
 			return;
 		} else {
-			if (count <= 1) {
+			if (sendc <= 1) {
 				if (n == tosend)
 					applog(LOG_DEBUG, "API: sent all of %d first go", tosend);
 				else
 					applog(LOG_DEBUG, "API: sent %d of %d first go", n, tosend);
 			} else {
 				if (n == tosend)
-					applog(LOG_DEBUG, "API: sent all of remaining %d (count=%d)", tosend, count);
+					applog(LOG_DEBUG, "API: sent all of remaining %d (sendc=%d)", tosend, sendc);
 				else
-					applog(LOG_DEBUG, "API: sent %d of remaining %d (count=%d)", n, tosend, count);
+					applog(LOG_DEBUG, "API: sent %d of remaining %d (sendc=%d)", n, tosend, sendc);
 			}
 
 			tosend -= n;
+			buf += n;
+
+			if (n == 0)
+				count++;
 		}
 	}
 }
@@ -4351,7 +4388,7 @@ static void *mcast_thread(void *userdata)
 	pthread_detach(pthread_self());
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-	RenameThread("api_mcast");
+	RenameThread("APIMcast");
 
 	mcast();
 
@@ -4509,6 +4546,8 @@ void api(int api_thr_id)
 
 	if (opt_api_mcast)
 		mcast_init();
+
+	strbufs = k_new_list("StrBufs", sizeof(SBITEM), ALLOC_SBITEMS, LIMIT_SBITEMS, false);
 
 	while (!bye) {
 		clisiz = sizeof(cli);

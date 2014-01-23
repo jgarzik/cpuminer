@@ -3716,7 +3716,7 @@ void *usb_resource_thread(void __maybe_unused *userdata)
 {
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-	RenameThread("usbresource");
+	RenameThread("USBResource");
 
 	applog(LOG_DEBUG, "RES: thread starting");
 

@@ -1,8 +1,8 @@
 /*
- * Copyright 2013 Andrew Smith
+ * Copyright 2013-2014 Andrew Smith
  * Copyright 2013 bitfury
  *
- * BitFury GPIO code based on chainminer code:
+ * BitFury GPIO code originally based on chainminer code:
  *	https://github.com/bfsb/chainminer
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -16,10 +16,12 @@
 #include "miner.h"
 #include "sha2.h"
 #include "libbitfury.h"
+#include "klist.h"
 
 /*
  * Tested on RPi running both Raspbian and Arch
- *  with BlackArrow BitFury V1 16 chip GPIO board
+ *  with BlackArrow BitFury V1 & V2 GPIO Controller
+ *  with 16 chip BlackArrow BitFury boards
  */
 
 #ifndef LINUX
@@ -51,13 +53,26 @@ static void bab_detect(__maybe_unused bool hotplug)
 #define BAB_GPIO_CLR BAB_ADDR(10)
 #define BAB_GPIO_LEVEL BAB_ADDR(13)
 
-#define BAB_MAXCHIPS 256
+// If the V1 test of this many chips finds no chips it will try V2
+#define BAB_V1_CHIP_TEST 32
+
+//maximum number of chips per board
+#define BAB_BOARDCHIPS 16
 #define BAB_MAXBUF (BAB_MAXCHIPS * 512)
+#define BAB_V1_BANK 0
+//maximum number of alternative banks
 #define BAB_MAXBANKS 4
+//maximum number of boards in a bank
+#define BAB_BANKBOARDS 6
+//maximum number of chips on alternative bank
+#define BAB_BANKCHIPS (BAB_BOARDCHIPS * BAB_BANKBOARDS)
+//maximum number of chips
+#define BAB_MAXCHIPS (BAB_MAXBANKS * BAB_BANKCHIPS)
 #define BAB_CORES 16
 #define BAB_X_COORD 21
 #define BAB_Y_COORD 36
 
+#define BAB_NOOP 0
 #define BAB_BREAK ((uint8_t *)"\04")
 #define BAB_ASYNC ((uint8_t *)"\05")
 #define BAB_SYNC ((uint8_t *)"\06")
@@ -67,23 +82,17 @@ static void bab_detect(__maybe_unused bool hotplug)
 #define BAB_FFL_PASS file, func, line
 
 #define bab_reset(_bank, _times) _bab_reset(babcgpu, babinfo, _bank, _times)
-#define bab_txrx(_buf, _siz, _det) _bab_txrx(babcgpu, babinfo, _buf, _siz, _det, BAB_FFL_HERE)
-#define bab_add_buf(_data) _bab_add_buf(babcgpu, babinfo, _data, sizeof(_data)-1, BAB_FFL_HERE)
-#define BAB_ADD_BREAK() _bab_add_buf(babcgpu, babinfo, BAB_BREAK, 1, BAB_FFL_HERE)
-#define BAB_ADD_ASYNC() _bab_add_buf(babcgpu, babinfo, BAB_ASYNC, 1, BAB_FFL_HERE)
-#define bab_config_reg(_reg, _ena) _bab_config_reg(babcgpu, babinfo, _reg, _ena, BAB_FFL_HERE)
-#define bab_add_data(_addr, _data, _siz) _bab_add_data(babcgpu, babinfo, _addr, (const uint8_t *)(_data), _siz, BAB_FFL_HERE)
+#define bab_txrx(_item, _det) _bab_txrx(babcgpu, babinfo, _item, _det, BAB_FFL_HERE)
+#define bab_add_buf(_item, _data) _bab_add_buf(_item, _data, sizeof(_data)-1, BAB_FFL_HERE)
+#define BAB_ADD_BREAK(_item) _bab_add_buf(_item, BAB_BREAK, 1, BAB_FFL_HERE)
+#define BAB_ADD_ASYNC(_item) _bab_add_buf(_item, BAB_ASYNC, 1, BAB_FFL_HERE)
+#define bab_config_reg(_item, _reg, _ena) _bab_config_reg(_item, _reg, _ena, BAB_FFL_HERE)
+#define bab_add_data(_item, _addr, _data, _siz) _bab_add_data(_item, _addr, (const uint8_t *)(_data), _siz, BAB_FFL_HERE)
+
+#define BAB_ADD_NOOPs(_item, _count) _bab_add_noops(_item, _count, BAB_FFL_HERE)
 
 #define BAB_ADD_MIN 4
 #define BAB_ADD_MAX 128
-
-#define BAB_STATE_DONE 0
-#define BAB_STATE_READY 1
-#define BAB_STATE_SENDING 2
-#define BAB_STATE_SENT 3
-#define BAB_STATE_READING 4
-
-#define BAB_SPI_BUFFERS 2
 
 #define BAB_BASEA 4
 #define BAB_BASEB 61
@@ -121,9 +130,6 @@ static const uint32_t bab_test_data[BAB_TEST_DATA] = {
 	0xb0e72d8e,	0x55d979bc,	0x39403296,	0x40f09e84,
 	0x8a0bb7b7,	0x33af304f,	0x0b290c1a //,	0xf0c4e61f
 };
-
-//maximum number of chips on alternative bank
-// #define BANKCHIPS 64
 
 /*
  * maximum chip speed available for auto tuner
@@ -215,6 +221,14 @@ static const uint8_t bab_reg_ena[4] = { 0xc1, 0x6a, 0x59, 0xe3 };
 static const uint8_t bab_reg_dis[4] = { 0x00, 0x00, 0x00, 0x00 };
 
 #define BAB_NONCE_OFFSETS 3
+#define BAB_OFF_0x1C_STA 2
+#define BAB_OFF_0x1C_FIN 2
+#define BAB_OFF_OTHER_STA 0
+#define BAB_OFF_OTHER_FIN 1
+
+#define BAB_EVIL_NONCE 0xe0
+#define BAB_EVIL_MASK 0xff
+
 static const uint32_t bab_nonce_offsets[] = {-0x800000, 0, -0x400000};
 
 struct bab_work_send {
@@ -231,50 +245,99 @@ struct bab_work_reply {
 	uint32_t jobsel;
 };
 
-#define MAX_BLISTS 4096
+#define BAB_CHIP_MIN (sizeof(struct bab_work_reply)+16)
 
-typedef struct blist {
-	struct blist *prev;
-	struct blist *next;
+#define ALLOC_WITEMS 1024
+#define LIMIT_WITEMS 0
+
+// Work
+typedef struct witem {
 	struct work *work;
+	struct bab_work_send chip_input;
+	bool ci_setup;
 	int nonces;
-} BLIST;
+	struct timeval work_start;
+} WITEM;
 
-#define MAX_RLISTS 256
+#define ALLOC_SITEMS 8
+#define LIMIT_SITEMS 0
 
-typedef struct rlist {
-	struct rlist *prev;
-	struct rlist *next;
+// SPI I/O
+typedef struct sitem {
+	uint32_t siz;
+	uint8_t wbuf[BAB_MAXBUF];
+	uint8_t rbuf[BAB_MAXBUF];
+	uint32_t chip_off[BAB_MAXCHIPS+1];
+	uint32_t bank_off[BAB_MAXBANKS+2];
+	// WITEMs used to build the work
+	K_ITEM *witems[BAB_MAXCHIPS];
+	struct timeval work_start;
+} SITEM;
+
+#define ALLOC_RITEMS 256
+#define LIMIT_RITEMS 0
+
+// Results
+typedef struct ritem {
 	int chip;
-	uint32_t nonce;
-	bool first_second;
-} RLIST;
+	int nonces;
+	uint32_t nonce[BAB_REPLY_NONCES];
+	bool not_first_reply;
+	struct timeval when;
+} RITEM;
+
+#define ALLOC_NITEMS 102400
+#define LIMIT_NITEMS 0
+
+// Nonce History
+typedef struct nitem {
+	struct timeval found;
+} NITEM;
+
+#define DATAW(_item) ((WITEM *)(_item->data))
+#define DATAS(_item) ((SITEM *)(_item->data))
+#define DATAR(_item) ((RITEM *)(_item->data))
+#define DATAN(_item) ((NITEM *)(_item->data))
+
+// Record the number of each band between work sends
+#define BAB_DELAY_BANDS 10
+#define BAB_DELAY_BASE 0.5
+#define BAB_DELAY_STEP 0.2
+
+#define BAB_CHIP_SPEEDS 6
+// less than or equal GH/s
+static double chip_speed_ranges[BAB_CHIP_SPEEDS - 1] =
+	{ 0.0, 0.8, 1.6, 2.2, 2.8 };
+// Greater than the last one above means it's the last speed
+static char *chip_speed_names[BAB_CHIP_SPEEDS] =
+	{ "Dead", "V.Slow", "Slow", "OK", "Good", "Fast" };
 
 struct bab_info {
 	struct thr_info spi_thr;
 	struct thr_info res_thr;
 
-	pthread_mutex_t spi_lock;
-	pthread_mutex_t res_lock;
 	pthread_mutex_t did_lock;
-	cglock_t blist_lock;
+	pthread_mutex_t nonce_lock;
 
 	// All GPIO goes through this
 	volatile unsigned *gpio;
 
+	int version;
 	int spifd;
 	int chips;
+	int chips_per_bank[BAB_MAXBANKS+1];
+	int missing_chips_per_bank[BAB_MAXBANKS+1];
+	int boards;
+	int banks;
 	uint32_t chip_spis[BAB_MAXCHIPS+1];
 
-	int buffer;
-	int buf_status[BAB_SPI_BUFFERS];
-	uint8_t buf_write[BAB_SPI_BUFFERS][BAB_MAXBUF];
-	uint8_t buf_read[BAB_SPI_BUFFERS][BAB_MAXBUF];
-	uint32_t buf_used[BAB_SPI_BUFFERS];
-	uint32_t chip_off[BAB_SPI_BUFFERS][BAB_MAXCHIPS+1];
-	uint32_t bank_off[BAB_SPI_BUFFERS][BAB_MAXBANKS+2];
+	int reply_wait;
 
-	struct bab_work_send chip_input[BAB_MAXCHIPS];
+	cgsem_t scan_work;
+	cgsem_t spi_work;
+	cgsem_t spi_reply;
+	cgsem_t process_reply;
+
 	struct bab_work_reply chip_results[BAB_MAXCHIPS];
 	struct bab_work_reply chip_prev[BAB_MAXCHIPS];
 
@@ -286,20 +349,18 @@ struct bab_info {
 
 	uint8_t osc[BAB_OSC];
 
+	// TODO: performance tuning
 	int fixchip;
 
 	/*
 	 * Ignore errors in the first work reply since
 	 * they may be from a previous run or random junk
-	 * There can be >100 with just a 16 chip board
+	 * There can be >100 with just one 16 chip board
 	 */
 	uint32_t initial_ignored;
-	bool nonce_before[BAB_MAXCHIPS];
 	bool not_first_reply[BAB_MAXCHIPS];
 
 	// Stats
-	struct timeval chip_start[BAB_MAXCHIPS];
-	int chip_busy[BAB_MAXCHIPS];
 	uint64_t core_good[BAB_MAXCHIPS][BAB_CORES];
 	uint64_t core_bad[BAB_MAXCHIPS][BAB_CORES];
 	uint64_t chip_spie[BAB_MAXCHIPS]; // spi errors
@@ -308,6 +369,11 @@ struct bab_info {
 	uint64_t chip_good[BAB_MAXCHIPS];
 	uint64_t chip_bad[BAB_MAXCHIPS];
 	uint64_t chip_ncore[BAB_MAXCHIPS][BAB_X_COORD][BAB_Y_COORD];
+
+	uint64_t chip_cont_bad[BAB_MAXCHIPS];
+	uint64_t chip_max_bad[BAB_MAXCHIPS];
+
+	uint64_t discarded_e0s;
 
 	uint64_t untested_nonces;
 	uint64_t tested_nonces;
@@ -319,308 +385,153 @@ struct bab_info {
 	uint64_t total_tests;
 	uint64_t max_tests_per_nonce;
 	uint64_t total_links;
+	uint64_t total_proc_links;
 	uint64_t max_links;
+	uint64_t max_proc_links;
+	uint64_t total_work_links;
 
-	int blist_count;
-	int bfree_count;
-	int work_count;
-	int chip_count;
-	BLIST *bfree_list;
-	BLIST *work_list;
-	BLIST *chip_list[BAB_MAXCHIPS];
+	uint64_t fail;
+	uint64_t fail_total_tests;
+	uint64_t fail_total_links;
+	uint64_t fail_total_work_links;
 
-	int rlist_count;
-	int rfree_count;
-	int res_count;
-	RLIST *rfree_list;
-	RLIST *res_list_head;
-	RLIST *res_list_tail;
+	uint64_t ign_total_tests;
+	uint64_t ign_total_links;
+	uint64_t ign_total_work_links;
+
+	struct timeval last_sent_work;
+	uint64_t delay_count;
+	double delay_min;
+	double delay_max;
+	/*
+	 * 0 is below band ranges
+	 * BAB_DELAY_BANDS+1 is above band ranges
+	 */
+	uint64_t delay_bands[BAB_DELAY_BANDS+2];
+
+	uint64_t send_count;
+	double send_total;
+	double send_min;
+	double send_max;
+
+	// Work
+	K_LIST *wfree_list;
+	K_STORE *available_work;
+	K_STORE *chip_work[BAB_MAXCHIPS];
+
+	// SPI I/O
+	K_LIST *sfree_list;
+	// Waiting to send
+	K_STORE *spi_list;
+	// Sent
+	K_STORE *spi_sent;
+
+	// Results
+	K_LIST *rfree_list;
+	K_STORE *res_list;
+
+	// Nonce History
+	K_LIST *nfree_list;
+	K_STORE *good_nonces[BAB_MAXCHIPS];
+	K_STORE *bad_nonces[BAB_MAXCHIPS];
 
 	struct timeval last_did;
 
 	bool initialised;
 };
 
-static BLIST *new_blist_set(struct cgpu_info *babcgpu)
+/*
+ * Amount of time for history
+ * Older items in nonce_history are discarded
+ * 300s / 5 minutes
+ */
+#define HISTORY_TIME_S 300
+
+/*
+ * If the SPI I/O thread waits longer than this long for work
+ * it will report an error saying how long it's waiting
+ * and again every BAB_STD_WAIT_mS after that
+ */
+#define BAB_LONG_uS 1200000
+
+/*
+ * If work wasn't available early enough,
+ * report every BAB_LONG_WAIT_mS until it is
+ */
+#define BAB_LONG_WAIT_mS 888
+
+/*
+ * Some amount of time to wait for work
+ * before checking how long we've waited
+ */
+#define BAB_STD_WAIT_mS 888
+
+/*
+ * How long to wait for the ioctl() to complete (per BANK)
+ * This is a failsafe in case the ioctl() fails
+ * since bab_txrx() will already post a wakeup when it completes
+ * V1 is set to this x 2
+ * V2 is set to this x active banks
+ */
+#define BAB_REPLY_WAIT_mS 160
+
+/*
+ * Work items older than this should not expect results
+ * It has to allow for the result buffer returned with the next result
+ * 0.75GH/s takes 5.727s to do a full nonce range
+ * If HW is too high, consider increasing this to see if work is being
+ * expired too early (due to slow chips)
+ */
+#define BAB_WORK_EXPIRE_mS 7800
+
+// Don't send work more often than this
+#define BAB_EXPECTED_WORK_DELAY_mS 899
+
+static void cleanup_older(struct cgpu_info *babcgpu, int chip, K_ITEM *witem)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	BLIST *blist = NULL;
-	int i;
+	struct timeval now;
+	bool expired_item;
+	K_ITEM *tail;
 
-	blist = calloc(MAX_BLISTS, sizeof(*blist));
-	if (!blist)
-		quithere(1, "Failed to calloc blist - when old count=%d", babinfo->blist_count);
+	cgtime(&now);
 
-	babinfo->blist_count += MAX_BLISTS;
-	babinfo->bfree_count = MAX_BLISTS;
+	K_WLOCK(babinfo->chip_work[chip]);
+	tail = babinfo->chip_work[chip]->tail;
+	expired_item = false;
+	// Discard expired work
+	while (tail) {
+		if (ms_tdiff(&now, &(DATAW(tail)->work_start)) < BAB_WORK_EXPIRE_mS)
+			break;
 
-	blist[0].prev = NULL;
-	blist[0].next = &(blist[1]);
-	for (i = 1; i < MAX_BLISTS-1; i++) {
-		blist[i].prev = &blist[i-1];
-		blist[i].next = &blist[i+1];
+		if (tail == witem)
+			expired_item = true;
+
+		k_unlink_item(babinfo->chip_work[chip], tail);
+		K_WUNLOCK(babinfo->chip_work[chip]);
+		work_completed(babcgpu, DATAW(tail)->work);
+		K_WLOCK(babinfo->chip_work[chip]);
+		k_add_head(babinfo->wfree_list, tail);
+		tail = babinfo->chip_work[chip]->tail;
 	}
-	blist[MAX_BLISTS-1].prev = &(blist[MAX_BLISTS-2]);
-	blist[MAX_BLISTS-1].next = NULL;
-
-	return blist;
-}
-
-static BLIST *next_work(struct cgpu_info *babcgpu, int chip)
-{
-	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	BLIST *bitem;
-
-	cg_wlock(&babinfo->blist_lock);
-	bitem = babinfo->work_list;
-	if (bitem) {
-		// Unlink it from work
-		if (bitem->next)
-			bitem->next->prev = NULL;
-		babinfo->work_list = bitem->next;
-		babinfo->work_count--;
-
-		// Add it to the chip
-		bitem->next = babinfo->chip_list[chip];
-		bitem->prev = NULL;
-		if (bitem->next)
-			bitem->next->prev = bitem;
-		babinfo->chip_list[chip] = bitem;
-		babinfo->chip_count++;
+	// If we didn't expire witem, then remove all older than it
+	if (!expired_item && witem && witem->next) {
+		tail = babinfo->chip_work[chip]->tail;
+		while (tail && tail != witem) {
+			k_unlink_item(babinfo->chip_work[chip], tail);
+			K_WUNLOCK(babinfo->chip_work[chip]);
+			work_completed(babcgpu, DATAW(tail)->work);
+			K_WLOCK(babinfo->chip_work[chip]);
+			k_add_head(babinfo->wfree_list, tail);
+			tail = babinfo->chip_work[chip]->tail;
+		}
 	}
-	cg_wunlock(&babinfo->blist_lock);
-
-	return bitem;
-}
-
-static void discard_last(struct cgpu_info *babcgpu, int chip)
-{
-	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	BLIST *bitem;
-
-	cg_wlock(&babinfo->blist_lock);
-	bitem = babinfo->chip_list[chip];
-	if (bitem) {
-		// Unlink it from the chip
-		if (bitem->next)
-			bitem->next->prev = NULL;
-		babinfo->chip_list[chip] = bitem->next;
-		babinfo->chip_count--;
-
-		// Put it in the free list
-		bitem->next = babinfo->bfree_list;
-		bitem->prev = NULL;
-		if (bitem->next)
-			bitem->next->prev = bitem;
-		babinfo->bfree_list = bitem;
-		babinfo->bfree_count++;
-	}
-	cg_wunlock(&babinfo->blist_lock);
-}
-
-static BLIST *store_work(struct cgpu_info *babcgpu, struct work *work)
-{
-	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	BLIST *bitem = NULL;
-	int ran_out = 0;
-
-	cg_wlock(&babinfo->blist_lock);
-
-	if (babinfo->bfree_list == NULL) {
-		ran_out = babinfo->blist_count;
-		babinfo->bfree_list = new_blist_set(babcgpu);
-	}
-
-	// unlink from free
-	bitem = babinfo->bfree_list;
-	babinfo->bfree_list = babinfo->bfree_list->next;
-	if (babinfo->bfree_list)
-		babinfo->bfree_list->prev = NULL;
-	babinfo->bfree_count--;
-
-	// add to work
-	bitem->next = babinfo->work_list;
-	bitem->prev = NULL;
-	if (bitem->next)
-		bitem->next->prev = bitem;
-	babinfo->work_list = bitem;
-	babinfo->work_count++;
-
-	bitem->work = work;
-	bitem->nonces = 0;
-
-	cg_wunlock(&babinfo->blist_lock);
-
-	if (ran_out > 0) {
-		applog(LOG_ERR, "%s%i: BLIST used count exceeded %d, now %d (work=%d chip=%d)",
-				babcgpu->drv->name, babcgpu->device_id,
-				ran_out, babinfo->blist_count,
-				babinfo->work_count,
-				babinfo->chip_count);
-	}
-
-	return bitem;
-}
-
-static void free_blist(struct cgpu_info *babcgpu, BLIST *bhead, int chip)
-{
-	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	struct work *work;
-	BLIST *bitem;
-
-	if (!bhead)
-		return;
-
-	// Unlink it from the chip
-	cg_wlock(&babinfo->blist_lock);
-	if (unlikely(bhead == babinfo->chip_list[chip])) {
-		// Removing the chip head is an error
-		bhead = bhead->next;
-		babinfo->chip_list[chip]->next = NULL;
-	} else
-		bhead->prev->next = NULL;
-	bitem = bhead;
-	while (bitem) {
-		babinfo->chip_count--;
-		bitem = bitem->next;
-	}
-	cg_wunlock(&babinfo->blist_lock);
-
-	while (bhead) {
-		bitem = bhead;
-		bhead = bitem->next;
-
-		// add to free
-		cg_wlock(&babinfo->blist_lock);
-		bitem->next = babinfo->bfree_list;
-		if (babinfo->bfree_list)
-			babinfo->bfree_list->prev = bitem;
-		bitem->prev = NULL;
-		babinfo->bfree_list = bitem;
-		babinfo->bfree_count++;
-		work = bitem->work;
-		cg_wunlock(&babinfo->blist_lock);
-
-		work_completed(babcgpu, work);
-	}
-
-}
-
-static RLIST *new_rlist_set(struct cgpu_info *babcgpu)
-{
-	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	RLIST *rlist = NULL;
-	int i;
-
-	rlist = calloc(MAX_RLISTS, sizeof(*rlist));
-	if (!rlist)
-		quithere(1, "Failed to calloc rlist - when old count=%d", babinfo->rlist_count);
-
-	babinfo->rlist_count += MAX_RLISTS;
-	babinfo->rfree_count = MAX_RLISTS;
-
-	rlist[0].prev = NULL;
-	rlist[0].next = &(rlist[1]);
-	for (i = 1; i < MAX_RLISTS-1; i++) {
-		rlist[i].prev = &rlist[i-1];
-		rlist[i].next = &rlist[i+1];
-	}
-	rlist[MAX_RLISTS-1].prev = &(rlist[MAX_RLISTS-2]);
-	rlist[MAX_RLISTS-1].next = NULL;
-
-	return rlist;
-}
-
-static RLIST *store_nonce(struct cgpu_info *babcgpu, int chip, uint32_t nonce, bool first_second)
-{
-	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	RLIST *ritem = NULL;
-	int ran_out = 0;
-
-	mutex_lock(&(babinfo->res_lock));
-
-	if (babinfo->rfree_list == NULL) {
-		ran_out = babinfo->rlist_count;
-		babinfo->rfree_list = new_rlist_set(babcgpu);
-	}
-
-	// unlink from rfree
-	ritem = babinfo->rfree_list;
-	babinfo->rfree_list = babinfo->rfree_list->next;
-	if (babinfo->rfree_list)
-		babinfo->rfree_list->prev = NULL;
-	babinfo->rfree_count--;
-
-	// add to head of results
-	ritem->next = babinfo->res_list_head;
-	ritem->prev = NULL;
-	babinfo->res_list_head = ritem;
-	if (ritem->next)
-		ritem->next->prev = ritem;
-	else
-		babinfo->res_list_tail = ritem;
-
-	babinfo->res_count++;
-
-	ritem->chip = chip;
-	ritem->nonce = nonce;
-	ritem->first_second = first_second;
-
-	mutex_unlock(&(babinfo->res_lock));
-
-	if (ran_out > 0) {
-		applog(LOG_ERR, "%s%i: RLIST used count exceeded %d, now %d (work=%d chip=%d)",
-				babcgpu->drv->name, babcgpu->device_id,
-				ran_out, babinfo->rlist_count,
-				babinfo->work_count,
-				babinfo->chip_count);
-	}
-
-	return ritem;
-}
-
-static bool oldest_nonce(struct cgpu_info *babcgpu, int *chip, uint32_t *nonce, bool *first_second)
-{
-	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	RLIST *ritem = NULL;
-	bool found = false;
-
-	mutex_lock(&(babinfo->res_lock));
-
-	if (babinfo->res_list_tail) {
-		// unlink from res
-		ritem = babinfo->res_list_tail;
-		if (ritem->prev) {
-			ritem->prev->next = NULL;
-			babinfo->res_list_tail = ritem->prev;
-		} else
-			babinfo->res_list_head = babinfo->res_list_tail = NULL;
-
-		babinfo->res_count--;
-
-		found = true;
-		*chip = ritem->chip;
-		*nonce = ritem->nonce;
-		*first_second = ritem->first_second;
-
-		// add to rfree
-		ritem->next = babinfo->rfree_list;
-		ritem->prev = NULL;
-		if (ritem->next)
-			ritem->next->prev = ritem;
-		babinfo->rfree_list = ritem;
-
-		babinfo->rfree_count++;
-	}
-
-	mutex_unlock(&(babinfo->res_lock));
-
-	return found;
+	K_WUNLOCK(babinfo->chip_work[chip]);
 }
 
 static void _bab_reset(__maybe_unused struct cgpu_info *babcgpu, struct bab_info *babinfo, int bank, int times)
 {
-	const int banks[4] = { 18, 23, 24, 25 };
+	const int banks[BAB_MAXBANKS] = { 18, 23, 24, 25 };
 	int i;
 
 	BAB_INP_GPIO(10);
@@ -629,7 +540,7 @@ static void _bab_reset(__maybe_unused struct cgpu_info *babcgpu, struct bab_info
 	BAB_OUT_GPIO(11);
 
 	if (bank) {
-		for (i = 0; i < 4; i++) {
+		for (i = 0; i < BAB_MAXBANKS; i++) {
 			BAB_INP_GPIO(banks[i]);
 			BAB_OUT_GPIO(banks[i]);
 			if (bank == i+1)
@@ -639,7 +550,7 @@ static void _bab_reset(__maybe_unused struct cgpu_info *babcgpu, struct bab_info
 		}
 		cgsleep_us(4096);
 	} else {
-		for (i = 0; i < 4; i++)
+		for (i = 0; i < BAB_MAXBANKS; i++)
 			BAB_INP_GPIO(banks[i]);
 	}
 
@@ -660,15 +571,16 @@ static void _bab_reset(__maybe_unused struct cgpu_info *babcgpu, struct bab_info
 }
 
 // TODO: handle a false return where this is called?
-static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, int buf, uint32_t siz, bool detect_ignore, const char *file, const char *func, const int line)
+static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, K_ITEM *item, bool detect_ignore, const char *file, const char *func, const int line)
 {
-	int bank, i;
-	uint32_t pos;
+	int bank, i, count;
+	uint32_t siz, pos;
 	struct spi_ioc_transfer tran;
 	uintptr_t rbuf, wbuf;
 
-	wbuf = (uintptr_t)(babinfo->buf_write[buf]);
-	rbuf = (uintptr_t)(babinfo->buf_read[buf]);
+	wbuf = (uintptr_t)(DATAS(item)->wbuf);
+	rbuf = (uintptr_t)(DATAS(item)->rbuf);
+	siz = (uint32_t)(DATAS(item)->siz);
 
 	memset(&tran, 0, sizeof(tran));
 	tran.delay_usecs = 0;
@@ -677,7 +589,7 @@ static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, int b
 	i = 0;
 	pos = 0;
 	for (bank = 0; bank <= BAB_MAXBANKS; bank++) {
-		if (babinfo->bank_off[buf][bank]) {
+		if (DATAS(item)->bank_off[bank]) {
 			bab_reset(bank, 64);
 			break;
 		}
@@ -690,13 +602,14 @@ static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, int b
 		return false;
 	}
 
+	count = 0;
 	while (siz > 0) {
 		tran.tx_buf = wbuf;
 		tran.rx_buf = rbuf;
 		tran.speed_hz = BAB_SPI_SPEED;
-		if (pos == babinfo->bank_off[buf][bank]) {
+		if (pos == DATAS(item)->bank_off[bank]) {
 			for (; ++bank <= BAB_MAXBANKS; ) {
-				if (babinfo->bank_off[buf][bank] > pos) {
+				if (DATAS(item)->bank_off[bank] > pos) {
 					bab_reset(bank, 64);
 					break;
 				}
@@ -707,14 +620,14 @@ static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, int b
 		else
 			tran.len = BAB_SPI_BUFSIZ;
 
-		if (pos < babinfo->bank_off[buf][bank] &&
-		    babinfo->bank_off[buf][bank] < (pos + tran.len))
-			tran.len = babinfo->bank_off[buf][bank] - pos;
+		if (pos < DATAS(item)->bank_off[bank] &&
+		    DATAS(item)->bank_off[bank] < (pos + tran.len))
+			tran.len = DATAS(item)->bank_off[bank] - pos;
 
 		for (; i < babinfo->chips; i++) {
-			if (!babinfo->chip_off[buf][i])
+			if (!DATAS(item)->chip_off[i])
 				continue;
-			if (babinfo->chip_off[buf][i] >= pos + tran.len) {
+			if (DATAS(item)->chip_off[i] >= pos + tran.len) {
 				tran.speed_hz = babinfo->chip_spis[i];
 				break;
 			}
@@ -741,11 +654,12 @@ static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, int b
 						BAB_SPI_SPEED, BAB_FFL_PASS);
 		}
 
+		count++;
 		if (ioctl(babinfo->spifd, SPI_IOC_MESSAGE(1), (void *)&tran) < 0) {
 			if (!detect_ignore || errno != 110) {
-				applog(LOG_ERR, "%s%d: ioctl failed err=%d" BAB_FFL,
+				applog(LOG_ERR, "%s%d: ioctl (%d) failed err=%d" BAB_FFL,
 						babcgpu->drv->name, babcgpu->device_id,
-						errno, BAB_FFL_PASS);
+						count, errno, BAB_FFL_PASS);
 			}
 			return false;
 		}
@@ -755,24 +669,23 @@ static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, int b
 		rbuf += tran.len;
 		pos += tran.len;
 	}
+	cgtime(&(DATAS(item)->work_start));
 	mutex_lock(&(babinfo->did_lock));
 	cgtime(&(babinfo->last_did));
 	mutex_unlock(&(babinfo->did_lock));
 	return true;
 }
 
-static void _bab_add_buf_rev(__maybe_unused struct cgpu_info *babcgpu, struct bab_info *babinfo, const uint8_t *data, uint32_t siz, const char *file, const char *func, const int line)
+static void _bab_add_buf_rev(K_ITEM *item, const uint8_t *data, uint32_t siz, const char *file, const char *func, const int line)
 {
-	uint8_t tmp;
 	uint32_t now_used, i;
-	int buf;
+	uint8_t tmp;
 
-	buf = babinfo->buffer;
-	now_used = babinfo->buf_used[buf];
+	now_used = DATAS(item)->siz;
 	if (now_used + siz >= BAB_MAXBUF) {
 		quitfrom(1, file, func, line,
-			"%s() buffer %d limit of %d exceeded=%d siz=%d",
-			__func__, buf, BAB_MAXBUF, now_used + siz, siz);
+			"%s() buffer limit of %d exceeded=%d siz=%d",
+			__func__, BAB_MAXBUF, (int)(now_used + siz), (int)siz);
 	}
 
 	for (i = 0; i < siz; i++) {
@@ -780,30 +693,43 @@ static void _bab_add_buf_rev(__maybe_unused struct cgpu_info *babcgpu, struct ba
 		tmp = ((tmp & 0xaa)>>1) | ((tmp & 0x55) << 1);
 		tmp = ((tmp & 0xcc)>>2) | ((tmp & 0x33) << 2);
 		tmp = ((tmp & 0xf0)>>4) | ((tmp & 0x0f) << 4);
-		babinfo->buf_write[buf][now_used + i] = tmp;
+		DATAS(item)->wbuf[now_used + i] = tmp;
 	}
 
-	babinfo->buf_used[buf] += siz;
+	DATAS(item)->siz += siz;
 }
 
-static void _bab_add_buf(__maybe_unused struct cgpu_info *babcgpu, struct bab_info *babinfo, const uint8_t *data, size_t siz, const char *file, const char *func, const int line)
+static void _bab_add_buf(K_ITEM *item, const uint8_t *data, size_t siz, const char *file, const char *func, const int line)
 {
 	uint32_t now_used;
-	int buf;
 
-	buf = babinfo->buffer;
-	now_used = babinfo->buf_used[buf];
+	now_used = DATAS(item)->siz;
 	if (now_used + siz >= BAB_MAXBUF) {
 		quitfrom(1, file, func, line,
-			"%s() buffer %d limit of %d exceeded=%d siz=%d",
-			__func__, buf, BAB_MAXBUF, (int)(now_used + siz), (int)siz);
+			"%s() DATAS buffer limit of %d exceeded=%d siz=%d",
+			__func__, BAB_MAXBUF, (int)(now_used + siz), (int)siz);
 	}
 
-	memcpy(&(babinfo->buf_write[buf][now_used]), data, siz);
-	babinfo->buf_used[buf] += siz;
+	memcpy(&(DATAS(item)->wbuf[now_used]), data, siz);
+	DATAS(item)->siz += siz;
 }
 
-static void _bab_add_data(struct cgpu_info *babcgpu, struct bab_info *babinfo, uint32_t addr, const uint8_t *data, size_t siz, const char *file, const char *func, const int line)
+static void _bab_add_noops(K_ITEM *item, size_t siz, const char *file, const char *func, const int line)
+{
+	uint32_t now_used;
+
+	now_used = DATAS(item)->siz;
+	if (now_used + siz >= BAB_MAXBUF) {
+		quitfrom(1, file, func, line,
+			"%s() DATAS buffer limit of %d exceeded=%d siz=%d",
+			__func__, BAB_MAXBUF, (int)(now_used + siz), (int)siz);
+	}
+
+	memset(&(DATAS(item)->wbuf[now_used]), BAB_NOOP, siz);
+	DATAS(item)->siz += siz;
+}
+
+static void _bab_add_data(K_ITEM *item, uint32_t addr, const uint8_t *data, size_t siz, const char *file, const char *func, const int line)
 {
 	uint8_t tmp[3];
 	int trf_siz;
@@ -817,17 +743,17 @@ static void _bab_add_data(struct cgpu_info *babcgpu, struct bab_info *babinfo, u
 	tmp[0] = (trf_siz - 1) | 0xE0;
 	tmp[1] = (addr >> 8) & 0xff;
 	tmp[2] = addr & 0xff;
-	_bab_add_buf(babcgpu, babinfo, tmp, sizeof(tmp), BAB_FFL_PASS);
-	_bab_add_buf_rev(babcgpu, babinfo, data, siz, BAB_FFL_PASS);
+	_bab_add_buf(item, tmp, sizeof(tmp), BAB_FFL_PASS);
+	_bab_add_buf_rev(item, data, siz, BAB_FFL_PASS);
 }
 
-static void _bab_config_reg(struct cgpu_info *babcgpu, struct bab_info *babinfo, uint32_t reg, bool enable, const char *file, const char *func, const int line)
+static void _bab_config_reg(K_ITEM *item, uint32_t reg, bool enable, const char *file, const char *func, const int line)
 {
 	if (enable) {
-		_bab_add_data(babcgpu, babinfo, BAB_REG_ADDR + reg*32,
+		_bab_add_data(item, BAB_REG_ADDR + reg*32,
 				bab_reg_ena, sizeof(bab_reg_ena), BAB_FFL_PASS);
 	} else {
-		_bab_add_data(babcgpu, babinfo, BAB_REG_ADDR + reg*32,
+		_bab_add_data(item, BAB_REG_ADDR + reg*32,
 				bab_reg_dis, sizeof(bab_reg_dis), BAB_FFL_PASS);
 	}
 
@@ -850,57 +776,36 @@ static void bab_set_osc(struct bab_info *babinfo, int chip)
 	applog(LOG_DEBUG, "@osc(chip=%d) fast=%d 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x", chip, fast, babinfo->osc[0], babinfo->osc[1], babinfo->osc[2], babinfo->osc[3], babinfo->osc[4], babinfo->osc[5], babinfo->osc[6], babinfo->osc[7]);
 }
 
-static bool bab_put(struct cgpu_info *babcgpu, struct bab_info *babinfo)
+static void bab_put(struct bab_info *babinfo, K_ITEM *sitem)
 {
-	int buf, i, reg, bank = 0;
+	struct bab_work_send *chip_input;
+	int i, reg, bank = 0;
+	size_t chip_siz;
 
-	babinfo->buffer = -1;
-
-	mutex_lock(&(babinfo->spi_lock));
-	if (babinfo->buf_status[0] == BAB_STATE_DONE) {
-		babinfo->buffer = 0;
-	} else if (babinfo->buf_status[1] == BAB_STATE_DONE) {
-		babinfo->buffer = 1;
-	} else if (babinfo->buf_status[0] == BAB_STATE_READY) {
-		babinfo->buf_status[0] = BAB_STATE_DONE;
-		babinfo->buffer = 0;
-	} else if (babinfo->buf_status[1] == BAB_STATE_READY) {
-		babinfo->buf_status[1] = BAB_STATE_DONE;
-		babinfo->buffer = 1;
-	}
-	mutex_unlock(&(babinfo->spi_lock));
-
-	if (babinfo->buffer == -1)
-		return false;
-
-	buf = babinfo->buffer;
-	babinfo->buf_used[buf] = 0;
-	memset(babinfo->bank_off[buf], 0, sizeof(babinfo->bank_off) / BAB_SPI_BUFFERS);
-
-	BAB_ADD_BREAK();
+	BAB_ADD_BREAK(sitem);
 	for (i = 0; i < babinfo->chips; i++) {
 		if (babinfo->chip_bank[i] != bank) {
-			babinfo->bank_off[buf][bank] = babinfo->buf_used[buf];
+			DATAS(sitem)->bank_off[bank] = DATAS(sitem)->siz;
 			bank = babinfo->chip_bank[i];
-			BAB_ADD_BREAK();
+			BAB_ADD_BREAK(sitem);
 		}
 		if (i == babinfo->fixchip &&
 		    (BAB_CFGD_SET(babinfo->chip_conf[i]) ||
 		     !babinfo->chip_conf[i])) {
 			bab_set_osc(babinfo, i);
-			bab_add_data(BAB_OSC_ADDR, babinfo->osc, sizeof(babinfo->osc));
-			bab_config_reg(BAB_ICLK_REG, BAB_ICLK_BIT(babinfo->chip_conf[i]));
-			bab_config_reg(BAB_FAST_REG, BAB_FAST_BIT(babinfo->chip_conf[i]));
-			bab_config_reg(BAB_DIV2_REG, BAB_DIV2_BIT(babinfo->chip_conf[i]));
-			bab_config_reg(BAB_SLOW_REG, BAB_SLOW_BIT(babinfo->chip_conf[i]));
-			bab_config_reg(BAB_OCLK_REG, BAB_OCLK_BIT(babinfo->chip_conf[i]));
+			bab_add_data(sitem, BAB_OSC_ADDR, babinfo->osc, sizeof(babinfo->osc));
+			bab_config_reg(sitem, BAB_ICLK_REG, BAB_ICLK_BIT(babinfo->chip_conf[i]));
+			bab_config_reg(sitem, BAB_FAST_REG, BAB_FAST_BIT(babinfo->chip_conf[i]));
+			bab_config_reg(sitem, BAB_DIV2_REG, BAB_DIV2_BIT(babinfo->chip_conf[i]));
+			bab_config_reg(sitem, BAB_SLOW_REG, BAB_SLOW_BIT(babinfo->chip_conf[i]));
+			bab_config_reg(sitem, BAB_OCLK_REG, BAB_OCLK_BIT(babinfo->chip_conf[i]));
 			for (reg = BAB_REG_CLR_FROM; reg <= BAB_REG_CLR_TO; reg++)
-				bab_config_reg(reg, false);
+				bab_config_reg(sitem, reg, false);
 			if (babinfo->chip_conf[i]) {
-				bab_add_data(BAB_COUNT_ADDR, bab_counters, sizeof(bab_counters));
-				bab_add_data(BAB_W1A_ADDR, bab_w1, sizeof(bab_w1));
-				bab_add_data(BAB_W1B_ADDR, bab_w1, sizeof(bab_w1)/2);
-				bab_add_data(BAB_W2_ADDR, bab_w2, sizeof(bab_w2));
+				bab_add_data(sitem, BAB_COUNT_ADDR, bab_counters, sizeof(bab_counters));
+				bab_add_data(sitem, BAB_W1A_ADDR, bab_w1, sizeof(bab_w1));
+				bab_add_data(sitem, BAB_W1B_ADDR, bab_w1, sizeof(bab_w1)/2);
+				bab_add_data(sitem, BAB_W2_ADDR, bab_w2, sizeof(bab_w2));
 				babinfo->chip_conf[i] ^= BAB_CFGD_VAL;
 			}
 			babinfo->old_fast[i] = babinfo->chip_fast[i];
@@ -908,89 +813,93 @@ static bool bab_put(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 		} else {
 			if (babinfo->old_fast[i] != babinfo->chip_fast[i]) {
 				bab_set_osc(babinfo, i);
-				bab_add_data(BAB_OSC_ADDR, babinfo->osc, sizeof(babinfo->osc));
+				bab_add_data(sitem, BAB_OSC_ADDR, babinfo->osc, sizeof(babinfo->osc));
 				babinfo->old_fast[i] = babinfo->chip_fast[i];
 			}
 			if (babinfo->old_conf[i] != babinfo->chip_conf[i]) {
 				if (BAB_ICLK_SET(babinfo->old_conf[i]) !=
 						 BAB_ICLK_SET(babinfo->chip_conf[i]))
-					bab_config_reg(BAB_ICLK_REG,
+					bab_config_reg(sitem, BAB_ICLK_REG,
 							BAB_ICLK_BIT(babinfo->chip_conf[i]));
 				if (BAB_FAST_SET(babinfo->old_conf[i]) !=
 						 BAB_FAST_SET(babinfo->chip_conf[i]))
-					bab_config_reg(BAB_FAST_REG,
+					bab_config_reg(sitem, BAB_FAST_REG,
 							BAB_FAST_BIT(babinfo->chip_conf[i]));
 				if (BAB_DIV2_SET(babinfo->old_conf[i]) !=
 						 BAB_DIV2_SET(babinfo->chip_conf[i]))
-					bab_config_reg(BAB_DIV2_REG,
+					bab_config_reg(sitem, BAB_DIV2_REG,
 							BAB_DIV2_BIT(babinfo->chip_conf[i]));
 				if (BAB_SLOW_SET(babinfo->old_conf[i]) !=
 						 BAB_SLOW_SET(babinfo->chip_conf[i]))
-					bab_config_reg(BAB_SLOW_REG,
+					bab_config_reg(sitem, BAB_SLOW_REG,
 							BAB_SLOW_BIT(babinfo->chip_conf[i]));
 				if (BAB_OCLK_SET(babinfo->old_conf[i]) !=
 						 BAB_OCLK_SET(babinfo->chip_conf[i]))
-					bab_config_reg(BAB_OCLK_REG,
+					bab_config_reg(sitem, BAB_OCLK_REG,
 							BAB_OCLK_BIT(babinfo->chip_conf[i]));
 				babinfo->old_conf[i] = babinfo->chip_conf[i];
 			}
 		}
-		babinfo->chip_off[buf][i] = babinfo->buf_used[buf] + 3;
+		DATAS(sitem)->chip_off[i] = DATAS(sitem)->siz + 3;
+		chip_input = &(DATAW(DATAS(sitem)->witems[i])->chip_input);
+		// Would no-ops need to be added if a chip gets disabled?
 		if (babinfo->chip_conf[i])
-			bab_add_data(BAB_INP_ADDR, (uint8_t *)(&(babinfo->chip_input[i])),
-					sizeof(babinfo->chip_input[i]));
+			bab_add_data(sitem, BAB_INP_ADDR, (uint8_t *)chip_input, sizeof(*chip_input));
 
-		BAB_ADD_ASYNC();
+		chip_siz = DATAS(sitem)->siz - babinfo->chip_conf[i];
+		if (chip_siz < BAB_CHIP_MIN)
+			BAB_ADD_NOOPs(sitem, BAB_CHIP_MIN - chip_siz);
+
+		BAB_ADD_ASYNC(sitem);
 	}
-	babinfo->chip_off[buf][i] = babinfo->buf_used[buf];
-	babinfo->bank_off[buf][bank] = babinfo->buf_used[buf];
+	DATAS(sitem)->chip_off[i] = DATAS(sitem)->siz;
+	DATAS(sitem)->bank_off[bank] = DATAS(sitem)->siz;
 
-	mutex_lock(&(babinfo->spi_lock));
-	babinfo->buf_status[buf] = BAB_STATE_READY;
-	mutex_unlock(&(babinfo->spi_lock));
+	K_WLOCK(babinfo->spi_list);
+	k_add_head(babinfo->spi_list, sitem);
+	K_WUNLOCK(babinfo->spi_list);
+
+	cgsem_post(&(babinfo->spi_work));
 
 	babinfo->fixchip = (babinfo->fixchip + 1) % babinfo->chips;
-	return true;
 }
 
-static bool bab_get(__maybe_unused struct cgpu_info *babcgpu, struct bab_info *babinfo)
+static bool bab_get(__maybe_unused struct cgpu_info *babcgpu, struct bab_info *babinfo, struct timeval *when)
 {
-	int buf, i;
+	K_ITEM *item;
+	int i;
 
-	babinfo->buffer = -1;
+	cgsem_mswait(&(babinfo->spi_reply), babinfo->reply_wait);
 
-	mutex_lock(&(babinfo->spi_lock));
-	if (babinfo->buf_status[0] == BAB_STATE_SENT) {
-		babinfo->buf_status[0] = BAB_STATE_READING;
-		babinfo->buffer = 0;
-	} else if (babinfo->buf_status[1] == BAB_STATE_SENT) {
-			babinfo->buf_status[1] = BAB_STATE_READING;
-			babinfo->buffer = 1;
-	}
-	mutex_unlock(&(babinfo->spi_lock));
+	K_WLOCK(babinfo->spi_sent);
+	item = k_unlink_tail(babinfo->spi_sent);
+	K_WUNLOCK(babinfo->spi_sent);
 
-	if (babinfo->buffer == -1)
+	if (!item)
 		return false;
 
-	buf = babinfo->buffer;
 	for (i = 0; i < babinfo->chips; i++) {
 		if (babinfo->chip_conf[i] & 0x7f) {
 			memcpy((void *)&(babinfo->chip_results[i]),
-				(void *)(babinfo->buf_read[buf] + babinfo->chip_off[buf][i]),
+				(void *)(DATAS(item)->rbuf + DATAS(item)->chip_off[i]),
 				sizeof(babinfo->chip_results[0]));
 		}
 	}
 
-	mutex_lock(&(babinfo->spi_lock));
-	babinfo->buf_status[buf] = BAB_STATE_DONE;
-	mutex_unlock(&(babinfo->spi_lock));
+	// work_start is also the time the results were read
+	memcpy(when, &(DATAS(item)->work_start), sizeof(*when));
+
+	K_WLOCK(babinfo->sfree_list);
+	k_add_head(babinfo->sfree_list, item);
+	K_WUNLOCK(babinfo->sfree_list);
 
 	return true;
 }
 
 void bab_detect_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo, int bank, int first, int last)
 {
-	int buf, i, reg, j;
+	int i, reg, j;
+	K_ITEM *item;
 
 	if (sizeof(struct bab_work_send) != sizeof(bab_test_data)) {
 		quithere(1, "struct bab_work_send (%d) and bab_test_data (%d)"
@@ -999,58 +908,55 @@ void bab_detect_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo, int b
 			    (int)sizeof(bab_test_data));
 	}
 
-	memset(babinfo->bank_off, 0, sizeof(babinfo->bank_off));
-
-	buf = babinfo->buffer = 0;
-	babinfo->buf_used[buf] = 0;
-	BAB_ADD_BREAK();
+	K_WLOCK(babinfo->sfree_list);
+	item = k_unlink_head_zero(babinfo->sfree_list);
+	K_WUNLOCK(babinfo->sfree_list);
+	BAB_ADD_BREAK(item);
 	for (i = first; i < last && i < BAB_MAXCHIPS; i++) {
 		bab_set_osc(babinfo, i);
-		bab_add_data(BAB_OSC_ADDR, babinfo->osc, sizeof(babinfo->osc));
-		bab_config_reg(BAB_ICLK_REG, BAB_ICLK_BIT(babinfo->chip_conf[i]));
-		bab_config_reg(BAB_FAST_REG, BAB_FAST_BIT(babinfo->chip_conf[i]));
-		bab_config_reg(BAB_DIV2_REG, BAB_DIV2_BIT(babinfo->chip_conf[i]));
-		bab_config_reg(BAB_SLOW_REG, BAB_SLOW_BIT(babinfo->chip_conf[i]));
-		bab_config_reg(BAB_OCLK_REG, BAB_OCLK_BIT(babinfo->chip_conf[i]));
+		bab_add_data(item, BAB_OSC_ADDR, babinfo->osc, sizeof(babinfo->osc));
+		bab_config_reg(item, BAB_ICLK_REG, BAB_ICLK_BIT(babinfo->chip_conf[i]));
+		bab_config_reg(item, BAB_FAST_REG, BAB_FAST_BIT(babinfo->chip_conf[i]));
+		bab_config_reg(item, BAB_DIV2_REG, BAB_DIV2_BIT(babinfo->chip_conf[i]));
+		bab_config_reg(item, BAB_SLOW_REG, BAB_SLOW_BIT(babinfo->chip_conf[i]));
+		bab_config_reg(item, BAB_OCLK_REG, BAB_OCLK_BIT(babinfo->chip_conf[i]));
 		for (reg = BAB_REG_CLR_FROM; reg <= BAB_REG_CLR_TO; reg++)
-			bab_config_reg(reg, false);
-		bab_add_data(BAB_COUNT_ADDR, bab_counters, sizeof(bab_counters));
-		bab_add_data(BAB_W1A_ADDR, bab_w1, sizeof(bab_w1));
-		bab_add_data(BAB_W1B_ADDR, bab_w1, sizeof(bab_w1)/2);
-		bab_add_data(BAB_W2_ADDR, bab_w2, sizeof(bab_w2));
-		babinfo->chip_off[buf][i] = babinfo->buf_used[buf] + 3;
-		bab_add_data(BAB_INP_ADDR, bab_test_data, sizeof(bab_test_data));
-		babinfo->chip_off[buf][i+1] = babinfo->buf_used[buf];
-		babinfo->bank_off[buf][bank] = babinfo->buf_used[buf];
+			bab_config_reg(item, reg, false);
+		bab_add_data(item, BAB_COUNT_ADDR, bab_counters, sizeof(bab_counters));
+		bab_add_data(item, BAB_W1A_ADDR, bab_w1, sizeof(bab_w1));
+		bab_add_data(item, BAB_W1B_ADDR, bab_w1, sizeof(bab_w1)/2);
+		bab_add_data(item, BAB_W2_ADDR, bab_w2, sizeof(bab_w2));
+		DATAS(item)->chip_off[i] = DATAS(item)->siz + 3;
+		bab_add_data(item, BAB_INP_ADDR, bab_test_data, sizeof(bab_test_data));
+		DATAS(item)->chip_off[i+1] = DATAS(item)->siz;
+		DATAS(item)->bank_off[bank] = DATAS(item)->siz;
 		babinfo->chips = i + 1;
-		bab_txrx(buf, babinfo->buf_used[buf], false);
-		babinfo->buf_used[buf] = 0;
-		BAB_ADD_BREAK();
+		bab_txrx(item, false);
+		DATAS(item)->siz = 0;
+		BAB_ADD_BREAK(item);
 		for (j = first; j <= i; j++) {
-			babinfo->chip_off[buf][j] = babinfo->buf_used[buf] + 3;
-			BAB_ADD_ASYNC();
+			DATAS(item)->chip_off[j] = DATAS(item)->siz + 3;
+			BAB_ADD_ASYNC(item);
 		}
 	}
 
-	buf = babinfo->buffer = 1;
-	babinfo->buf_used[buf] = 0;
-	BAB_ADD_BREAK();
+	memset(item->data, 0, babinfo->sfree_list->siz);
+	BAB_ADD_BREAK(item);
 	for (i = first; i < last && i < BAB_MAXCHIPS; i++) {
-		babinfo->chip_off[buf][i] = babinfo->buf_used[buf] + 3;
-		bab_add_data(BAB_INP_ADDR, bab_test_data, sizeof(bab_test_data));
-		BAB_ADD_ASYNC();
+		DATAS(item)->chip_off[i] = DATAS(item)->siz + 3;
+		bab_add_data(item, BAB_INP_ADDR, bab_test_data, sizeof(bab_test_data));
+		BAB_ADD_ASYNC(item);
 	}
-	babinfo->chip_off[buf][i] = babinfo->buf_used[buf];
-	babinfo->bank_off[buf][bank] = babinfo->buf_used[buf];
+	DATAS(item)->chip_off[i] = DATAS(item)->siz;
+	DATAS(item)->bank_off[bank] = DATAS(item)->siz;
 	babinfo->chips = i;
-	bab_txrx(buf, babinfo->buf_used[buf], true);
-	babinfo->buf_used[buf] = 0;
+	bab_txrx(item, true);
+	DATAS(item)->siz = 0;
 	babinfo->chips = first;
 	for (i = first; i < last && i < BAB_MAXCHIPS; i++) {
 		uint32_t tmp[DATA_UINTS-1];
-		memcpy(tmp, babinfo->buf_read[buf]+babinfo->chip_off[buf][i], sizeof(tmp));
-		for (j = 0; j < BAB_SPI_BUFFERS; j++)
-			babinfo->chip_off[j][i] = 0;
+		memcpy(tmp, DATAS(item)->rbuf + DATAS(item)->chip_off[i], sizeof(tmp));
+		DATAS(item)->chip_off[i] = 0;
 		for (j = 0; j < BAB_REPLY_NONCES; j++) {
 			if (tmp[j] != 0xffffffff && tmp[j] != 0x00000000) {
 				babinfo->chip_bank[i] = bank;
@@ -1061,6 +967,10 @@ void bab_detect_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo, int b
 	}
 	for (i = first ; i < babinfo->chips; i++)
 		babinfo->chip_bank[i] = bank;
+
+	K_WLOCK(babinfo->sfree_list);
+	k_add_head(babinfo->sfree_list, item);
+	K_WUNLOCK(babinfo->sfree_list);
 }
 
 static const char *bab_modules[] = {
@@ -1075,6 +985,7 @@ static const char *bab_memory = "/dev/mem";
 
 static int bab_memory_addr = 0x20200000;
 
+// TODO: add --bab-options for SPEED_HZ, tran.delay_usecs and an inter transfer delay (default 0)
 static struct {
 	int request;
 	int value;
@@ -1167,7 +1078,73 @@ bad_out:
 
 static void bab_init_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 {
-	bab_detect_chips(babcgpu, babinfo, 0, 0, BAB_MAXCHIPS);
+	int chip, chipoff, bank, chips, new_chips, boards, mis;
+
+	applog(LOG_WARNING, "%s V1 first test for %d chips ...",
+			    babcgpu->drv->dname, BAB_V1_CHIP_TEST);
+
+	bab_detect_chips(babcgpu, babinfo, 0, 0, BAB_V1_CHIP_TEST);
+	if (babinfo->chips > 0) {
+		babinfo->version = 1;
+		babinfo->banks = 0;
+		if (babinfo->chips == BAB_V1_CHIP_TEST) {
+			applog(LOG_WARNING, "%s V1 test for %d more chips ...",
+					    babcgpu->drv->dname, BAB_MAXCHIPS - BAB_V1_CHIP_TEST);
+
+			bab_detect_chips(babcgpu, babinfo, 0, BAB_V1_CHIP_TEST, BAB_MAXCHIPS);
+		}
+		babinfo->chips_per_bank[BAB_V1_BANK] = babinfo->chips;
+		babinfo->boards = (int)((float)(babinfo->chips - 1) / BAB_BOARDCHIPS) + 1;
+		babinfo->reply_wait = BAB_REPLY_WAIT_mS * 2;
+
+		if ((chip = (babinfo->chips_per_bank[BAB_V1_BANK] % BAB_BOARDCHIPS))) {
+			mis = BAB_BOARDCHIPS - chip;
+			babinfo->missing_chips_per_bank[BAB_V1_BANK] = mis;
+			applog(LOG_WARNING, "%s V1: missing %d chip%s",
+					    babcgpu->drv->dname, mis,
+					    (mis == 1) ? "" : "s");
+		}
+	} else {
+		applog(LOG_WARNING, "%s no chips found with V1", babcgpu->drv->dname);
+		applog(LOG_WARNING, "%s V2 test %d banks %d chips ...",
+				    babcgpu->drv->dname, BAB_MAXBANKS, BAB_MAXCHIPS);
+
+		chips = 0;
+		babinfo->version = 2;
+		babinfo->banks = 0;
+		for (bank = 1; bank <= BAB_MAXBANKS; bank++) {
+			for (chipoff = 0; chipoff < BAB_BANKCHIPS; chipoff++) {
+				chip = babinfo->chips + chipoff;
+				babinfo->chip_spis[chip] = 625000;
+			}
+			bab_reset(bank, 64);
+			bab_detect_chips(babcgpu, babinfo, bank, babinfo->chips, babinfo->chips + BAB_BANKCHIPS);
+			new_chips = babinfo->chips - chips;
+			babinfo->chips_per_bank[bank] = new_chips;
+			chips = babinfo->chips;
+			if (new_chips == 0)
+				boards = 0;
+			else {
+				boards = (int)((float)(new_chips - 1) / BAB_BOARDCHIPS) + 1;
+				babinfo->banks++;
+			}
+			applog(LOG_WARNING, "%s V2 bank %d: %d chips %d board%s",
+					    babcgpu->drv->dname, bank, new_chips,
+					    boards, (boards == 1) ? "" : "s");
+			babinfo->boards += boards;
+
+			if ((chip = (babinfo->chips_per_bank[bank] % BAB_BOARDCHIPS))) {
+				mis = BAB_BOARDCHIPS - chip;
+				babinfo->missing_chips_per_bank[bank] = mis;
+				applog(LOG_WARNING, "%s V2: bank %d missing %d chip%s",
+						    babcgpu->drv->dname, bank,
+						    mis, (mis == 1) ? "" : "s");
+			}
+		}
+		babinfo->reply_wait = BAB_REPLY_WAIT_mS * babinfo->banks;
+		bab_reset(0, 8);
+	}
+
 	memcpy(babinfo->old_conf, babinfo->chip_conf, sizeof(babinfo->old_conf));
 	memcpy(babinfo->old_fast, babinfo->chip_fast, sizeof(babinfo->old_fast));
 }
@@ -1199,16 +1176,25 @@ static void bab_detect(bool hotplug)
 		babinfo->chip_fast[i] = BAB_DEFSPEED;
 	}
 
-	mutex_init(&babinfo->spi_lock);
-
 	if (!bab_init_gpio(babcgpu, babinfo, BAB_SPI_BUS, BAB_SPI_CHIP))
 		goto unalloc;
 
-	applog(LOG_WARNING, "%s V1 testing for %d chips ...", babcgpu->drv->dname, BAB_MAXCHIPS);
+	babinfo->sfree_list = k_new_list("SPI I/O", sizeof(SITEM),
+					 ALLOC_SITEMS, LIMIT_SITEMS, true);
+	babinfo->spi_list = k_new_store(babinfo->sfree_list);
+	babinfo->spi_sent = k_new_store(babinfo->sfree_list);
 
 	bab_init_chips(babcgpu, babinfo);
 
-	applog(LOG_WARNING, "%s found %d chips", babcgpu->drv->dname, babinfo->chips);
+	if (babinfo->boards) {
+		applog(LOG_WARNING, "%s found %d chips %d board%s",
+				    babcgpu->drv->dname, babinfo->chips,
+				    babinfo->boards,
+				    (babinfo->boards == 1) ? "" : "s");
+	} else {
+		applog(LOG_WARNING, "%s found %d chips",
+				    babcgpu->drv->dname, babinfo->chips);
+	}
 
 	if (babinfo->chips == 0)
 		goto cleanup;
@@ -1216,9 +1202,35 @@ static void bab_detect(bool hotplug)
 	if (!add_cgpu(babcgpu))
 		goto cleanup;
 
-	mutex_init(&babinfo->res_lock);
+	cgsem_init(&(babinfo->scan_work));
+	cgsem_init(&(babinfo->spi_work));
+	cgsem_init(&(babinfo->spi_reply));
+	cgsem_init(&(babinfo->process_reply));
+
 	mutex_init(&babinfo->did_lock);
-	cglock_init(&babinfo->blist_lock);
+	mutex_init(&babinfo->nonce_lock);
+
+	babinfo->rfree_list = k_new_list("Results", sizeof(RITEM),
+					 ALLOC_RITEMS, LIMIT_RITEMS, true);
+	babinfo->res_list = k_new_store(babinfo->rfree_list);
+
+	babinfo->wfree_list = k_new_list("Work", sizeof(WITEM),
+					 ALLOC_WITEMS, LIMIT_WITEMS, true);
+	babinfo->available_work = k_new_store(babinfo->wfree_list);
+	for (i = 0; i < BAB_MAXCHIPS; i++)
+		babinfo->chip_work[i] = k_new_store(babinfo->wfree_list);
+
+	babinfo->nfree_list = k_new_list("Nonce History", sizeof(WITEM),
+					 ALLOC_NITEMS, LIMIT_NITEMS, true);
+	for (i = 0; i < BAB_MAXCHIPS; i++) {
+		babinfo->good_nonces[i] = k_new_store(babinfo->nfree_list);
+		babinfo->bad_nonces[i] = k_new_store(babinfo->nfree_list);
+	}
+
+	// Exclude detection
+	cgtime(&(babcgpu->dev_start_tv));
+	// Ignore detection tests
+	babinfo->last_did.tv_sec = 0;
 
 	babinfo->initialised = true;
 
@@ -1228,7 +1240,6 @@ cleanup:
 	close(babinfo->spifd);
 	munmap((void *)(babinfo->gpio), BAB_SPI_BUFSIZ);
 unalloc:
-	mutex_destroy(&babinfo->spi_lock);
 	free(babinfo);
 	free(babcgpu);
 }
@@ -1237,19 +1248,15 @@ static void bab_identify(__maybe_unused struct cgpu_info *babcgpu)
 {
 }
 
-#define BAB_LONG_WAIT_uS 1200000
-#define BAB_WAIT_MSG_EVERY 10
-#define BAB_LONG_WAIT_SLEEP_uS 100000
-#define BAB_STD_WAIT_uS 3000
-
 // thread to do spi txrx
 static void *bab_spi(void *userdata)
 {
 	struct cgpu_info *babcgpu = (struct cgpu_info *)userdata;
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	struct timeval start, stop;
-	double wait;
-	int i, buf, msgs;
+	struct timeval start, stop, send, now;
+	K_ITEM *sitem, *witem;
+	double wait, delay;
+	int chip, band;
 
 	applog(LOG_DEBUG, "%s%i: SPIing...",
 			  babcgpu->drv->name, babcgpu->device_id);
@@ -1262,51 +1269,92 @@ static void *bab_spi(void *userdata)
 		cgsleep_ms(3);
 	}
 
-	msgs = 0;
 	cgtime(&start);
 	while (babcgpu->shutdown == false) {
-		buf = -1;
-		mutex_lock(&(babinfo->spi_lock));
-		for (i = 0; i < BAB_SPI_BUFFERS; i++) {
-			if (babinfo->buf_status[i] == BAB_STATE_READY) {
-				babinfo->buf_status[i] = BAB_STATE_SENDING;
-				buf = i;
-				cgtime(&start);
-				break;
-			}
-		}
-		mutex_unlock(&(babinfo->spi_lock));
+		K_WLOCK(babinfo->spi_list);
+		sitem = k_unlink_tail(babinfo->spi_list);
+		K_WUNLOCK(babinfo->spi_list);
 
-		if (buf == -1) {
+		if (!sitem) {
 			cgtime(&stop);
 			wait = us_tdiff(&stop, &start);
-			if (wait > BAB_LONG_WAIT_uS) {
-				if ((msgs++ % BAB_WAIT_MSG_EVERY) == 0) {
-					applog(LOG_WARNING, "%s%i: SPI waiting %.0fus ...",
-								babcgpu->drv->name,
-								babcgpu->device_id,
-								(float)wait);
-				}
-			}
-			cgsleep_us(BAB_LONG_WAIT_SLEEP_uS);
+			if (wait > BAB_LONG_uS) {
+				applog(LOG_WARNING, "%s%i: SPI waiting %fs ...",
+							babcgpu->drv->name,
+							babcgpu->device_id,
+							(float)wait / 1000000.0);
+				cgsem_mswait(&(babinfo->spi_work), BAB_LONG_WAIT_mS);
+			} else
+				cgsem_mswait(&(babinfo->spi_work), (int)((BAB_LONG_uS - wait) / 1000));
 			continue;
 		}
 
-		bab_txrx(buf, babinfo->buf_used[buf], false);
-		cgtime(&stop);
-		wait = us_tdiff(&stop, &start);
-		if (wait < BAB_STD_WAIT_uS)
-			cgsleep_us((uint64_t)(BAB_STD_WAIT_uS - wait));
-		else if (wait > BAB_LONG_WAIT_uS) {
-			applog(LOG_DEBUG, "%s%i: SPI waited %.0fus",
-					  babcgpu->drv->name, babcgpu->device_id,
-					  (float)wait);
+		// TODO: need an LP/urgent flag to skip this possible cgsem_mswait()
+		// maybe zero last_sent_work.tv_sec ?
+		while (babinfo->last_sent_work.tv_sec) {
+			cgtime(&now);
+			delay = tdiff(&now, &(babinfo->last_sent_work)) * 1000.0;
+			if (delay < BAB_EXPECTED_WORK_DELAY_mS)
+				cgsem_mswait(&(babinfo->spi_work), BAB_EXPECTED_WORK_DELAY_mS - delay);
+			else
+				break;
 		}
 
-		mutex_lock(&(babinfo->spi_lock));
-		babinfo->buf_status[i] = BAB_STATE_SENT;
-		mutex_unlock(&(babinfo->spi_lock));
-		msgs = 0;
+		/*
+		 * TODO: handle if an LP happened after bab_do_work() started
+		 * i.e. we don't want to send the work
+		 * Have an LP counter that at this point would show the work
+		 * is stale - so don't send it
+		 */
+		cgtime(&send);
+		bab_txrx(sitem, false);
+		cgtime(&start);
+
+		// The work isn't added to the chip until it has been sent
+		K_WLOCK(babinfo->wfree_list);
+		for (chip = 0; chip < babinfo->chips; chip++) {
+			witem = DATAS(sitem)->witems[chip];
+			if (witem) {
+				memcpy(&(DATAW(witem)->work_start), &(DATAS(sitem)->work_start),
+					sizeof(DATAW(witem)->work_start));
+				k_add_head(babinfo->chip_work[chip], witem);
+			}
+		}
+		K_WUNLOCK(babinfo->wfree_list);
+
+		K_WLOCK(babinfo->spi_sent);
+		k_add_head(babinfo->spi_sent, sitem);
+		K_WUNLOCK(babinfo->spi_sent);
+
+		cgsem_post(&(babinfo->spi_reply));
+
+		// Store stats
+		if (babinfo->last_sent_work.tv_sec) {
+			delay = tdiff(&send, &(babinfo->last_sent_work));
+			babinfo->delay_count++;
+			if (babinfo->delay_min == 0 || babinfo->delay_min > delay)
+				babinfo->delay_min = delay;
+			if (babinfo->delay_max < delay)
+				babinfo->delay_max = delay;
+			if (delay < BAB_DELAY_BASE)
+				band = 0;
+			else if (delay >= (BAB_DELAY_BASE+BAB_DELAY_STEP*(BAB_DELAY_BANDS+1)))
+				band = BAB_DELAY_BANDS+1;
+			else
+				band = (int)(((double)delay - BAB_DELAY_BASE) / BAB_DELAY_STEP) + 1;
+			babinfo->delay_bands[band]++;
+		}
+		memcpy(&(babinfo->last_sent_work), &send, sizeof(start));
+
+		delay = tdiff(&start, &send);
+		babinfo->send_count++;
+		babinfo->send_total += delay;
+		if (babinfo->send_min == 0 || babinfo->send_min > delay)
+			babinfo->send_min = delay;
+		if (babinfo->send_max < delay)
+			babinfo->send_max = delay;
+
+		cgsem_mswait(&(babinfo->spi_work), BAB_STD_WAIT_mS);
 	}
 
 	return NULL;
@@ -1320,8 +1368,10 @@ static void bab_flush_work(struct cgpu_info *babcgpu)
 			  babcgpu->drv->name, babcgpu->device_id);
 
 	mutex_lock(&(babinfo->did_lock));
-	memset(&(babinfo->last_did), 0, sizeof(babinfo->last_did));
+	babinfo->last_did.tv_sec = 0;
 	mutex_unlock(&(babinfo->did_lock));
+
+	cgsem_post(&(babinfo->scan_work));
 }
 
 #define DATA_MERKLE7 16
@@ -1334,84 +1384,220 @@ static void bab_flush_work(struct cgpu_info *babcgpu)
 #define WORK_BITS (18*4)
 #define WORK_NONCE (19*4)
 
+#define UPDATE_HISTORY 1
+
+#if UPDATE_HISTORY
+static void process_history(struct bab_info *babinfo, int chip, struct timeval *when, bool good, struct timeval *now)
+{
+	K_ITEM *item;
+	double diff;
+	int i;
+
+	K_WLOCK(babinfo->nfree_list);
+	item = k_unlink_head(babinfo->nfree_list);
+	memcpy(&(DATAN(item)->found), when, sizeof(*when));
+	if (good)
+		k_add_head(babinfo->good_nonces[chip], item);
+	else
+		k_add_head(babinfo->bad_nonces[chip], item);
+
+	// Remove all expired history
+	for (i = 0; i < babinfo->chips; i++) {
+		item = babinfo->good_nonces[i]->tail;
+		while (item) {
+			diff = tdiff(now, &(DATAN(item)->found));
+			if (diff < HISTORY_TIME_S)
+				break;
+
+			k_unlink_item(babinfo->good_nonces[i], item);
+			k_add_head(babinfo->nfree_list, item);
+
+			item = babinfo->good_nonces[i]->tail;
+		}
+
+		item = babinfo->bad_nonces[i]->tail;
+		while (item) {
+			diff = tdiff(now, &(DATAN(item)->found));
+			if (diff < HISTORY_TIME_S)
+				break;
+
+			k_unlink_item(babinfo->bad_nonces[i], item);
+			k_add_head(babinfo->nfree_list, item);
+
+			item = babinfo->bad_nonces[i]->tail;
+		}
+	}
+	K_WUNLOCK(babinfo->nfree_list);
+}
+#endif
+
 /*
- * Find the matching work item by checking the nonce against each work
- * item for the chip
- * Discard any work items older than a match
+ * Find the matching work item by checking each nonce against
+ * work items for the nonces chip
  */
-static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, uint32_t nonce)
+static K_ITEM *process_nonce(struct thr_info *thr, struct cgpu_info *babcgpu, K_ITEM *ritem, uint32_t raw_nonce, K_ITEM *newest_witem)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	BLIST *bitem;
-	unsigned int links, tests;
-	int i;
+	unsigned int links, proc_links, work_links, tests;
+	int try_sta, try_fin, offset;
+	K_ITEM *witem, *wtail;
+	struct timeval now;
+	bool not_first_reply;
+	uint32_t nonce;
+	int chip;
+
+	chip = DATAR(ritem)->chip;
+	not_first_reply = DATAR(ritem)->not_first_reply;
 
 	babinfo->chip_nonces[chip]++;
 
-	nonce = decnonce(nonce);
-
 	/*
-	 * We can grab the head of the chip work queue and then
-	 * release the lock and follow it to the end
-	 * since the other thread will only add items above the
-	 * head - it wont touch the list->next pointers from the
-	 * head to the end - only the head->prev pointer may get
-	 * changed
+	 * We can grab the head of the chip work queue and then release
+	 * the lock and follow it to the end and back, since the other
+	 * thread will only add items above the head - it wont touch
+	 * any of the prev/next pointers from the head to the end -
+	 * except the head->prev pointer may get changed
 	 */
-	cg_rlock(&babinfo->blist_lock);
-	bitem = babinfo->chip_list[chip];
-	cg_runlock(&babinfo->blist_lock);
+	K_RLOCK(babinfo->chip_work[chip]);
+	witem = babinfo->chip_work[chip]->head;
+	K_RUNLOCK(babinfo->chip_work[chip]);
 
-	if (!bitem) {
-		applog(LOG_ERR, "%s%i: chip %d has no work!",
+	if (!witem) {
+		applog(LOG_ERR, "%s%i: chip %d has no work, 1 nonce discarded!",
 				babcgpu->drv->name, babcgpu->device_id, chip);
 		babinfo->untested_nonces++;
-		return false;
+		return newest_witem;
 	}
 
 	babinfo->tested_nonces++;
 
-	tests = 0;
-	links = 0;
-	while (bitem) {
-		if (!bitem->work) {
-			applog(LOG_ERR, "%s%i: chip %d bitem links %d has no work!",
+	if ((raw_nonce & 0xff) < 0x1c) {
+		// Will only be this offset
+		try_sta = BAB_OFF_0x1C_STA;
+		try_fin = BAB_OFF_0x1C_FIN;
+	} else {
+		// Will only be one of the other offsets
+		try_sta = BAB_OFF_OTHER_STA;
+		try_fin = BAB_OFF_OTHER_FIN;
+	}
+
+	nonce = decnonce(raw_nonce);
+
+	cgtime(&now);
+
+	tests = links = proc_links = work_links = 0;
+	wtail = witem;
+	while (wtail && wtail->next) {
+		work_links++;
+		wtail = wtail->next;
+	}
+	while (wtail) {
+		if (!(DATAW(wtail)->work)) {
+			applog(LOG_ERR, "%s%i: chip %d witem links %d has no work!",
 					babcgpu->drv->name,
 					babcgpu->device_id,
 					chip, links);
 		} else {
-			for (i = 0; i < BAB_NONCE_OFFSETS; i++) {
-				tests++;
-				if (test_nonce(bitem->work, nonce + bab_nonce_offsets[i])) {
-					submit_tested_work(thr, bitem->work);
-					babinfo->nonce_offset_count[i]++;
-					babinfo->chip_good[chip]++;
-					bitem->nonces++;
-					babinfo->new_nonces++;
-					babinfo->ok_nonces++;
-					free_blist(babcgpu, bitem->next, chip);
-					babinfo->total_tests += tests;
-					if (babinfo->max_tests_per_nonce < tests)
-						babinfo->max_tests_per_nonce = tests;
-					babinfo->total_links += links;
-					if (babinfo->max_links < links)
-						babinfo->max_links = links;
-					return true;
+			if (ms_tdiff(&now, &(DATAW(wtail)->work_start)) >= BAB_WORK_EXPIRE_mS)
+				proc_links--;
+			else {
+				for (offset = try_sta; offset <= try_fin; offset++) {
+					tests++;
+					if (test_nonce(DATAW(wtail)->work, nonce + bab_nonce_offsets[offset])) {
+						submit_tested_work(thr, DATAW(wtail)->work);
+						babinfo->nonce_offset_count[offset]++;
+						babinfo->chip_good[chip]++;
+						DATAW(wtail)->nonces++;
+
+						mutex_lock(&(babinfo->nonce_lock));
+						babinfo->new_nonces++;
+						mutex_unlock(&(babinfo->nonce_lock));
+
+						babinfo->ok_nonces++;
+						babinfo->total_tests += tests;
+						if (babinfo->max_tests_per_nonce < tests)
+							babinfo->max_tests_per_nonce = tests;
+						babinfo->total_links += links;
+						babinfo->total_proc_links += proc_links;
+						if (babinfo->max_links < links)
+							babinfo->max_links = links;
+						if (babinfo->max_proc_links < proc_links)
+							babinfo->max_proc_links = proc_links;
+						babinfo->total_work_links += work_links;
+
+						babinfo->chip_cont_bad[chip] = 0;
+#if UPDATE_HISTORY
+						process_history(babinfo, chip,
+								&(DATAR(ritem)->when),
+								true, &now);
+#endif
+
+						if (newest_witem == NULL ||
+						    ms_tdiff(&(DATAW(wtail)->work_start),
+							&(DATAW(newest_witem)->work_start)) < 0)
+								return wtail;
+
+						return newest_witem;
+					}
 				}
 			}
 		}
-		bitem = bitem->next;
+		if (wtail == witem)
+			break;
+		wtail = wtail->prev;
 		links++;
+		proc_links++;
 	}
 
-	if (babinfo->not_first_reply[chip]) {
+	if (not_first_reply) {
 		babinfo->chip_bad[chip]++;
 		inc_hw_errors(thr);
-	} else
-		babinfo->initial_ignored++;
 
-	return false;
+		babinfo->fail++;
+		babinfo->fail_total_tests += tests;
+		babinfo->fail_total_links += links;
+		babinfo->fail_total_work_links += work_links;
+
+		babinfo->chip_cont_bad[chip]++;
+		if (babinfo->chip_max_bad[chip] < babinfo->chip_cont_bad[chip])
+			babinfo->chip_max_bad[chip] = babinfo->chip_cont_bad[chip];
+
+#if UPDATE_HISTORY
+		process_history(babinfo, chip, &(DATAR(ritem)->when), false, &now);
+#endif
+	} else {
+		babinfo->initial_ignored++;
+		babinfo->ign_total_tests += tests;
+		babinfo->ign_total_links += links;
+		babinfo->ign_total_work_links += work_links;
+	}
+
+	return newest_witem;
 }
+
+/*
+ * On completion discard any work items older than BAB_WORK_EXPIRE_mS
+ * and any work items of the chip older than the work of the newest nonce work item
+ */
+static void oknonces(struct thr_info *thr, struct cgpu_info *babcgpu, K_ITEM *ritem)
+{
+	uint32_t raw_nonce;
+	K_ITEM *witem;
+	int nonces;
+
+	witem = NULL;
+
+	for (nonces = 0; nonces < DATAR(ritem)->nonces; nonces++) {
+		raw_nonce = DATAR(ritem)->nonce[nonces];
+
+		witem = process_nonce(thr, babcgpu, ritem, raw_nonce, witem);
+	}
+
+	cleanup_older(babcgpu, DATAR(ritem)->chip, witem);
+}
+
+// Check at least every ...
+#define BAB_RESULT_DELAY_mS 999
 
 // Results checking thread
 static void *bab_res(void *userdata)
@@ -1419,9 +1605,7 @@ static void *bab_res(void *userdata)
 	struct cgpu_info *babcgpu = (struct cgpu_info *)userdata;
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	struct thr_info *thr = babcgpu->thr[0];
-	bool first_second;
-	uint32_t nonce;
-	int chip;
+	K_ITEM *ritem;
 
 	applog(LOG_DEBUG, "%s%i: Results...",
 			  babcgpu->drv->name, babcgpu->device_id);
@@ -1434,59 +1618,109 @@ static void *bab_res(void *userdata)
 		cgsleep_ms(3);
 	}
 
+	ritem = NULL;
 	while (babcgpu->shutdown == false) {
-		if (!oldest_nonce(babcgpu, &chip, &nonce, &first_second)) {
-			cgsleep_ms(3);
+		K_WLOCK(babinfo->res_list);
+		if (ritem) {
+			// Release the old one
+			k_add_head(babinfo->rfree_list, ritem);
+			ritem = NULL;
+		}
+		// Check for a new one
+		ritem = k_unlink_tail(babinfo->res_list);
+		K_WUNLOCK(babinfo->res_list);
+
+		if (!ritem) {
+			cgsem_mswait(&(babinfo->process_reply), BAB_RESULT_DELAY_mS);
 			continue;
 		}
 
-		if (first_second)
-			babinfo->not_first_reply[chip] = true;
-
-		oknonce(thr, babcgpu, chip, nonce);
+		oknonces(thr, babcgpu, ritem);
 	}
 
 	return NULL;
 }
 
+/*
+ * 1.0s per nonce = 4.2GH/s
+ * 0.9s per nonce = 4.8GH/s
+ * On a slow machine, reducing this may resolve:
+ *  BaB0: SPI waiting 1.2...s
+ */
+#define BAB_STD_WORK_DELAY_uS 900000
+
 static bool bab_do_work(struct cgpu_info *babcgpu)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	int busy, newbusy, match, work_items = 0;
-	int spi, mis, miso;
-	int i, j;
-	BLIST *bitem;
-	bool res, got_a_nonce;
+	int work_items = 0;
+	K_ITEM *witem, *sitem, *ritem;
+	struct timeval when, now;
+	double delay;
+	int chip, rep, j, nonces;
+	uint32_t nonce;
+	bool res;
 
-	for (i = 0; i < babinfo->chips; i++) {
-		bitem = next_work(babcgpu, i);
-		if (!bitem) {
-			applog(LOG_ERR, "%s%i: short work list (%i) expected %d - discarded",
+	cgtime(&now);
+	mutex_lock(&(babinfo->did_lock));
+	delay = us_tdiff(&now, &(babinfo->last_did));
+	mutex_unlock(&(babinfo->did_lock));
+	if (delay < BAB_STD_WORK_DELAY_uS)
+		return false;
+
+	K_WLOCK(babinfo->sfree_list);
+	sitem = k_unlink_head_zero(babinfo->sfree_list);
+	K_WUNLOCK(babinfo->sfree_list);
+
+	for (chip = 0; chip < babinfo->chips; chip++) {
+		// TODO: ignore stale work
+		K_WLOCK(babinfo->available_work);
+		witem = k_unlink_tail(babinfo->available_work);
+		K_WUNLOCK(babinfo->available_work);
+		if (!witem) {
+			applog(LOG_ERR, "%s%i: short work list (%d) expected %d - reset",
 					babcgpu->drv->name, babcgpu->device_id,
-					i, babinfo->chips);
-			for (j = 0; j < i; i++)
-				discard_last(babcgpu, j);
+					chip, babinfo->chips);
+
+			// Put them back in the order they were taken
+			K_WLOCK(babinfo->available_work);
+			for (j = chip-1; j >= 0; j--) {
+				witem = DATAS(sitem)->witems[j];
+				k_add_tail(babinfo->available_work, witem);
+			}
+			K_WUNLOCK(babinfo->available_work);
+
+			K_WLOCK(babinfo->sfree_list);
+			k_add_head(babinfo->sfree_list, sitem);
+			K_WUNLOCK(babinfo->sfree_list);
 
 			return false;
 		}
-		memcpy((void *)&(babinfo->chip_input[i].midstate[0]),
-			bitem->work->midstate, sizeof(bitem->work->midstate));
-		memcpy((void *)&(babinfo->chip_input[i].merkle7),
-			(void *)&(bitem->work->data[WORK_MERKLE7]), 12);
 
-		ms3steps((void *)&(babinfo->chip_input[i]));
+		/*
+		 * TODO: do this when we get work except on LP?
+		 * (not LP so we only do ms3steps for work required)
+		 * Though that may more likely trigger the applog(short work list) above?
+		 */
+		if (DATAW(witem)->ci_setup == false) {
+			memcpy((void *)&(DATAW(witem)->chip_input.midstate[0]),
+				DATAW(witem)->work->midstate, sizeof(DATAW(witem)->work->midstate));
+			memcpy((void *)&(DATAW(witem)->chip_input.merkle7),
+				(void *)&(DATAW(witem)->work->data[WORK_MERKLE7]), MERKLE_BYTES);
+
+			ms3steps((void *)&(DATAW(witem)->chip_input));
+
+			DATAW(witem)->ci_setup = true;
+		}
+
+		DATAS(sitem)->witems[chip] = witem;
 		work_items++;
 	}
 
 	// Send
-	res = bab_put(babcgpu, babinfo);
-	if (!res) {
-		applog(LOG_DEBUG, "%s%i: couldn't put work ...",
-				  babcgpu->drv->name, babcgpu->device_id);
-	}
+	bab_put(babinfo, sitem);
 
 	// Receive
-	res = bab_get(babcgpu, babinfo);
+	res = bab_get(babcgpu, babinfo, &when);
 	if (!res) {
 		applog(LOG_DEBUG, "%s%i: didn't get work reply ...",
 				  babcgpu->drv->name, babcgpu->device_id);
@@ -1496,79 +1730,46 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 	applog(LOG_DEBUG, "%s%i: Did get work reply ...",
 			  babcgpu->drv->name, babcgpu->device_id);
 
-	spi = mis = miso = 0;
+	for (chip = 0; chip < babinfo->chips; chip++) {
+		K_WLOCK(babinfo->rfree_list);
+		ritem = k_unlink_head(babinfo->rfree_list);
+		K_WUNLOCK(babinfo->rfree_list);
 
-	for (i = 0; i < babinfo->chips; i++) {
-		match = 0;
-		newbusy = busy = babinfo->chip_busy[i];
+		DATAR(ritem)->chip = chip;
+		DATAR(ritem)->not_first_reply = babinfo->not_first_reply[chip];
+		memcpy(&(DATAR(ritem)->when), &when, sizeof(when));
 
-		if (!babinfo->chip_conf[i])
-			continue;
-
-		for (j = 1; j < BAB_REPLY_NONCES; j++) {
-			if (babinfo->chip_results[i].nonce[(busy+j) % BAB_REPLY_NONCES] !=
-			    babinfo->chip_prev[i].nonce[(busy+j) % BAB_REPLY_NONCES])
-				newbusy = (busy+j) % BAB_REPLY_NONCES;
-			else
-				match++;
-		}
-
-		if (!match) {
-			if (!miso) {
-				mis++;
-// ignore for now ...				babinfo->chip_miso[i]++;
+		nonces = 0;
+		for (rep = 0; rep < BAB_REPLY_NONCES; rep++) {
+			nonce = babinfo->chip_results[chip].nonce[rep];
+			if (nonce != babinfo->chip_prev[chip].nonce[rep]) {
+				if ((nonce & BAB_EVIL_MASK) == BAB_EVIL_NONCE)
+					babinfo->discarded_e0s++;
+				else
+					DATAR(ritem)->nonce[nonces++] = nonce;
 			}
-			miso = 1;
-			continue;
-		}
-
-		miso = 0;
-		if (babinfo->chip_results[i].jobsel != 0xffffffff &&
-		    babinfo->chip_results[i].jobsel != 0x00000000) {
-			spi++;
-			babinfo->chip_spie[i]++;
-			applog(LOG_DEBUG, "%s%i: SPI ERROR on chip %d (0x%08x)",
-					  babcgpu->drv->name, babcgpu->device_id,
-					  i, babinfo->chip_results[i].jobsel);
-		}
-
-// Not used yet
-//		if (babinfo->chip_results[i].jobsel != babinfo->chip_prev[i].jobsel) {
-
-		got_a_nonce = false;
-		for (; newbusy != busy; busy = (busy + 1) % BAB_REPLY_NONCES) {
-			if (babinfo->chip_results[i].nonce[busy] == 0xffffffff ||
-			    babinfo->chip_results[i].nonce[busy] == 0x00000000) {
-				babinfo->chip_results[i].nonce[busy] = babinfo->chip_prev[i].nonce[busy];
-				spi = 1;
-				continue;
-			}
-
-			store_nonce(babcgpu, i,
-				    babinfo->chip_results[i].nonce[busy],
-				    babinfo->nonce_before[i]);
-
-			got_a_nonce = true;
 		}
 
 		/*
-		 * We only care about this after the first reply we find a nonce
-		 * After that, the value has no more effect
+		 * Send even with zero nonces
+		 * so cleanup_older() is called for the chip
 		 */
-		if (got_a_nonce)
-			babinfo->nonce_before[i] = true;
+		DATAR(ritem)->nonces = nonces;
+		K_WLOCK(babinfo->res_list);
+		k_add_head(babinfo->res_list, ritem);
+		K_WUNLOCK(babinfo->res_list);
 
-		mis += miso;
-		babinfo->chip_miso[i] += miso;
-		babinfo->chip_busy[i] = busy;
+		cgsem_post(&(babinfo->process_reply));
+
+		babinfo->not_first_reply[chip] = true;
+
+		memcpy((void *)(&(babinfo->chip_prev[chip])),
+			(void *)(&(babinfo->chip_results[chip])),
+			sizeof(struct bab_work_reply));
+
 	}
 
-	memcpy((void *)(&(babinfo->chip_prev[0])),
-		(void *)(&(babinfo->chip_results[0])),
-		sizeof(babinfo->chip_prev));
-
-	applog(LOG_DEBUG, "Work: items:%d spi:%d miso:%d",
-			  work_items, spi, mis);
+	applog(LOG_DEBUG, "Work: items:%d", work_items);
 
 	return true;
 }
@@ -1620,17 +1821,27 @@ static bool bab_queue_full(struct cgpu_info *babcgpu)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	struct work *work;
+	K_ITEM *item;
+	int count;
 	bool ret;
 
-	if (babinfo->work_count >= babinfo->chips)
+	K_RLOCK(babinfo->available_work);
+	count = babinfo->available_work->count;
+	K_RUNLOCK(babinfo->available_work);
+
+	if (count >= babinfo->chips)
 		ret = true;
 	else {
 		work = get_queued(babcgpu);
-		if (work)
-			store_work(babcgpu, work);
-		else
+		if (work) {
+			K_WLOCK(babinfo->wfree_list);
+			item = k_unlink_head_zero(babinfo->wfree_list);
+			DATAW(item)->work = work;
+			k_add_head(babinfo->available_work, item);
+			K_WUNLOCK(babinfo->wfree_list);
+		} else
 			// Avoid a hard loop when we can't get work fast enough
-			cgsleep_ms(10);
+			cgsleep_us(42);
 
 		ret = false;
 	}
@@ -1638,45 +1849,35 @@ static bool bab_queue_full(struct cgpu_info *babcgpu)
 	return ret;
 }
 
-/*
- * 1.0s per nonce = 4.2GH/s
- * So anything around 4GH/s or less per chip should be fine
- */
-#define BAB_STD_WORK_uS 1000000
-
-#define BAB_STD_DELAY_uS 30000
+#define BAB_STD_DELAY_mS 100
 
 /*
  * TODO: allow this to run through more than once - the second+
  * time not sending any new work unless a flush occurs since:
- * at the moment we have BAB_STD_WORK_uS latency added to earliest replies
+ * at the moment we have BAB_STD_WORK_mS latency added to earliest replies
  */
 static int64_t bab_scanwork(__maybe_unused struct thr_info *thr)
 {
 	struct cgpu_info *babcgpu = thr->cgpu;
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	int64_t hashcount = 0;
-	struct timeval now;
-	double delay;
+	int count;
 
 	bab_do_work(babcgpu);
 
-	// Sleep now so we get the work "bab_queue_full()" just before we use it
-	while (80085) {
-		cgtime(&now);
-		mutex_lock(&(babinfo->did_lock));
-		delay = us_tdiff(&now, &(babinfo->last_did));
-		mutex_unlock(&(babinfo->did_lock));
-		if (delay < (BAB_STD_WORK_uS - BAB_STD_DELAY_uS))
-			cgsleep_us(BAB_STD_DELAY_uS);
-		else
-			break;
-	}
+	K_RLOCK(babinfo->available_work);
+	count = babinfo->available_work->count;
+	K_RUNLOCK(babinfo->available_work);
 
+	if (count >= babinfo->chips)
+		cgsem_mswait(&(babinfo->scan_work), BAB_STD_DELAY_mS);
+
+	mutex_lock(&(babinfo->nonce_lock));
 	if (babinfo->new_nonces) {
 		hashcount += 0xffffffffull * babinfo->new_nonces;
 		babinfo->new_nonces = 0;
 	}
+	mutex_unlock(&(babinfo->nonce_lock));
 
 	return hashcount;
 }
@@ -1686,16 +1887,87 @@ static int64_t bab_scanwork(__maybe_unused struct thr_info *thr)
 static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
+	uint64_t history_good[BAB_MAXCHIPS], history_bad[BAB_MAXCHIPS];
+	double history_elapsed[BAB_MAXCHIPS], diff;
+	bool elapsed_is_good[BAB_MAXCHIPS];
+	int speeds[BAB_CHIP_SPEEDS];
 	struct api_data *root = NULL;
 	char data[2048];
 	char buf[32];
-	int i, to, j;
+	int spi_work, chip_work, i, to, j, sp, bank, chip_off;
+	struct timeval now;
+	double elapsed, ghs;
+	float ghs_sum, ghs_tot;
+	float tot, hw;
+	K_ITEM *item;
 
 	if (babinfo->initialised == false)
 		return NULL;
 
-	root = api_add_int(root, "Chips", &(babinfo->chips), true);
+	memset(&speeds, 0, sizeof(speeds));
 
+	root = api_add_int(root, "Version", &(babinfo->version), true);
+	root = api_add_int(root, "Chips", &(babinfo->chips), true);
+	root = api_add_int(root, "Boards", &(babinfo->boards), true);
+	root = api_add_int(root, "Banks", &(babinfo->banks), true);
+
+	data[0] = '\0';
+	for (i = 0; i <= BAB_MAXBANKS; i++) {
+		snprintf(buf, sizeof(buf), "%s%d",
+					   (i == 0) ? "" : " ",
+					   babinfo->chips_per_bank[i]);
+		strcat(data, buf);
+	}
+	root = api_add_string(root, "Chips Per Bank", data, true);
+
+	data[0] = '\0';
+	for (i = 0; i <= BAB_MAXBANKS; i++) {
+		snprintf(buf, sizeof(buf), "%s%d",
+					   (i == 0) ? "" : " ",
+					   babinfo->missing_chips_per_bank[i]);
+		strcat(data, buf);
+	}
+	root = api_add_string(root, "Missing Chips Per Bank", data, true);
+
+	cgtime(&now);
+	elapsed = tdiff(&now, &(babcgpu->dev_start_tv));
+
+	root = api_add_elapsed(root, "Device Elapsed", &elapsed, true);
+
+	root = api_add_string(root, "History Enabled",
+#if UPDATE_HISTORY
+				"true",
+#else
+				"false",
+#endif
+				true);
+
+	int chs = HISTORY_TIME_S;
+	root = api_add_int(root, "Chip History Limit", &chs, true);
+
+	K_RLOCK(babinfo->nfree_list);
+	for (i = 0; i < babinfo->chips; i++) {
+		item = babinfo->good_nonces[i]->tail;
+		elapsed_is_good[i] = true;
+		if (!item)
+			history_elapsed[i] = 0;
+		else
+			history_elapsed[i] = tdiff(&now, &(DATAN(item)->found));
+
+		item = babinfo->bad_nonces[i]->tail;
+		if (item) {
+			diff = tdiff(&now, &(DATAN(item)->found));
+			if (history_elapsed[i] < diff) {
+				history_elapsed[i] = diff;
+				elapsed_is_good[i] = false;
+			}
+		}
+		history_good[i] = babinfo->good_nonces[i]->count;
+		history_bad[i] = babinfo->bad_nonces[i]->count;
+	}
+	K_RUNLOCK(babinfo->nfree_list);
+
+	ghs_tot = 0;
 	for (i = 0; i < babinfo->chips; i += CHIPS_PER_STAT) {
 		to = i + CHIPS_PER_STAT - 1;
 		if (to >= babinfo->chips)
@@ -1748,47 +2020,323 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 		data[0] = '\0';
 		for (j = i; j <= to; j++) {
 			snprintf(buf, sizeof(buf),
-					"%s0x%02x",
+					"%s%d",
 					j == i ? "" : " ",
 					(int)(babinfo->chip_fast[j]));
 			strcat(data, buf);
 		}
 		snprintf(buf, sizeof(buf), "Fast %d - %d", i, to);
 		root = api_add_string(root, buf, data, true);
+
+		data[0] = '\0';
+		for (j = i; j <= to; j++) {
+			tot = (float)(babinfo->chip_good[j] + babinfo->chip_bad[j]);
+			if (tot != 0)
+				hw = 100.0 * (float)(babinfo->chip_bad[j]) / tot;
+			else
+				hw = 0;
+			snprintf(buf, sizeof(buf),
+					"%s%.3f",
+					j == i ? "" : " ", hw);
+			strcat(data, buf);
+		}
+		snprintf(buf, sizeof(buf), "HW%% %d - %d", i, to);
+		root = api_add_string(root, buf, data, true);
+
+		ghs_sum = 0;
+		data[0] = '\0';
+		for (j = i; j <= to; j++) {
+			if (elapsed > 0) {
+				ghs = (double)(babinfo->chip_good[j]) * 0xffffffffull /
+					elapsed / 1000000000.0;
+			} else
+				ghs = 0;
+
+			snprintf(buf, sizeof(buf),
+					"%s%.3f",
+					j == i ? "" : " ", ghs);
+			strcat(data, buf);
+			ghs_sum += (float)ghs;
+		}
+		snprintf(buf, sizeof(buf), "GHs %d - %d", i, to);
+		root = api_add_string(root, buf, data, true);
+
+		snprintf(buf, sizeof(buf), "Sum GHs %d - %d", i, to);
+		root = api_add_avg(root, buf, &ghs_sum, true);
+
+		data[0] = '\0';
+		for (j = i; j <= to; j++) {
+			snprintf(buf, sizeof(buf),
+					"%s%"PRIu64,
+					j == i ? "" : " ",
+					babinfo->chip_cont_bad[j]);
+			strcat(data, buf);
+		}
+		snprintf(buf, sizeof(buf), "Cont-Bad %d - %d", i, to);
+		root = api_add_string(root, buf, data, true);
+
+		data[0] = '\0';
+		for (j = i; j <= to; j++) {
+			snprintf(buf, sizeof(buf),
+					"%s%"PRIu64,
+					j == i ? "" : " ",
+					babinfo->chip_max_bad[j]);
+			strcat(data, buf);
+		}
+		snprintf(buf, sizeof(buf), "Max-Bad %d - %d", i, to);
+		root = api_add_string(root, buf, data, true);
+
+		data[0] = '\0';
+		for (j = i; j <= to; j++) {
+			snprintf(buf, sizeof(buf),
+					"%s%"PRIu64,
+					j == i ? "" : " ",
+					history_good[j]);
+			strcat(data, buf);
+		}
+		snprintf(buf, sizeof(buf), "History Good %d - %d", i, to);
+		root = api_add_string(root, buf, data, true);
+
+		data[0] = '\0';
+		for (j = i; j <= to; j++) {
+			snprintf(buf, sizeof(buf),
+					"%s%"PRIu64,
+					j == i ? "" : " ",
+					history_bad[j]);
+			strcat(data, buf);
+		}
+		snprintf(buf, sizeof(buf), "History Bad %d - %d", i, to);
+		root = api_add_string(root, buf, data, true);
+
+		data[0] = '\0';
+		for (j = i; j <= to; j++) {
+			tot = (float)(history_good[j] + history_bad[j]);
+			if (tot != 0)
+				hw = 100.0 * (float)(history_bad[j]) / tot;
+			else
+				hw = 0;
+			snprintf(buf, sizeof(buf),
+					"%s%.3f",
+					j == i ? "" : " ", hw);
+			strcat(data, buf);
+		}
+		snprintf(buf, sizeof(buf), "History HW%% %d - %d", i, to);
+		root = api_add_string(root, buf, data, true);
+
+		ghs_sum = 0;
+		data[0] = '\0';
+		for (j = i; j <= to; j++) {
+			if (history_elapsed[j] > 0) {
+				double num = history_good[j];
+				// exclude the first nonce?
+				if (elapsed_is_good[j])
+					num--;
+				ghs = num * 0xffffffffull /
+					history_elapsed[j] / 1000000000.0;
+			} else
+				ghs = 0;
+
+			snprintf(buf, sizeof(buf),
+					"%s%.3f",
+					j == i ? "" : " ", ghs);
+			strcat(data, buf);
+
+			ghs_sum += (float)ghs;
+
+			// Setup speed range data
+			for (sp = 0; sp < BAB_CHIP_SPEEDS - 1; sp++) {
+				if (ghs <= chip_speed_ranges[sp]) {
+					speeds[sp]++;
+					break;
+				}
+			}
+			if (sp >= (BAB_CHIP_SPEEDS - 1))
+				speeds[BAB_CHIP_SPEEDS - 1]++;
+		}
+		snprintf(buf, sizeof(buf), "History GHs %d - %d", i, to);
+		root = api_add_string(root, buf, data, true);
+
+		snprintf(buf, sizeof(buf), "Sum History GHs %d - %d", i, to);
+		root = api_add_avg(root, buf, &ghs_sum, true);
+
+		ghs_tot += ghs_sum;
 	}
+
+	root = api_add_avg(root, "Total History GHs", &ghs_tot, true);
+
+	for (sp = 0; sp < BAB_CHIP_SPEEDS; sp++) {
+		if (sp < (BAB_CHIP_SPEEDS - 1))
+			ghs = chip_speed_ranges[sp];
+		else
+			ghs = chip_speed_ranges[BAB_CHIP_SPEEDS - 2];
+
+		snprintf(buf, sizeof(buf), "History Speed %s%.1f %s",
+					   (sp < (BAB_CHIP_SPEEDS - 1)) ? "" : ">",
+					   ghs, chip_speed_names[sp]);
+
+		root = api_add_int(root, buf, &(speeds[sp]), true);
+	}
+
+	int len, str, siz = 1024;
+	char *tmp = malloc(siz);
+	if (!tmp)
+		quithere(1, "OOM tmp1");
+	for (sp = 0; sp < 2; sp++) {
+		tmp[0] = '\0';
+		len = 0;
+		for (i = 0; i < babinfo->chips; i++) {
+			if (history_elapsed[i] > 0) {
+				double num = history_good[i];
+				// exclude the first nonce?
+				if (elapsed_is_good[i])
+					num--;
+				ghs = num * 0xffffffffull /
+					history_elapsed[i] / 1000000000.0;
+			} else
+				ghs = 0;
+
+			if ((sp == 0 || ghs > chip_speed_ranges[sp-1]) &&
+			    (ghs <= chip_speed_ranges[sp])) {
+				bank = babinfo->chip_bank[i];
+				chip_off = i;
+				for (j = 0; j < babinfo->chip_bank[i]; j++)
+					chip_off -= babinfo->chips_per_bank[j];
+				/*
+				 * Bank/Board/Chip are all 1 based
+				 * except V1 Bank = BAB_V1_BANK (0)
+				 * If the bank has any missing chips then a "?"
+				 * is placed after the board number
+				 */
+				snprintf(buf, sizeof(buf), "%s%d/%d%s/%d",
+							   len ? " " : "", bank,
+							   (int)(chip_off / BAB_BOARDCHIPS)+1,
+							   babinfo->missing_chips_per_bank[bank] ?
+							   "?" : "",
+							   (chip_off % BAB_BOARDCHIPS)+1);
+				str = strlen(buf);
+				while ((len + str + 1) > siz) {
+					siz += 1024;
+					tmp = realloc(tmp, siz);
+					if (!tmp)
+						quithere(1, "OOM tmp2");
+				}
+				strcpy(tmp + len, buf);
+				len += str;
+			}
+		}
+		snprintf(buf, sizeof(buf), "History %s", chip_speed_names[sp]);
+
+		root = api_add_string(root, buf, len ? tmp : "None", true);
+	}
+	free(tmp);
+	tmp = NULL;
 
 	for (i = 0; i < BAB_NONCE_OFFSETS; i++) {
 		snprintf(buf, sizeof(buf), "Nonce Offset 0x%08x", bab_nonce_offsets[i]);
 		root = api_add_uint64(root, buf, &(babinfo->nonce_offset_count[i]), true);
 	}
 
+	root = api_add_uint64(root, "Discarded E0s", &(babinfo->discarded_e0s), true);
 	root = api_add_uint64(root, "Tested", &(babinfo->tested_nonces), true);
+	root = api_add_uint64(root, "OK", &(babinfo->ok_nonces), true);
 	root = api_add_uint64(root, "Total Tests", &(babinfo->total_tests), true);
 	root = api_add_uint64(root, "Max Tests", &(babinfo->max_tests_per_nonce), true);
-	float avg = babinfo->tested_nonces ? (float)(babinfo->total_tests) /
-					     (float)(babinfo->tested_nonces) : 0;
-// TODO: add a API_AVG which is 3 places - double/float?
-	root = api_add_volts(root, "Avg Tests", &avg, true);
+	float avg = babinfo->ok_nonces ? (float)(babinfo->total_tests) /
+					     (float)(babinfo->ok_nonces) : 0;
+	root = api_add_avg(root, "Avg Tests", &avg, true);
 	root = api_add_uint64(root, "Untested", &(babinfo->untested_nonces), true);
 
 	root = api_add_uint64(root, "Work Links", &(babinfo->total_links), true);
+	root = api_add_uint64(root, "Work Processed Links", &(babinfo->total_proc_links), true);
 	root = api_add_uint64(root, "Max Links", &(babinfo->max_links), true);
-	avg = babinfo->tested_nonces ? (float)(babinfo->total_links) /
-					(float)(babinfo->tested_nonces) : 0;
-	root = api_add_volts(root, "Avg Links", &avg, true);
+	root = api_add_uint64(root, "Max Processed Links", &(babinfo->max_proc_links), true);
+	root = api_add_uint64(root, "Total Work Links", &(babinfo->total_work_links), true);
+	avg = babinfo->ok_nonces ? (float)(babinfo->total_links) /
+					(float)(babinfo->ok_nonces) : 0;
+	root = api_add_avg(root, "Avg Links", &avg, true);
+	avg = babinfo->ok_nonces ? (float)(babinfo->total_proc_links) /
+					(float)(babinfo->ok_nonces) : 0;
+	root = api_add_avg(root, "Avg Proc Links", &avg, true);
+	avg = babinfo->ok_nonces ? (float)(babinfo->total_work_links) /
+					(float)(babinfo->ok_nonces) : 0;
+	root = api_add_avg(root, "Avg Work Links", &avg, true);
+
+	root = api_add_uint64(root, "Fail", &(babinfo->fail), true);
+	root = api_add_uint64(root, "Fail Total Tests", &(babinfo->fail_total_tests), true);
+	avg = babinfo->fail ? (float)(babinfo->fail_total_tests) /
+					(float)(babinfo->fail) : 0;
+	root = api_add_avg(root, "Fail Avg Tests", &avg, true);
+	root = api_add_uint64(root, "Fail Work Links", &(babinfo->fail_total_links), true);
+	root = api_add_uint64(root, "Fail Total Work Links", &(babinfo->fail_total_work_links), true);
 
 	root = api_add_uint32(root, "Initial Ignored", &(babinfo->initial_ignored), true);
+	root = api_add_uint64(root, "Ign Total Tests", &(babinfo->ign_total_tests), true);
+	root = api_add_uint64(root, "Ign Work Links", &(babinfo->ign_total_links), true);
+	root = api_add_uint64(root, "Ign Total Work Links", &(babinfo->ign_total_work_links), true);
 
-	root = api_add_int(root, "BList Count", &(babinfo->blist_count), true);
-	root = api_add_int(root, "BFree Count", &(babinfo->bfree_count), true);
-	root = api_add_int(root, "Work Count", &(babinfo->work_count), true);
-	root = api_add_int(root, "Chip Count", &(babinfo->chip_count), true);
+	chip_work = 0;
+	for (i = 0; i < babinfo->chips; i++)
+		chip_work += babinfo->chip_work[i]->count;
+	spi_work = babinfo->spi_list->count * babinfo->chips;
 
-	root = api_add_int(root, "RList Count", &(babinfo->rlist_count), true);
-	root = api_add_int(root, "RFree Count", &(babinfo->rfree_count), true);
-	root = api_add_int(root, "Result Count", &(babinfo->res_count), true);
+	root = api_add_int(root, "WFree Total", &(babinfo->wfree_list->total), true);
+	root = api_add_int(root, "WFree Count", &(babinfo->wfree_list->count), true);
+	root = api_add_int(root, "Available Work", &(babinfo->available_work->count), true);
+	root = api_add_int(root, "SPI Work", &spi_work, true);
+	root = api_add_int(root, "Chip Work", &chip_work, true);
+
+	root = api_add_int(root, "SFree Total", &(babinfo->sfree_list->total), true);
+	root = api_add_int(root, "SFree Count", &(babinfo->sfree_list->count), true);
+	root = api_add_int(root, "SPI Waiting", &(babinfo->spi_list->count), true);
+	root = api_add_int(root, "SPI Sent", &(babinfo->spi_sent->count), true);
+
+	root = api_add_int(root, "RFree Total", &(babinfo->rfree_list->total), true);
+	root = api_add_int(root, "RFree Count", &(babinfo->rfree_list->count), true);
+	root = api_add_int(root, "Result Count", &(babinfo->res_list->count), true);
+
+	int used = babinfo->nfree_list->total - babinfo->nfree_list->count;
+	root = api_add_int(root, "NFree Total", &(babinfo->nfree_list->total), true);
+	root = api_add_int(root, "NFree Used", &used, true);
+
+	root = api_add_uint64(root, "Delay Count", &(babinfo->delay_count), true);
+	root = api_add_double(root, "Delay Min", &(babinfo->delay_min), true);
+	root = api_add_double(root, "Delay Max", &(babinfo->delay_max), true);
+
+	data[0] = '\0';
+	for (i = 0; i <= BAB_DELAY_BANDS; i++) {
+		snprintf(buf, sizeof(buf),
+				"%s<%.1f=%"PRIu64,
+				i == 0 ? "" : " ",
+				BAB_DELAY_BASE+(BAB_DELAY_STEP*i),
+				babinfo->delay_bands[i]);
+		strcat(data, buf);
+	}
+	snprintf(buf, sizeof(buf),
+			" >=%.1f=%"PRIu64,
+			BAB_DELAY_BASE+BAB_DELAY_STEP*(BAB_DELAY_BANDS+1),
+			babinfo->delay_bands[BAB_DELAY_BANDS+1]);
+	strcat(data, buf);
+	root = api_add_string(root, "Delay Bands", data, true);
+
+	root = api_add_uint64(root, "Send Count", &(babinfo->send_count), true);
+	root = api_add_double(root, "Send Total", &(babinfo->send_total), true);
+	avg = babinfo->send_count ? (float)(babinfo->send_total) /
+					(float)(babinfo->send_count) : 0;
+	root = api_add_avg(root, "Send Avg", &avg, true);
+	root = api_add_double(root, "Send Min", &(babinfo->send_min), true);
+	root = api_add_double(root, "Send Max", &(babinfo->send_max), true);
 
 	return root;
+}
+
+static void bab_get_statline_before(char *buf, size_t bufsiz, struct cgpu_info *babcgpu)
+{
+	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
+
+	tailsprintf(buf, bufsiz, "B:%d B:%02d C:%03d | ",
+				 babinfo->banks,
+				 babinfo->boards,
+				 babinfo->chips);
 }
 #endif
 
@@ -1799,7 +2347,7 @@ struct device_drv bab_drv = {
 	.drv_detect = bab_detect,
 #ifdef LINUX
 	.get_api_stats = bab_api_stats,
-//TODO:	.get_statline_before = get_bab_statline_before,
+	.get_statline_before = bab_get_statline_before,
 	.identify_device = bab_identify,
 	.thread_prepare = bab_thread_prepare,
 	.hash_work = hash_queued_work,
