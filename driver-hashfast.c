@@ -266,7 +266,7 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	hu->crc8 = hfa_crc8((uint8_t *)hu);
 	applog(LOG_INFO, "HFA%d: Sending OP_USB_INIT with GWQ protocol specified",
 	       hashfast->device_id);
-
+resend:
 	if (!hfa_send_packet(hashfast, (struct hf_header *)hu, HF_USB_CMD(OP_USB_INIT)))
 		return false;
 
@@ -274,12 +274,14 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	// We extend the normal timeout - a complete device initialization, including
 	// bringing power supplies up from standby, etc., can take over a second.
 tryagain:
-	for (i = 0; i < 30; i++) {
+	for (i = 0; i < 10; i++) {
 		ret = hfa_get_header(hashfast, h, &hcrc);
 		if (ret)
 			break;
 	}
 	if (!ret) {
+		if (retries++ < 3)
+			goto resend;
 		applog(LOG_WARNING, "HFA %d: OP_USB_INIT failed!", hashfast->device_id);
 		return false;
 	}
