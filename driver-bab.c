@@ -243,6 +243,7 @@ struct bab_work_send {
 struct bab_work_reply {
 	uint32_t nonce[BAB_REPLY_NONCES];
 	uint32_t jobsel;
+	uint32_t spichk;
 };
 
 #define BAB_CHIP_MIN (sizeof(struct bab_work_reply)+16)
@@ -1656,8 +1657,8 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 	K_ITEM *witem, *sitem, *ritem;
 	struct timeval when, now;
 	double delay;
-	int chip, rep, j, nonces;
-	uint32_t nonce;
+	int chip, rep, j, nonces, spie = 0, miso = 0;
+	uint32_t nonce, spichk;
 	bool res;
 
 	cgtime(&now);
@@ -1739,6 +1740,12 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 		DATAR(ritem)->not_first_reply = babinfo->not_first_reply[chip];
 		memcpy(&(DATAR(ritem)->when), &when, sizeof(when));
 
+		spichk = babinfo->chip_results[chip].spichk;
+		if (spichk != 0 && spichk != 0xffffffff) {
+			babinfo->chip_spie[chip]++;
+			spie++;
+		}
+
 		nonces = 0;
 		for (rep = 0; rep < BAB_REPLY_NONCES; rep++) {
 			nonce = babinfo->chip_results[chip].nonce[rep];
@@ -1748,6 +1755,12 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 				else
 					DATAR(ritem)->nonce[nonces++] = nonce;
 			}
+		}
+
+		if (nonces == BAB_REPLY_NONCES) {
+			babinfo->chip_miso[chip]++;
+			miso++;
+			// Test the results anyway
 		}
 
 		/*
@@ -1769,7 +1782,7 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 
 	}
 
-	applog(LOG_DEBUG, "Work: items:%d", work_items);
+	applog(LOG_DEBUG, "Work: items:%d spie:%d miso:%d", work_items, spie, miso);
 
 	return true;
 }
@@ -2026,6 +2039,28 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 			strcat(data, buf);
 		}
 		snprintf(buf, sizeof(buf), "Fast %d - %d", i, to);
+		root = api_add_string(root, buf, data, true);
+
+		data[0] = '\0';
+		for (j = i; j <= to; j++) {
+			snprintf(buf, sizeof(buf),
+					"%s%d",
+					j == i ? "" : " ",
+					(int)(babinfo->chip_spie[j]));
+			strcat(data, buf);
+		}
+		snprintf(buf, sizeof(buf), "Spie %d - %d", i, to);
+		root = api_add_string(root, buf, data, true);
+
+		data[0] = '\0';
+		for (j = i; j <= to; j++) {
+			snprintf(buf, sizeof(buf),
+					"%s%d",
+					j == i ? "" : " ",
+					(int)(babinfo->chip_miso[j]));
+			strcat(data, buf);
+		}
+		snprintf(buf, sizeof(buf), "Miso %d - %d", i, to);
 		root = api_add_string(root, buf, data, true);
 
 		data[0] = '\0';
