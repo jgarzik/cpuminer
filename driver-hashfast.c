@@ -666,8 +666,8 @@ static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
 	struct hf_candidate_nonce *n = (struct hf_candidate_nonce *)(h + 1);
 	int i, num_nonces = h->data_length / U32SIZE(sizeof(struct hf_candidate_nonce));
 
-	applog(LOG_DEBUG, "HFA %d: OP_NONCE: %2d:, num_nonces %d hdata 0x%04x",
-	       hashfast->device_id, h->chip_address, num_nonces, h->hdata);
+	applog(LOG_DEBUG, "HFA %d: OP_NONCE: %2d/%2d:, num_nonces %d hdata 0x%04x",
+	       hashfast->device_id, h->chip_address, h->core_address, num_nonces, h->hdata);
 	for (i = 0; i < num_nonces; i++, n++) {
 		struct work *work = NULL;
 
