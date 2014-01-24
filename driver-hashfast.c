@@ -11,6 +11,7 @@
 #include "config.h"
 
 #include <stdbool.h>
+#include <math.h>
 
 #include "miner.h"
 #include "usbutils.h"
@@ -575,6 +576,24 @@ static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_inf
 	mutex_unlock(&info->lock);
 }
 
+/* Board temperature conversion */
+static float board_temperature(uint16_t adc)
+{
+	float t, r, f, b;
+
+	if (adc < 40 || adc > 650)
+		return((float) 0.0);	// Bad count
+
+	b = 3590.0;
+	f = (float)adc / 1023.0;
+	r = 1.0 / (1.0 / f - 1.0);
+	t = log(r) / b;
+	t += 1.0 / (25.0 + 273.15);
+	t = 1.0 / t - 273.15;
+
+	return t;
+}
+
 static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_info *info,
 				  struct hf_header *h)
 {
@@ -596,8 +615,8 @@ static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_in
 			for (j = 0; j < 6; j++)
 				core_voltage[j] = GN_CORE_VOLTAGE(d->die.core_voltage[j]);
 
-			applog(LOG_DEBUG, "HFA %d: die %2d: OP_DIE_STATUS Die temp %.2fC vdd's %.2f %.2f %.2f %.2f %.2f %.2f",
-			       hashfast->device_id, h->chip_address + i, die_temperature,
+			applog(LOG_DEBUG, "HFA %d: die %2d: OP_DIE_STATUS Temps die %.1fC board %.1fC vdd's %.2f %.2f %.2f %.2f %.2f %.2f",
+			       hashfast->device_id, h->chip_address + i, die_temperature, board_temperature(d->temperature),
 			       core_voltage[0], core_voltage[1], core_voltage[2],
 			       core_voltage[3], core_voltage[4], core_voltage[5]);
 			// XXX Convert board phase currents, voltage, temperature
