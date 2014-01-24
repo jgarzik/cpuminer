@@ -641,25 +641,6 @@ static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_in
 	}
 }
 
-static void search_for_extra_nonce(struct thr_info *thr, struct work *work,
-				   struct hf_candidate_nonce *n)
-{
-	uint32_t nonce = n->nonce;
-	int i;
-
-	/* No function to test with ntime offsets yet */
-	if (n->ntime & HF_NTIME_MASK)
-		return;
-	for (i = 0; i < 128; i++, nonce++) {
-		/* We could break out of this early if nonce wraps or if we
-		 * find one correct nonce since the chance of more is extremely
-		 * low but this function will be hit so infrequently we may as
-		 * well test the entire range with the least code. */
-		if (test_nonce(work, nonce))
-			submit_tested_work(thr, work);
-	}
-}
-
 static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
 			    struct hashfast_info *info, struct hf_header *h)
 {
@@ -698,7 +679,6 @@ static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
 				 * next 128 nonces */
 				applog(LOG_DEBUG, "HFA %d: OP_NONCE: SEARCH PROXIMITY EVENT FOUND",
 				       hashfast->device_id);
-				search_for_extra_nonce(thr, work, n);
 			}
 		}
 	}
