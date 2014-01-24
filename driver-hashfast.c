@@ -491,7 +491,7 @@ static struct cgpu_info *hfa_detect_one(libusb_device *dev, struct usb_find_devi
 	return hashfast;
 }
 
-static void hfa_detect(bool hotplug)
+static void hfa_detect(bool __maybe_unused hotplug)
 {
 	/* Set up the CRC tables only once. */
 	if (!hfa_crc8_set)
