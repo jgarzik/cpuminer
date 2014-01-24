@@ -24,6 +24,7 @@
 #define GP8  0x107   /* x^8 + x^2 + x + 1 */
 #define DI8  0x07
 
+static bool hfa_crc8_set;
 static unsigned char crc8_table[256];	/* CRC-8 table */
 
 static void hfa_init_crc8(void)
@@ -31,6 +32,7 @@ static void hfa_init_crc8(void)
 	int i,j;
 	unsigned char crc;
 
+	hfa_crc8_set = true;
 	for (i = 0; i < 256; i++) {
 		crc = i;
 		for (j = 0; j < 8; j++)
@@ -264,7 +266,7 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	hu->crc8 = hfa_crc8((uint8_t *)hu);
 	applog(LOG_INFO, "HFA%d: Sending OP_USB_INIT with GWQ protocol specified",
 	       hashfast->device_id);
-
+resend:
 	if (!hfa_send_packet(hashfast, (struct hf_header *)hu, HF_USB_CMD(OP_USB_INIT)))
 		return false;
 
@@ -272,12 +274,14 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	// We extend the normal timeout - a complete device initialization, including
 	// bringing power supplies up from standby, etc., can take over a second.
 tryagain:
-	for (i = 0; i < 30; i++) {
+	for (i = 0; i < 10; i++) {
 		ret = hfa_get_header(hashfast, h, &hcrc);
 		if (ret)
 			break;
 	}
 	if (!ret) {
+		if (retries++ < 3)
+			goto resend;
 		applog(LOG_WARNING, "HFA %d: OP_USB_INIT failed!", hashfast->device_id);
 		return false;
 	}
@@ -489,7 +493,7 @@ static struct cgpu_info *hfa_detect_one(libusb_device *dev, struct usb_find_devi
 static void hfa_detect(bool hotplug)
 {
 	/* Set up the CRC tables only once. */
-	if (!hotplug)
+	if (!hfa_crc8_set)
 		hfa_init_crc8();
 	usb_detect(&hashfast_drv, hfa_detect_one);
 }
