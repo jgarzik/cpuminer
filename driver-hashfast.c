@@ -230,7 +230,10 @@ static const char *hf_usb_init_errors[] = {
 	"Main board FPGA SPI read timeout",
 	"Main board FPGA Bad magic number",
 	"Main board FPGA SPI write timeout",
-	"Main board FPGA register read/write test failed"
+	"Main board FPGA register read/write test failed",
+	"ASIC core power fault",
+	"Dynamic baud rate change timeout",
+	"Address failure"
 };
 
 static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
