@@ -174,6 +174,7 @@ char *opt_klondike_options = NULL;
 #ifdef USE_DRILLBIT
 char *opt_drillbit_options = NULL;
 #endif
+char *opt_bab_options = NULL;
 #ifdef USE_USBUTILS
 char *opt_usb_select = NULL;
 int opt_usbdump = -1;
@@ -1070,6 +1071,15 @@ static char *set_drillbit_options(const char *arg)
 }
 #endif
 
+#ifdef USE_BAB
+static char *set_bab_options(const char *arg)
+{
+	opt_set_charp(arg, &opt_bab_options);
+
+	return NULL;
+}
+#endif
+
 #ifdef USE_USBUTILS
 static char *set_usb_select(const char *arg)
 {
@@ -1236,6 +1246,11 @@ static struct opt_table opt_config_table[] = {
         OPT_WITH_ARG("--drillbit-options",
                      set_drillbit_options, NULL, NULL,
                      "Set drillbit options <int|ext>:clock[:clock_divider][:voltage]"),
+#endif
+#ifdef USE_BAB
+	OPT_WITH_ARG("--bab-options",
+		     set_bab_options, NULL, NULL,
+		     "Set bab options max:def:min:up:down:hz:delay:trf"),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
@@ -4411,12 +4426,14 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", json_escape(opt_icarus_timing));
 #ifdef USE_KLONDIKE
 	if (opt_klondike_options)
-		fprintf(fcfg, ",\n\"klondike-options\" : \"%s\"", json_escape(opt_icarus_options));
+		fprintf(fcfg, ",\n\"klondike-options\" : \"%s\"", json_escape(opt_klondike_options));
 #endif
 #ifdef USE_DRILLBIT
         if (opt_drillbit_options)
                 fprintf(fcfg, ",\n\"drillbit-options\" : \"%s\"", json_escape(opt_drillbit_options));
 #endif
+	if (opt_bab_options)
+		fprintf(fcfg, ",\n\"bab-options\" : \"%s\"", json_escape(opt_bab_options));
 #ifdef USE_USBUTILS
 	if (opt_usb_select)
 		fprintf(fcfg, ",\n\"usb\" : \"%s\"", json_escape(opt_usb_select));
