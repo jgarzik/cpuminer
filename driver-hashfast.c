@@ -123,6 +123,9 @@ static bool hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, uint16_t 
 		memcpy(&packet[sizeof(struct hf_header)], data, len);
 	tx_length = sizeof(struct hf_header) + len;
 
+	if (unlikely(hashfast->usbinfo.nodev))
+		return false;
+
 	applog(LOG_DEBUG, "HFA %d: Sending %s frame", hashfast->device_id, hfa_cmds[opcode].cmd_name);
 retry:
 	ret = usb_write(hashfast, (char *)packet, tx_length, &amount,
@@ -153,6 +156,9 @@ retry:
 static bool hfa_send_packet(struct cgpu_info *hashfast, struct hf_header *h, int cmd)
 {
 	int amount, ret, len;
+
+	if (unlikely(hashfast->usbinfo.nodev))
+		return false;
 
 	len = sizeof(*h) + h->data_length * 4;
 	ret = usb_write(hashfast, (char *)h, len, &amount, hfa_cmds[cmd].usb_cmd);
@@ -216,6 +222,8 @@ static bool hfa_get_data(struct cgpu_info *hashfast, char *buf, int len4)
 {
 	int amount, ret, len = len4 * 4;
 
+	if (unlikely(hashfast->usbinfo.nodev))
+		return false;
 	ret = usb_read(hashfast, buf, len, &amount, C_HF_GETDATA);
 	if (ret)
 		return false;
@@ -285,6 +293,9 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	applog(LOG_INFO, "HFA%d: Sending OP_USB_INIT with GWQ protocol specified",
 	       hashfast->device_id);
 resend:
+	if (unlikely(hashfast->usbinfo.nodev))
+		return false;
+
 	if (!hfa_send_packet(hashfast, (struct hf_header *)hu, HF_USB_CMD(OP_USB_INIT)))
 		return false;
 
@@ -294,6 +305,8 @@ resend:
 tryagain:
 	for (i = 0; i < 10; i++) {
 		ret = hfa_get_header(hashfast, h, &hcrc);
+		if (unlikely(hashfast->usbinfo.nodev))
+			return false;
 		if (ret)
 			break;
 	}
@@ -385,6 +398,8 @@ tryagain:
 
 static void hfa_send_shutdown(struct cgpu_info *hashfast)
 {
+	if (hashfast->usbinfo.nodev)
+		return;
 	hfa_send_frame(hashfast, HF_USB_CMD(OP_USB_SHUTDOWN), 0, NULL, 0);
 }
 
@@ -394,6 +409,8 @@ static void hfa_clear_readbuf(struct cgpu_info *hashfast)
 	char buf[512];
 
 	do {
+		if (hashfast->usbinfo.nodev)
+			break;
 		ret = usb_read(hashfast, buf, 512, &amount, C_HF_CLEAR_READ);
 	} while (!ret || amount);
 }
@@ -416,6 +433,9 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 		hashfast->device_data = NULL;
 		return false;
 	}
+
+	if (hashfast->usbinfo.nodev)
+		return false;
 
 	// The per-die status array
 	info->die_status = calloc(info->asic_count, sizeof(struct hf_g1_die_data));
@@ -467,6 +487,9 @@ static bool hfa_initialise(struct cgpu_info *hashfast)
 static void hfa_dfu_boot(struct cgpu_info *hashfast)
 {
 	bool ret;
+
+	if (unlikely(hashfast->usbinfo.nodev))
+		return;
 
 	ret = hfa_send_frame(hashfast, HF_USB_CMD(OP_DFU), 0, NULL, 0);
 	applog(LOG_WARNING, "HFA %d %03d:%03d DFU Boot %s", hashfast->device_id, hashfast->usbinfo.bus_number,
