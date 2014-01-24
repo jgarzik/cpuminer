@@ -1940,7 +1940,6 @@ static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom
 
 		struct cgpu_info *cgpu = get_devices(dev);
 		float temp = cgpu->temp;
-		struct timeval now;
 		double dev_runtime;
 
 		dev_runtime = cgpu_runtime(cgpu);
