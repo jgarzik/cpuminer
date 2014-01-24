@@ -109,6 +109,7 @@ static bool hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, uint16_t 
 	int tx_length, ret, amount, id = hashfast->device_id;
 	uint8_t packet[256];
 	struct hf_header *p = (struct hf_header *)packet;
+	bool retried = false;
 
 	p->preamble = HF_PREAMBLE;
 	p->operation_code = hfa_cmds[opcode].cmd;
@@ -123,13 +124,26 @@ static bool hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, uint16_t 
 	tx_length = sizeof(struct hf_header) + len;
 
 	applog(LOG_DEBUG, "HFA %d: Sending %s frame", hashfast->device_id, hfa_cmds[opcode].cmd_name);
+retry:
 	ret = usb_write(hashfast, (char *)packet, tx_length, &amount,
 			hfa_cmds[opcode].usb_cmd);
 	if (unlikely(ret < 0 || amount != tx_length)) {
+		if (hashfast->usbinfo.nodev)
+			return false;
+		if (!retried) {
+			applog(LOG_ERR, "HFA %d: hfa_send_frame: USB Send error, ret %d amount %d vs. tx_length %d, retrying",
+			       id, ret, amount, tx_length);
+			retried = true;
+			goto retry;
+		}
 		applog(LOG_ERR, "HFA %d: hfa_send_frame: USB Send error, ret %d amount %d vs. tx_length %d",
 		       id, ret, amount, tx_length);
 		return false;
 	}
+
+	if (retried)
+		applog(LOG_ERR, "HFA %d: hfa_send_frame: recovered OK", id);
+
 	return true;
 }
 
