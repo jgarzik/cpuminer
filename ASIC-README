@@ -351,14 +351,14 @@ BlackArrow Bitfury devices
 
 Any option left blank or starting with 'd' will use the default setting
 If there are not enough options, then the remaining will be left at their
-defailt value
+default value
 
-Max:Def:Min are the chip speed limits to allow ranging from 52 to 57
+Max:Def:Min are the chip speed limits to allow, ranging from 52 to 57
 
 Up:Down are the HW error % used to tune the chip speed
-Up means if the HW error % is less than up over a 5 minute period,
+Up means if the HW error % is less than up, over a 5 minute period,
 then increase the chip speed
-Down means if the HW error % is greater than down over 5 minutes,
+Down means if the HW error % is greater than down, over 5 minutes,
 then decrease the chip speed
 
 Hz is the SPI clock speed to use
