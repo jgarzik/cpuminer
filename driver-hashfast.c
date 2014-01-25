@@ -18,6 +18,11 @@
 
 #include "driver-hashfast.h"
 
+int opt_hfa_ntime_roll = 1;
+int opt_hfa_hash_clock = 550;
+bool opt_hfa_pll_bypass;
+bool opt_hfa_dfu_boot;
+
 ////////////////////////////////////////////////////////////////////////////////
 // Support for the CRC's used in header (CRC-8) and packet body (CRC-32)
 ////////////////////////////////////////////////////////////////////////////////
@@ -270,8 +275,8 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	bool ret;
 
 	/* Hash clock rate in Mhz */
-	info->hash_clock_rate = opt_hfa_hash_clock ? opt_hfa_hash_clock : 550;
-	info->group_ntime_roll = opt_hfa_ntime_roll ? opt_hfa_ntime_roll : 1;
+	info->hash_clock_rate = opt_hfa_hash_clock;
+	info->group_ntime_roll = opt_hfa_ntime_roll;
 	info->core_ntime_roll = 1;
 
 	// Assemble the USB_INIT request
