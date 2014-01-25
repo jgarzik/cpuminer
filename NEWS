@@ -1,3 +1,119 @@
+Version 3.11.0 - 25th January 2014
+
+- Add hashfast documentation to ASIC README
+- Support the variable HFA naming throughout the driver notices.
+- Set the global hfa hash clock rate to equal the lowest if we are lowering it
+for a device reset since it may be re-hotplugged after failing reset.
+- Decrease the hfa clock rate if it is overclocked and we have had to try
+resetting it.
+- Put a sanity check on the measured temperature in the hfa driver for obviously
+wrong values.
+- Avoid calling applog from within hfa statline before to avoid a deadlock.
+- Add throttling control to hfa driver, configurable at command line, nominally
+set to 85 degrees.
+- Reset hfa device if no valid hashes are seen for 1 minute from the last work.
+- Store when the last getwork was retrieved and display it in the API summary.
+- bab - also report dead chip count screen
+- Count share based hashes in the hfa driver with the device diff to get more
+frequent updates.
+- Only count 2/3 of the accumulated hashes on each pass through the hfa scan
+work loop to smooth out displayed hashrate.
+- bab add total history HW% to API stats
+- Test valid nonces in the hashfast driver allowing us to check against the
+target when trying to submit them.
+- No point casting a double to a uint64
+- Convert the hfa hashmeter to one based on successful share return and display
+the raw and calculated hash totals in the API.
+- bab - remove libbitfury dependency since it requires USB
+- Add description to hfa hash clock command.
+- Add hfa board temperatures to API output.
+- Wait for up to 0.5 seconds in the hashfast scanwork loop if no jobs are
+required.
+- Label HFA devices as B or S when their configuration matches babyjet or
+sierra.
+- Fix libbitfury being compiled in always by mistake.
+- bab - spelling
+- Add bab-options
+- bab - tune the chip speed based on error rates
+- bab record/report spie and miso errors
+- Win32 falsely comes up as big endian pulling in the wrong hf protocol header.
+- Remove unused components in hashfast driver.
+- Check in all usb communication places for hashfast driver that the device
+still exists.
+- Do not send a usb reset on a usb read pipe error.
+- Don't replace usb pipe errors with the pipe reset return code.
+- Updated hf protocol header.
+- The search for extra nonce is not worth performing in the hashfast driver.
+- Add core address to hfa parse nonce debugging.
+- Retry sending a frame once if it has failed in hfa_send_frame
+- Add extra hfa usb init errors.
+- Quiet now unused variable warning in hfa detect.
+- Remove unused variable.
+- Add board temperature to hfa debug
+- Make submit_tested_work return a bool about whether it meets the work target
+or not.
+- Provide a helper function for determining dev runtime and use it in the
+hashmeters used.
+- Look for hfa usb init header for 2 seconds, then resend the init twice more
+before failing.
+- Really only set up the hfa crc table once.
+- Generically increase the queue if we are mining on a pool without local work
+generation each time we run out of work.
+- Change new block detection message since longpoll is rarely relevant today.
+- Change the default clockspeed bits on nanofury devices to 50 and add a command
+line option to allow it to be changed.
+- Use unused line at the top of the log window which often gets stuck
+unchanging.
+- Clear pool work on a stratum reconnect message.
+- bab record/report spie and miso errors
+- bab - cleanup old work for dead chips also
+- bab add avg fail tests to API stats
+- bab report bank/board/chip for dead and v.slow chips
+- bab process all nonce replies per chip together
+- bab reduce work delays
+- bab record the number of E0s discarded
+- bab - modified result parsing
+- bab restore removed unused flag
+- configure - correct minion name
+- bab only scan valid nonce offsets
+- bab record continuous (and max) bad nonces
+- bab display Banks/Boards/Chips in the device window
+- Modify thread naming to make them easier to identify
+- bab reduce the work send delay
+- bab remove results polling
+- bab report SPI wait in seconds
+- bab report missing chips at start and API
+- bab ensure there's enough space for the nonce reply
+- bab correct stats 'Send Max'
+- bab allow long enough wait on ioctl() per board
+- bab more I/O stats
+- api.c 2014
+- api allow any size stats data
+- bab add processed links which excludes expired links skipped
+- bab report chips per bank, hw% and ghs per chip
+- bab lock access to new_nonces to ensure correct reporting
+- bab report V2 banks/boards during initialisation
+- bab expire chip work
+- bab use only k_lists and make work handling more refined
+- klist - allow adding to tail
+- bab remove old unused #define
+- bab correct for master git
+- correct klist reallocs
+- klist lists for bab
+- api.c correct DEVICECODE and ordering
+- Maxchips should be 384 (16 chips/board 24 boards/controller)
+- bab more detailed stats and delay less when waiting for a buffer
+- api add data type AVG float 3 decimal
+- bab - add V2 detect with bug fix in detect
+- api.c set the actual version number to 3.0
+- API V3.0 unlimited socket reply size
+- README update --usb
+- Check for loss of device in usb read before any other code on the usbdev
+- Change stratum strings under stratum_lock in reconnect and free old strings.
+- Add mcp2210 compilation to want_libbitfury configs.
+- Fix HF driver typo.
+
+
 Version 3.10.0 - 9th January 2014
 
 - Set the mcp2210 transfer setting only when it changes.
