@@ -1117,7 +1117,9 @@ static void hfa_statline_before(char *buf, size_t bufsiz, struct cgpu_info *hash
 
 		d = &info->die_status[i];
 		temp = GN_DIE_TEMPERATURE(d->die.die_temperature);
-		if (temp > max_temp)
+		/* Sanity check on temp since we change it lockless it can
+		 * rarely read a massive value */
+		if (temp > max_temp && temp < 200)
 			max_temp = temp;
 		for (j = 0; j < 6; j++) {
 			double volt = GN_CORE_VOLTAGE(d->die.core_voltage[j]);
