@@ -331,6 +331,12 @@ temperature just below an optimal target. This option allows you to change the
 target temperature. When actively cooled below this, the devices will run at
 maximum speed.
 
+--nfu-bits <arg>    Set nanofury bits for overclocking range 32-63 (default: 50)
+
+Cgminer by default sets the clockspeed on nanofury devices to the highest that
+is still within USB2 spec. This value allows you to alter the clockspeed, with
+~54 being the optimal but requiring a higher power or USB3 port.
+
 
 BITFURY Devices
 

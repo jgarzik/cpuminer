@@ -656,6 +656,13 @@ static char *set_int_0_to_200(const char *arg, int *i)
 }
 #endif
 
+#ifdef USE_BITFURY
+static char *set_int_32_to_63(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 32, 63);
+}
+#endif
+
 static char *set_int_1_to_10(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 1, 10);
@@ -1259,6 +1266,11 @@ static struct opt_table opt_config_table[] = {
 		     opt_set_charp, NULL, &opt_stderr_cmd,
 		     "Use custom pipe cmd for output messages"),
 #endif // defined(unix)
+#ifdef USE_BITFURY
+	OPT_WITH_ARG("--nfu-bits",
+		     set_int_32_to_63, opt_show_intval, &opt_nf1_bits,
+		     "Set nanofury bits for overclocking, range 32-63"),
+#endif
 	OPT_WITHOUT_ARG("--net-delay",
 			opt_set_bool, &opt_delaynet,
 			"Impose small delays in networking to not overload slow routers"),
@@ -2134,12 +2146,10 @@ static void suffix_string(uint64_t val, char *buf, size_t bufsiz, int sigdigits)
 	}
 }
 
-static void get_statline(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
+double cgpu_runtime(struct cgpu_info *cgpu)
 {
-	char displayed_hashes[16], displayed_rolling[16];
-	uint64_t dh64, dr64;
 	struct timeval now;
-	double dev_runtime, wu;
+	double dev_runtime;
 
 	if (cgpu->dev_start_tv.tv_sec == 0)
 		dev_runtime = total_secs;
@@ -2150,6 +2160,16 @@ static void get_statline(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
 
 	if (dev_runtime < 1.0)
 		dev_runtime = 1.0;
+	return dev_runtime;
+}
+
+static void get_statline(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
+{
+	char displayed_hashes[16], displayed_rolling[16];
+	double dev_runtime, wu;
+	uint64_t dh64, dr64;
+
+	dev_runtime = cgpu_runtime(cgpu);
 
 	wu = cgpu->diff1 / dev_runtime * 60.0;
 
@@ -2354,7 +2374,7 @@ static void check_winsizes(void)
 			statusy = LINES - 2;
 		else
 			statusy = logstart;
-		logcursor = statusy + 1;
+		logcursor = statusy;
 		wresize(statuswin, statusy, x);
 		getmaxyx(mainwin, y, x);
 		y -= logcursor;
@@ -3728,8 +3748,6 @@ static struct pool *priority_pool(int choice)
 	return ret;
 }
 
-static void clear_pool_work(struct pool *pool);
-
 /* Specifies whether we can switch to this pool or not. */
 static bool pool_unusable(struct pool *pool)
 {
@@ -4087,7 +4105,7 @@ static bool test_work_current(struct work *work)
 				       work->gbt ? "GBT " : "", work->pool->pool_no);
 			}
 		} else if (have_longpoll)
-			applog(LOG_NOTICE, "New block detected on network before longpoll");
+			applog(LOG_NOTICE, "New block detected on network before pool notification");
 		else
 			applog(LOG_NOTICE, "New block detected on network");
 		restart_threads();
@@ -5197,7 +5215,7 @@ void clear_stratum_shares(struct pool *pool)
 	}
 }
 
-static void clear_pool_work(struct pool *pool)
+void clear_pool_work(struct pool *pool)
 {
 	struct work *work, *tmp;
 	int cleared = 0;
@@ -5211,6 +5229,9 @@ static void clear_pool_work(struct pool *pool)
 		}
 	}
 	mutex_unlock(stgd_lock);
+
+	if (cleared)
+		applog(LOG_INFO, "Cleared %d work items due to stratum disconnect on pool %d", cleared, pool->pool_no);
 }
 
 static int cp_prio(void)
@@ -6069,18 +6090,19 @@ static void update_work_stats(struct thr_info *thr, struct work *work)
 }
 
 /* To be used once the work has been tested to be meet diff1 and has had its
- * nonce adjusted. */
-void submit_tested_work(struct thr_info *thr, struct work *work)
+ * nonce adjusted. Returns true if the work target is met. */
+bool submit_tested_work(struct thr_info *thr, struct work *work)
 {
 	struct work *work_out;
 	update_work_stats(thr, work);
 
 	if (!fulltest(work->hash, work->target)) {
 		applog(LOG_INFO, "Share above target");
-		return;
+		return false;
 	}
 	work_out = copy_work(work);
 	submit_work_async(work_out);
+	return true;
 }
 
 /* Returns true if nonce for work was a valid share */
@@ -8286,6 +8308,8 @@ begin_bench:
 			applog(LOG_WARNING, "Pool %d not providing work fast enough", cp->pool_no);
 			cp->getfail_occasions++;
 			total_go++;
+			if (!pool_localgen(cp))
+				applog(LOG_INFO, "Increasing queue to %d", ++opt_queue);
 		}
 		pool = select_pool(lagging);
 retry:

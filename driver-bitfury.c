@@ -16,6 +16,7 @@
 #include "libbitfury.h"
 
 int opt_bxf_temp_target = BXF_TEMP_TARGET / 10;
+int opt_nf1_bits = 50;
 
 /* Wait longer 1/3 longer than it would take for a full nonce range */
 #define BF1WAIT 1600
@@ -414,7 +415,7 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	if (val != MCP2210_GPIO_PIN_LOW)
 		goto out;
 
-	info->osc6_bits = 54;
+	info->osc6_bits = opt_nf1_bits;
 	if (!nf1_reinit(bitfury, info))
 		goto out;
 

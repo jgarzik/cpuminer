@@ -2572,20 +2572,20 @@ pipe_retry:
 	}
 
 	if (err == LIBUSB_ERROR_PIPE) {
-		int retries = 0;
+		int pipeerr, retries = 0;
 
 		do {
 			cgpu->usbinfo.last_pipe = time(NULL);
 			cgpu->usbinfo.pipe_count++;
 			applog(LOG_INFO, "%s%i: libusb pipe error, trying to clear",
 				cgpu->drv->name, cgpu->device_id);
-			err = libusb_clear_halt(dev_handle, endpoint);
+			pipeerr = libusb_clear_halt(dev_handle, endpoint);
 			applog(LOG_DEBUG, "%s%i: libusb pipe error%scleared",
 				cgpu->drv->name, cgpu->device_id, err ? " not " : " ");
 
-			if (err)
+			if (pipeerr)
 				cgpu->usbinfo.clear_fail_count++;
-		} while (err && ++retries < USB_RETRY_MAX);
+		} while (pipeerr && ++retries < USB_RETRY_MAX);
 		if (!err && ++pipe_retries < USB_RETRY_MAX)
 			goto pipe_retry;
 	}
@@ -2687,7 +2687,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		if (err && err != LIBUSB_ERROR_TIMEOUT) {
 			applog(LOG_WARNING, "%s %i %s usb read err:(%d) %s", cgpu->drv->name,
 			       cgpu->device_id, usb_cmdname(cmd), err, libusb_error_name(err));
-			if (err != LIBUSB_ERROR_NO_DEVICE) {
+			if (err != LIBUSB_ERROR_NO_DEVICE && err != LIBUSB_ERROR_PIPE) {
 				err = libusb_reset_device(usbdev->handle);
 				applog(LOG_WARNING, "%s %i attempted reset got err:(%d) %s",
 				       cgpu->drv->name, cgpu->device_id, err, libusb_error_name(err));

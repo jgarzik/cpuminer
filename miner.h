@@ -660,6 +660,7 @@ endian_flip128(void __maybe_unused *dest_p, const void __maybe_unused *src_p)
 }
 #endif
 
+extern double cgpu_runtime(struct cgpu_info *cgpu);
 extern void _quit(int status);
 
 /*
@@ -1016,6 +1017,7 @@ extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
 
 extern void clear_stratum_shares(struct pool *pool);
+extern void clear_pool_work(struct pool *pool);
 extern void set_target(unsigned char *dest_target, double diff);
 extern int restart_wait(struct thr_info *thr, unsigned int mstime);
 
@@ -1342,7 +1344,7 @@ extern void get_datestamp(char *, size_t, struct timeval *);
 extern void inc_hw_errors(struct thr_info *thr);
 extern bool test_nonce(struct work *work, uint32_t nonce);
 extern bool test_nonce_diff(struct work *work, uint32_t nonce, double diff);
-extern void submit_tested_work(struct thr_info *thr, struct work *work);
+extern bool submit_tested_work(struct thr_info *thr, struct work *work);
 extern bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern bool submit_noffset_nonce(struct thr_info *thr, struct work *work, uint32_t nonce,
 			  int noffset);

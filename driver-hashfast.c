@@ -11,6 +11,7 @@
 #include "config.h"
 
 #include <stdbool.h>
+#include <math.h>
 
 #include "miner.h"
 #include "usbutils.h"
@@ -24,6 +25,7 @@
 #define GP8  0x107   /* x^8 + x^2 + x + 1 */
 #define DI8  0x07
 
+static bool hfa_crc8_set;
 static unsigned char crc8_table[256];	/* CRC-8 table */
 
 static void hfa_init_crc8(void)
@@ -31,6 +33,7 @@ static void hfa_init_crc8(void)
 	int i,j;
 	unsigned char crc;
 
+	hfa_crc8_set = true;
 	for (i = 0; i < 256; i++) {
 		crc = i;
 		for (j = 0; j < 8; j++)
@@ -106,6 +109,7 @@ static bool hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, uint16_t 
 	int tx_length, ret, amount, id = hashfast->device_id;
 	uint8_t packet[256];
 	struct hf_header *p = (struct hf_header *)packet;
+	bool retried = false;
 
 	p->preamble = HF_PREAMBLE;
 	p->operation_code = hfa_cmds[opcode].cmd;
@@ -119,14 +123,30 @@ static bool hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, uint16_t 
 		memcpy(&packet[sizeof(struct hf_header)], data, len);
 	tx_length = sizeof(struct hf_header) + len;
 
+	if (unlikely(hashfast->usbinfo.nodev))
+		return false;
+
 	applog(LOG_DEBUG, "HFA %d: Sending %s frame", hashfast->device_id, hfa_cmds[opcode].cmd_name);
+retry:
 	ret = usb_write(hashfast, (char *)packet, tx_length, &amount,
 			hfa_cmds[opcode].usb_cmd);
 	if (unlikely(ret < 0 || amount != tx_length)) {
+		if (hashfast->usbinfo.nodev)
+			return false;
+		if (!retried) {
+			applog(LOG_ERR, "HFA %d: hfa_send_frame: USB Send error, ret %d amount %d vs. tx_length %d, retrying",
+			       id, ret, amount, tx_length);
+			retried = true;
+			goto retry;
+		}
 		applog(LOG_ERR, "HFA %d: hfa_send_frame: USB Send error, ret %d amount %d vs. tx_length %d",
 		       id, ret, amount, tx_length);
 		return false;
 	}
+
+	if (retried)
+		applog(LOG_ERR, "HFA %d: hfa_send_frame: recovered OK", id);
+
 	return true;
 }
 
@@ -136,6 +156,9 @@ static bool hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, uint16_t 
 static bool hfa_send_packet(struct cgpu_info *hashfast, struct hf_header *h, int cmd)
 {
 	int amount, ret, len;
+
+	if (unlikely(hashfast->usbinfo.nodev))
+		return false;
 
 	len = sizeof(*h) + h->data_length * 4;
 	ret = usb_write(hashfast, (char *)h, len, &amount, hfa_cmds[cmd].usb_cmd);
@@ -199,6 +222,8 @@ static bool hfa_get_data(struct cgpu_info *hashfast, char *buf, int len4)
 {
 	int amount, ret, len = len4 * 4;
 
+	if (unlikely(hashfast->usbinfo.nodev))
+		return false;
 	ret = usb_read(hashfast, buf, len, &amount, C_HF_GETDATA);
 	if (ret)
 		return false;
@@ -227,7 +252,10 @@ static const char *hf_usb_init_errors[] = {
 	"Main board FPGA SPI read timeout",
 	"Main board FPGA Bad magic number",
 	"Main board FPGA SPI write timeout",
-	"Main board FPGA register read/write test failed"
+	"Main board FPGA register read/write test failed",
+	"ASIC core power fault",
+	"Dynamic baud rate change timeout",
+	"Address failure"
 };
 
 static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
@@ -264,6 +292,9 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	hu->crc8 = hfa_crc8((uint8_t *)hu);
 	applog(LOG_INFO, "HFA%d: Sending OP_USB_INIT with GWQ protocol specified",
 	       hashfast->device_id);
+resend:
+	if (unlikely(hashfast->usbinfo.nodev))
+		return false;
 
 	if (!hfa_send_packet(hashfast, (struct hf_header *)hu, HF_USB_CMD(OP_USB_INIT)))
 		return false;
@@ -272,12 +303,16 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	// We extend the normal timeout - a complete device initialization, including
 	// bringing power supplies up from standby, etc., can take over a second.
 tryagain:
-	for (i = 0; i < 30; i++) {
+	for (i = 0; i < 10; i++) {
 		ret = hfa_get_header(hashfast, h, &hcrc);
+		if (unlikely(hashfast->usbinfo.nodev))
+			return false;
 		if (ret)
 			break;
 	}
 	if (!ret) {
+		if (retries++ < 3)
+			goto resend;
 		applog(LOG_WARNING, "HFA %d: OP_USB_INIT failed!", hashfast->device_id);
 		return false;
 	}
@@ -363,6 +398,8 @@ tryagain:
 
 static void hfa_send_shutdown(struct cgpu_info *hashfast)
 {
+	if (hashfast->usbinfo.nodev)
+		return;
 	hfa_send_frame(hashfast, HF_USB_CMD(OP_USB_SHUTDOWN), 0, NULL, 0);
 }
 
@@ -372,6 +409,8 @@ static void hfa_clear_readbuf(struct cgpu_info *hashfast)
 	char buf[512];
 
 	do {
+		if (hashfast->usbinfo.nodev)
+			break;
 		ret = usb_read(hashfast, buf, 512, &amount, C_HF_CLEAR_READ);
 	} while (!ret || amount);
 }
@@ -394,6 +433,9 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 		hashfast->device_data = NULL;
 		return false;
 	}
+
+	if (hashfast->usbinfo.nodev)
+		return false;
 
 	// The per-die status array
 	info->die_status = calloc(info->asic_count, sizeof(struct hf_g1_die_data));
@@ -446,6 +488,9 @@ static void hfa_dfu_boot(struct cgpu_info *hashfast)
 {
 	bool ret;
 
+	if (unlikely(hashfast->usbinfo.nodev))
+		return;
+
 	ret = hfa_send_frame(hashfast, HF_USB_CMD(OP_DFU), 0, NULL, 0);
 	applog(LOG_WARNING, "HFA %d %03d:%03d DFU Boot %s", hashfast->device_id, hashfast->usbinfo.bus_number,
 	       hashfast->usbinfo.device_address, ret ? "Succeeded" : "Failed");
@@ -486,10 +531,10 @@ static struct cgpu_info *hfa_detect_one(libusb_device *dev, struct usb_find_devi
 	return hashfast;
 }
 
-static void hfa_detect(bool hotplug)
+static void hfa_detect(bool __maybe_unused hotplug)
 {
 	/* Set up the CRC tables only once. */
-	if (!hotplug)
+	if (!hfa_crc8_set)
 		hfa_init_crc8();
 	usb_detect(&hashfast_drv, hfa_detect_one);
 }
@@ -571,6 +616,24 @@ static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_inf
 	mutex_unlock(&info->lock);
 }
 
+/* Board temperature conversion */
+static float board_temperature(uint16_t adc)
+{
+	float t, r, f, b;
+
+	if (adc < 40 || adc > 650)
+		return((float) 0.0);	// Bad count
+
+	b = 3590.0;
+	f = (float)adc / 1023.0;
+	r = 1.0 / (1.0 / f - 1.0);
+	t = log(r) / b;
+	t += 1.0 / (25.0 + 273.15);
+	t = 1.0 / t - 273.15;
+
+	return t;
+}
+
 static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_info *info,
 				  struct hf_header *h)
 {
@@ -592,31 +655,12 @@ static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_in
 			for (j = 0; j < 6; j++)
 				core_voltage[j] = GN_CORE_VOLTAGE(d->die.core_voltage[j]);
 
-			applog(LOG_DEBUG, "HFA %d: die %2d: OP_DIE_STATUS Die temp %.2fC vdd's %.2f %.2f %.2f %.2f %.2f %.2f",
-			       hashfast->device_id, h->chip_address + i, die_temperature,
+			applog(LOG_DEBUG, "HFA %d: die %2d: OP_DIE_STATUS Temps die %.1fC board %.1fC vdd's %.2f %.2f %.2f %.2f %.2f %.2f",
+			       hashfast->device_id, h->chip_address + i, die_temperature, board_temperature(d->temperature),
 			       core_voltage[0], core_voltage[1], core_voltage[2],
 			       core_voltage[3], core_voltage[4], core_voltage[5]);
 			// XXX Convert board phase currents, voltage, temperature
 		}
-	}
-}
-
-static void search_for_extra_nonce(struct thr_info *thr, struct work *work,
-				   struct hf_candidate_nonce *n)
-{
-	uint32_t nonce = n->nonce;
-	int i;
-
-	/* No function to test with ntime offsets yet */
-	if (n->ntime & HF_NTIME_MASK)
-		return;
-	for (i = 0; i < 128; i++, nonce++) {
-		/* We could break out of this early if nonce wraps or if we
-		 * find one correct nonce since the chance of more is extremely
-		 * low but this function will be hit so infrequently we may as
-		 * well test the entire range with the least code. */
-		if (test_nonce(work, nonce))
-			submit_tested_work(thr, work);
 	}
 }
 
@@ -626,8 +670,8 @@ static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
 	struct hf_candidate_nonce *n = (struct hf_candidate_nonce *)(h + 1);
 	int i, num_nonces = h->data_length / U32SIZE(sizeof(struct hf_candidate_nonce));
 
-	applog(LOG_DEBUG, "HFA %d: OP_NONCE: %2d:, num_nonces %d hdata 0x%04x",
-	       hashfast->device_id, h->chip_address, num_nonces, h->hdata);
+	applog(LOG_DEBUG, "HFA %d: OP_NONCE: %2d/%2d:, num_nonces %d hdata 0x%04x",
+	       hashfast->device_id, h->chip_address, h->core_address, num_nonces, h->hdata);
 	for (i = 0; i < num_nonces; i++, n++) {
 		struct work *work = NULL;
 
@@ -650,16 +694,15 @@ static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
 		} else {
 			applog(LOG_DEBUG, "HFA %d: OP_NONCE: sequence %d: submitting nonce 0x%08x ntime %d",
 			       hashfast->device_id, n->sequence, n->nonce, n->ntime & HF_NTIME_MASK);
-			if ((n->nonce & 0xffff0000) == 0x42420000)		// XXX REMOVE THIS
-				break;						// XXX PHONEY EMULATOR NONCE
 			submit_noffset_nonce(thr, work, n->nonce, n->ntime & HF_NTIME_MASK);	// XXX Return value from submit_nonce is error if set
+#if 0	/* Not used */
 			if (unlikely(n->ntime & HF_NONCE_SEARCH)) {
 				/* This tells us there is another share in the
 				 * next 128 nonces */
 				applog(LOG_DEBUG, "HFA %d: OP_NONCE: SEARCH PROXIMITY EVENT FOUND",
 				       hashfast->device_id);
-				search_for_extra_nonce(thr, work, n);
 			}
+#endif
 		}
 	}
 }

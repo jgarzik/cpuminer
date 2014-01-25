@@ -1,5 +1,5 @@
 //
-// Copyright 2013 HashFast LLC
+// Copyright 2013, 2014 HashFast Technologies LLC
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License as published by the Free
@@ -77,6 +77,9 @@
 #define OP_USB_STATS1                   137         // Statistics class 1
 #define OP_USB_GWQSTATS                 138         // GWQ protocol statistics
 #define OP_USB_NOTICE                   139         // Asynchronous notification event
+#define OP_PING                         140         // Echo
+#define OP_CORE_MAP                     141         // Return core map
+#define OP_VERSION                      142         // Version information
 #define OP_USB_DEBUG                    255
 
 // HashFast vendor and product ID's
@@ -106,13 +109,26 @@
 #define E_BOARD_3                       14
 #define E_BOARD_4                       15
 #define E_BOARD_5                       16
+#define E_CORE_POWER_FAULT              17
+#define E_BAUD_TIMEOUT                  18
+#define E_ADDRESS_FAILURE               19
 
 #define U32SIZE(x)                      (sizeof(x)/sizeof(uint32_t))
+
+// Baud rate vs. code for gpi[7:5] coming out of reset
+#define BAUD_RATE_PWRUP_0           115200
+#define BAUD_RATE_PWRUP_1             9600
+#define BAUD_RATE_PWRUP_2            38400
+#define BAUD_RATE_PWRUP_3            57600
+#define BAUD_RATE_PWRUP_4           230400
+#define BAUD_RATE_PWRUP_5           576000
+#define BAUD_RATE_PWRUP_6           921600
+#define BAUD_RATE_PWRUP_7          1152000
 
 
 // Structure definitions, LE platforms
 
-#if __BYTE_ORDER == __BIG_ENDIAN
+#if __BYTE_ORDER == __BIG_ENDIAN && !defined(WIN32)
 #include "hf_protocol_be.h"
 #else
 // Generic header
