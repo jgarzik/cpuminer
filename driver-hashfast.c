@@ -936,6 +936,8 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 		       hashfast->device_id);
 		if (info->hash_clock_rate > HFA_CLOCK_DEFAULT) {
 			info->hash_clock_rate -= 5;
+			if (info->hash_clock_rate < opt_hfa_hash_clock)
+				opt_hfa_hash_clock = info->hash_clock_rate;
 			applog(LOG_WARNING, "%s %d: Decreasing clock speed to %d with reset",
 			       hashfast->drv->name, hashfast->device_id, info->hash_clock_rate);
 		}
