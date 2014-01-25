@@ -2252,6 +2252,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
 	uint64_t history_good[BAB_MAXCHIPS], history_bad[BAB_MAXCHIPS];
+	uint64_t his_good_tot, his_bad_tot;
 	double history_elapsed[BAB_MAXCHIPS], diff;
 	bool elapsed_is_good[BAB_MAXCHIPS];
 	int speeds[BAB_CHIP_SPEEDS];
@@ -2261,7 +2262,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	int spi_work, chip_work, i, to, j, sp, bank, chip_off;
 	struct timeval now;
 	double elapsed, ghs;
-	float ghs_sum, ghs_tot;
+	float ghs_sum, his_ghs_tot;
 	float tot, hw;
 	K_ITEM *item;
 
@@ -2331,7 +2332,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	}
 	K_RUNLOCK(babinfo->nfree_list);
 
-	ghs_tot = 0;
+	his_ghs_tot = 0;
 	for (i = 0; i < babinfo->chips; i += CHIPS_PER_STAT) {
 		to = i + CHIPS_PER_STAT - 1;
 		if (to >= babinfo->chips)
@@ -2545,10 +2546,21 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 		snprintf(buf, sizeof(buf), "Sum History GHs "FMT_RANGE, i, to);
 		root = api_add_avg(root, buf, &ghs_sum, true);
 
-		ghs_tot += ghs_sum;
+		his_ghs_tot += ghs_sum;
 	}
 
-	root = api_add_avg(root, "Total History GHs", &ghs_tot, true);
+	root = api_add_avg(root, "Total History GHs", &his_ghs_tot, true);
+
+	his_good_tot = his_bad_tot = 0;
+	for (i = 0; i < babinfo->chips; i++) {
+		his_good_tot += history_good[i];
+		his_bad_tot += history_bad[i];
+	}
+	if (his_good_tot + his_bad_tot)
+		tot = 100.0 * (float)his_bad_tot / (float)(his_good_tot + his_bad_tot);
+	else
+		tot = 0.0;
+	root = api_add_avg(root, "Total History HW%", &tot, true);
 
 	for (sp = 0; sp < BAB_CHIP_SPEEDS; sp++) {
 		if (sp < (BAB_CHIP_SPEEDS - 1))
