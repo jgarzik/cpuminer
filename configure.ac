@@ -288,7 +288,7 @@ else
 	want_usbutils=false
 fi
 
-if test x$bab$bitfury != xnono; then
+if test x$bitfury != xno; then
 	want_libbitfury=true
 else
 	want_libbitfury=false
