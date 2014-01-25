@@ -706,7 +706,7 @@ static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
 			       hashfast->device_id, n->sequence, n->nonce, n->ntime & HF_NTIME_MASK);
 			if (submit_noffset_nonce(thr, work, n->nonce, n->ntime & HF_NTIME_MASK)) {
 				mutex_lock(&info->lock);
-				info->hash_count += 0xffffffffull * (uint64_t)work->work_difficulty;
+				info->hash_count += 0xffffffffull * work->work_difficulty;
 				mutex_unlock(&info->lock);
 			}
 #if 0	/* Not used */
