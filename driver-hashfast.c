@@ -604,7 +604,7 @@ static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_inf
 	}
 
 	mutex_lock(&info->lock);
-	info->hash_count += g->hash_count;
+	info->raw_hashes += g->hash_count;
 	info->device_sequence_head = g->sequence_head;
 	info->device_sequence_tail = g->sequence_tail;
 	info->shed_count = g->shed_count;
@@ -704,7 +704,11 @@ static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
 		} else {
 			applog(LOG_DEBUG, "HFA %d: OP_NONCE: sequence %d: submitting nonce 0x%08x ntime %d",
 			       hashfast->device_id, n->sequence, n->nonce, n->ntime & HF_NTIME_MASK);
-			submit_noffset_nonce(thr, work, n->nonce, n->ntime & HF_NTIME_MASK);	// XXX Return value from submit_nonce is error if set
+			if (submit_noffset_nonce(thr, work, n->nonce, n->ntime & HF_NTIME_MASK)) {
+				mutex_lock(&info->lock);
+				info->hash_count += 0xffffffffull * (uint64_t)work->work_difficulty;
+				mutex_unlock(&info->lock);
+			}
 #if 0	/* Not used */
 			if (unlikely(n->ntime & HF_NONCE_SEARCH)) {
 				/* This tells us there is another share in the
@@ -988,6 +992,7 @@ restart:
 
 	mutex_lock(&info->lock);
 	hashes = info->hash_count;
+	info->calc_hashes += hashes;
 	info->hash_count = 0;
 	mutex_unlock(&info->lock);
 
@@ -1059,6 +1064,9 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 		root = api_add_uint64(root, "an fifo full", &l->array_nonce_fifo_full, false);
 		root = api_add_uint64(root, "stats overrun", &l->stats_overrun, false);
 	}
+
+	root = api_add_uint64(root, "raw hashcount", &info->raw_hashes, false);
+	root = api_add_uint64(root, "calc hashcount", &info->calc_hashes, false);
 
 	return root;
 }

@@ -94,6 +94,8 @@ struct hashfast_info {
 	uint16_t device_sequence_head;              // DEVICE: The most recent sequence number the device dispatched
 	uint16_t device_sequence_tail;              // DEVICE: The most recently completed job in the device
 	int64_t hash_count;
+	uint64_t raw_hashes;
+	uint64_t calc_hashes;
 	uint16_t shed_count;                        // Dynamic copy of #cores device has shed for thermal control
 	int no_matching_work;
 
