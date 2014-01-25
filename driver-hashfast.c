@@ -1033,15 +1033,17 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 	for (i = 0; i < info->asic_count; i++) {
 		struct hf_long_statistics *l = &info->die_statistics[i];
 		struct hf_g1_die_data *d = &info->die_status[i];
-		double die_temp, core_voltage;
+		double val;
 		int j;
 
 		root = api_add_int(root, "Core", &i, true);
-		die_temp = GN_DIE_TEMPERATURE(d->die.die_temperature);
-		root = api_add_double(root, "die temperature", &die_temp, true);
+		val = GN_DIE_TEMPERATURE(d->die.die_temperature);
+		root = api_add_double(root, "die temperature", &val, true);
+		val = board_temperature(d->temperature);
+		root = api_add_double(root, "board temperature", &val, true);
 		for (j = 0; j < 6; j++) {
-			core_voltage = GN_CORE_VOLTAGE(d->die.core_voltage[j]);
-			sprintf(buf, "%d: %.2f", j, core_voltage);
+			val = GN_CORE_VOLTAGE(d->die.core_voltage[j]);
+			sprintf(buf, "%d: %.2f", j, val);
 			root = api_add_string(root, "core voltage", buf, true);
 		}
 		root = api_add_uint64(root, "rx header crc", &l->rx_header_crc, false);
