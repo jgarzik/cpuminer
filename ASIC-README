@@ -54,6 +54,18 @@ Nanofury devices come up as NF1.
 Bitfury USB devices are also set up as per the USB ASICs below.
 
 
+HASHFAST devices
+
+Hashfast devices need the --enable-hashfast option when compiling cgminer.
+
+All current HFA devices are supported and are recognised with the name HFA
+in the --usb commands. After initialisation, cgminer will determine what type
+they are and give them the following names:
+
+HFB: Hashfast Babyjet
+HFS: Hashfast Sierra
+HFA: Hashfast non standard (eg. a Babyjet with an added board)
+
 ---
 GETTING STARTED WITH USB ASICS
 
@@ -135,6 +147,8 @@ ASIC SPECIFIC COMMANDS
 --bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
 --bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
+--hfa-hash-clock <arg> Set hashfast clock speed (default: 550)
+--hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 85)
 --klondike-options <arg> Set klondike options clock:temptarget
 
 
@@ -372,6 +386,26 @@ Hz is the SPI clock speed to use
 Delay is the us delay used between bytes for the SPI I/O - default 0
 
 Trf is the us delay used between sends for the SPI I/O - default 0
+
+
+Hashfast devices
+
+--hfa-hash-clock <arg> Set hashfast clock speed (default: 550)
+
+This will change the initialisation clock speed on all attached hfa devices.
+Note that if instability is detected by cgminer and the device has to undergo
+a reset, cgminer will lower the clockspeed on resetting it each time till the
+value returns to the default of 550.
+
+--hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 85)
+
+Cgminer will temporarily stop sending hashfast devices work once this
+temperature is reached. Note that with the water cooling in these devices,
+temperature recovery is likely to be very quick and the device will start
+hashing again after only a very brief period.
+
+Other undocumented hashfast command line options are for development purposes
+only at this stage and serve no useful purpose to end users.
 
 ---
 
