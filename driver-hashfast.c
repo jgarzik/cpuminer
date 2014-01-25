@@ -344,6 +344,11 @@ tryagain:
 	info->hash_sequence_tail = 0;
 	info->device_sequence_tail = 0;
 
+	if (info->asic_count == 12)
+		hashfast->drv->name = "HFS";
+	else if (info->asic_count == 4)
+		hashfast->drv->name = "HFB";
+
 	// Size in bytes of the core bitmap in bytes
 	info->core_bitmap_size = (((info->asic_count * info->core_count) + 31) / 32) * 4;
 
