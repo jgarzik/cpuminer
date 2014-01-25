@@ -289,9 +289,9 @@ else
 fi
 
 if test x$bab$bitfury != xnono; then
-	want_libbitfury = true
+	want_libbitfury=true
 else
-	want_libbitfury = false
+	want_libbitfury=false
 fi
 
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$modminer != xno])
