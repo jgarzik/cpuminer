@@ -694,15 +694,15 @@ static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
 		} else {
 			applog(LOG_DEBUG, "HFA %d: OP_NONCE: sequence %d: submitting nonce 0x%08x ntime %d",
 			       hashfast->device_id, n->sequence, n->nonce, n->ntime & HF_NTIME_MASK);
-			if ((n->nonce & 0xffff0000) == 0x42420000)		// XXX REMOVE THIS
-				break;						// XXX PHONEY EMULATOR NONCE
 			submit_noffset_nonce(thr, work, n->nonce, n->ntime & HF_NTIME_MASK);	// XXX Return value from submit_nonce is error if set
+#if 0	/* Not used */
 			if (unlikely(n->ntime & HF_NONCE_SEARCH)) {
 				/* This tells us there is another share in the
 				 * next 128 nonces */
 				applog(LOG_DEBUG, "HFA %d: OP_NONCE: SEARCH PROXIMITY EVENT FOUND",
 				       hashfast->device_id);
 			}
+#endif
 		}
 	}
 }
