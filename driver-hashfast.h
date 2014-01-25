@@ -18,6 +18,7 @@
 
 int opt_hfa_ntime_roll;
 int opt_hfa_hash_clock;
+int opt_hfa_overheat;
 bool opt_hfa_pll_bypass;
 bool opt_hfa_dfu_boot;
 
@@ -99,6 +100,7 @@ struct hashfast_info {
 	uint16_t shed_count;                        // Dynamic copy of #cores device has shed for thermal control
 	int no_matching_work;
 	int resets;
+	bool overheat;
 
 	pthread_t read_thr;
 };

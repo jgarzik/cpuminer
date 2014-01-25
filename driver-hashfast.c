@@ -20,6 +20,7 @@
 
 int opt_hfa_ntime_roll = 1;
 int opt_hfa_hash_clock = 550;
+int opt_hfa_overheat = 85;
 bool opt_hfa_pll_bypass;
 bool opt_hfa_dfu_boot;
 
@@ -891,7 +892,10 @@ static bool hfa_prepare(struct thr_info *thr)
 /* Figure out how many jobs to send. */
 static int hfa_jobs(struct hashfast_info *info)
 {
-	int ret;
+	int ret = 0;
+
+	if (unlikely(info->overheat))
+		goto out;
 
 	mutex_lock(&info->lock);
 	ret = info->usb_init_base.inflight_target - HF_SEQUENCE_DISTANCE(info->hash_sequence_head, info->device_sequence_tail);
@@ -901,6 +905,7 @@ static int hfa_jobs(struct hashfast_info *info)
 		ret = info->usb_init_base.inflight_target;
 	mutex_unlock(&info->lock);
 
+out:
 	return ret;
 }
 
@@ -1115,6 +1120,15 @@ static void hfa_statline_before(char *buf, size_t bufsiz, struct cgpu_info *hash
 	}
 
 	tailsprintf(buf, bufsiz, " max%3.0fC %3.2fV | ", max_temp, max_volt);
+
+	if (unlikely(max_temp >= opt_hfa_overheat)) {
+		if (!info->overheat) {
+			applog(LOG_WARNING, "HFA %d: Hit throttle temp of %.1f, throttling!",
+			       hashfast->device_id, max_temp);
+			info->overheat = true;
+		}
+	} else if (unlikely(info->overheat))
+		info->overheat = false;
 }
 
 static void hfa_init(struct cgpu_info __maybe_unused *hashfast)
