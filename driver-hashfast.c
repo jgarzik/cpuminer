@@ -702,18 +702,13 @@ static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
 			info->no_matching_work++;
 			applog(LOG_INFO, "HFA %d: No matching work!", hashfast->device_id);
 		} else {
-			struct work *nwork = copy_work_noffset(work, n->ntime & HF_NTIME_MASK);
-
 			applog(LOG_DEBUG, "HFA %d: OP_NONCE: sequence %d: submitting nonce 0x%08x ntime %d",
 			       hashfast->device_id, n->sequence, n->nonce, n->ntime & HF_NTIME_MASK);
-			if (!test_nonce(nwork, n->nonce))
-				inc_hw_errors(thr);
-			else if (submit_tested_work(thr, nwork)) {
+			if (submit_noffset_nonce(thr, work, n->nonce, n->ntime & HF_NTIME_MASK)) {
 				mutex_lock(&info->lock);
-				info->hash_count += 0xffffffffull * work->work_difficulty;
+				info->hash_count += 0xffffffffull * work->device_diff;
 				mutex_unlock(&info->lock);
 			}
-			free_work(nwork);
 #if 0	/* Not used */
 			if (unlikely(n->ntime & HF_NONCE_SEARCH)) {
 				/* This tells us there is another share in the
