@@ -895,8 +895,8 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
+	int jobs, ret, cycles = 0;
 	int64_t hashes;
-	int jobs, ret;
 
 	if (unlikely(hashfast->usbinfo.nodev)) {
 		applog(LOG_WARNING, "HFA %d: device disappeared, disabling",
@@ -920,7 +920,9 @@ restart:
 
 	jobs = hfa_jobs(info);
 
-	if (!jobs) {
+	/* Wait on restart_wait for up to 0.5 seconds or submit jobs as soon as
+	 * they're required. */
+	while (!jobs && ++cycles < 5) {
 		ret = restart_wait(thr, 100);
 		if (unlikely(!ret))
 			goto restart;
