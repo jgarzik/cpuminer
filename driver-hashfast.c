@@ -274,6 +274,8 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	uint8_t hcrc;
 	bool ret;
 
+	info->resets++;
+
 	/* Hash clock rate in Mhz */
 	info->hash_clock_rate = opt_hfa_hash_clock;
 	info->group_ntime_roll = opt_hfa_ntime_roll;
@@ -880,6 +882,8 @@ static bool hfa_prepare(struct thr_info *thr)
 
 	cgtime(&now);
 	get_datestamp(hashfast->init, sizeof(hashfast->init), &now);
+	hashfast->last_device_valid_work = time(NULL);
+	info->resets = 0;
 
 	return true;
 }
@@ -911,6 +915,17 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 		applog(LOG_WARNING, "HFA %d: device disappeared, disabling",
 		       hashfast->device_id);
 		return -1;
+	}
+
+	if (unlikely(last_getwork - hashfast->last_device_valid_work > 60)) {
+		applog(LOG_WARNING, "HFA %d: No valid hashes for over 1 minute, attempting to reset",
+		       hashfast->device_id);
+		ret = hfa_reset(hashfast, info);
+		if (unlikely(!ret)) {
+			applog(LOG_ERR, "HFA %d: Failed to reset after hash failure, disabling",
+			hashfast->device_id);
+			return -1;
+		}
 	}
 
 	if (unlikely(thr->work_restart)) {
@@ -1069,6 +1084,7 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 
 	root = api_add_uint64(root, "raw hashcount", &info->raw_hashes, false);
 	root = api_add_uint64(root, "calc hashcount", &info->calc_hashes, false);
+	root = api_add_int(root, "resets", &info->resets, false);
 
 	return root;
 }
