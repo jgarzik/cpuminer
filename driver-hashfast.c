@@ -344,6 +344,11 @@ tryagain:
 	info->hash_sequence_tail = 0;
 	info->device_sequence_tail = 0;
 
+	if (info->asic_count == 12)
+		hashfast->drv->name = "HFS";
+	else if (info->asic_count == 4)
+		hashfast->drv->name = "HFB";
+
 	// Size in bytes of the core bitmap in bytes
 	info->core_bitmap_size = (((info->asic_count * info->core_count) + 31) / 32) * 4;
 
@@ -890,8 +895,8 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
+	int jobs, ret, cycles = 0;
 	int64_t hashes;
-	int jobs, ret;
 
 	if (unlikely(hashfast->usbinfo.nodev)) {
 		applog(LOG_WARNING, "HFA %d: device disappeared, disabling",
@@ -915,7 +920,9 @@ restart:
 
 	jobs = hfa_jobs(info);
 
-	if (!jobs) {
+	/* Wait on restart_wait for up to 0.5 seconds or submit jobs as soon as
+	 * they're required. */
+	while (!jobs && ++cycles < 5) {
 		ret = restart_wait(thr, 100);
 		if (unlikely(!ret))
 			goto restart;
@@ -1026,15 +1033,17 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 	for (i = 0; i < info->asic_count; i++) {
 		struct hf_long_statistics *l = &info->die_statistics[i];
 		struct hf_g1_die_data *d = &info->die_status[i];
-		double die_temp, core_voltage;
+		double val;
 		int j;
 
 		root = api_add_int(root, "Core", &i, true);
-		die_temp = GN_DIE_TEMPERATURE(d->die.die_temperature);
-		root = api_add_double(root, "die temperature", &die_temp, true);
+		val = GN_DIE_TEMPERATURE(d->die.die_temperature);
+		root = api_add_double(root, "die temperature", &val, true);
+		val = board_temperature(d->temperature);
+		root = api_add_double(root, "board temperature", &val, true);
 		for (j = 0; j < 6; j++) {
-			core_voltage = GN_CORE_VOLTAGE(d->die.core_voltage[j]);
-			sprintf(buf, "%d: %.2f", j, core_voltage);
+			val = GN_CORE_VOLTAGE(d->die.core_voltage[j]);
+			sprintf(buf, "%d: %.2f", j, val);
 			root = api_add_string(root, "core voltage", buf, true);
 		}
 		root = api_add_uint64(root, "rx header crc", &l->rx_header_crc, false);
