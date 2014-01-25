@@ -995,10 +995,12 @@ restart:
 		       hashfast->device_id, info->hash_sequence_head, op_hash_data.search_difficulty, work->work_difficulty);
 	}
 
+	/* Only count 2/3 of the hashes to smooth out the hashrate for cycles
+	 * that have no hashes added. */
 	mutex_lock(&info->lock);
-	hashes = info->hash_count;
+	hashes = info->hash_count / 3 * 2;
 	info->calc_hashes += hashes;
-	info->hash_count = 0;
+	info->hash_count -= hashes;
 	mutex_unlock(&info->lock);
 
 	return hashes;
