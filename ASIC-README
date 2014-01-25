@@ -40,7 +40,7 @@ BlackArrow Bitfury devices
 BlackArrow Bitfury devices need the --enable-bab option when compiling cgminer.
 
 The current BlackArrow Bitfury devices are similar to the Bitfury GPIO mining
-boards and come up as BaB. There are no options available for them.
+boards, with both V1 and V2 controllers, and come up as BaB.
 
 
 BITFURY devices
@@ -129,6 +129,7 @@ ASIC SPECIFIC COMMANDS
 --avalon-freq <arg> Set frequency range for avalon-auto, single value or range
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq:tech
 --avalon-temp <arg> Set avalon target temperature (default: 50)
+--bab-options <arg> Set BaB options max:def:min:up:down:hz:delay:trf
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
 --bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
@@ -349,6 +350,28 @@ ext recommends a clock of 80 to 230, with a default of 200
 
 voltage must be one of 650, 750, 850 or 950 with a default of 850
 
+
+BlackArrow Bitfury devices
+
+--bab-options <arg> Set BaB options Max:Def:Min:Up:Down:Hz:Delay:Trf
+
+Any option left blank or starting with 'd' will use the default setting
+If there are not enough options, then the remaining will be left at their
+default value
+
+Max:Def:Min are the chip speed limits to allow, ranging from 52 to 57
+
+Up:Down are the HW error % used to tune the chip speed
+Up means if the HW error % is less than up, over a 5 minute period,
+then increase the chip speed
+Down means if the HW error % is greater than down, over 5 minutes,
+then decrease the chip speed
+
+Hz is the SPI clock speed to use
+
+Delay is the us delay used between bytes for the SPI I/O - default 0
+
+Trf is the us delay used between sends for the SPI I/O - default 0
 
 ---
 

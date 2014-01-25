@@ -17,6 +17,7 @@
 #include "sha2.h"
 #include "libbitfury.h"
 #include "klist.h"
+#include <ctype.h>
 
 /*
  * Tested on RPi running both Raspbian and Arch
@@ -39,8 +40,12 @@ static void bab_detect(__maybe_unused bool hotplug)
 #define BAB_SPI_BUS 0
 #define BAB_SPI_CHIP 0
 
-#define BAB_SPI_SPEED 96000
+//#define BAB_SPI_SPEED 96000
+#define BAB_SPI_SPEED 1000000
 #define BAB_SPI_BUFSIZ 1024
+
+#define BAB_DELAY_USECS 0
+#define BAB_TRF_DELAY 0
 
 #define BAB_ADDR(_n) (*((babinfo->gpio) + (_n)))
 
@@ -140,8 +145,16 @@ static const uint32_t bab_test_data[BAB_TEST_DATA] = {
  *    56/  101/  125/  99
  */
 #define BAB_MAXSPEED 57
+#define BAB_DEFMAXSPEED 55
 #define BAB_DEFSPEED 54
 #define BAB_MINSPEED 52
+
+/*
+ * % of errors to tune the speed up or down
+ * 1.0 to 10.0 should average around 5.5% errors
+ */
+#define BAB_TUNEUP 1.0
+#define BAB_TUNEDOWN 10.0
 
 #define MIDSTATE_BYTES 32
 #define MERKLE_OFFSET 64
@@ -243,6 +256,7 @@ struct bab_work_send {
 struct bab_work_reply {
 	uint32_t nonce[BAB_REPLY_NONCES];
 	uint32_t jobsel;
+	uint32_t spichk;
 };
 
 #define BAB_CHIP_MIN (sizeof(struct bab_work_reply)+16)
@@ -312,6 +326,12 @@ static double chip_speed_ranges[BAB_CHIP_SPEEDS - 1] =
 static char *chip_speed_names[BAB_CHIP_SPEEDS] =
 	{ "Dead", "V.Slow", "Slow", "OK", "Good", "Fast" };
 
+/*
+ * This is required to do chip tuning
+ * If disabled, it will simply run the chips at default speed
+ */
+#define UPDATE_HISTORY 1
+
 struct bab_info {
 	struct thr_info spi_thr;
 	struct thr_info res_thr;
@@ -348,9 +368,6 @@ struct bab_info {
 	uint8_t chip_bank[BAB_MAXCHIPS+1];
 
 	uint8_t osc[BAB_OSC];
-
-	// TODO: performance tuning
-	int fixchip;
 
 	/*
 	 * Ignore errors in the first work reply since
@@ -434,6 +451,23 @@ struct bab_info {
 	K_LIST *nfree_list;
 	K_STORE *good_nonces[BAB_MAXCHIPS];
 	K_STORE *bad_nonces[BAB_MAXCHIPS];
+#if UPDATE_HISTORY
+	struct timeval first_work[BAB_MAXCHIPS];
+	uint32_t work_count[BAB_MAXCHIPS];
+	struct timeval last_tune[BAB_MAXCHIPS];
+	uint8_t bad_fast[BAB_MAXCHIPS];
+	bool dead_msg[BAB_MAXCHIPS];
+#endif
+
+	// bab-options (in order)
+	uint8_t max_speed;
+	uint8_t def_speed;
+	uint8_t min_speed;
+	double tune_up;
+	double tune_down;
+	uint32_t speed_hz;
+	uint16_t delay_usecs;
+	uint64_t trf_delay;
 
 	struct timeval last_did;
 
@@ -583,8 +617,8 @@ static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, K_ITE
 	siz = (uint32_t)(DATAS(item)->siz);
 
 	memset(&tran, 0, sizeof(tran));
-	tran.delay_usecs = 0;
-	tran.speed_hz = BAB_SPI_SPEED;
+	tran.speed_hz = babinfo->speed_hz;
+	tran.delay_usecs = babinfo->delay_usecs;
 
 	i = 0;
 	pos = 0;
@@ -668,6 +702,9 @@ static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, K_ITE
 		wbuf += tran.len;
 		rbuf += tran.len;
 		pos += tran.len;
+
+		if (siz > 0 && babinfo->trf_delay > 0)
+			cgsleep_us(babinfo->trf_delay);
 	}
 	cgtime(&(DATAS(item)->work_start));
 	mutex_lock(&(babinfo->did_lock));
@@ -789,9 +826,7 @@ static void bab_put(struct bab_info *babinfo, K_ITEM *sitem)
 			bank = babinfo->chip_bank[i];
 			BAB_ADD_BREAK(sitem);
 		}
-		if (i == babinfo->fixchip &&
-		    (BAB_CFGD_SET(babinfo->chip_conf[i]) ||
-		     !babinfo->chip_conf[i])) {
+		if (BAB_CFGD_SET(babinfo->chip_conf[i]) || !babinfo->chip_conf[i]) {
 			bab_set_osc(babinfo, i);
 			bab_add_data(sitem, BAB_OSC_ADDR, babinfo->osc, sizeof(babinfo->osc));
 			bab_config_reg(sitem, BAB_ICLK_REG, BAB_ICLK_BIT(babinfo->chip_conf[i]));
@@ -842,7 +877,7 @@ static void bab_put(struct bab_info *babinfo, K_ITEM *sitem)
 		}
 		DATAS(sitem)->chip_off[i] = DATAS(sitem)->siz + 3;
 		chip_input = &(DATAW(DATAS(sitem)->witems[i])->chip_input);
-		// Would no-ops need to be added if a chip gets disabled?
+
 		if (babinfo->chip_conf[i])
 			bab_add_data(sitem, BAB_INP_ADDR, (uint8_t *)chip_input, sizeof(*chip_input));
 
@@ -860,8 +895,6 @@ static void bab_put(struct bab_info *babinfo, K_ITEM *sitem)
 	K_WUNLOCK(babinfo->spi_list);
 
 	cgsem_post(&(babinfo->spi_work));
-
-	babinfo->fixchip = (babinfo->fixchip + 1) % babinfo->chips;
 }
 
 static bool bab_get(__maybe_unused struct cgpu_info *babcgpu, struct bab_info *babinfo, struct timeval *when)
@@ -1003,6 +1036,9 @@ static bool bab_init_gpio(struct cgpu_info *babcgpu, struct bab_info *babinfo, i
 {
 	int i, err, memfd, data;
 	char buf[64];
+
+	bab_ioc[4].value = (int)(babinfo->speed_hz);
+	bab_ioc[5].value = (int)(babinfo->speed_hz);
 
 	for (i = 0; bab_modules[i]; i++) {
 		snprintf(buf, sizeof(buf), "modprobe %s", bab_modules[i]);
@@ -1149,6 +1185,148 @@ static void bab_init_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 	memcpy(babinfo->old_fast, babinfo->chip_fast, sizeof(babinfo->old_fast));
 }
 
+static char *bab_options[] = {
+	"MaxSpeed",
+	"DefaultSpeed",
+	"MinSpeed",
+	"TuneUp",
+	"TuneDown",
+	"SPISpeed",
+	"SPIDelayuS",
+	"TransferDelayuS"
+};
+
+#define INVOP " Invalid Option "
+
+static void bab_get_options(struct cgpu_info *babcgpu, struct bab_info *babinfo)
+{
+	char *ptr, *colon;
+	int which, val;
+	double fval;
+	long lval;
+
+	if (opt_bab_options == NULL)
+		return;
+
+	which = 0;
+	ptr = opt_bab_options;
+	while (ptr && *ptr) {
+		colon = strchr(ptr, ':');
+		if (colon)
+			*(colon++) = '\0';
+
+		switch (which) {
+			case 0:
+				if (*ptr && tolower(*ptr) != 'd') {
+					val = atoi(ptr);
+					if (!isdigit(*ptr) || val < BAB_MINSPEED || val > BAB_MAXSPEED) {
+						quit(1, "%s"INVOP"%s '%s' must be %d <= %s <= %d",
+							babcgpu->drv->dname,
+							bab_options[which],
+							ptr, BAB_MINSPEED,
+							bab_options[which],
+							BAB_MAXSPEED);
+					}
+					babinfo->max_speed = (uint8_t)val;
+				}
+				break;
+			case 1:
+				if (*ptr && tolower(*ptr) != 'd') {
+					val = atoi(ptr);
+					if (!isdigit(*ptr) || val < BAB_MINSPEED || val > babinfo->max_speed) {
+						quit(1, "%s"INVOP"%s '%s' must be %d <= %s <= %d",
+							babcgpu->drv->dname,
+							bab_options[which],
+							ptr, BAB_MINSPEED,
+							bab_options[which],
+							babinfo->max_speed);
+					}
+					babinfo->def_speed = (uint8_t)val;
+				}
+				break;
+			case 2:
+				if (*ptr && tolower(*ptr) != 'd') {
+					val = atoi(ptr);
+					if (!isdigit(*ptr) || val < BAB_MINSPEED || val > babinfo->def_speed) {
+						quit(1, "%s"INVOP"%s '%s' must be %d <= %s <= %d",
+							babcgpu->drv->dname,
+							bab_options[which],
+							ptr, BAB_MINSPEED,
+							bab_options[which],
+							babinfo->def_speed);
+					}
+					babinfo->min_speed = (uint8_t)val;
+				}
+				break;
+			case 3:
+				if (*ptr && tolower(*ptr) != 'd') {
+					fval = atof(ptr);
+					if (!isdigit(*ptr) || fval < 0.0 || fval > 100.0) {
+						quit(1, "%s"INVOP"%s '%s' must be 0.0 <= %s <= 100.0",
+							babcgpu->drv->dname,
+							bab_options[which], ptr,
+							bab_options[which]);
+					}
+					babinfo->tune_up = fval;
+				}
+				break;
+			case 4:
+				if (*ptr && tolower(*ptr) != 'd') {
+					fval = atof(ptr);
+					if (!isdigit(*ptr) || fval < 0.0 || fval > 100.0) {
+						quit(1, "%s"INVOP"%s '%s' must be %f <= %s <= 100.0",
+							babcgpu->drv->dname,
+							bab_options[which],
+							ptr, babinfo->tune_up,
+							bab_options[which]);
+					}
+					babinfo->tune_down = fval;
+				}
+				break;
+			case 5:
+				if (*ptr && tolower(*ptr) != 'd') {
+					val = atoi(ptr);
+					if (!isdigit(*ptr) || val < 10000 || val > 10000000) {
+						quit(1, "%s"INVOP"%s '%s' must be 10,000 <= %s <= 10,000,000",
+							babcgpu->drv->dname,
+							bab_options[which], ptr,
+							bab_options[which]);
+					}
+					babinfo->speed_hz = (uint32_t)val;
+				}
+				break;
+			case 6:
+				if (*ptr && tolower(*ptr) != 'd') {
+					val = atoi(ptr);
+					if (!isdigit(*ptr) || val < 0 || val > 65535) {
+						quit(1, "%s"INVOP"%s '%s' must be 0 <= %s <= 65535",
+							babcgpu->drv->dname,
+							bab_options[which], ptr,
+							bab_options[which]);
+					}
+					babinfo->delay_usecs = (uint16_t)val;
+				}
+				break;
+			case 7:
+				if (*ptr && tolower(*ptr) != 'd') {
+					lval = atol(ptr);
+					if (!isdigit(*ptr) || lval < 0) {
+						quit(1, "%s"INVOP"%s '%s' must be %s >= 0",
+							babcgpu->drv->dname,
+							bab_options[which], ptr,
+							bab_options[which]);
+					}
+					babinfo->trf_delay = (uint64_t)lval;
+				}
+				break;
+			default:
+				break;
+		}
+		ptr = colon;
+		which++;
+	}
+}
+
 static void bab_detect(bool hotplug)
 {
 	struct cgpu_info *babcgpu = NULL;
@@ -1171,9 +1349,25 @@ static void bab_detect(bool hotplug)
 		quithere(1, "Failed to calloc babinfo");
 	babcgpu->device_data = (void *)babinfo;
 
+	babinfo->max_speed = BAB_DEFMAXSPEED;
+	babinfo->def_speed = BAB_DEFSPEED;
+	babinfo->min_speed = BAB_MINSPEED;
+
+	babinfo->tune_up = BAB_TUNEUP;
+	babinfo->tune_down = BAB_TUNEDOWN;
+
+	babinfo->speed_hz = BAB_SPI_SPEED;
+	babinfo->delay_usecs = BAB_DELAY_USECS;
+	babinfo->trf_delay = BAB_TRF_DELAY;
+
+	bab_get_options(babcgpu, babinfo);
+
 	for (i = 0; i < BAB_MAXCHIPS; i++) {
 		babinfo->chip_conf[i] = BAB_DEFCONF;
-		babinfo->chip_fast[i] = BAB_DEFSPEED;
+		babinfo->chip_fast[i] = babinfo->def_speed;
+#if UPDATE_HISTORY
+		babinfo->bad_fast[i] = babinfo->max_speed + 1;
+#endif
 	}
 
 	if (!bab_init_gpio(babcgpu, babinfo, BAB_SPI_BUS, BAB_SPI_CHIP))
@@ -1318,6 +1512,11 @@ static void *bab_spi(void *userdata)
 				memcpy(&(DATAW(witem)->work_start), &(DATAS(sitem)->work_start),
 					sizeof(DATAW(witem)->work_start));
 				k_add_head(babinfo->chip_work[chip], witem);
+#if UPDATE_HISTORY
+				babinfo->work_count[chip]++;
+				if (babinfo->first_work[chip].tv_sec == 0)
+					memcpy(&(babinfo->first_work[chip]), &send, sizeof(send));
+#endif
 			}
 		}
 		K_WUNLOCK(babinfo->wfree_list);
@@ -1384,13 +1583,14 @@ static void bab_flush_work(struct cgpu_info *babcgpu)
 #define WORK_BITS (18*4)
 #define WORK_NONCE (19*4)
 
-#define UPDATE_HISTORY 1
-
 #if UPDATE_HISTORY
-static void process_history(struct bab_info *babinfo, int chip, struct timeval *when, bool good, struct timeval *now)
+static void process_history(struct cgpu_info *babcgpu, int chip, struct timeval *when, bool good, struct timeval *now)
 {
+	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
+	uint64_t good_nonces, bad_nonces;
+	uint8_t chip_fast;
+	double tune;
 	K_ITEM *item;
-	double diff;
 	int i;
 
 	K_WLOCK(babinfo->nfree_list);
@@ -1405,8 +1605,7 @@ static void process_history(struct bab_info *babinfo, int chip, struct timeval *
 	for (i = 0; i < babinfo->chips; i++) {
 		item = babinfo->good_nonces[i]->tail;
 		while (item) {
-			diff = tdiff(now, &(DATAN(item)->found));
-			if (diff < HISTORY_TIME_S)
+			if (tdiff(now, &(DATAN(item)->found)) < HISTORY_TIME_S)
 				break;
 
 			k_unlink_item(babinfo->good_nonces[i], item);
@@ -1417,8 +1616,7 @@ static void process_history(struct bab_info *babinfo, int chip, struct timeval *
 
 		item = babinfo->bad_nonces[i]->tail;
 		while (item) {
-			diff = tdiff(now, &(DATAN(item)->found));
-			if (diff < HISTORY_TIME_S)
+			if (tdiff(now, &(DATAN(item)->found)) < HISTORY_TIME_S)
 				break;
 
 			k_unlink_item(babinfo->bad_nonces[i], item);
@@ -1428,6 +1626,99 @@ static void process_history(struct bab_info *babinfo, int chip, struct timeval *
 		}
 	}
 	K_WUNLOCK(babinfo->nfree_list);
+
+	// Tuning ...
+	good_nonces = babinfo->good_nonces[chip]->count;
+	bad_nonces = babinfo->bad_nonces[chip]->count;
+
+	if (tdiff(now, &(babinfo->first_work[chip])) >= HISTORY_TIME_S &&
+	    tdiff(now, &(babinfo->last_tune[chip])) >= HISTORY_TIME_S &&
+	    (good_nonces + bad_nonces) > 0) {
+
+		chip_fast = babinfo->chip_fast[chip];
+
+		/*
+		 * If dead then step it down and remember the speed
+		 * TODO: does a speed change reset the chip? Or is there a reset?
+		 */
+		if (good_nonces == 0) {
+			if (chip_fast > babinfo->min_speed) {
+				if (babinfo->bad_fast[chip] > chip_fast)
+					babinfo->bad_fast[chip] = chip_fast;
+
+				babinfo->chip_fast[chip]--;
+
+				applog(LOG_WARNING, "%s%d: Chip %d DEAD - speed down from %d to %d",
+						    babcgpu->drv->name, babcgpu->device_id,
+						    chip, (int)chip_fast, (int)chip_fast - 1);
+			} else {
+				/*
+				 * Permanently DEAD since we're already at the minumum speed
+				 * but only getting bad nonces
+				 */
+				if (babinfo->dead_msg[chip] == false) {
+					applog(LOG_WARNING, "%s%d: Chip %d DEAD - at min speed %d",
+							    babcgpu->drv->name, babcgpu->device_id,
+							    chip, (int)chip_fast);
+
+					babinfo->dead_msg[chip] = true;
+				}
+			}
+			goto tune_over;
+		}
+
+		/*
+		 * It 'was' permanently DEAD but a good nonce came back!
+		 */
+		if (babinfo->dead_msg[chip]) {
+			applog(LOG_WARNING, "%s%d: Chip %d REVIVED - at speed %d",
+					    babcgpu->drv->name, babcgpu->device_id,
+					    chip, (int)chip_fast);
+
+			babinfo->dead_msg[chip] = false;
+		}
+
+		/*
+		 * Since we have found 'some' nonces -
+		 * make sure bad_fast is higher than current chip_fast
+		 */
+		if (babinfo->bad_fast[chip] <= chip_fast)
+			babinfo->bad_fast[chip] = chip_fast + 1;
+
+		tune = (double)bad_nonces / (double)(good_nonces + bad_nonces) * 100.0;
+
+		// Tune it down if error rate is too high
+		if (tune >= babinfo->tune_down) {
+			babinfo->chip_fast[chip]--;
+
+			applog(LOG_WARNING, "%s%d: Chip %d High errors %.2f%% - speed down %d to %d",
+					    babcgpu->drv->name, babcgpu->device_id,
+					    chip, tune, (int)chip_fast, (int)chip_fast - 1);
+
+			goto tune_over;
+		}
+
+		/*
+		 * TODO: if we are at bad_fast-1 and tune_up
+		 * and bad_fast was set more than some time limit ago
+		 * then consider increasing bad_fast by 1?
+		 */
+
+		// Tune it up if error rate is low enough
+		if (tune <= babinfo->tune_up &&
+		    chip_fast < babinfo->max_speed &&
+		    chip_fast < (babinfo->bad_fast[chip] - 1)) {
+			babinfo->chip_fast[chip]++;
+
+			applog(LOG_WARNING, "%s%d: Chip %d Low errors %.2f%% - speed up %d to %d",
+					    babcgpu->drv->name, babcgpu->device_id,
+					    chip, tune, (int)chip_fast, (int)chip_fast + 1);
+
+			goto tune_over;
+		}
+tune_over:
+		cgtime(&(babinfo->last_tune[chip]));
+	}
 }
 #endif
 
@@ -1527,7 +1818,7 @@ static K_ITEM *process_nonce(struct thr_info *thr, struct cgpu_info *babcgpu, K_
 
 						babinfo->chip_cont_bad[chip] = 0;
 #if UPDATE_HISTORY
-						process_history(babinfo, chip,
+						process_history(babcgpu, chip,
 								&(DATAR(ritem)->when),
 								true, &now);
 #endif
@@ -1563,7 +1854,7 @@ static K_ITEM *process_nonce(struct thr_info *thr, struct cgpu_info *babcgpu, K_
 			babinfo->chip_max_bad[chip] = babinfo->chip_cont_bad[chip];
 
 #if UPDATE_HISTORY
-		process_history(babinfo, chip, &(DATAR(ritem)->when), false, &now);
+		process_history(babcgpu, chip, &(DATAR(ritem)->when), false, &now);
 #endif
 	} else {
 		babinfo->initial_ignored++;
@@ -1656,8 +1947,8 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 	K_ITEM *witem, *sitem, *ritem;
 	struct timeval when, now;
 	double delay;
-	int chip, rep, j, nonces;
-	uint32_t nonce;
+	int chip, rep, j, nonces, spie = 0, miso = 0;
+	uint32_t nonce, spichk;
 	bool res;
 
 	cgtime(&now);
@@ -1739,6 +2030,12 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 		DATAR(ritem)->not_first_reply = babinfo->not_first_reply[chip];
 		memcpy(&(DATAR(ritem)->when), &when, sizeof(when));
 
+		spichk = babinfo->chip_results[chip].spichk;
+		if (spichk != 0 && spichk != 0xffffffff) {
+			babinfo->chip_spie[chip]++;
+			spie++;
+		}
+
 		nonces = 0;
 		for (rep = 0; rep < BAB_REPLY_NONCES; rep++) {
 			nonce = babinfo->chip_results[chip].nonce[rep];
@@ -1748,6 +2045,12 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 				else
 					DATAR(ritem)->nonce[nonces++] = nonce;
 			}
+		}
+
+		if (nonces == BAB_REPLY_NONCES) {
+			babinfo->chip_miso[chip]++;
+			miso++;
+			// Test the results anyway
 		}
 
 		/*
@@ -1769,7 +2072,7 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 
 	}
 
-	applog(LOG_DEBUG, "Work: items:%d", work_items);
+	applog(LOG_DEBUG, "Work: items:%d spie:%d miso:%d", work_items, spie, miso);
 
 	return true;
 }
@@ -1883,6 +2186,7 @@ static int64_t bab_scanwork(__maybe_unused struct thr_info *thr)
 }
 
 #define CHIPS_PER_STAT 16
+#define FMT_RANGE "%d-%d"
 
 static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 {
@@ -1981,7 +2285,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 					babinfo->chip_nonces[j]);
 			strcat(data, buf);
 		}
-		snprintf(buf, sizeof(buf), "Nonces %d - %d", i, to);
+		snprintf(buf, sizeof(buf), "Nonces "FMT_RANGE, i, to);
 		root = api_add_string(root, buf, data, true);
 
 		data[0] = '\0';
@@ -1992,7 +2296,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 					babinfo->chip_good[j]);
 			strcat(data, buf);
 		}
-		snprintf(buf, sizeof(buf), "Good %d - %d", i, to);
+		snprintf(buf, sizeof(buf), "Good "FMT_RANGE, i, to);
 		root = api_add_string(root, buf, data, true);
 
 		data[0] = '\0';
@@ -2003,7 +2307,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 					babinfo->chip_bad[j]);
 			strcat(data, buf);
 		}
-		snprintf(buf, sizeof(buf), "Bad %d - %d", i, to);
+		snprintf(buf, sizeof(buf), "Bad "FMT_RANGE, i, to);
 		root = api_add_string(root, buf, data, true);
 
 		data[0] = '\0';
@@ -2014,7 +2318,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 					(int)(babinfo->chip_conf[j]));
 			strcat(data, buf);
 		}
-		snprintf(buf, sizeof(buf), "Conf %d - %d", i, to);
+		snprintf(buf, sizeof(buf), "Conf "FMT_RANGE, i, to);
 		root = api_add_string(root, buf, data, true);
 
 		data[0] = '\0';
@@ -2025,7 +2329,29 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 					(int)(babinfo->chip_fast[j]));
 			strcat(data, buf);
 		}
-		snprintf(buf, sizeof(buf), "Fast %d - %d", i, to);
+		snprintf(buf, sizeof(buf), "Fast "FMT_RANGE, i, to);
+		root = api_add_string(root, buf, data, true);
+
+		data[0] = '\0';
+		for (j = i; j <= to; j++) {
+			snprintf(buf, sizeof(buf),
+					"%s%d",
+					j == i ? "" : " ",
+					(int)(babinfo->chip_spie[j]));
+			strcat(data, buf);
+		}
+		snprintf(buf, sizeof(buf), "Spie "FMT_RANGE, i, to);
+		root = api_add_string(root, buf, data, true);
+
+		data[0] = '\0';
+		for (j = i; j <= to; j++) {
+			snprintf(buf, sizeof(buf),
+					"%s%d",
+					j == i ? "" : " ",
+					(int)(babinfo->chip_miso[j]));
+			strcat(data, buf);
+		}
+		snprintf(buf, sizeof(buf), "Miso "FMT_RANGE, i, to);
 		root = api_add_string(root, buf, data, true);
 
 		data[0] = '\0';
@@ -2040,7 +2366,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 					j == i ? "" : " ", hw);
 			strcat(data, buf);
 		}
-		snprintf(buf, sizeof(buf), "HW%% %d - %d", i, to);
+		snprintf(buf, sizeof(buf), "HW%% "FMT_RANGE, i, to);
 		root = api_add_string(root, buf, data, true);
 
 		ghs_sum = 0;
@@ -2058,10 +2384,10 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 			strcat(data, buf);
 			ghs_sum += (float)ghs;
 		}
-		snprintf(buf, sizeof(buf), "GHs %d - %d", i, to);
+		snprintf(buf, sizeof(buf), "GHs "FMT_RANGE, i, to);
 		root = api_add_string(root, buf, data, true);
 
-		snprintf(buf, sizeof(buf), "Sum GHs %d - %d", i, to);
+		snprintf(buf, sizeof(buf), "Sum GHs "FMT_RANGE, i, to);
 		root = api_add_avg(root, buf, &ghs_sum, true);
 
 		data[0] = '\0';
@@ -2072,7 +2398,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 					babinfo->chip_cont_bad[j]);
 			strcat(data, buf);
 		}
-		snprintf(buf, sizeof(buf), "Cont-Bad %d - %d", i, to);
+		snprintf(buf, sizeof(buf), "Cont-Bad "FMT_RANGE, i, to);
 		root = api_add_string(root, buf, data, true);
 
 		data[0] = '\0';
@@ -2083,7 +2409,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 					babinfo->chip_max_bad[j]);
 			strcat(data, buf);
 		}
-		snprintf(buf, sizeof(buf), "Max-Bad %d - %d", i, to);
+		snprintf(buf, sizeof(buf), "Max-Bad "FMT_RANGE, i, to);
 		root = api_add_string(root, buf, data, true);
 
 		data[0] = '\0';
@@ -2094,7 +2420,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 					history_good[j]);
 			strcat(data, buf);
 		}
-		snprintf(buf, sizeof(buf), "History Good %d - %d", i, to);
+		snprintf(buf, sizeof(buf), "History Good "FMT_RANGE, i, to);
 		root = api_add_string(root, buf, data, true);
 
 		data[0] = '\0';
@@ -2105,7 +2431,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 					history_bad[j]);
 			strcat(data, buf);
 		}
-		snprintf(buf, sizeof(buf), "History Bad %d - %d", i, to);
+		snprintf(buf, sizeof(buf), "History Bad "FMT_RANGE, i, to);
 		root = api_add_string(root, buf, data, true);
 
 		data[0] = '\0';
@@ -2120,7 +2446,7 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 					j == i ? "" : " ", hw);
 			strcat(data, buf);
 		}
-		snprintf(buf, sizeof(buf), "History HW%% %d - %d", i, to);
+		snprintf(buf, sizeof(buf), "History HW%% "FMT_RANGE, i, to);
 		root = api_add_string(root, buf, data, true);
 
 		ghs_sum = 0;
@@ -2153,10 +2479,10 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 			if (sp >= (BAB_CHIP_SPEEDS - 1))
 				speeds[BAB_CHIP_SPEEDS - 1]++;
 		}
-		snprintf(buf, sizeof(buf), "History GHs %d - %d", i, to);
+		snprintf(buf, sizeof(buf), "History GHs "FMT_RANGE, i, to);
 		root = api_add_string(root, buf, data, true);
 
-		snprintf(buf, sizeof(buf), "Sum History GHs %d - %d", i, to);
+		snprintf(buf, sizeof(buf), "Sum History GHs "FMT_RANGE, i, to);
 		root = api_add_avg(root, buf, &ghs_sum, true);
 
 		ghs_tot += ghs_sum;
@@ -2325,6 +2651,20 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	root = api_add_avg(root, "Send Avg", &avg, true);
 	root = api_add_double(root, "Send Min", &(babinfo->send_min), true);
 	root = api_add_double(root, "Send Max", &(babinfo->send_max), true);
+
+	i = (int)(babinfo->max_speed);
+	root = api_add_int(root, bab_options[0], &i, true);
+	i = (int)(babinfo->def_speed);
+	root = api_add_int(root, bab_options[1], &i, true);
+	i = (int)(babinfo->min_speed);
+	root = api_add_int(root, bab_options[2], &i, true);
+	root = api_add_double(root, bab_options[3], &(babinfo->tune_up), true);
+	root = api_add_double(root, bab_options[4], &(babinfo->tune_down), true);
+	i = (int)(babinfo->speed_hz);
+	root = api_add_int(root, bab_options[5], &i, true);
+	i = (int)(babinfo->delay_usecs);
+	root = api_add_int(root, bab_options[6], &i, true);
+	root = api_add_uint64(root, bab_options[7], &(babinfo->trf_delay), true);
 
 	return root;
 }

@@ -218,6 +218,7 @@ ASIC only options:
 --avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq:tech
 --avalon-temp <arg> Set avalon target temperature (default: 50)
+--bab-options <arg> Set BaB options max:def:min:up:down:hz:delay:trf
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
 --bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
