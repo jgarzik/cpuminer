@@ -890,12 +890,20 @@ static bool hfa_prepare(struct thr_info *thr)
 }
 
 /* Figure out how many jobs to send. */
-static int hfa_jobs(struct hashfast_info *info)
+static int hfa_jobs(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
 	int ret = 0;
 
-	if (unlikely(info->overheat))
+	if (unlikely(info->overheat)) {
+		/* Acknowledge and notify of new condition.*/
+		if (info->overheat < 0) {
+			applog(LOG_WARNING, "HFA %d: Hit overheat temp, throttling!",
+			       hashfast->device_id);
+			/* Value of 1 means acknowledged overheat */
+			info->overheat = 1;
+		}
 		goto out;
+	}
 
 	mutex_lock(&info->lock);
 	ret = info->usb_init_base.inflight_target - HF_SEQUENCE_DISTANCE(info->hash_sequence_head, info->device_sequence_tail);
@@ -947,7 +955,7 @@ restart:
 		}
 	}
 
-	jobs = hfa_jobs(info);
+	jobs = hfa_jobs(hashfast, info);
 
 	/* Wait on restart_wait for up to 0.5 seconds or submit jobs as soon as
 	 * they're required. */
@@ -955,7 +963,7 @@ restart:
 		ret = restart_wait(thr, 100);
 		if (unlikely(!ret))
 			goto restart;
-		jobs = hfa_jobs(info);
+		jobs = hfa_jobs(hashfast, info);
 	}
 
 	if (jobs) {
@@ -1122,13 +1130,11 @@ static void hfa_statline_before(char *buf, size_t bufsiz, struct cgpu_info *hash
 	tailsprintf(buf, bufsiz, " max%3.0fC %3.2fV | ", max_temp, max_volt);
 
 	if (unlikely(max_temp >= opt_hfa_overheat)) {
-		if (!info->overheat) {
-			applog(LOG_WARNING, "HFA %d: Hit throttle temp of %.1f, throttling!",
-			       hashfast->device_id, max_temp);
-			info->overheat = true;
-		}
+		/* -1 means new overheat condition */
+		if (!info->overheat)
+			info->overheat = -1;
 	} else if (unlikely(info->overheat))
-		info->overheat = false;
+		info->overheat = 0;
 }
 
 static void hfa_init(struct cgpu_info __maybe_unused *hashfast)

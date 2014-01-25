@@ -100,7 +100,7 @@ struct hashfast_info {
 	uint16_t shed_count;                        // Dynamic copy of #cores device has shed for thermal control
 	int no_matching_work;
 	int resets;
-	bool overheat;
+	int overheat;
 
 	pthread_t read_thr;
 };
