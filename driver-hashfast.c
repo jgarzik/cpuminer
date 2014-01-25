@@ -19,8 +19,8 @@
 #include "driver-hashfast.h"
 
 int opt_hfa_ntime_roll = 1;
-int opt_hfa_hash_clock = 550;
-int opt_hfa_overheat = 85;
+int opt_hfa_hash_clock = HFA_CLOCK_DEFAULT;
+int opt_hfa_overheat = HFA_OVERHEAT_DEFAULT;
 bool opt_hfa_pll_bypass;
 bool opt_hfa_dfu_boot;
 
@@ -278,7 +278,8 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	info->resets++;
 
 	/* Hash clock rate in Mhz */
-	info->hash_clock_rate = opt_hfa_hash_clock;
+	if (!info->hash_clock_rate)
+		info->hash_clock_rate = opt_hfa_hash_clock;
 	info->group_ntime_roll = opt_hfa_ntime_roll;
 	info->core_ntime_roll = 1;
 
@@ -933,12 +934,19 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 	if (unlikely(last_getwork - hashfast->last_device_valid_work > 60)) {
 		applog(LOG_WARNING, "HFA %d: No valid hashes for over 1 minute, attempting to reset",
 		       hashfast->device_id);
+		if (info->hash_clock_rate > HFA_CLOCK_DEFAULT) {
+			info->hash_clock_rate -= 5;
+			applog(LOG_WARNING, "%s %d: Decreasing clock speed to %d with reset",
+			       hashfast->drv->name, hashfast->device_id, info->hash_clock_rate);
+		}
 		ret = hfa_reset(hashfast, info);
-		if (unlikely(!ret)) {
-			applog(LOG_ERR, "HFA %d: Failed to reset after hash failure, disabling",
-			hashfast->device_id);
+		if (!ret) {
+			applog(LOG_ERR, "%s %d: Failed to reset after hash failure, disabling",
+			       hashfast->drv->name, hashfast->device_id);
 			return -1;
 		}
+		applog(LOG_NOTICE, "%s %d: Reset successful", hashfast->drv->name,
+		       hashfast->device_id);
 	}
 
 	if (unlikely(thr->work_restart)) {
