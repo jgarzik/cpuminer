@@ -293,7 +293,6 @@ bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32_t nonc
 bool libbitfury_sendHashData(struct thr_info *thr, struct cgpu_info *bitfury,
 			     struct bitfury_info *info)
 {
-	static unsigned second_run;
 	unsigned *newbuf = info->newbuf;
 	unsigned *oldbuf = info->oldbuf;
 	struct bitfury_payload *p = &(info->payload);
@@ -314,25 +313,27 @@ bool libbitfury_sendHashData(struct thr_info *thr, struct cgpu_info *bitfury,
 
 	info->job_switched = newbuf[16] != oldbuf[16];
 
-	if (second_run && info->job_switched) {
-		int i;
+	if (likely(info->second_run)) {
+		if (info->job_switched) {
+			int i;
 
-		for (i = 0; i < 16; i++) {
-			if (oldbuf[i] != newbuf[i] && info->owork) {
-				uint32_t nonce; //possible nonce
+			for (i = 0; i < 16; i++) {
+				if (oldbuf[i] != newbuf[i] && info->owork) {
+					uint32_t nonce; //possible nonce
 
-				nonce = decnonce(newbuf[i]);
-				if (bitfury_checkresults(thr, info->owork, nonce))
-					info->nonces++;
+					nonce = decnonce(newbuf[i]);
+					if (bitfury_checkresults(thr, info->owork, nonce))
+						info->nonces++;
+				}
 			}
-		}
 
-		memcpy(op, p, sizeof(struct bitfury_payload));
-		memcpy(oldbuf, newbuf, 17 * 4);
-	}
+			memcpy(op, p, sizeof(struct bitfury_payload));
+			memcpy(oldbuf, newbuf, 17 * 4);
+		}
+	} else
+		info->second_run = true;
 
 	cgsleep_ms(BITFURY_REFRESH_DELAY);
-	second_run = 1;
 
 	return true;
 }
