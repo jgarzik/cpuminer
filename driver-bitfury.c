@@ -911,6 +911,7 @@ static int64_t nf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 		info->work = get_work(thr, thr->id);
 		if (unlikely(thr->work_restart)) {
 			free_work(info->work);
+			info->work = NULL;
 			return 0;
 		}
 		bitfury_work_to_payload(&info->payload, info->work);
