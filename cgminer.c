@@ -3045,7 +3045,7 @@ static void calc_diff(struct work *work, double known)
 {
 	struct cgminer_pool_stats *pool_stats = &(work->pool->cgminer_pool_stats);
 	double difficulty;
-	int intdiff;
+	uint64_t uintdiff;
 
 	if (known)
 		work->work_difficulty = known;
@@ -3061,8 +3061,8 @@ static void calc_diff(struct work *work, double known)
 	difficulty = work->work_difficulty;
 
 	pool_stats->last_diff = difficulty;
-	intdiff = round(difficulty);
-	suffix_string(intdiff, work->pool->diff, sizeof(work->pool->diff), 0);
+	uintdiff = round(difficulty);
+	suffix_string(uintdiff, work->pool->diff, sizeof(work->pool->diff), 0);
 
 	if (difficulty == pool_stats->min_diff)
 		pool_stats->min_diff_count++;
