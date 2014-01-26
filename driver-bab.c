@@ -350,6 +350,7 @@ struct bab_info {
 	uint32_t chip_spis[BAB_MAXCHIPS+1];
 
 	int reply_wait;
+	uint64_t reply_waits;
 
 	cgsem_t scan_work;
 	cgsem_t spi_work;
@@ -959,16 +960,28 @@ static void bab_put(struct bab_info *babinfo, K_ITEM *sitem)
 static bool bab_get(__maybe_unused struct cgpu_info *babcgpu, struct bab_info *babinfo, struct timeval *when)
 {
 	K_ITEM *item;
+	bool delayed;
 	int i;
 
-	cgsem_mswait(&(babinfo->spi_reply), babinfo->reply_wait);
+	item = NULL;
+	delayed = false;
+	while (item == NULL) {
+		cgsem_mswait(&(babinfo->spi_reply), babinfo->reply_wait);
 
-	K_WLOCK(babinfo->spi_sent);
-	item = k_unlink_tail(babinfo->spi_sent);
-	K_WUNLOCK(babinfo->spi_sent);
+		K_WLOCK(babinfo->spi_sent);
+		item = k_unlink_tail(babinfo->spi_sent);
+		K_WUNLOCK(babinfo->spi_sent);
 
-	if (!item)
-		return false;
+		if (!item) {
+			if (!delayed) {
+				applog(LOG_WARNING, "%s%d: Delay getting work reply ...",
+							babcgpu->drv->name,
+							babcgpu->device_id);
+				delayed = true;
+				babinfo->reply_waits++;
+			}
+		}
+	}
 
 	for (i = 0; i < babinfo->chips; i++) {
 		if (babinfo->chip_conf[i] & 0x7f) {
@@ -2722,6 +2735,9 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	root = api_add_avg(root, "Send Avg", &avg, true);
 	root = api_add_double(root, "Send Min", &(babinfo->send_min), true);
 	root = api_add_double(root, "Send Max", &(babinfo->send_max), true);
+
+	root = api_add_int(root, "Reply Wait", &(babinfo->reply_wait), true);
+	root = api_add_uint64(root, "Reply Waits", &(babinfo->reply_waits), true);
 
 	i = (int)(babinfo->max_speed);
 	root = api_add_int(root, bab_options[0], &i, true);
