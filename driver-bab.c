@@ -39,8 +39,7 @@ static void bab_detect(__maybe_unused bool hotplug)
 #define BAB_SPI_BUS 0
 #define BAB_SPI_CHIP 0
 
-//#define BAB_SPI_SPEED 96000
-#define BAB_SPI_SPEED 1000000
+#define BAB_SPI_SPEED 96000
 #define BAB_SPI_BUFSIZ 1024
 
 #define BAB_DELAY_USECS 0
