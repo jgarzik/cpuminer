@@ -24,7 +24,7 @@ bool opt_hfa_dfu_boot;
 
 #define HASHFAST_MINER_THREADS 1
 #define HFA_CLOCK_DEFAULT 550
-#define HFA_OVERHEAT_DEFAULT 85
+#define HFA_OVERHEAT_DEFAULT 90
 
 // Matching fields for hf_statistics, but large #s for local accumulation, per-die
 struct hf_long_statistics {
