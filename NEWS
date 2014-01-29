@@ -1,3 +1,25 @@
+Version 3.12.0 - 29th January 2014
+
+- Add support for AntminerU1 devices with the icarus driver.
+- Add antminer U1 to comment in udev rules.
+- Do away with usb resets entirely since we retry on both pipe and io errors now
+and they're of dubious value.
+- Retry on usb IO errors instead of faking success.
+- Check that we've cleared the pipe error after a clear request, not the err
+value which is unchanged.
+- Update to libusb-1.0.18
+- Change hfa overheat limit to 90 degrees.
+- Relax timeout in hf get header to 500ms to match the usb timeout.
+- Minion - check/clear interrupts for all chips
+- Set info work to null after it is freed in nf1 after a restart to prevent
+double free later.
+- The second_run bool in libbitfury should be per device. Microoptimise its and
+job_switched usage, removing the unused results array for NF1 devices.
+- Fix displayed diff when solo mining at >2^32 diff.
+- bab - stop stale work accumulating
+- bab - set the default SPI speed back to 96000
+
+
 Version 3.11.0 - 25th January 2014
 
 - Add hashfast documentation to ASIC README
