@@ -52,7 +52,9 @@
 // The serial I/O speed - Linux uses a define 'B115200' in bits/termios.h
 #define ICARUS_IO_SPEED 115200
 
+#define ICARUS_BUF_SIZE 8
 // The size of a successful nonce read
+#define ANT_READ_SIZE 5
 #define ICARUS_READ_SIZE 4
 
 // Ensure the sizes are correct for the Serial read
@@ -70,6 +72,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 
 // USB ms timeout to wait - user specified timeouts are multiples of this
 #define ICARUS_WAIT_TIMEOUT 100
+#define ANT_WAIT_TIMEOUT 10
 #define ICARUS_CMR2_TIMEOUT 1
 
 // Defined in multiples of ICARUS_WAIT_TIMEOUT
@@ -103,7 +106,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 // Per FPGA
 #define CAIRNSMORE2_HASH_TIME 0.0000000066600
 #define NANOSEC 1000000000.0
-
+#define ANTMINERUSB_HASH_TIME 0.0000000006450
 #define CAIRNSMORE2_INTS 4
 
 // Icarus Rev3 doesn't send a completion message when it finishes
@@ -218,6 +221,8 @@ struct ICARUS_INFO {
 	uint8_t cmr2_speed;
 	bool speed_next_work;
 	bool flash_next_work;
+
+	int nonce_size;
 };
 
 #define ICARUS_MIDSTATE_SIZE 32
@@ -415,6 +420,7 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 				 interface, C_VENDOR);
 			break;
 		case IDENT_AMU:
+		case IDENT_ANU:
 			// Enable the UART
 			transfer(icarus, CP210X_TYPE_OUT, CP210X_REQUEST_IFC_ENABLE,
 				 CP210X_VALUE_UART_ENABLE,
@@ -469,7 +475,7 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 
 	cgtime(tv_start);
 	err = usb_read_ii_timeout_cancellable(icarus, info->intinfo, (char *)buf,
-					      ICARUS_READ_SIZE, &amt, read_time,
+					      info->nonce_size, &amt, read_time,
 					      C_GETRESULTS);
 	cgtime(tv_finish);
 
@@ -495,6 +501,7 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 		applog(LOG_DEBUG, "Icarus Read: No data for %d ms", rc);
 	return ICA_NONCE_TIMEOUT;
 }
+
 
 static const char *timing_mode_str(enum timing_mode timing_mode)
 {
@@ -562,6 +569,9 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 			break;
 		case IDENT_CMR2:
 			info->Hs = CAIRNSMORE2_HASH_TIME;
+			break;
+		case IDENT_ANU:
+			info->Hs = ANTMINERUSB_HASH_TIME;
 			break;
 		default:
 			quit(1, "Icarus get_options() called with invalid %s ident=%d",
@@ -718,6 +728,7 @@ static void get_options(int this_option_offset, struct cgpu_info *icarus, int *b
 			*fpga_count = 2;
 			break;
 		case IDENT_AMU:
+		case IDENT_ANU:
 			*baud = ICARUS_IO_SPEED;
 			*work_division = 1;
 			*fpga_count = 1;
@@ -837,6 +848,9 @@ static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb
 		case IDENT_CMR1:
 			info->timeout = ICARUS_WAIT_TIMEOUT;
 			break;
+		case IDENT_ANU:
+			info->timeout = ANT_WAIT_TIMEOUT;
+			break;
 		case IDENT_CMR2:
 			if (found->intinfo_count != CAIRNSMORE2_INTS) {
 				quithere(1, "CMR2 Interface count (%d) isn't expected: %d",
@@ -853,6 +867,7 @@ static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb
 				icarus->drv->dname, icarus->drv->dname, info->ident);
 	}
 
+	info->nonce_size = ICARUS_READ_SIZE;
 // For CMR2 test each USB Interface
 
 cmr2_retry:
@@ -872,6 +887,16 @@ cmr2_retry:
 		ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, NULL, 100);
 		if (ret != ICA_NONCE_OK)
 			continue;
+
+		if (unlikely(info->nonce_size == ICARUS_READ_SIZE && usb_buffer_size(icarus) == 1)) {
+			usb_buffer_clear(icarus);
+			icarus->usbdev->ident = IDENT_ANU;
+			info->nonce_size = ANT_READ_SIZE;
+			info->Hs = ANTMINERUSB_HASH_TIME;
+			icarus->drv->name = "ANU";
+			applog(LOG_DEBUG, "%s %i: Detected Antminer U1, changing nonce size to %d",
+			       icarus->drv->name, icarus->device_id, ANT_READ_SIZE);
+		}
 
 		nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
 		if (strncmp(nonce_hex, golden_nonce, 8) == 0)
@@ -1078,7 +1103,7 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	struct cgpu_info *icarus = thr->cgpu;
 	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
 	int ret, err, amount;
-	unsigned char nonce_bin[ICARUS_READ_SIZE];
+	unsigned char nonce_bin[ICARUS_BUF_SIZE];
 	struct ICARUS_WORK workdata;
 	char *ob_hex;
 	uint32_t nonce;
@@ -1163,7 +1188,7 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 		goto out;
 	}
 
-	memcpy((char *)&nonce, nonce_bin, sizeof(nonce_bin));
+	memcpy((char *)&nonce, nonce_bin, ICARUS_READ_SIZE);
 	nonce = htobe32(nonce);
 	curr_hw_errors = icarus->hw_errors;
 	submit_nonce(thr, work, nonce);

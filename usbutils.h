@@ -135,6 +135,7 @@ struct usb_intinfo {
 enum sub_ident {
 	IDENT_UNK = 0,
 	IDENT_AMU,
+	IDENT_ANU,
 	IDENT_AVA,
 	IDENT_BAJ,
 	IDENT_BAL,
