@@ -4,7 +4,7 @@ Currently supported devices include the Avalon (including BitBurner and
 Klondike), the Butterfly Labs SC range of devices, the ASICMINER block
 erupters, the BF1 (bitfury) USB (red and blue) devices, KnCminer Mercury,
 Saturn and Jupiter devices, BlackArrow Bitfury devices, Bi*fury USB devices,
-Nanofury USB devices and Hashfast devices.
+Nanofury USB devices, Hashfast devices and Antminer U1 USB devices.
 
 No COM ports on windows or TTY devices will be used by cgminer as it
 communicates directly with them via USB so it is normal for them to not exist or
@@ -65,6 +65,15 @@ they are and give them the following names:
 HFB: Hashfast Babyjet
 HFS: Hashfast Sierra
 HFA: Hashfast non standard (eg. a Babyjet with an added board)
+
+
+ANTMINER devices
+
+Antminer devices need the --enable-icarus option when compiling cgminer.
+
+Currently the U1 USB sticks are supported and come up as ANU devices. They
+are also set up as per the USB ASICs below. They need no options to work well
+but will accept all the icarus options.
 
 ---
 GETTING STARTED WITH USB ASICS
