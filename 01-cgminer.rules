@@ -10,7 +10,7 @@ ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", SUBSYSTEM=="usb", ACTION=="ad
 # Icarus
 ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", SUBSYSTEM=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
 
-# AsicminerUSB
+# AsicminerUSB and Antminer U1
 ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SUBSYSTEM=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
 
 # Cairnsmore1
