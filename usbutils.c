@@ -2586,7 +2586,7 @@ pipe_retry:
 			if (pipeerr)
 				cgpu->usbinfo.clear_fail_count++;
 		} while (pipeerr && ++retries < USB_RETRY_MAX);
-		if (!err && ++pipe_retries < USB_RETRY_MAX)
+		if (!pipeerr && ++pipe_retries < USB_RETRY_MAX)
 			goto pipe_retry;
 	}
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)

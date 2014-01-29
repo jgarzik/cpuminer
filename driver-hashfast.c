@@ -188,7 +188,7 @@ static bool hfa_get_header(struct cgpu_info *hashfast, struct hf_header *h, uint
 
 	orig_len = len = sizeof(*h);
 
-	/* Read for up to 200ms till we find the first occurrence of HF_PREAMBLE
+	/* Read for up to 500ms till we find the first occurrence of HF_PREAMBLE
 	 * though it should be the first byte unless we get woefully out of
 	 * sync. */
 	cgtimer_time(&ts_start);
@@ -197,7 +197,7 @@ static bool hfa_get_header(struct cgpu_info *hashfast, struct hf_header *h, uint
 
 		cgtimer_time(&ts_now);
 		cgtimer_sub(&ts_now, &ts_start, &ts_diff);
-		if (cgtimer_to_ms(&ts_diff) > 200)
+		if (cgtimer_to_ms(&ts_diff) > 500)
 			return false;
 
 		if (unlikely(hashfast->usbinfo.nodev))

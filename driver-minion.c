@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Andrew Smith - BlackArrow Ltd
+ * Copyright 2013-2014 Andrew Smith - BlackArrow Ltd
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -33,6 +33,10 @@ static void minion_detect(__maybe_unused bool hotplug)
 #define MINION_CHIPS 32
 #define MINION_CORES 99
 
+/*
+ * TODO: These will need adjusting for final hardware
+ * Look them up and calculate them?
+ */
 #define MINION_QUE_HIGH 4
 #define MINION_QUE_LOW 2
 
@@ -1127,7 +1131,13 @@ static void enable_chip_cores(struct cgpu_info *minioncgpu, struct minion_info *
 			  chip, READ_ADDR(MINION_CORE_ENA96_98),
 			  rbuf, MINION_CORE_SIZ, data);
 
-
+	/*
+	 * This will say it has completed the test 99 times faster than
+	 * a single core speed since all work will be divided up across all
+	 * 99 cores (even if they aren't there)
+	 * Of course it will only have checked N/99 of the nonce range
+	 * where N = the number of working cores
+	 */
 	data[0] = 0xff;
 	data[1] = 0xff;
 	data[2] = 0xff;
@@ -1918,63 +1928,84 @@ static void *minion_spi_reply(void *userdata)
 		// them all anyway - to avoid high latency when there are only a few results due to low luck
 		ret = poll(&pfd, 1, MINION_REPLY_mS);
 		if (ret > 0) {
+			bool gotres;
 			int c;
 
 			read(minioninfo->gpiointfd, &c, 1);
 
-//			applog(LOG_ERR, "%s%i: result interrupt",
-//					   minioncgpu->drv->name, minioncgpu->device_id);
-
-			// TODO: which chip do I check for interrupts? Do I need to check every one of them?
-			SET_HEAD_READ(head, MINION_SYS_INT_STA);
-			head->chip = 0;
-			/*
-			 * TODO: can we lose an interrupt if it happens before it gets back to poll
-			 * but after 'get count of results' is done?
-			 * No since the but stays hi until we clear it
-			 */
-			reply = do_ioctl(wbuf, wsiz, rbuf, rsiz);
-			if (reply != (int)wsiz) {
-				applog(LOG_ERR, "%s: chip %d int status returned %d (should be %d)",
-						minioncgpu->drv->dname, chip, reply, (int)wsiz);
-			}
-
-			if (rbuf[wsiz - rsiz] & MINION_RESULT_INT) {
-				cgsem_post(&(minioninfo->scan_work));
-//				applog(LOG_ERR, "%s%i: correct interrupt",
-//						   minioncgpu->drv->name, minioncgpu->device_id);
-			}
-
-			if (rbuf[wsiz - rsiz] & MINION_CMD_INT) {
-				applog(LOG_ERR, "%s%i: got CMD interrupt",
-						   minioncgpu->drv->name, minioncgpu->device_id);
-			}
-
 /*
-			{
-				char *tmp;
-				tmp = bin2hex(rbuf, wsiz);
-				applog(LOG_ERR, "%s%i: interrupt: %s",
-						   minioncgpu->drv->name, minioncgpu->device_id,
-						   tmp);
-				free(tmp);
-			}
+			applog(LOG_ERR, "%s%i: Interrupt",
+					minioncgpu->drv->name,
+					minioncgpu->device_id);
 */
 
-			// TODO: try combining MINION_SYS_INT_STA and MINION_SYS_INT_CLR
-			// in one ioctl()
+			gotres = false;
+			for (chip = 0; chip < MINION_CHIPS; chip++) {
+				if (minioninfo->chip[chip]) {
+					SET_HEAD_READ(head, MINION_SYS_INT_STA);
+					head->chip = chip;
+					reply = do_ioctl(wbuf, wsiz, rbuf, rsiz);
+					if (reply != (int)wsiz) {
+						applog(LOG_ERR, "%s: chip %d int status returned %d"
+								" (should be %d)",
+								minioncgpu->drv->dname,
+								chip, reply, (int)wsiz);
+					}
 
-			// Clear all the interrupt bits we got
-			SET_HEAD_WRITE(head, MINION_SYS_INT_CLR);
-			head->data[0] = rbuf[wsiz - rsiz];
-			head->data[1] = 0x00;
-			head->data[2] = 0x00;
-			head->data[3] = 0x00;
-			reply = do_ioctl(wbuf, wsiz, rbuf, 0);
-			if (reply != (int)wsiz) {
-				applog(LOG_ERR, "%s: chip %d int clear returned %d (should be %d)",
-						minioncgpu->drv->dname, chip, reply, (int)wsiz);
+					if (rbuf[wsiz - rsiz] & MINION_RESULT_INT) {
+						gotres = true;
+/*
+						applog(LOG_ERR, "%s%i: chip %d got RES interrupt",
+								minioncgpu->drv->name,
+								minioncgpu->device_id,
+								chip);
+*/
+					}
+
+					if (rbuf[wsiz - rsiz] & MINION_CMD_INT) {
+						// Work queue is empty
+/*
+						applog(LOG_ERR, "%s%i: chip %d got CMD interrupt",
+								minioncgpu->drv->name,
+								minioncgpu->device_id,
+								chip);
+*/
+					}
+
+/*
+					{
+						char *tmp;
+						tmp = bin2hex(rbuf, wsiz);
+						applog(LOG_ERR, "%s%i: chip %d interrupt: %s",
+								minioncgpu->drv->name,
+								minioncgpu->device_id,
+								chip, tmp);
+						free(tmp);
+					}
+*/
+
+					// TODO: try combining MINION_SYS_INT_STA and
+					// MINION_SYS_INT_CLR in one ioctl()
+
+					// Clear all the interrupt bits we got
+					SET_HEAD_WRITE(head, MINION_SYS_INT_CLR);
+					head->data[0] = rbuf[wsiz - rsiz];
+					head->data[1] = 0x00;
+					head->data[2] = 0x00;
+					head->data[3] = 0x00;
+					reply = do_ioctl(wbuf, wsiz, rbuf, 0);
+					if (reply != (int)wsiz) {
+						applog(LOG_ERR, "%s: chip %d int clear returned %d"
+								" (should be %d)",
+								minioncgpu->drv->dname,
+								chip, reply, (int)wsiz);
+					}
+				}
 			}
+
+			// Doing this last means we can't miss an interrupt
+			if (gotres)
+				cgsem_post(&(minioninfo->scan_work));
 		}
 	}
 
