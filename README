@@ -238,8 +238,8 @@ See FGPA-README for more information regarding this.
 
 Cgminer should automatically find all of your Avalon ASIC, BFL ASIC, BitForce
 FPGAs, Icarus bitstream FPGAs, Klondike ASIC, ASICMINER usb block erupters,
-KnC ASICs, BaB ASICs, Hashfast ASICs, ModMiner FPGAs, BPMC/BGMC BF1 USB ASICs
-and Bi*fury USB ASICs.
+KnC ASICs, BaB ASICs, Hashfast ASICs, ModMiner FPGAs, BPMC/BGMC BF1 USB ASICs,
+Bi*fury USB ASICs, Nanofury USB ASICs and Antminer U1 USB ASICs.
 
 ---
 
@@ -635,7 +635,7 @@ config file and the file will be loaded one each startup.
 
 Q: The build fails with gcc is unable to build a binary.
 A: Remove the "-march=native" component of your CFLAGS as your version of gcc
-does not support it.
+does not support it. Also -O2 is capital o 2, not zero 2.
 
 Q: Can you implement feature X?
 A: I can, but time is limited, and people who donate are more likely to get
@@ -662,7 +662,9 @@ less of another, or can you change the quiet mode or can you add yet another
 output mode?
 A: Everyone will always have their own view of what's important to monitor.
 The defaults are very sane and I have very little interest in changing this
-any further.
+any further. There is far more detail in the API output than can be reasonably
+displayed on the small console window, and using an external interface such
+as miner.php is much more useful for setups with many devices.
 
 Q: What are the best parameters to pass for X pool/hardware/device.
 A: Virtually always, the DEFAULT parameters give the best results. Most user
@@ -713,9 +715,6 @@ been skipped.
 Q: What is an ASIC?
 A: They are Application Specify Integrated Circuit devices and provide the
 highest performance per unit power due to being dedicated to only one purpose.
-
-Q: Can I mine scrypt with FPGAs or ASICs?
-A: No.
 
 Q: What is stratum and how do I use it?
 A: Stratum is a protocol designed for pooled mining in such a way as to
