@@ -334,6 +334,9 @@ struct device_drv {
 	void (*thread_shutdown)(struct thr_info *);
 	void (*thread_enable)(struct thr_info *);
 
+	/* What should be zeroed in this device when global zero stats is sent */
+	void (*zero_stats)(struct cgpu_info *);
+
 	// Does it need to be free()d?
 	bool copy;
 

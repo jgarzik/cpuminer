@@ -4515,6 +4515,11 @@ void zero_stats(void)
 		cgpu->diff_rejected = 0;
 		cgpu->last_share_diff = 0;
 		mutex_unlock(&hash_lock);
+
+		/* Don't take any locks in the driver zero stats function, as
+		 * it's called async from everything else and we don't want to
+		 * deadlock. */
+		cgpu->drv->zero_stats(cgpu);
 	}
 }
 
@@ -7576,6 +7581,7 @@ static void noop_detect(bool __maybe_unused hotplug)
 #define noop_flush_work noop_reinit_device
 #define noop_update_work noop_reinit_device
 #define noop_queue_full noop_get_stats
+#define noop_zero_stats noop_reinit_device
 
 /* Fill missing driver drv functions with noops */
 void fill_device_drv(struct device_drv *drv)
@@ -7612,6 +7618,8 @@ void fill_device_drv(struct device_drv *drv)
 		drv->update_work = &noop_update_work;
 	if (!drv->queue_full)
 		drv->queue_full = &noop_queue_full;
+	if (!drv->zero_stats)
+		drv->zero_stats = &noop_zero_stats;
 	if (!drv->max_diff)
 		drv->max_diff = 1;
 	if (!drv->working_diff)
