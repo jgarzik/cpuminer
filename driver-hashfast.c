@@ -964,9 +964,11 @@ restart:
 				return -1;
 			}
 		}
-	}
-
-	jobs = hfa_jobs(hashfast, info);
+		/* Give a full allotment of jobs after a restart, not waiting
+		 * for the status update telling us how much to give. */
+		jobs = info->usb_init_base.inflight_target;
+	} else
+		jobs = hfa_jobs(hashfast, info);
 
 	/* Wait on restart_wait for up to 0.5 seconds or submit jobs as soon as
 	 * they're required. */
