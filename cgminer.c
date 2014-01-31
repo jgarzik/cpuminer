@@ -6377,6 +6377,7 @@ struct work *get_queued(struct cgpu_info *cgpu)
 		if (unlikely(stale_work(work, false))) {
 			discard_work(work);
 			work = NULL;
+			wake_gws();
 			goto out_unlock;
 		}
 		__add_queued(cgpu, work);
