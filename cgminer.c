@@ -3907,8 +3907,6 @@ int restart_wait(struct thr_info *thr, unsigned int mstime)
 
 	return rc;
 }
-	
-static void flush_queue(struct cgpu_info *cgpu);
 
 static void *restart_thread(void __maybe_unused *arg)
 {
@@ -6506,7 +6504,7 @@ struct work *take_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate,
 	return work;
 }
 
-static void flush_queue(struct cgpu_info *cgpu)
+void flush_queue(struct cgpu_info *cgpu)
 {
 	struct work *work = NULL;
 

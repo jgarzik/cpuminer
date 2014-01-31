@@ -1364,6 +1364,7 @@ extern void __work_completed(struct cgpu_info *cgpu, struct work *work);
 extern int age_queued_work(struct cgpu_info *cgpu, double secs);
 extern void work_completed(struct cgpu_info *cgpu, struct work *work);
 extern struct work *take_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
+extern void flush_queue(struct cgpu_info *cgpu);
 extern void hash_driver_work(struct thr_info *mythr);
 extern void hash_queued_work(struct thr_info *mythr);
 extern void _wlog(const char *str);
