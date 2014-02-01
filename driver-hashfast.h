@@ -118,6 +118,7 @@ struct hashfast_info {
 	double max_temp;
 
 	pthread_t read_thr;
+	time_t last_restart;
 };
 
 #endif /* USE_HASHFAST */

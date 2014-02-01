@@ -983,6 +983,11 @@ static void hfa_temp_clock(struct cgpu_info *hashfast, struct hashfast_info *inf
 	if (!opt_hfa_target)
 		return;
 
+	/* Do no restarts at all if there has been one less than 15 seconds
+	 * ago */
+	if (now_t - info->last_restart < 15)
+		return;
+
 	for (i = 0; i < info->asic_count ; i++) {
 		struct hf_die_data *hdd = &info->die_data[i];
 
@@ -1013,7 +1018,8 @@ static void hfa_temp_clock(struct cgpu_info *hashfast, struct hashfast_info *inf
 				continue;
 			hfa_increase_clock(hashfast, info, i);
 		}
-		hdd->last_restart = now_t;
+		info->last_restart = hdd->last_restart = now_t;
+		break;
 	}
 }
 
@@ -1054,6 +1060,7 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 
 	if (unlikely(thr->work_restart)) {
 restart:
+		info->last_restart = time(NULL);
 		thr->work_restart = false;
 		ret = hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), 0, (uint8_t *)NULL, 0);
 		if (unlikely(!ret)) {
