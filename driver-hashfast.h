@@ -19,12 +19,16 @@
 int opt_hfa_ntime_roll;
 int opt_hfa_hash_clock;
 int opt_hfa_overheat;
+int opt_hfa_target;
 bool opt_hfa_pll_bypass;
 bool opt_hfa_dfu_boot;
 
 #define HASHFAST_MINER_THREADS 1
 #define HFA_CLOCK_DEFAULT 550
-#define HFA_OVERHEAT_DEFAULT 90
+#define HFA_CLOCK_MIN 125
+#define HFA_TEMP_OVERHEAT 90
+#define HFA_TEMP_TARGET 85
+#define HFA_TEMP_HYSTERESIS 3
 
 // Matching fields for hf_statistics, but large #s for local accumulation, per-die
 struct hf_long_statistics {
@@ -73,6 +77,13 @@ struct hf_long_usb_stats1 {
 	uint8_t  max_rx_buffers;
 };
 
+/* Private per die data for dynamic clocking */
+struct hf_die_data {
+	int hash_clock;
+	double temp;
+	time_t last_restart;
+};
+
 struct hashfast_info {
 	int asic_count;                             // # of chips in the chain
 	int core_count;                             // # of cores per chip
@@ -82,6 +93,7 @@ struct hashfast_info {
 	struct hf_g1_die_data *die_status;          // Array of per-die voltage, current, temperature sensor data
 	struct hf_long_statistics *die_statistics;  // Array of per-die error counters
 	struct hf_long_usb_stats1 stats1;
+	struct hf_die_data *die_data;
 	int hash_clock_rate;                        // Hash clock rate to use, in Mhz
 	struct hf_usb_init_base usb_init_base;      // USB Base information from USB_INIT
 	struct hf_config_data config_data;          // Configuration data used from USB_INIT
@@ -103,6 +115,7 @@ struct hashfast_info {
 	int no_matching_work;
 	int resets;
 	int overheat;
+	double max_temp;
 
 	pthread_t read_thr;
 };

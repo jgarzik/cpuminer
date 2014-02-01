@@ -20,7 +20,8 @@
 
 int opt_hfa_ntime_roll = 1;
 int opt_hfa_hash_clock = HFA_CLOCK_DEFAULT;
-int opt_hfa_overheat = HFA_OVERHEAT_DEFAULT;
+int opt_hfa_overheat = HFA_TEMP_OVERHEAT;
+int opt_hfa_target = HFA_TEMP_TARGET;
 bool opt_hfa_pll_bypass;
 bool opt_hfa_dfu_boot;
 
@@ -433,6 +434,7 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 {
 	struct hashfast_info *info;
 	bool ret;
+	int i;
 
 	info = calloc(sizeof(struct hashfast_info), 1);
 	if (!info)
@@ -455,6 +457,12 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 	info->die_status = calloc(info->asic_count, sizeof(struct hf_g1_die_data));
 	if (unlikely(!(info->die_status)))
 		quit(1, "Failed to calloc die_status");
+
+	info->die_data = calloc(info->asic_count, sizeof(struct hf_die_data));
+	if (unlikely(!(info->die_data)))
+		quit(1, "Failed to calloc die_data");
+	for (i = 0; i < info->asic_count; i++)
+		info->die_data[i].hash_clock = info->hash_clock_rate;
 
 	// The per-die statistics array
 	info->die_statistics = calloc(info->asic_count, sizeof(struct hf_long_statistics));
@@ -659,24 +667,35 @@ static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_in
 	float die_temperature;
 	float core_voltage[6];
 
-	if (info->device_type == HFD_G1) {
-		// Copy in the data. They're numbered sequentially from the starting point
-		ds = info->die_status + h->chip_address;
-		for (i = 0; i < num_included; i++)
-			memcpy(ds++, d++, sizeof(struct hf_g1_die_data));
+	// Copy in the data. They're numbered sequentially from the starting point
+	ds = info->die_status + h->chip_address;
+	for (i = 0; i < num_included; i++)
+		memcpy(ds++, d++, sizeof(struct hf_g1_die_data));
 
-		for (i = 0, d = &info->die_status[h->chip_address]; i < num_included; i++, d++) {
-			die_temperature = GN_DIE_TEMPERATURE(d->die.die_temperature);
-			for (j = 0; j < 6; j++)
-				core_voltage[j] = GN_CORE_VOLTAGE(d->die.core_voltage[j]);
+	info->max_temp = 0;
+	for (i = 0, d = &info->die_status[h->chip_address]; i < num_included; i++, d++) {
+		int die = h->chip_address + i;
 
-			applog(LOG_DEBUG, "%s %d: die %2d: OP_DIE_STATUS Temps die %.1fC board %.1fC vdd's %.2f %.2f %.2f %.2f %.2f %.2f",
-			       hashfast->drv->name, hashfast->device_id, h->chip_address + i, die_temperature, board_temperature(d->temperature),
-			       core_voltage[0], core_voltage[1], core_voltage[2],
-			       core_voltage[3], core_voltage[4], core_voltage[5]);
-			// XXX Convert board phase currents, voltage, temperature
-		}
+		die_temperature = GN_DIE_TEMPERATURE(d->die.die_temperature);
+		info->die_data[die].temp = die_temperature;
+		if (die_temperature > info->max_temp)
+			info->max_temp = die_temperature;
+		for (j = 0; j < 6; j++)
+			core_voltage[j] = GN_CORE_VOLTAGE(d->die.core_voltage[j]);
+
+		applog(LOG_DEBUG, "%s %d: die %2d: OP_DIE_STATUS Temps die %.1fC board %.1fC vdd's %.2f %.2f %.2f %.2f %.2f %.2f",
+			hashfast->drv->name, hashfast->device_id, die, die_temperature, board_temperature(d->temperature),
+			core_voltage[0], core_voltage[1], core_voltage[2],
+			core_voltage[3], core_voltage[4], core_voltage[5]);
+		// XXX Convert board phase currents, voltage, temperature
 	}
+
+	if (unlikely(info->max_temp >= opt_hfa_overheat)) {
+		/* -1 means new overheat condition */
+		if (!info->overheat)
+			info->overheat = -1;
+	} else if (unlikely(info->overheat && info->max_temp < opt_hfa_overheat - HFA_TEMP_HYSTERESIS))
+		info->overheat = 0;
 }
 
 static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
@@ -899,8 +918,8 @@ static int hfa_jobs(struct cgpu_info *hashfast, struct hashfast_info *info)
 	if (unlikely(info->overheat)) {
 		/* Acknowledge and notify of new condition.*/
 		if (info->overheat < 0) {
-			applog(LOG_WARNING, "%s %d: Hit overheat temp, throttling!",
-			       hashfast->drv->name, hashfast->device_id);
+			applog(LOG_WARNING, "%s %d: Hit overheat temp %.1f, throttling!",
+			       hashfast->drv->name, hashfast->device_id, info->max_temp);
 			/* Value of 1 means acknowledged overheat */
 			info->overheat = 1;
 		}
@@ -917,6 +936,79 @@ static int hfa_jobs(struct cgpu_info *hashfast, struct hashfast_info *info)
 
 out:
 	return ret;
+}
+
+static void hfa_increase_clock(struct cgpu_info *hashfast, struct hashfast_info *info,
+			       int die)
+{
+	struct hf_die_data *hdd = &info->die_data[die];
+	uint32_t diebit = 0x00000001ul << die;
+	uint16_t hdata, increase = 5;
+
+	if (hdd->hash_clock + increase > info->hash_clock_rate)
+		increase = info->hash_clock_rate - hdd->hash_clock;
+	hdd->hash_clock += increase;
+	applog(LOG_INFO, "%s %d: Die temp below range %.1f, increasing die %d clock to %d",
+	       hashfast->drv->name, hashfast->device_id, info->die_data[die].temp, die, hdd->hash_clock);
+	hdata = (WR_MHZ_INCREASE << 12) | increase;
+	hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), hdata, (uint8_t *)&diebit, 4);
+}
+
+static void hfa_decrease_clock(struct cgpu_info *hashfast, struct hashfast_info *info,
+			       int die)
+{
+	struct hf_die_data *hdd = &info->die_data[die];
+	uint32_t diebit = 0x00000001ul << die;
+	uint16_t hdata, decrease = 10;
+
+	if (hdd->hash_clock - decrease < HFA_CLOCK_MIN)
+		decrease = hdd->hash_clock - HFA_CLOCK_MIN;
+	hdd->hash_clock -= decrease;
+	applog(LOG_INFO, "%s %d: Die temp above range %.1f, decreasing die %d clock to %d",
+	       hashfast->drv->name, hashfast->device_id, info->die_data[die].temp, die, hdd->hash_clock);
+	hdata = (WR_MHZ_DECREASE << 12) | decrease;
+	hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), hdata, (uint8_t *)&diebit, 4);
+}
+
+/* Adjust clock according to temperature if need be by changing the clock
+ * setting and issuing a work restart with the new clock speed. */
+static void hfa_temp_clock(struct cgpu_info *hashfast, struct hashfast_info *info)
+{
+	time_t now_t = time(NULL);
+	int i;
+
+	for (i = 0; i < info->asic_count ; i++) {
+		struct hf_die_data *hdd = &info->die_data[i];
+
+		/* Only send a restart no more than every 30 seconds. */
+		if (now_t - hdd->last_restart < 30)
+			continue;
+
+		/* Sanity check */
+		if (unlikely(hdd->temp == 0.0 || hdd->temp > 255))
+			continue;
+
+		/* In target temperature */
+		if (hdd->temp >= opt_hfa_target - HFA_TEMP_HYSTERESIS && hdd->temp <= opt_hfa_target)
+			continue;
+
+		if (hdd->temp > opt_hfa_target) {
+			/* Temp above target range */
+
+			/* Already at min speed */
+			if (hdd->hash_clock == HFA_CLOCK_MIN)
+				continue;
+			hfa_decrease_clock(hashfast, info, i);
+		} else {
+			/* Temp below target range.*/
+
+			/* Already at max speed */
+			if (hdd->hash_clock == info->hash_clock_rate)
+				continue;
+			hfa_increase_clock(hashfast, info, i);
+		}
+		hdd->last_restart = now_t;
+	}
 }
 
 static int64_t hfa_scanwork(struct thr_info *thr)
@@ -951,6 +1043,8 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 		applog(LOG_NOTICE, "%s %d: Reset successful", hashfast->drv->name,
 		       hashfast->device_id);
 	}
+
+	hfa_temp_clock(hashfast, info);
 
 	if (unlikely(thr->work_restart)) {
 restart:
@@ -1091,6 +1185,7 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 		int j;
 
 		root = api_add_int(root, "Core", &i, true);
+		root = api_add_int(root, "hash clockrate", &(info->die_data[i].hash_clock), false);
 		val = GN_DIE_TEMPERATURE(d->die.die_temperature);
 		root = api_add_double(root, "die temperature", &val, true);
 		val = board_temperature(d->temperature);
@@ -1119,22 +1214,16 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 static void hfa_statline_before(char *buf, size_t bufsiz, struct cgpu_info *hashfast)
 {
 	struct hashfast_info *info = hashfast->device_data;
-	double max_temp, max_volt;
 	struct hf_g1_die_data *d;
+	double max_volt;
 	int i;
 
-	max_temp = max_volt = 0.0;
+	max_volt = 0.0;
 
 	for (i = 0; i < info->asic_count; i++) {
-		double temp;
 		int j;
 
 		d = &info->die_status[i];
-		temp = GN_DIE_TEMPERATURE(d->die.die_temperature);
-		/* Sanity check on temp since we change it lockless it can
-		 * rarely read a massive value */
-		if (temp > max_temp && temp < 200)
-			max_temp = temp;
 		for (j = 0; j < 6; j++) {
 			double volt = GN_CORE_VOLTAGE(d->die.core_voltage[j]);
 
@@ -1143,14 +1232,7 @@ static void hfa_statline_before(char *buf, size_t bufsiz, struct cgpu_info *hash
 		}
 	}
 
-	tailsprintf(buf, bufsiz, " max%3.0fC %3.2fV | ", max_temp, max_volt);
-
-	if (unlikely(max_temp >= opt_hfa_overheat)) {
-		/* -1 means new overheat condition */
-		if (!info->overheat)
-			info->overheat = -1;
-	} else if (unlikely(info->overheat))
-		info->overheat = 0;
+	tailsprintf(buf, bufsiz, " max%3.0fC %3.2fV | ", info->max_temp, max_volt);
 }
 
 static void hfa_init(struct cgpu_info __maybe_unused *hashfast)
@@ -1183,6 +1265,7 @@ static void hfa_shutdown(struct thr_info *thr)
 	free(info->works);
 	free(info->die_statistics);
 	free(info->die_status);
+	free(info->die_data);
 	/* Don't free info here since it will be accessed by statline before
 	 * if a device is removed. */
 }
