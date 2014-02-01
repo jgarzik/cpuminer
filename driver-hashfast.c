@@ -677,6 +677,9 @@ static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_in
 		int die = h->chip_address + i;
 
 		die_temperature = GN_DIE_TEMPERATURE(d->die.die_temperature);
+		/* Sanity checking */
+		if (unlikely(die_temperature > 255))
+			die_temperature = info->die_data[die].temp;
 		info->die_data[die].temp = die_temperature;
 		if (die_temperature > info->max_temp)
 			info->max_temp = die_temperature;
