@@ -119,6 +119,7 @@ struct hashfast_info {
 
 	pthread_t read_thr;
 	time_t last_restart;
+	time_t last_send;
 };
 
 #endif /* USE_HASHFAST */

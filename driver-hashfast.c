@@ -115,6 +115,7 @@ static bool hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, uint16_t 
 			   uint8_t *data, int len)
 {
 	int tx_length, ret, amount, id = hashfast->device_id;
+	struct hashfast_info *info = hashfast->device_data;
 	uint8_t packet[256];
 	struct hf_header *p = (struct hf_header *)packet;
 	bool retried = false;
@@ -134,6 +135,7 @@ static bool hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, uint16_t 
 	if (unlikely(hashfast->usbinfo.nodev))
 		return false;
 
+	info->last_send = time(NULL);
 	applog(LOG_DEBUG, "%s %d: Sending %s frame", hashfast->drv->name, hashfast->device_id, hfa_cmds[opcode].cmd_name);
 retry:
 	ret = usb_write(hashfast, (char *)packet, tx_length, &amount,
@@ -885,11 +887,20 @@ static void *hfa_read(void *arg)
 			case OP_USB_NOTICE:
 				hfa_parse_notice(hashfast, h);
 				break;
+			case OP_PING:
+				/* Do nothing */
+				break;
 			default:
 				applog(LOG_WARNING, "%s %d: Unhandled operation code %d",
 				       hashfast->drv->name, hashfast->device_id, h->operation_code);
 				break;
 		}
+		/* Make sure we send something to the device at least every 5
+		 * seconds so it knows the driver is still alive for when we
+		 * run out of work. The read thread never blocks so is the
+		 * best place to do this. */
+		if (time(NULL) - info->last_send > 5)
+			hfa_send_frame(hashfast, HF_USB_CMD(OP_PING), 0, NULL, 0);
 	}
 	applog(LOG_DEBUG, "%s %d: Shutting down read thread", hashfast->drv->name, hashfast->device_id);
 
