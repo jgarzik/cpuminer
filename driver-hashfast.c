@@ -980,6 +980,9 @@ static void hfa_temp_clock(struct cgpu_info *hashfast, struct hashfast_info *inf
 	time_t now_t = time(NULL);
 	int i;
 
+	if (!opt_hfa_target)
+		return;
+
 	for (i = 0; i < info->asic_count ; i++) {
 		struct hf_die_data *hdd = &info->die_data[i];
 

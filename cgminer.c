@@ -1238,7 +1238,7 @@ static struct opt_table opt_config_table[] = {
 		     "Set the hashfast overheat throttling temperature"),
 	OPT_WITH_ARG("--hfa-temp-target",
 		     set_int_0_to_200, opt_show_intval, &opt_hfa_target,
-		     "Set the hashfast target temperature"),
+		     "Set the hashfast target temperature (0 to disable)"),
 #endif
 #ifdef USE_KLONDIKE
 	OPT_WITH_ARG("--klondike-options",
