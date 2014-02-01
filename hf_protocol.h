@@ -125,6 +125,29 @@
 #define BAUD_RATE_PWRUP_6           921600
 #define BAUD_RATE_PWRUP_7          1152000
 
+// OP_WORK_RESTART hash clock change methods.
+//
+// May be issued *infrequently* by the host to adjust hash clock rate for thermal control
+// The "hdata" field, if non zero, contains adjustment instructions. Bits 15:12 of "hdata"
+// contain the adjustment type according to the following code, and bits 11:0 contain the
+// associated value. Examples:
+//     hdata = (1<<12)|550 = Set hash clock rate to 550 Mhz
+//     hdata = (4<<12)|1   = Increase hash clock rate by 1%
+//     hdata = (6<<12)     = Go back to whatever the "original" OP_USB_INIT settings were
+//
+// Finally, if 4 bytes of "data" follows the OP_WORK_RESTART header, then that data is taken
+// as a little endian bitmap, bit set = enable clock change to that die, bit clear = don't
+// change clock on that die, i.e. considered as a uint32_t, then 0x1 = die 0, 0x2 = die 1 etc.
+
+#define WR_NO_CHANGE                    0
+#define WR_CLOCK_VALUE                  1
+#define WR_MHZ_INCREASE                 2
+#define WR_MHZ_DECREASE                 3
+#define WR_PERCENT_INCREASE             4
+#define WR_PERCENT_DECREASE             5
+#define WR_REVERT                       6
+
+#define WR_COMMAND_SHIFT                12
 
 // Structure definitions, LE platforms
 
