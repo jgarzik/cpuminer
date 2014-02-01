@@ -297,6 +297,7 @@ struct stratum_share {
 	struct work *work;
 	int id;
 	time_t sshare_time;
+	time_t sshare_sent;
 };
 
 static struct stratum_share *stratum_shares = NULL;
@@ -5544,6 +5545,15 @@ static void *stratum_sthread(void *userdata)
 			free(sshare);
 			pool->stale_shares++;
 			total_stale++;
+		} else {
+			int ssdiff;
+
+			sshare->sshare_sent = time(NULL);
+			ssdiff = sshare->sshare_sent - sshare->sshare_time;
+			if (ssdiff > 0) {
+				applog(LOG_INFO, "Pool %d stratum share submission lag time %d seconds",
+				       pool->pool_no, ssdiff);
+			}
 		}
 	}
 
