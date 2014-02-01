@@ -5099,8 +5099,15 @@ static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 				 struct stratum_share *sshare)
 {
 	struct work *work = sshare->work;
+	time_t now_t = time(NULL);
 	char hashshow[64];
+	int srdiff;
 
+	srdiff = now_t - sshare->sshare_sent;
+	if (srdiff > 0) {
+		applog(LOG_INFO, "Pool %d stratum share result lag time %d seconds",
+		       work->pool->pool_no, srdiff);
+	}
 	show_hash(work, hashshow);
 	share_result(val, res_val, err_val, work, hashshow, false, "");
 }
