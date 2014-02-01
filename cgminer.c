@@ -5104,7 +5104,7 @@ static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 	int srdiff;
 
 	srdiff = now_t - sshare->sshare_sent;
-	if (srdiff > 0) {
+	if (opt_debug || srdiff > 0) {
 		applog(LOG_INFO, "Pool %d stratum share result lag time %d seconds",
 		       work->pool->pool_no, srdiff);
 	}
@@ -5557,7 +5557,7 @@ static void *stratum_sthread(void *userdata)
 
 			sshare->sshare_sent = time(NULL);
 			ssdiff = sshare->sshare_sent - sshare->sshare_time;
-			if (ssdiff > 0) {
+			if (opt_debug || ssdiff > 0) {
 				applog(LOG_INFO, "Pool %d stratum share submission lag time %d seconds",
 				       pool->pool_no, ssdiff);
 			}
