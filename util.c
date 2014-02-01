@@ -1259,11 +1259,14 @@ static enum send_ret __stratum_send(struct pool *pool, char *s, ssize_t len)
 		struct timeval timeout = {1, 0};
 		ssize_t sent;
 		fd_set wd;
-
+retry:
 		FD_ZERO(&wd);
 		FD_SET(sock, &wd);
-		if (select(sock + 1, NULL, &wd, NULL, &timeout) < 1)
+		if (select(sock + 1, NULL, &wd, NULL, &timeout) < 1) {
+			if (interrupted())
+				goto retry;
 			return SEND_SELECTFAIL;
+		}
 #ifdef __APPLE__
 		sent = send(pool->sock, s + ssent, len, SO_NOSIGPIPE);
 #elif WIN32
@@ -2177,6 +2180,7 @@ static bool setup_stratum_socket(struct pool *pool)
 				applog(LOG_DEBUG, "Failed sock connect");
 				continue;
 			}
+retry:
 			FD_ZERO(&rw);
 			FD_SET(sockd, &rw);
 			selret = select(sockd + 1, NULL, &rw, NULL, &tv_timeout);
@@ -2192,6 +2196,8 @@ static bool setup_stratum_socket(struct pool *pool)
 					break;
 				}
 			}
+			if (selret < 0 && interrupted())
+				goto retry;
 			CLOSESOCKET(sockd);
 			applog(LOG_DEBUG, "Select timeout/failed connect");
 			continue;
@@ -2605,6 +2611,7 @@ int _cgsem_mswait(cgsem_t *cgsem, int ms, const char *file, const char *func, co
 	fd_set rd;
 	char buf;
 
+retry:
 	fd = cgsem->pipefd[0];
 	FD_ZERO(&rd);
 	FD_SET(fd, &rd);
@@ -2617,6 +2624,8 @@ int _cgsem_mswait(cgsem_t *cgsem, int ms, const char *file, const char *func, co
 	}
 	if (likely(!ret))
 		return ETIMEDOUT;
+	if (interrupted())
+		goto retry;
 	quitfrom(1, file, func, line, "Failed to sem_timedwait errno=%d cgsem=0x%p", errno, cgsem);
 	/* We don't reach here */
 	return 0;
