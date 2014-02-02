@@ -214,7 +214,6 @@ if test "x$drillbit" = xyes; then
 fi
 AM_CONDITIONAL([HAS_DRILLBIT], [test x$drillbit = xyes])
 
-
 hashfast="no"
 
 AC_ARG_ENABLE([hashfast],
@@ -525,12 +524,12 @@ if test "x$cointerra" = xyes; then
 	echo "  Cointerra.ASICs......: Enabled"
 else
 	echo "  Cointerra.ASICs......: Disabled"
+fi
 
 if test "x$bitmine_A1" = xyes; then
-	echo "  Bitmine-A1.ASICs........: Enabled"
+	echo "  Bitmine-A1.ASICs.....: Enabled"
 else
-	echo "  Bitmine-A1.ASICs........: Disabled"
-
+	echo "  Bitmine-A1.ASICs.....: Disabled"
 fi
 
 if test "x$drillbit" = xyes; then
