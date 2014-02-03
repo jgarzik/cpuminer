@@ -1204,8 +1204,8 @@ static struct api_data *print_data(struct io_data *io_data, struct api_data *roo
 				break;
 			case API_TIMEVAL:
 				snprintf(buf, sizeof(buf), "%ld.%06ld",
-					((struct timeval *)(root->data))->tv_sec,
-					((struct timeval *)(root->data))->tv_usec);
+					(long)((struct timeval *)(root->data))->tv_sec,
+					(long)((struct timeval *)(root->data))->tv_usec);
 				break;
 			case API_TEMP:
 				snprintf(buf, sizeof(buf), "%.2f", *((float *)(root->data)));
