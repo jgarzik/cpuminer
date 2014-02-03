@@ -22,6 +22,9 @@ int opt_hfa_overheat;
 int opt_hfa_target;
 bool opt_hfa_pll_bypass;
 bool opt_hfa_dfu_boot;
+int opt_hfa_fan_default;
+int opt_hfa_fan_max;
+int opt_hfa_fan_min;
 
 #define HASHFAST_MINER_THREADS 1
 #define HFA_CLOCK_DEFAULT 550
@@ -29,6 +32,9 @@ bool opt_hfa_dfu_boot;
 #define HFA_TEMP_OVERHEAT 90
 #define HFA_TEMP_TARGET 85
 #define HFA_TEMP_HYSTERESIS 3
+#define HFA_FAN_DEFAULT 33
+#define HFA_FAN_MAX 100
+#define HFA_FAN_MIN 0
 
 // Matching fields for hf_statistics, but large #s for local accumulation, per-die
 struct hf_long_statistics {
@@ -116,6 +122,8 @@ struct hashfast_info {
 	int resets;
 	int overheat;
 	double max_temp;
+	int last_max_temp;
+	int fanspeed;                               // Fanspeed in percent
 
 	pthread_t read_thr;
 	time_t last_restart;

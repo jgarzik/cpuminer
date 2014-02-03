@@ -24,6 +24,9 @@ int opt_hfa_overheat = HFA_TEMP_OVERHEAT;
 int opt_hfa_target = HFA_TEMP_TARGET;
 bool opt_hfa_pll_bypass;
 bool opt_hfa_dfu_boot;
+int opt_hfa_fan_default = HFA_FAN_DEFAULT;
+int opt_hfa_fan_max = HFA_FAN_MAX;
+int opt_hfa_fan_min = HFA_FAN_MIN;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Support for the CRC's used in header (CRC-8) and packet body (CRC-32)
@@ -102,7 +105,10 @@ static const struct hfa_cmd hfa_cmds[] = {
 	{OP_USB_STATS1, "OP_USB_STATS1", C_NULL},
 	{OP_USB_GWQSTATS, "OP_USB_GWQSTATS", C_HF_GWQSTATS},
 	{OP_USB_NOTICE, "OP_USB_NOTICE", C_HF_NOTICE},
-	{OP_PING, "OP_PING", C_HF_PING}
+	{OP_PING, "OP_PING", C_HF_PING},
+	{OP_CORE_MAP, "OP_CORE_MAP", C_NULL},
+	{OP_VERSION, "OP_VERSION", C_NULL},			// 32
+	{OP_FAN, "OP_FAN", C_HF_FAN}
 };
 
 #define HF_USB_CMD_OFFSET (128 - 18)
@@ -110,27 +116,12 @@ static const struct hfa_cmd hfa_cmds[] = {
 
 /* Send an arbitrary frame, consisting of an 8 byte header and an optional
  * packet body. */
-
-static bool hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, uint16_t hdata,
-			   uint8_t *data, int len)
+static bool __hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, int tx_length,
+			     uint8_t *packet)
 {
-	int tx_length, ret, amount, id = hashfast->device_id;
 	struct hashfast_info *info = hashfast->device_data;
-	uint8_t packet[256];
-	struct hf_header *p = (struct hf_header *)packet;
+	int ret, amount, id = hashfast->device_id;
 	bool retried = false;
-
-	p->preamble = HF_PREAMBLE;
-	p->operation_code = hfa_cmds[opcode].cmd;
-	p->chip_address = HF_GWQ_ADDRESS;
-	p->core_address = 0;
-	p->hdata = htole16(hdata);
-	p->data_length = len / 4;
-	p->crc8 = hfa_crc8(packet);
-
-	if (len)
-		memcpy(&packet[sizeof(struct hf_header)], data, len);
-	tx_length = sizeof(struct hf_header) + len;
 
 	if (unlikely(hashfast->usbinfo.nodev))
 		return false;
@@ -158,6 +149,28 @@ retry:
 		applog(LOG_ERR, "%s %d: hfa_send_frame: recovered OK", hashfast->drv->name, id);
 
 	return true;
+}
+
+static bool hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, uint16_t hdata,
+			   uint8_t *data, int len)
+{
+	uint8_t packet[256];
+	struct hf_header *p = (struct hf_header *)packet;
+	int tx_length;
+
+	p->preamble = HF_PREAMBLE;
+	p->operation_code = hfa_cmds[opcode].cmd;
+	p->chip_address = HF_GWQ_ADDRESS;
+	p->core_address = 0;
+	p->hdata = htole16(hdata);
+	p->data_length = len / 4;
+	p->crc8 = hfa_crc8(packet);
+
+	if (len)
+		memcpy(&packet[sizeof(struct hf_header)], data, len);
+	tx_length = sizeof(struct hf_header) + len;
+
+	return (__hfa_send_frame(hashfast, opcode, tx_length, packet));
 }
 
 /* Send an already assembled packet, consisting of an 8 byte header which may
@@ -907,6 +920,9 @@ static void *hfa_read(void *arg)
 	return NULL;
 }
 
+static void hfa_set_fanspeed(struct cgpu_info *hashfast, struct hashfast_info *info,
+			     int fanspeed);
+
 static bool hfa_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *hashfast = thr->cgpu;
@@ -921,6 +937,7 @@ static bool hfa_prepare(struct thr_info *thr)
 	get_datestamp(hashfast->init, sizeof(hashfast->init), &now);
 	hashfast->last_device_valid_work = time(NULL);
 	info->resets = 0;
+	hfa_set_fanspeed(hashfast, info, opt_hfa_fan_default);
 
 	return true;
 }
@@ -951,6 +968,28 @@ static int hfa_jobs(struct cgpu_info *hashfast, struct hashfast_info *info)
 
 out:
 	return ret;
+}
+
+static void hfa_set_fanspeed(struct cgpu_info *hashfast, struct hashfast_info *info,
+			     int fanspeed)
+{
+	const uint8_t opcode = HF_USB_CMD(OP_FAN);
+	uint8_t packet[256];
+	struct hf_header *p = (struct hf_header *)packet;
+	const int tx_length = sizeof(struct hf_header);
+	uint16_t hdata;
+
+	info->fanspeed = fanspeed;
+	hdata = fanspeed * 255 / 100; // Fanspeed is in percent, hdata 0-255
+	p->preamble = HF_PREAMBLE;
+	p->operation_code = hfa_cmds[opcode].cmd;
+	p->chip_address = 0xff;
+	p->core_address = 1;
+	p->hdata = htole16(hdata);
+	p->data_length = 0;
+	p->crc8 = hfa_crc8(packet);
+
+	__hfa_send_frame(hashfast, opcode, tx_length, packet);
 }
 
 static void hfa_increase_clock(struct cgpu_info *hashfast, struct hashfast_info *info,
