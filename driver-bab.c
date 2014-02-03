@@ -345,6 +345,8 @@ struct bab_info {
 	int chips;
 	int chips_per_bank[BAB_MAXBANKS+1];
 	int missing_chips_per_bank[BAB_MAXBANKS+1];
+	int bank_first_chip[BAB_MAXBANKS+1];
+	int bank_last_chip[BAB_MAXBANKS+1];
 	int boards;
 	int banks;
 	uint32_t chip_spis[BAB_MAXCHIPS+1];
@@ -1202,6 +1204,8 @@ static void bab_init_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 			bab_detect_chips(babcgpu, babinfo, 0, BAB_V1_CHIP_TEST, BAB_MAXCHIPS);
 		}
 		babinfo->chips_per_bank[BAB_V1_BANK] = babinfo->chips;
+		babinfo->bank_first_chip[BAB_V1_BANK] = 0;
+		babinfo->bank_last_chip[BAB_V1_BANK] = babinfo->chips - 1;
 		babinfo->boards = (int)((float)(babinfo->chips - 1) / BAB_BOARDCHIPS) + 1;
 		babinfo->reply_wait = BAB_REPLY_WAIT_mS * 2;
 
@@ -1229,6 +1233,10 @@ static void bab_init_chips(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 			bab_detect_chips(babcgpu, babinfo, bank, babinfo->chips, babinfo->chips + BAB_BANKCHIPS);
 			new_chips = babinfo->chips - chips;
 			babinfo->chips_per_bank[bank] = new_chips;
+			if (new_chips > 0) {
+				babinfo->bank_first_chip[bank] = babinfo->chips - new_chips;
+				babinfo->bank_last_chip[bank] = babinfo->chips - 1;
+			}
 			chips = babinfo->chips;
 			if (new_chips == 0)
 				boards = 0;
@@ -1449,6 +1457,11 @@ static void bab_detect(bool hotplug)
 					 ALLOC_SITEMS, LIMIT_SITEMS, true);
 	babinfo->spi_list = k_new_store(babinfo->sfree_list);
 	babinfo->spi_sent = k_new_store(babinfo->sfree_list);
+
+	for (i = 0; i <= BAB_MAXBANKS; i++) {
+		babinfo->bank_first_chip[i] = -1;
+		babinfo->bank_last_chip[i] = -1;
+	}
 
 	bab_init_chips(babcgpu, babinfo);
 
@@ -2271,7 +2284,8 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	struct api_data *root = NULL;
 	char data[2048];
 	char buf[32];
-	int spi_work, chip_work, i, to, j, sp, bank, chip_off;
+	int spi_work, chip_work, i, to, j, sp, chip, bank, chip_off, k, board;
+	bool dead;
 	struct timeval now;
 	double elapsed, ghs;
 	float ghs_sum, his_ghs_tot;
@@ -2640,6 +2654,89 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	}
 	free(tmp);
 	tmp = NULL;
+
+	switch (babinfo->version) {
+		case 1:
+			i = j = BAB_V1_BANK;
+			break;
+		case 2:
+			i = 1;
+			j = BAB_MAXBANKS;
+			break;
+	}
+	data[0] = '\0';
+	for (bank = i; bank <= j; bank++) {
+		if (babinfo->bank_first_chip[bank] >= 0) {
+			chip = babinfo->bank_first_chip[bank];
+			to = babinfo->bank_last_chip[bank];
+			for (; chip <= to; chip += BAB_BOARDCHIPS) {
+				dead = true;
+				for (k = chip; (k <= to) && (k < (chip+BAB_BOARDCHIPS)); k++) {
+					if (history_elapsed[k] > 0) {
+						double num = history_good[k];
+						// exclude the first nonce?
+						if (elapsed_is_good[k])
+							num--;
+						ghs = num * 0xffffffffull /
+							history_elapsed[k] / 1000000000.0;
+					} else
+						ghs = 0;
+
+					if (ghs > 0.0) {
+						dead = false;
+						break;
+					}
+				}
+				if (dead) {
+					board = (int)((float)(chip - babinfo->bank_first_chip[bank]) /
+							BAB_BOARDCHIPS) + 1;
+					snprintf(buf, sizeof(buf),
+							"%s%d/%d%s",
+							data[0] ? " " : "",
+							bank, board,
+							babinfo->missing_chips_per_bank[bank] ?
+							"?" : "");
+					strcat(data, buf);
+				}
+			}
+		}
+	}
+	root = api_add_string(root, "History Dead Boards", data[0] ? data : "None", true);
+
+	data[0] = '\0';
+	for (bank = i; bank <= j; bank++) {
+		if (babinfo->bank_first_chip[bank] >= 0) {
+			to = babinfo->bank_first_chip[bank];
+			chip = babinfo->bank_last_chip[bank];
+			for (; chip >= to; chip--) {
+				dead = true;
+				if (history_elapsed[chip] > 0) {
+					double num = history_good[chip];
+					// exclude the first nonce?
+					if (elapsed_is_good[chip])
+						num--;
+					ghs = num * 0xffffffffull /
+						history_elapsed[chip] / 1000000000.0;
+				} else
+					ghs = 0;
+
+				if (ghs > 0.0)
+					break;
+			}
+			if (chip < babinfo->bank_last_chip[bank]) {
+				board = (int)((float)(chip - babinfo->bank_first_chip[bank]) /
+						BAB_BOARDCHIPS) + 1;
+				snprintf(buf, sizeof(buf),
+						"%s%d/%d%s",
+						data[0] ? " " : "",
+						bank, board,
+						babinfo->missing_chips_per_bank[bank] ?
+						"?" : "");
+				strcat(data, buf);
+			}
+		}
+	}
+	root = api_add_string(root, "History Dead Chains", data[0] ? data : "None", true);
 
 	for (i = 0; i < BAB_NONCE_OFFSETS; i++) {
 		snprintf(buf, sizeof(buf), "Nonce Offset 0x%08x", bab_nonce_offsets[i]);
