@@ -971,16 +971,22 @@ out:
 }
 
 static void hfa_set_fanspeed(struct cgpu_info *hashfast, struct hashfast_info *info,
-			     int fanspeed)
+			     int fandiff)
 {
 	const uint8_t opcode = HF_USB_CMD(OP_FAN);
 	uint8_t packet[256];
 	struct hf_header *p = (struct hf_header *)packet;
 	const int tx_length = sizeof(struct hf_header);
 	uint16_t hdata;
+	int fandata;
 
-	info->fanspeed = fanspeed;
-	hdata = fanspeed * 255 / 100; // Fanspeed is in percent, hdata 0-255
+	info->fanspeed += fandiff;
+	if (info->fanspeed > opt_hfa_fan_max)
+		info->fanspeed = opt_hfa_fan_max;
+	else if (info->fanspeed < opt_hfa_fan_min)
+		info->fanspeed = opt_hfa_fan_min;
+	fandata = info->fanspeed * 255 / 100; // Fanspeed is in percent, hdata 0-255
+	hdata = fandata; // Use an int first to avoid overflowing uint16_t
 	p->preamble = HF_PREAMBLE;
 	p->operation_code = hfa_cmds[opcode].cmd;
 	p->chip_address = 0xff;
@@ -1029,10 +1035,53 @@ static void hfa_decrease_clock(struct cgpu_info *hashfast, struct hashfast_info 
 static void hfa_temp_clock(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
 	time_t now_t = time(NULL);
-	int i;
+	bool throttled = false;
+	int temp_change, i;
 
 	if (!opt_hfa_target)
 		return;
+
+	/* First find out if any dies are throttled before trying to optimise
+	 * fanspeed */
+	for (i = 0; i < info->asic_count ; i++) {
+		struct hf_die_data *hdd = &info->die_data[i];
+
+		if (hdd->hash_clock < info->hash_clock_rate) {
+			throttled = true;
+			break;
+		}
+	}
+
+	/* Find the direction of temperature change since we last checked */
+	temp_change = info->max_temp - info->last_max_temp;
+	info->last_max_temp = info->max_temp;
+
+	/* Adjust fanspeeds first if possible before die speeds, increasing
+	 * speed quickly and lowering speed slowly */
+	if (info->max_temp > opt_hfa_target ||
+	    (throttled && info->max_temp >= opt_hfa_target - HFA_TEMP_HYSTERESIS)) {
+		/* We should be trying to decrease temperature, if it's not on
+		 * its way down. */
+		if (temp_change >= 0 && info->fanspeed < opt_hfa_fan_max)
+			hfa_set_fanspeed(hashfast, info, 5);
+	} else if (info->max_temp >= opt_hfa_target - HFA_TEMP_HYSTERESIS) {
+		/* In optimal range, try and maintain the same temp */
+		if (temp_change > 0) {
+			/* Temp rising, tweak fanspeed up */
+			if (info->fanspeed < opt_hfa_fan_max)
+				hfa_set_fanspeed(hashfast, info, 1);
+		} else if (temp_change < 0) {
+			/* Temp falling, tweak fanspeed down */
+			if (info->fanspeed > opt_hfa_fan_min)
+				hfa_set_fanspeed(hashfast, info, -1);
+		}
+	} else {
+		/* Below optimal range, try and increase temp */
+		if (temp_change <= 0 && !throttled) {
+			if (info->fanspeed > opt_hfa_fan_min)
+				hfa_set_fanspeed(hashfast, info, -1);
+		}
+	}
 
 	/* Do no restarts at all if there has been one less than 15 seconds
 	 * ago */
