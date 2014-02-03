@@ -34,13 +34,6 @@
 #define HAVE_AN_FPGA 1
 #endif
 
-// Big enough for largest API request
-//  though a PC with 100s of PGAs may exceed the size ...
-//  data is truncated at the end of the last record that fits
-//	but still closed correctly for JSON
-// Current code assumes it can socket send this size + JSON_CLOSE + JSON_END
-#define SOCKBUFSIZ	65432
-
 // BUFSIZ varies on Windows and Linux
 #define TMPBUFSIZ	8192
 
@@ -131,8 +124,11 @@ static const char *COMMA = ",";
 #define COMSTR ","
 static const char SEPARATOR = '|';
 #define SEPSTR "|"
+#define CMDJOIN '+'
+#define JOIN_CMD "CMD="
+#define BETWEEN_JOIN SEPSTR
 
-static const char *APIVERSION = "3.0";
+static const char *APIVERSION = "3.1";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -277,6 +273,7 @@ static const char ISJSON = '{';
 #define JSON_USBSTATS	JSON1 _USBSTATS JSON2
 #define JSON_END	JSON4 JSON5
 #define JSON_END_TRUNCATED	JSON4_TRUNCATED JSON5
+#define JSON_BETWEEN_JOIN	","
 
 static const char *JSON_COMMAND = "command";
 static const char *JSON_PARAMETER = "parameter";
@@ -1348,10 +1345,8 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 #endif
 	int i;
 
-	io_reinit(io_data);
-
 	if (isjson)
-		io_put(io_data, JSON_START JSON_STATUS);
+		io_add(io_data, JSON_START JSON_STATUS);
 
 	for (i = 0; codes[i].severity != SEVERITY_FAIL; i++) {
 		if (codes[i].code == messageid) {
@@ -3777,54 +3772,55 @@ struct CMDS {
 	char *name;
 	void (*func)(struct io_data *, SOCKETTYPE, char *, bool, char);
 	bool iswritemode;
+	bool joinable;
 } cmds[] = {
-	{ "version",		apiversion,	false },
-	{ "config",		minerconfig,	false },
-	{ "devs",		devstatus,	false },
-	{ "pools",		poolstatus,	false },
-	{ "summary",		summary,	false },
+	{ "version",		apiversion,	false,	true },
+	{ "config",		minerconfig,	false,	true },
+	{ "devs",		devstatus,	false,	true },
+	{ "pools",		poolstatus,	false,	true },
+	{ "summary",		summary,	false,	true },
 #ifdef HAVE_AN_FPGA
-	{ "pga",		pgadev,		false },
-	{ "pgaenable",		pgaenable,	true },
-	{ "pgadisable",		pgadisable,	true },
-	{ "pgaidentify",	pgaidentify,	true },
+	{ "pga",		pgadev,		false,	false },
+	{ "pgaenable",		pgaenable,	true,	false },
+	{ "pgadisable",		pgadisable,	true,	false },
+	{ "pgaidentify",	pgaidentify,	true,	false },
 #endif
-	{ "pgacount",		pgacount,	false },
-	{ "switchpool",		switchpool,	true },
-	{ "addpool",		addpool,	true },
-	{ "poolpriority",	poolpriority,	true },
-	{ "poolquota",		poolquota,	true },
-	{ "enablepool",		enablepool,	true },
-	{ "disablepool",	disablepool,	true },
-	{ "removepool",		removepool,	true },
-	{ "save",		dosave,		true },
-	{ "quit",		doquit,		true },
-	{ "privileged",		privileged,	true },
-	{ "notify",		notify,		false },
-	{ "devdetails",		devdetails,	false },
-	{ "restart",		dorestart,	true },
-	{ "stats",		minerstats,	false },
-	{ "check",		checkcommand,	false },
-	{ "failover-only",	failoveronly,	true },
-	{ "coin",		minecoin,	false },
-	{ "debug",		debugstate,	true },
-	{ "setconfig",		setconfig,	true },
-	{ "usbstats",		usbstats,	false },
+	{ "pgacount",		pgacount,	false,	true },
+	{ "switchpool",		switchpool,	true,	false },
+	{ "addpool",		addpool,	true,	false },
+	{ "poolpriority",	poolpriority,	true,	false },
+	{ "poolquota",		poolquota,	true,	false },
+	{ "enablepool",		enablepool,	true,	false },
+	{ "disablepool",	disablepool,	true,	false },
+	{ "removepool",		removepool,	true,	false },
+	{ "save",		dosave,		true,	false },
+	{ "quit",		doquit,		true,	false },
+	{ "privileged",		privileged,	true,	false },
+	{ "notify",		notify,		false,	true },
+	{ "devdetails",		devdetails,	false,	true },
+	{ "restart",		dorestart,	true,	false },
+	{ "stats",		minerstats,	false,	true },
+	{ "check",		checkcommand,	false,	false },
+	{ "failover-only",	failoveronly,	true,	false },
+	{ "coin",		minecoin,	false,	true },
+	{ "debug",		debugstate,	true,	false },
+	{ "setconfig",		setconfig,	true,	false },
+	{ "usbstats",		usbstats,	false,	true },
 #ifdef HAVE_AN_FPGA
-	{ "pgaset",		pgaset,		true },
+	{ "pgaset",		pgaset,		true,	false },
 #endif
-	{ "zero",		dozero,		true },
-	{ "hotplug",		dohotplug,	true },
+	{ "zero",		dozero,		true,	false },
+	{ "hotplug",		dohotplug,	true,	false },
 #ifdef HAVE_AN_ASIC
-	{ "asc",		ascdev,		false },
-	{ "ascenable",		ascenable,	true },
-	{ "ascdisable",		ascdisable,	true },
-	{ "ascidentify",	ascidentify,	true },
-	{ "ascset",		ascset,		true },
+	{ "asc",		ascdev,		false,	false },
+	{ "ascenable",		ascenable,	true,	false },
+	{ "ascdisable",		ascdisable,	true,	false },
+	{ "ascidentify",	ascidentify,	true,	false },
+	{ "ascset",		ascset,		true,	false },
 #endif
-	{ "asccount",		asccount,	false },
-	{ "lockstats",		lockstats,	true },
-	{ NULL,			NULL,		false }
+	{ "asccount",		asccount,	false,	true },
+	{ "lockstats",		lockstats,	true,	true },
+	{ NULL,			NULL,		false,	false }
 };
 
 static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, char group)
@@ -3863,6 +3859,49 @@ static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, c
 	root = print_data(io_data, root, isjson, false);
 	if (isjson && io_open)
 		io_close(io_data);
+}
+
+static void head_join(struct io_data *io_data, char *cmdptr, bool isjson, bool *firstjoin)
+{
+	char *ptr;
+
+	if (*firstjoin) {
+		if (isjson)
+			io_add(io_data, JSON0);
+		*firstjoin = false;
+	} else {
+		if (isjson)
+			io_add(io_data, JSON_BETWEEN_JOIN);
+	}
+
+	// External supplied string
+	ptr = escape_string(cmdptr, isjson);
+
+	if (isjson) {
+		io_add(io_data, JSON1);
+		io_add(io_data, ptr);
+		io_add(io_data, JSON2);
+	} else {
+		io_add(io_data, JOIN_CMD);
+		io_add(io_data, ptr);
+		io_add(io_data, BETWEEN_JOIN);
+	}
+
+	if (ptr != cmdptr)
+		free(ptr);
+}
+
+static void tail_join(struct io_data *io_data, bool isjson)
+{
+	if (io_data->close) {
+		io_add(io_data, JSON_CLOSE);
+		io_data->close = false;
+	}
+
+	if (isjson) {
+		io_add(io_data, JSON_END);
+		io_add(io_data, JSON3);
+	}
 }
 
 static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
@@ -4429,7 +4468,7 @@ void api(int api_thr_id)
 	struct sockaddr_in cli;
 	socklen_t clisiz;
 	char cmdbuf[100];
-	char *cmd = NULL;
+	char *cmd = NULL, *cmdptr, *cmdsbuf;
 	char *param;
 	bool addrok;
 	char group;
@@ -4437,7 +4476,7 @@ void api(int api_thr_id)
 	json_t *json_config = NULL;
 	json_t *json_val;
 	bool isjson;
-	bool did;
+	bool did, isjoin, firstjoin;
 	int i;
 
 	SOCKETTYPE *apisock;
@@ -4640,27 +4679,80 @@ void api(int api_thr_id)
 				}
 
 				if (!did) {
-					for (i = 0; cmds[i].name != NULL; i++) {
-						if (strcmp(cmd, cmds[i].name) == 0) {
-							sprintf(cmdbuf, "|%s|", cmd);
-							if (ISPRIVGROUP(group) || strstr(COMMANDS(group), cmdbuf))
-								(cmds[i].func)(io_data, c, param, isjson, group);
-							else {
-								message(io_data, MSG_ACCDENY, 0, cmds[i].name, isjson);
-								applog(LOG_DEBUG, "API: access denied to '%s' for '%s' command", connectaddr, cmds[i].name);
-							}
+					if (strchr(cmd, CMDJOIN)) {
+						firstjoin = isjoin = true;
+						// cmd + leading '|' + '\0'
+						cmdsbuf = malloc(strlen(cmd) + 2);
+						if (!cmdsbuf)
+							quithere(1, "OOM cmdsbuf");
+						strcpy(cmdsbuf, "|");
+						param = NULL;
+					} else
+						firstjoin = isjoin = false;
 
-							send_result(io_data, c, isjson);
-							did = true;
-							break;
+					cmdptr = cmd;
+					do {
+						did = false;
+						if (isjoin) {
+							cmd = strchr(cmdptr, CMDJOIN);
+							if (cmd)
+								*(cmd++) = '\0';
+							if (!*cmdptr)
+								goto inochi;
 						}
-					}
+
+						for (i = 0; cmds[i].name != NULL; i++) {
+							if (strcmp(cmdptr, cmds[i].name) == 0) {
+								sprintf(cmdbuf, "|%s|", cmdptr);
+								if (isjoin) {
+									if (strstr(cmdsbuf, cmdbuf)) {
+										did = true;
+										break;
+									}
+									strcat(cmdsbuf, cmdptr);
+									strcat(cmdsbuf, "|");
+									head_join(io_data, cmdptr, isjson, &firstjoin);
+									if (!cmds[i].joinable) {
+										message(io_data, MSG_ACCDENY, 0, cmds[i].name, isjson);
+										did = true;
+										tail_join(io_data, isjson);
+										break;
+									}
+								}
+								if (ISPRIVGROUP(group) || strstr(COMMANDS(group), cmdbuf))
+									(cmds[i].func)(io_data, c, param, isjson, group);
+								else {
+									message(io_data, MSG_ACCDENY, 0, cmds[i].name, isjson);
+									applog(LOG_DEBUG, "API: access denied to '%s' for '%s' command", connectaddr, cmds[i].name);
+								}
+
+								did = true;
+								if (!isjoin)
+									send_result(io_data, c, isjson);
+								else
+									tail_join(io_data, isjson);
+								break;
+							}
+						}
+
+						if (!did) {
+							if (isjoin)
+								head_join(io_data, cmdptr, isjson, &firstjoin);
+							message(io_data, MSG_INVCMD, 0, NULL, isjson);
+							if (isjoin)
+								tail_join(io_data, isjson);
+							else
+								send_result(io_data, c, isjson);
+						}
+inochi:
+						if (isjoin)
+							cmdptr = cmd;
+					} while (isjoin && cmdptr);
 				}
 
-				if (!did) {
-					message(io_data, MSG_INVCMD, 0, NULL, isjson);
+				if (isjoin)
 					send_result(io_data, c, isjson);
-				}
+
 				if (isjson && json_is_object(json_config))
 					json_decref(json_config);
 			}
