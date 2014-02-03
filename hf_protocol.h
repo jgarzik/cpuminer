@@ -80,6 +80,7 @@
 #define OP_PING                         140         // Echo
 #define OP_CORE_MAP                     141         // Return core map
 #define OP_VERSION                      142         // Version information
+#define OP_FAN                          143         // Set Fan Speed
 #define OP_USB_DEBUG                    255
 
 // HashFast vendor and product ID's
