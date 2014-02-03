@@ -1274,6 +1274,7 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "inflight target", &varint, true);
 	varint = db->sequence_modulus;
 	root = api_add_int(root, "sequence modulus", &varint, true);
+	root = api_add_int(root, "fan percent", &info->fanspeed, false);
 
 	s1 = &info->stats1;
 	root = api_add_uint64(root, "rx preambles", &s1->usb_rx_preambles, false);
