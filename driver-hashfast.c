@@ -705,7 +705,7 @@ static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_in
 		// XXX Convert board phase currents, voltage, temperature
 	}
 	if (die == info->asic_count - 1) {
-		info->temp_update = true;
+		info->temp_updates++;
 		/* We have a full set of die temperatures, find the highest
 		 * current die temp. */
 		die_temperature = 0;
@@ -1061,9 +1061,9 @@ static void hfa_temp_clock(struct cgpu_info *hashfast, struct hashfast_info *inf
 	}
 
 	/* Find the direction of temperature change since we last checked */
-	if (!info->temp_update)
+	if (info->temp_updates < 5)
 		goto fan_only;
-	info->temp_update = false;
+	info->temp_updates = 0;
 	temp_change = info->max_temp - info->last_max_temp;
 	info->last_max_temp = info->max_temp;
 

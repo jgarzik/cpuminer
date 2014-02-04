@@ -123,7 +123,7 @@ struct hashfast_info {
 	int overheat;
 	double max_temp;
 	int last_max_temp;
-	bool temp_update;
+	int temp_updates;
 	int fanspeed;                               // Fanspeed in percent
 
 	pthread_t read_thr;
