@@ -2284,7 +2284,8 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 	struct api_data *root = NULL;
 	char data[2048];
 	char buf[32];
-	int spi_work, chip_work, i, to, j, sp, chip, bank, chip_off, k, board;
+	int spi_work, chip_work, sp, chip, bank, chip_off, board, last_board;
+	int i, to, j, k;
 	bool dead;
 	struct timeval now;
 	double elapsed, ghs;
@@ -2723,15 +2724,32 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 				if (ghs > 0.0)
 					break;
 			}
+			/*
+			 * The output here is: a/b+c/d
+			 * a/b is the SPI/board that starts the Dead Chain
+			 * c is the number of boards after a
+			 * d is the total number of chips in the Dead Chain
+			 * A Dead Chain is a continous set of dead chips that
+			 * finish at the end of an SPI chain of boards
+			 * This might be caused by the first board, or the cables attached
+			 * to the first board, in the Dead Chain i.e. a/b
+			 * If c is zero, it's just the last board, so it's the same as any
+			 * other board having dead chips
+			 */
 			if (chip < babinfo->bank_last_chip[bank]) {
 				board = (int)((float)(chip - babinfo->bank_first_chip[bank]) /
 						BAB_BOARDCHIPS) + 1;
+				last_board = (int)((float)(babinfo->bank_last_chip[bank] -
+						babinfo->bank_first_chip[bank]) /
+						BAB_BOARDCHIPS) + 1;
 				snprintf(buf, sizeof(buf),
-						"%s%d/%d%s",
+						"%s%d/%d%s+%d/%d",
 						data[0] ? " " : "",
 						bank, board,
 						babinfo->missing_chips_per_bank[bank] ?
-						"?" : "");
+						"?" : "",
+						last_board - board,
+						babinfo->bank_last_chip[bank] - chip);
 				strcat(data, buf);
 			}
 		}
