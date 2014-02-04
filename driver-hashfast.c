@@ -678,7 +678,7 @@ static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_in
 {
 	struct hf_g1_die_data *d = (struct hf_g1_die_data *)(h + 1), *ds;
 	int num_included = (h->data_length * 4) / sizeof(struct hf_g1_die_data);
-	int i, j;
+	int i, j, die = h->chip_address;
 
 	float die_temperature;
 	float core_voltage[6];
@@ -688,17 +688,13 @@ static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_in
 	for (i = 0; i < num_included; i++)
 		memcpy(ds++, d++, sizeof(struct hf_g1_die_data));
 
-	info->max_temp = 0;
 	for (i = 0, d = &info->die_status[h->chip_address]; i < num_included; i++, d++) {
-		int die = h->chip_address + i;
-
+		die += i;
 		die_temperature = GN_DIE_TEMPERATURE(d->die.die_temperature);
 		/* Sanity checking */
 		if (unlikely(die_temperature > 255))
 			die_temperature = info->die_data[die].temp;
 		info->die_data[die].temp = die_temperature;
-		if (die_temperature > info->max_temp)
-			info->max_temp = die_temperature;
 		for (j = 0; j < 6; j++)
 			core_voltage[j] = GN_CORE_VOLTAGE(d->die.core_voltage[j]);
 
@@ -707,6 +703,17 @@ static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_in
 			core_voltage[0], core_voltage[1], core_voltage[2],
 			core_voltage[3], core_voltage[4], core_voltage[5]);
 		// XXX Convert board phase currents, voltage, temperature
+	}
+	if (die == info->asic_count - 1) {
+		/* We have a full set of die temperatures, find the highest
+		 * current die temp. */
+		die_temperature = 0;
+		for (die = 0; die < info->asic_count; die++) {
+			if (info->die_data[die].temp > die_temperature)
+				die_temperature = info->die_data[die].temp;
+		}
+		/* Exponentially change the max_temp to smooth out troughs. */
+		info->max_temp = info->max_temp * 0.63 + die_temperature * 0.37;
 	}
 
 	if (unlikely(info->max_temp >= opt_hfa_overheat)) {
