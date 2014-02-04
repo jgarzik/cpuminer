@@ -32,9 +32,9 @@ int opt_hfa_fan_min;
 #define HFA_TEMP_OVERHEAT 90
 #define HFA_TEMP_TARGET 85
 #define HFA_TEMP_HYSTERESIS 3
-#define HFA_FAN_DEFAULT 10
-#define HFA_FAN_MAX 100
-#define HFA_FAN_MIN 0
+#define HFA_FAN_DEFAULT 33
+#define HFA_FAN_MAX 85
+#define HFA_FAN_MIN 10
 
 // Matching fields for hf_statistics, but large #s for local accumulation, per-die
 struct hf_long_statistics {
