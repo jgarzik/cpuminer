@@ -1121,6 +1121,9 @@ fan_only:
 			/* Already at min speed */
 			if (hdd->hash_clock == HFA_CLOCK_MIN)
 				continue;
+			/* Have some leeway before throttling speed */
+			if (hdd->temp < opt_hfa_target + HFA_TEMP_HYSTERESIS)
+				break;
 			hfa_decrease_clock(hashfast, info, i);
 		} else {
 			/* Temp below target range.*/
