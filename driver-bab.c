@@ -144,8 +144,9 @@ static const uint32_t bab_test_data[BAB_TEST_DATA] = {
  */
 #define BAB_MAXSPEED 57
 #define BAB_DEFMAXSPEED 55
-#define BAB_DEFSPEED 54
+#define BAB_DEFSPEED 53
 #define BAB_MINSPEED 52
+#define BAB_ABSMINSPEED 32
 
 /*
  * % of errors to tune the speed up or down
@@ -669,7 +670,7 @@ static void _bab_reset(__maybe_unused struct cgpu_info *babcgpu, struct bab_info
 // TODO: handle a false return where this is called?
 static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, K_ITEM *item, bool detect_ignore, const char *file, const char *func, const int line)
 {
-	int bank, i, count;
+	int bank, i, count, chip1, chip2;
 	uint32_t siz, pos;
 	struct spi_ioc_transfer tran;
 	uintptr_t rbuf, wbuf;
@@ -753,9 +754,31 @@ static bool _bab_txrx(struct cgpu_info *babcgpu, struct bab_info *babinfo, K_ITE
 		count++;
 		if (ioctl(babinfo->spifd, SPI_IOC_MESSAGE(1), (void *)&tran) < 0) {
 			if (!detect_ignore || errno != 110) {
-				applog(LOG_ERR, "%s%d: ioctl (%d) failed err=%d" BAB_FFL,
-						babcgpu->drv->name, babcgpu->device_id,
-						count, errno, BAB_FFL_PASS);
+				for (bank = BAB_MAXBANKS; bank >= 0; bank--) {
+					if (DATAS(item)->bank_off[bank] &&
+					    pos >= DATAS(item)->bank_off[bank]) {
+						break;
+					}
+				}
+				for (chip1 = babinfo->chips-1; chip1 >= 0; chip1--) {
+					if (DATAS(item)->chip_off[chip1] &&
+					    pos >= DATAS(item)->chip_off[chip1]) {
+						break;
+					}
+				}
+				for (chip2 = babinfo->chips-1; chip2 >= 0; chip2--) {
+					if (DATAS(item)->chip_off[chip2] &&
+					    (pos + tran.len) >= DATAS(item)->chip_off[chip2]) {
+						break;
+					}
+				}
+				applog(LOG_ERR, "%s%d: ioctl (%d) siz=%d bank=%d chip=%d-%d"
+						" failed err=%d" BAB_FFL,
+						babcgpu->drv->name,
+						babcgpu->device_id,
+						count, (int)(tran.len),
+						bank, chip1, chip2,
+						errno, BAB_FFL_PASS);
 			}
 			return false;
 		}
@@ -1299,39 +1322,47 @@ static void bab_get_options(struct cgpu_info *babcgpu, struct bab_info *babinfo)
 			case 0:
 				if (*ptr && tolower(*ptr) != 'd') {
 					val = atoi(ptr);
-					if (!isdigit(*ptr) || val < BAB_MINSPEED || val > BAB_MAXSPEED) {
+					if (!isdigit(*ptr) || val < BAB_ABSMINSPEED || val > BAB_MAXSPEED) {
 						quit(1, "%s"INVOP"%s '%s' must be %d <= %s <= %d",
 							babcgpu->drv->dname,
 							bab_options[which],
-							ptr, BAB_MINSPEED,
+							ptr, BAB_ABSMINSPEED,
 							bab_options[which],
 							BAB_MAXSPEED);
 					}
 					babinfo->max_speed = (uint8_t)val;
+					// Adjust def,min down if they are above max specified
+					if (babinfo->def_speed > babinfo->max_speed)
+						babinfo->def_speed = babinfo->max_speed;
+					if (babinfo->min_speed > babinfo->max_speed)
+						babinfo->min_speed = babinfo->max_speed;
 				}
 				break;
 			case 1:
 				if (*ptr && tolower(*ptr) != 'd') {
 					val = atoi(ptr);
-					if (!isdigit(*ptr) || val < BAB_MINSPEED || val > babinfo->max_speed) {
+					if (!isdigit(*ptr) || val < BAB_ABSMINSPEED || val > babinfo->max_speed) {
 						quit(1, "%s"INVOP"%s '%s' must be %d <= %s <= %d",
 							babcgpu->drv->dname,
 							bab_options[which],
-							ptr, BAB_MINSPEED,
+							ptr, BAB_ABSMINSPEED,
 							bab_options[which],
 							babinfo->max_speed);
 					}
 					babinfo->def_speed = (uint8_t)val;
+					// Adjust min down if is is above def specified
+					if (babinfo->min_speed > babinfo->def_speed)
+						babinfo->min_speed = babinfo->def_speed;
 				}
 				break;
 			case 2:
 				if (*ptr && tolower(*ptr) != 'd') {
 					val = atoi(ptr);
-					if (!isdigit(*ptr) || val < BAB_MINSPEED || val > babinfo->def_speed) {
+					if (!isdigit(*ptr) || val < BAB_ABSMINSPEED || val > babinfo->def_speed) {
 						quit(1, "%s"INVOP"%s '%s' must be %d <= %s <= %d",
 							babcgpu->drv->dname,
 							bab_options[which],
-							ptr, BAB_MINSPEED,
+							ptr, BAB_ABSMINSPEED,
 							bab_options[which],
 							babinfo->def_speed);
 					}
@@ -1431,7 +1462,7 @@ static void bab_detect(bool hotplug)
 
 	babinfo->max_speed = BAB_DEFMAXSPEED;
 	babinfo->def_speed = BAB_DEFSPEED;
-	babinfo->min_speed = BAB_MINSPEED;
+	babinfo->min_speed = BAB_ABSMINSPEED;
 
 	babinfo->tune_up = BAB_TUNEUP;
 	babinfo->tune_down = BAB_TUNEDOWN;
@@ -1710,12 +1741,12 @@ static void process_history(struct cgpu_info *babcgpu, int chip, struct timeval 
 			item = babinfo->bad_nonces[i]->tail;
 		}
 	}
-	K_WUNLOCK(babinfo->nfree_list);
-
-	// Tuning ...
 	good_nonces = babinfo->good_nonces[chip]->count;
 	bad_nonces = babinfo->bad_nonces[chip]->count;
 
+	K_WUNLOCK(babinfo->nfree_list);
+
+	// Tuning ...
 	if (tdiff(now, &(babinfo->first_work[chip])) >= HISTORY_TIME_S &&
 	    tdiff(now, &(babinfo->last_tune[chip])) >= HISTORY_TIME_S &&
 	    (good_nonces + bad_nonces) > 0) {
@@ -1772,8 +1803,16 @@ static void process_history(struct cgpu_info *babcgpu, int chip, struct timeval 
 
 		tune = (double)bad_nonces / (double)(good_nonces + bad_nonces) * 100.0;
 
-		// Tune it down if error rate is too high
-		if (tune >= babinfo->tune_down) {
+		/*
+		 * TODO: it appears some chips just get a % bad at low speeds
+		 * so we should handle them by weighting the speed reduction vs
+		 * the HW% gained from the reduction (i.e. GH/s)
+		 * Maybe handle that when they hit min_speed, then do a gradual speed
+		 * up verifying if it is really making GH/s worse or better
+		 */
+
+		// Tune it down if error rate is too high (and it's above min)
+		if (tune >= babinfo->tune_down && chip_fast > babinfo->min_speed) {
 			babinfo->chip_fast[chip]--;
 
 			applog(LOG_WARNING, "%s%d: Chip %d High errors %.2f%% - speed down %d to %d",
