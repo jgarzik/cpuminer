@@ -1011,7 +1011,7 @@ static void hfa_increase_clock(struct cgpu_info *hashfast, struct hashfast_info 
 {
 	struct hf_die_data *hdd = &info->die_data[die];
 	uint32_t diebit = 0x00000001ul << die;
-	uint16_t hdata, increase = 5;
+	uint16_t hdata, increase = 10;
 
 	if (hdd->hash_clock + increase > info->hash_clock_rate)
 		increase = info->hash_clock_rate - hdd->hash_clock;
