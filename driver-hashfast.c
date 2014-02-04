@@ -329,7 +329,7 @@ resend:
 	// We extend the normal timeout - a complete device initialization, including
 	// bringing power supplies up from standby, etc., can take over a second.
 tryagain:
-	for (i = 0; i < 10; i++) {
+	for (i = 0; i < 3; i++) {
 		ret = hfa_get_header(hashfast, h, &hcrc);
 		if (unlikely(hashfast->usbinfo.nodev))
 			return false;
