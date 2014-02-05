@@ -170,7 +170,7 @@ retry:
 	}
 
 	if (retried)
-		applog(LOG_ERR, "%s %d: hfa_send_frame: recovered OK", hashfast->drv->name, id);
+		applog(LOG_WARNING, "%s %d: hfa_send_frame: recovered OK", hashfast->drv->name, id);
 
 	return true;
 }
@@ -441,7 +441,7 @@ tryagain:
 
 	// See if the initialization suceeded
 	if (db->operation_status) {
-		applog(LOG_WARNING, "%s %d: OP_USB_INIT failed! Operation status %d (%s)",
+		applog(LOG_ERR, "%s %d: OP_USB_INIT failed! Operation status %d (%s)",
 		       hashfast->drv->name, hashfast->device_id, db->operation_status,
 			(db->operation_status < sizeof(hf_usb_init_errors)/sizeof(hf_usb_init_errors[0])) ?
 			hf_usb_init_errors[db->operation_status] : "Unknown error code");
@@ -642,7 +642,7 @@ static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_inf
 
 	/* This is a special flag that the thermal overload has been tripped */
 	if (unlikely(h->core_address & 0x80)) {
-		applog(LOG_WARNING, "%s %d Thermal overload tripped! Resetting device",
+		applog(LOG_ERR, "%s %d Thermal overload tripped! Resetting device",
 		       hashfast->drv->name, hashfast->device_id);
 		hfa_send_shutdown(hashfast);
 		if (hfa_reset(hashfast, info)) {
