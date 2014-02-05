@@ -1,7 +1,7 @@
 /*
  * libusb synchronization on Microsoft Windows
  *
- * Copyright © 2010 Michael Plante <michael.plante@gmail.com>
+ * Copyright (C) 2010 Michael Plante <michael.plante@gmail.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,6 +20,8 @@
 
 #ifndef LIBUSB_THREADS_WINDOWS_H
 #define LIBUSB_THREADS_WINDOWS_H
+
+#include <windows.h>
 
 #define usbi_mutex_static_t     volatile LONG
 #define USBI_MUTEX_INITIALIZER  0
@@ -82,6 +84,5 @@ int usbi_cond_timedwait(usbi_cond_t *cond,
 int usbi_cond_broadcast(usbi_cond_t *cond);
 int usbi_cond_signal(usbi_cond_t *cond);
 
-int usbi_get_tid(void);
-
 #endif /* LIBUSB_THREADS_WINDOWS_H */
+
