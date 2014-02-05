@@ -161,6 +161,7 @@ static bool no_work;
 #ifdef USE_ICARUS
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
+int opt_anu_freq = 200;
 #endif
 bool opt_worktime;
 #ifdef USE_AVALON
@@ -1035,6 +1036,20 @@ static char *set_icarus_timing(const char *arg)
 
 	return NULL;
 }
+
+static char *set_int_150_to_500(const char *arg, int *i)
+{
+	char *err = set_int_range(arg, i, 150, 500);
+	int mult;
+
+	if (err)
+		return err;
+	mult = *i / 25;
+	mult *= 25;
+	if (mult != *i)
+		return "Frequency must be a multiple of 25";
+	return NULL;
+}
 #endif
 
 #ifdef USE_AVALON
@@ -1096,6 +1111,11 @@ static char *set_null(const char __maybe_unused *arg)
 
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
+#ifdef USE_ICARUS
+	OPT_WITH_ARG("--anu-freq",
+		     set_int_150_to_500, &opt_show_intval, &opt_anu_freq,
+		     "Set AntminerU1 frequency in hex, range 150-500"),
+#endif
 	OPT_WITH_ARG("--api-allow",
 		     set_api_allow, NULL, NULL,
 		     "Allow API access only to the given list of [G:]IP[/Prefix] addresses[/subnets]"),
