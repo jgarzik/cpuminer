@@ -127,6 +127,7 @@ struct hashfast_info {
 	int last_max_temp;
 	int temp_updates;
 	int fanspeed;                               // Fanspeed in percent
+	int last_die_adjusted;
 
 	pthread_t read_thr;
 	time_t last_restart;

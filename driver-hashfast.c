@@ -1124,8 +1124,9 @@ fan_only:
 	if (now_t - info->last_restart < 15)
 		return;
 
-	for (i = 0; i < info->asic_count ; i++) {
-		struct hf_die_data *hdd = &info->die_data[i];
+	for (i = 1; i <= info->asic_count ; i++) {
+		int die = (info->last_die_adjusted + i) % info->asic_count;
+		struct hf_die_data *hdd = &info->die_data[die];
 
 		/* Only send a restart no more than every 30 seconds. */
 		if (now_t - hdd->last_restart < 30)
@@ -1148,16 +1149,20 @@ fan_only:
 			/* Have some leeway before throttling speed */
 			if (hdd->temp < opt_hfa_target + HFA_TEMP_HYSTERESIS)
 				break;
-			hfa_decrease_clock(hashfast, info, i);
+			hfa_decrease_clock(hashfast, info, die);
 		} else {
 			/* Temp below target range.*/
 
 			/* Already at max speed */
 			if (hdd->hash_clock == info->hash_clock_rate)
 				continue;
-			hfa_increase_clock(hashfast, info, i);
+			hfa_increase_clock(hashfast, info, die);
 		}
+		/* Keep track of the last die adjusted since we only adjust
+		 * one at a time to ensure we end up iterating over all of
+		 * them. */
 		info->last_restart = hdd->last_restart = now_t;
+		info->last_die_adjusted = die;
 		break;
 	}
 }
