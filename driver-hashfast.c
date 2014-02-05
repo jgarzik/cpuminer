@@ -52,6 +52,10 @@ char *set_hfa_fan(char *arg)
 
 	opt_hfa_fan_min = val1;
 	opt_hfa_fan_max = val2;
+	if (opt_hfa_fan_min > opt_hfa_fan_default)
+		opt_hfa_fan_default = opt_hfa_fan_min;
+	if (opt_hfa_fan_max < opt_hfa_fan_default)
+		opt_hfa_fan_default = opt_hfa_fan_max;
 
 	return NULL;
 }
