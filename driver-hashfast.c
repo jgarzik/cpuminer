@@ -936,6 +936,12 @@ static void *hfa_read(void *arg)
 				/* Do nothing */
 				break;
 			default:
+				if (h->operation_code == OP_FAN) {
+					applog(LOG_NOTICE, "%s %d: Firmware upgrade required to support fan control",
+					       hashfast->drv->name, hashfast->device_id);
+					opt_hfa_target = 0;
+					break;
+				}
 				applog(LOG_WARNING, "%s %d: Unhandled operation code %d",
 				       hashfast->drv->name, hashfast->device_id, h->operation_code);
 				break;
