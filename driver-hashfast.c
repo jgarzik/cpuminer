@@ -36,6 +36,26 @@ int opt_hfa_fan_min = HFA_FAN_MIN;
 #define DI8  0x07
 
 static bool hfa_crc8_set;
+
+char *set_hfa_fan(char *arg)
+{
+	int val1, val2, ret;
+
+	ret = sscanf(arg, "%d-%d", &val1, &val2);
+	if (ret < 1)
+		return "No values passed to hfa-fan";
+	if (ret == 1)
+		val2 = val1;
+
+	if (val1 < 0 || val1 > 100 || val2 < 0 || val2 > 100 || val2 < val1)
+		return "Invalid value passed to hfa-fan";
+
+	opt_hfa_fan_min = val1;
+	opt_hfa_fan_max = val2;
+
+	return NULL;
+}
+
 static unsigned char crc8_table[256];	/* CRC-8 table */
 
 static void hfa_init_crc8(void)
