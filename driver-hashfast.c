@@ -1200,8 +1200,6 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 		       hashfast->device_id);
 	}
 
-	hfa_temp_clock(hashfast, info);
-
 	if (unlikely(thr->work_restart)) {
 restart:
 		info->last_restart = time(NULL);
@@ -1218,8 +1216,12 @@ restart:
 		/* Give a full allotment of jobs after a restart, not waiting
 		 * for the status update telling us how much to give. */
 		jobs = info->usb_init_base.inflight_target;
-	} else
+	} else {
+		/* Only adjust die clocks if there's no restart since two
+		 * restarts back to back get ignored. */
+		hfa_temp_clock(hashfast, info);
 		jobs = hfa_jobs(hashfast, info);
+	}
 
 	/* Wait on restart_wait for up to 0.5 seconds or submit jobs as soon as
 	 * they're required. */
