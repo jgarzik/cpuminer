@@ -1127,6 +1127,31 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--api-port",
 		     set_int_1_to_65535, opt_show_intval, &opt_api_port,
 		     "Port number of miner API"),
+#ifdef USE_AVALON
+	OPT_WITHOUT_ARG("--avalon-auto",
+			opt_set_bool, &opt_avalon_auto,
+			"Adjust avalon overclock frequency dynamically for best hashrate"),
+	OPT_WITH_ARG("--avalon-cutoff",
+		     set_int_0_to_100, opt_show_intval, &opt_avalon_overheat,
+		     "Set avalon overheat cut off temperature"),
+	OPT_WITH_ARG("--avalon-fan",
+		     set_avalon_fan, NULL, NULL,
+		     "Set fanspeed percentage for avalon, single value or range (default: 20-100)"),
+	OPT_WITH_ARG("--avalon-freq",
+		     set_avalon_freq, NULL, NULL,
+		     "Set frequency range for avalon-auto, single value or range"),
+	OPT_WITH_ARG("--avalon-options",
+		     set_avalon_options, NULL, NULL,
+		     "Set avalon options baud:miners:asic:timeout:freq:tech"),
+	OPT_WITH_ARG("--avalon-temp",
+		     set_int_0_to_100, opt_show_intval, &opt_avalon_temp,
+		     "Set avalon target temperature"),
+#endif
+#ifdef USE_BAB
+	OPT_WITH_ARG("--bab-options",
+		     set_bab_options, NULL, NULL,
+		     "Set bab options max:def:min:up:down:hz:delay:trf"),
+#endif
 	OPT_WITHOUT_ARG("--balance",
 		     set_balance, &pool_strategy,
 		     "Change multipool strategy from failover to even share balance"),
@@ -1142,6 +1167,17 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bflsc-overheat",
 		     set_int_0_to_200, opt_show_intval, &opt_bflsc_overheat,
 		     "Set overheat temperature where BFLSC devices throttle, 0 to disable"),
+#endif
+#ifdef USE_AVALON
+	OPT_WITH_ARG("--bitburner-voltage",
+		     opt_set_intval, NULL, &opt_bitburner_core_voltage,
+		     "Set BitBurner (Avalon) core voltage, in millivolts"),
+	OPT_WITH_ARG("--bitburner-fury-voltage",
+		     opt_set_intval, NULL, &opt_bitburner_fury_core_voltage,
+		     "Set BitBurner Fury core voltage, in millivolts"),
+	OPT_WITH_ARG("--bitburner-fury-options",
+		     set_bitburner_fury_options, NULL, NULL,
+		     "Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq"),
 #endif
 #ifdef USE_BITFURY
 	OPT_WITH_ARG("--bxf-temp-target",
@@ -1162,6 +1198,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--disable-rejecting",
 			opt_set_bool, &opt_disable_pool,
 			"Automatically disable pools that continually reject shares"),
+#ifdef USE_DRILLBIT
+        OPT_WITH_ARG("--drillbit-options",
+                     set_drillbit_options, NULL, NULL,
+                     "Set drillbit options <int|ext>:clock[:clock_divider][:voltage]"),
+#endif
 	OPT_WITH_ARG("--expiry|-E",
 		     set_int_0_to_9999, opt_show_intval, &opt_expiry,
 		     "Upper bound on how many seconds after getting work we consider a share from it stale"),
@@ -1171,56 +1212,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--fix-protocol",
 			opt_set_bool, &opt_fix_protocol,
 			"Do not redirect to a different getwork protocol (eg. stratum)"),
-	OPT_WITH_ARG("--hotplug",
-		     set_int_0_to_9999, NULL, &hotplug_time,
-#ifdef USE_USBUTILS
-		     "Seconds between hotplug checks (0 means never check)"
-#else
-		     opt_hidden
-#endif
-		    ),
-#if defined(HAVE_MODMINER)
-	OPT_WITH_ARG("--kernel-path|-K",
-		     opt_set_charp, opt_show_charp, &opt_kernel_path,
-	             "Specify a path to where bitstream files are"),
-#endif
-#ifdef USE_ICARUS
-	OPT_WITH_ARG("--icarus-options",
-		     set_icarus_options, NULL, NULL,
-		     opt_hidden),
-	OPT_WITH_ARG("--icarus-timing",
-		     set_icarus_timing, NULL, NULL,
-		     opt_hidden),
-#endif
-#ifdef USE_AVALON
-	OPT_WITHOUT_ARG("--avalon-auto",
-			opt_set_bool, &opt_avalon_auto,
-			"Adjust avalon overclock frequency dynamically for best hashrate"),
-	OPT_WITH_ARG("--avalon-cutoff",
-		     set_int_0_to_100, opt_show_intval, &opt_avalon_overheat,
-		     "Set avalon overheat cut off temperature"),
-	OPT_WITH_ARG("--avalon-fan",
-		     set_avalon_fan, NULL, NULL,
-		     "Set fanspeed percentage for avalon, single value or range (default: 20-100)"),
-	OPT_WITH_ARG("--avalon-freq",
-		     set_avalon_freq, NULL, NULL,
-		     "Set frequency range for avalon-auto, single value or range"),
-	OPT_WITH_ARG("--avalon-options",
-		     set_avalon_options, NULL, NULL,
-		     "Set avalon options baud:miners:asic:timeout:freq:tech"),
-	OPT_WITH_ARG("--avalon-temp",
-		     set_int_0_to_100, opt_show_intval, &opt_avalon_temp,
-		     "Set avalon target temperature"),
-	OPT_WITH_ARG("--bitburner-voltage",
-		     opt_set_intval, NULL, &opt_bitburner_core_voltage,
-		     "Set BitBurner (Avalon) core voltage, in millivolts"),
-	OPT_WITH_ARG("--bitburner-fury-voltage",
-		     opt_set_intval, NULL, &opt_bitburner_fury_core_voltage,
-		     "Set BitBurner Fury core voltage, in millivolts"),
-	OPT_WITH_ARG("--bitburner-fury-options",
-		     set_bitburner_fury_options, NULL, NULL,
-		     "Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq"),
-#endif
 #ifdef USE_HASHFAST
 	OPT_WITHOUT_ARG("--hfa-dfu-boot",
 			opt_set_bool, &opt_hfa_dfu_boot,
@@ -1244,20 +1235,31 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_200, opt_show_intval, &opt_hfa_target,
 		     "Set the hashfast target temperature (0 to disable)"),
 #endif
+	OPT_WITH_ARG("--hotplug",
+		     set_int_0_to_9999, NULL, &hotplug_time,
+#ifdef USE_USBUTILS
+		     "Seconds between hotplug checks (0 means never check)"
+#else
+		     opt_hidden
+#endif
+		    ),
+#ifdef USE_ICARUS
+	OPT_WITH_ARG("--icarus-options",
+		     set_icarus_options, NULL, NULL,
+		     opt_hidden),
+	OPT_WITH_ARG("--icarus-timing",
+		     set_icarus_timing, NULL, NULL,
+		     opt_hidden),
+#endif
+#if defined(HAVE_MODMINER)
+	OPT_WITH_ARG("--kernel-path|-K",
+		     opt_set_charp, opt_show_charp, &opt_kernel_path,
+	             "Specify a path to where bitstream files are"),
+#endif
 #ifdef USE_KLONDIKE
 	OPT_WITH_ARG("--klondike-options",
 		     set_klondike_options, NULL, NULL,
 		     "Set klondike options clock:temptarget"),
-#endif
-#ifdef USE_DRILLBIT
-        OPT_WITH_ARG("--drillbit-options",
-                     set_drillbit_options, NULL, NULL,
-                     "Set drillbit options <int|ext>:clock[:clock_divider][:voltage]"),
-#endif
-#ifdef USE_BAB
-	OPT_WITH_ARG("--bab-options",
-		     set_bab_options, NULL, NULL,
-		     "Set bab options max:def:min:up:down:hz:delay:trf"),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
@@ -1293,6 +1295,8 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--per-device-stats",
 			opt_set_bool, &want_per_device_stats,
 			"Force verbose mode and output per-device statistics"),
+	OPT_WITH_ARG("--pools",
+			opt_set_bool, NULL, NULL, opt_hidden),
 	OPT_WITHOUT_ARG("--protocol-dump|-P",
 			opt_set_bool, &opt_protocol,
 			"Verbose dump of protocol-level activities"),
@@ -1367,9 +1371,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--url|-o",
 		     set_url, NULL, NULL,
 		     "URL for bitcoin JSON-RPC server"),
-	OPT_WITH_ARG("--user|-u",
-		     set_user, NULL, NULL,
-		     "Username for bitcoin JSON-RPC server"),
 #ifdef USE_USBUTILS
 	OPT_WITH_ARG("--usb",
 		     set_usb_select, NULL, NULL,
@@ -1381,17 +1382,18 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_usb_list_all,
 			opt_hidden),
 #endif
-	OPT_WITHOUT_ARG("--verbose",
-			opt_set_bool, &opt_log_output,
-			"Log verbose output to stderr as well as status output"),
+	OPT_WITH_ARG("--user|-u",
+		     set_user, NULL, NULL,
+		     "Username for bitcoin JSON-RPC server"),
 	OPT_WITH_ARG("--userpass|-O",
 		     set_userpass, NULL, NULL,
 		     "Username:Password pair for bitcoin JSON-RPC server"),
+	OPT_WITHOUT_ARG("--verbose",
+			opt_set_bool, &opt_log_output,
+			"Log verbose output to stderr as well as status output"),
 	OPT_WITHOUT_ARG("--worktime",
 			opt_set_bool, &opt_worktime,
 			"Display extra work time debug information"),
-	OPT_WITH_ARG("--pools",
-			opt_set_bool, NULL, NULL, opt_hidden),
 	OPT_ENDTABLE
 };
 
