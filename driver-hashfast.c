@@ -1081,7 +1081,7 @@ static void hfa_decrease_clock(struct cgpu_info *hashfast, struct hashfast_info 
 {
 	struct hf_die_data *hdd = &info->die_data[die];
 	uint32_t diebit = 0x00000001ul << die;
-	uint16_t hdata, decrease = 10;
+	uint16_t hdata, decrease = 20;
 	int i, high_clock = 0;
 
 	/* Find the fastest die for comparison */
