@@ -1039,6 +1039,7 @@ static void hfa_set_fanspeed(struct cgpu_info *hashfast, struct hashfast_info *i
 static void hfa_increase_clock(struct cgpu_info *hashfast, struct hashfast_info *info,
 			       int die)
 {
+	int i, high_clock = 0, low_clock = info->hash_clock_rate;
 	struct hf_die_data *hdd = &info->die_data[die];
 	uint32_t diebit = 0x00000001ul << die;
 	uint16_t hdata, increase = 10;
@@ -1046,9 +1047,30 @@ static void hfa_increase_clock(struct cgpu_info *hashfast, struct hashfast_info 
 	if (hdd->hash_clock + increase > info->hash_clock_rate)
 		increase = info->hash_clock_rate - hdd->hash_clock;
 	hdd->hash_clock += increase;
+	hdata = (WR_MHZ_INCREASE << 12) | increase;
+	if (info->clock_offset) {
+		for (i = 0; i < info->asic_count; i++) {
+			if (info->die_data[i].hash_clock > high_clock)
+				high_clock = info->die_data[i].hash_clock;
+			if (info->die_data[i].hash_clock < low_clock)
+				low_clock = info->die_data[i].hash_clock;
+		}
+		if (low_clock + HFA_CLOCK_MAXDIFF > high_clock) {
+			/* We can increase all clocks again */
+			for (i = 0; i < info->asic_count; i++) {
+				if (i == die) /* We've already added to this die */
+					continue;
+				info->die_data[i].hash_clock += increase;
+			}
+			applog(LOG_INFO, "%s %d: Die temp below range %.1f, increasing ALL dies by %d",
+			       hashfast->drv->name, hashfast->device_id, info->die_data[die].temp, increase);
+			hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), hdata, (uint8_t *)NULL, 0);
+			info->clock_offset -= increase;
+			return;
+		}
+	}
 	applog(LOG_INFO, "%s %d: Die temp below range %.1f, increasing die %d clock to %d",
 	       hashfast->drv->name, hashfast->device_id, info->die_data[die].temp, die, hdd->hash_clock);
-	hdata = (WR_MHZ_INCREASE << 12) | increase;
 	hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), hdata, (uint8_t *)&diebit, 4);
 }
 
@@ -1058,13 +1080,32 @@ static void hfa_decrease_clock(struct cgpu_info *hashfast, struct hashfast_info 
 	struct hf_die_data *hdd = &info->die_data[die];
 	uint32_t diebit = 0x00000001ul << die;
 	uint16_t hdata, decrease = 10;
+	int i, high_clock = 0;
 
+	/* Find the fastest die for comparison */
+	for (i = 0; i < info->asic_count; i++) {
+		if (info->die_data[i].hash_clock > high_clock)
+			high_clock = info->die_data[i].hash_clock;
+	}
 	if (hdd->hash_clock - decrease < HFA_CLOCK_MIN)
 		decrease = hdd->hash_clock - HFA_CLOCK_MIN;
+	hdata = (WR_MHZ_DECREASE << 12) | decrease;
+	if (high_clock >= hdd->hash_clock + HFA_CLOCK_MAXDIFF) {
+		/* We can't have huge differences in clocks as it will lead to
+		 * starvation of the faster cores so we have no choice but to
+		 * slow down all dies to tame this one. */
+		for (i = 0; i < info->asic_count; i++)
+			info->die_data[i].hash_clock -= decrease;
+		applog(LOG_INFO, "%s %d: Die temp above range %.1f, decreasing ALL die clocks by %d",
+		       hashfast->drv->name, hashfast->device_id, info->die_data[die].temp, decrease);
+		hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), hdata, (uint8_t *)NULL, 0);
+		info->clock_offset += decrease;
+		return;
+
+	}
 	hdd->hash_clock -= decrease;
 	applog(LOG_INFO, "%s %d: Die temp above range %.1f, decreasing die %d clock to %d",
 	       hashfast->drv->name, hashfast->device_id, info->die_data[die].temp, die, hdd->hash_clock);
-	hdata = (WR_MHZ_DECREASE << 12) | decrease;
 	hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), hdata, (uint8_t *)&diebit, 4);
 }
 
@@ -1072,28 +1113,30 @@ static void hfa_decrease_clock(struct cgpu_info *hashfast, struct hashfast_info 
  * setting and issuing a work restart with the new clock speed. */
 static void hfa_temp_clock(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
+	int temp_change, i, low_clock;
 	time_t now_t = time(NULL);
 	bool throttled = false;
-	int temp_change, i;
 
 	if (!opt_hfa_target)
 		return;
-
-	/* First find out if any dies are throttled before trying to optimise
-	 * fanspeed */
-	for (i = 0; i < info->asic_count ; i++) {
-		struct hf_die_data *hdd = &info->die_data[i];
-
-		if (hdd->hash_clock < info->hash_clock_rate) {
-			throttled = true;
-			break;
-		}
-	}
 
 	/* Only attempt to adjust fanspeed and/or clock speeds if we have
 	 * sampled enough temperature data. */
 	if (info->temp_updates < 5)
 		return;
+
+	/* First find out if any dies are throttled before trying to optimise
+	 * fanspeed, and find the slowest clock. */
+	low_clock = info->hash_clock_rate;
+	for (i = 0; i < info->asic_count ; i++) {
+		struct hf_die_data *hdd = &info->die_data[i];
+
+		if (hdd->hash_clock < info->hash_clock_rate)
+			throttled = true;
+		if (hdd->hash_clock < low_clock)
+			low_clock = hdd->hash_clock;
+	}
+
 	/* Find the direction of temperature change since we last checked */
 	info->temp_updates = 0;
 	temp_change = info->max_temp - info->last_max_temp;
@@ -1162,6 +1205,11 @@ static void hfa_temp_clock(struct cgpu_info *hashfast, struct hashfast_info *inf
 
 			/* Already at max speed */
 			if (hdd->hash_clock == info->hash_clock_rate)
+				continue;
+			/* Do not increase the clocks on any dies if we have
+			 * a forced offset due to wild differences in clocks,
+			 * unless this is the slowest one. */
+			if (info->clock_offset && hdd->hash_clock > low_clock)
 				continue;
 			hfa_increase_clock(hashfast, info, die);
 		}
