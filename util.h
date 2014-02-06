@@ -41,17 +41,19 @@
 	extern char *WSAErrorMsg(void);
 	#define SOCKERRMSG WSAErrorMsg()
 
+	/* Check for windows variants of the errors as well as when ming
+	 * decides to wrap the error into the errno equivalent. */
 	static inline bool sock_blocks(void)
 	{
-		return (WSAGetLastError() == WSAEWOULDBLOCK);
+		return (WSAGetLastError() == WSAEWOULDBLOCK || errno == EAGAIN);
 	}
 	static inline bool sock_timeout(void)
 	{
-		return (WSAGetLastError() == WSAETIMEDOUT);
+		return (WSAGetLastError() == WSAETIMEDOUT || errno == ETIMEDOUT);
 	}
 	static inline bool interrupted(void)
 	{
-		return (WSAGetLastError() == WSAEINTR);
+		return (WSAGetLastError() == WSAEINTR || errno == EINTR);
 	}
 	#ifndef SHUT_RDWR
 	#define SHUT_RDWR SD_BOTH
