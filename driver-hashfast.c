@@ -1064,8 +1064,8 @@ static void hfa_increase_clock(struct cgpu_info *hashfast, struct hashfast_info 
 					continue;
 				info->die_data[i].hash_clock += increase;
 			}
-			applog(LOG_INFO, "%s %d: Die temp below range %.1f, increasing ALL dies by %d",
-			       hashfast->drv->name, hashfast->device_id, info->die_data[die].temp, increase);
+			applog(LOG_INFO, "%s %d: Die %d temp below range %.1f, increasing ALL dies by %d",
+			       hashfast->drv->name, hashfast->device_id, die, info->die_data[die].temp, increase);
 			hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), hdata, (uint8_t *)NULL, 0);
 			info->clock_offset -= increase;
 			return;
@@ -1098,8 +1098,8 @@ static void hfa_decrease_clock(struct cgpu_info *hashfast, struct hashfast_info 
 		 * slow down all dies to tame this one. */
 		for (i = 0; i < info->asic_count; i++)
 			info->die_data[i].hash_clock -= decrease;
-		applog(LOG_INFO, "%s %d: Die temp above range %.1f, decreasing ALL die clocks by %d",
-		       hashfast->drv->name, hashfast->device_id, info->die_data[die].temp, decrease);
+		applog(LOG_INFO, "%s %d: Die %d temp above range %.1f, decreasing ALL die clocks by %d",
+		       hashfast->drv->name, hashfast->device_id, die, info->die_data[die].temp, decrease);
 		hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), hdata, (uint8_t *)NULL, 0);
 		info->clock_offset += decrease;
 		return;
