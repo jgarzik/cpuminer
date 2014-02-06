@@ -5865,6 +5865,9 @@ static struct work *hash_pop(void)
 
 	/* Signal hash_pop again in case there are mutliple hash_pop waiters */
 	pthread_cond_signal(&getq->cond);
+
+	/* Keep track of last getwork grabbed */
+	last_getwork = time(NULL);
 	mutex_unlock(stgd_lock);
 
 	return work;
@@ -6023,7 +6026,6 @@ struct work *get_work(struct thr_info *thr, const int thr_id)
 			wake_gws();
 		}
 	}
-	last_getwork = time(NULL);
 	applog(LOG_DEBUG, "Got work from get queue to get work for thread %d", thr_id);
 
 	work->thr_id = thr_id;
@@ -8361,8 +8363,14 @@ begin_bench:
 		}
 		mutex_unlock(stgd_lock);
 
-		if (ts > max_staged)
+		if (ts > max_staged) {
+			/* Keeps slowly generating work even if it's not being
+			 * used to keep last_getwork incrementing and to see
+			 * if pools are still alive. */
+			work = hash_pop();
+			discard_work(work);
 			continue;
+		}
 
 		work = make_work();
 
