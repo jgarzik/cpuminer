@@ -1136,7 +1136,7 @@ static void hfa_temp_clock(struct cgpu_info *hashfast, struct hashfast_info *inf
 
 	/* Find the direction of temperature change since we last checked */
 	if (info->temp_updates < 5)
-		goto fan_only;
+		goto dies_only;
 	info->temp_updates = 0;
 	temp_change = info->max_temp - info->last_max_temp;
 	info->last_max_temp = info->max_temp;
@@ -1168,7 +1168,7 @@ static void hfa_temp_clock(struct cgpu_info *hashfast, struct hashfast_info *inf
 		}
 	}
 
-fan_only:
+dies_only:
 	/* Do no restarts at all if there has been one less than 15 seconds
 	 * ago */
 	if (now_t - info->last_restart < 15)
@@ -1177,10 +1177,6 @@ fan_only:
 	for (i = 1; i <= info->asic_count ; i++) {
 		int die = (info->last_die_adjusted + i) % info->asic_count;
 		struct hf_die_data *hdd = &info->die_data[die];
-
-		/* Only send a restart no more than every 30 seconds. */
-		if (now_t - hdd->last_restart < 30)
-			continue;
 
 		/* Sanity check */
 		if (unlikely(hdd->temp == 0.0 || hdd->temp > 255))
@@ -1201,7 +1197,10 @@ fan_only:
 				break;
 			hfa_decrease_clock(hashfast, info, die);
 		} else {
-			/* Temp below target range.*/
+			/* Temp below target range. Only send a restart to
+			 * increase speed no more than every 60 seconds. */
+			if (now_t - hdd->last_restart < 60)
+				continue;
 
 			/* Already at max speed */
 			if (hdd->hash_clock == info->hash_clock_rate)
