@@ -413,7 +413,7 @@ tryagain:
 	       (db->firmware_rev >> 8) & 0xff, db->firmware_rev & 0xff);
 	applog(LOG_INFO, "%s %d:      hardware_rev:    %d.%d", hashfast->drv->name, hashfast->device_id,
 	       (db->hardware_rev >> 8) & 0xff, db->hardware_rev & 0xff);
-	applog(LOG_INFO, "%s %d:      serial number:   %d", hashfast->drv->name, hashfast->device_id,
+	applog(LOG_INFO, "%s %d:      serial number:   0x%08x", hashfast->drv->name, hashfast->device_id,
 	       db->serial_number);
 	applog(LOG_INFO, "%s %d:      hash clockrate:  %d Mhz", hashfast->drv->name, hashfast->device_id,
 	       db->hash_clockrate);
