@@ -6150,7 +6150,8 @@ bool submit_tested_work(struct thr_info *thr, struct work *work)
 	update_work_stats(thr, work);
 
 	if (!fulltest(work->hash, work->target)) {
-		applog(LOG_INFO, "Share above target");
+		applog(LOG_INFO, "%s %d: Share above target", thr->cgpu->drv->name,
+		       thr->cgpu->device_id);
 		return false;
 	}
 	work_out = copy_work(work);
