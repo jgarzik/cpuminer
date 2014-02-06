@@ -1122,11 +1122,6 @@ static void hfa_temp_clock(struct cgpu_info *hashfast, struct hashfast_info *inf
 	if (!opt_hfa_target)
 		return;
 
-	/* Only attempt to adjust fanspeed and/or clock speeds if we have
-	 * sampled enough temperature data. */
-	if (info->temp_updates < 5)
-		return;
-
 	/* First find out if any dies are throttled before trying to optimise
 	 * fanspeed, and find the slowest clock. */
 	low_clock = info->hash_clock_rate;
