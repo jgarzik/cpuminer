@@ -112,6 +112,7 @@ struct hashfast_info {
 	int core_ntime_roll;                        // Total core ntime roll amount
 
 	pthread_mutex_t lock;
+	pthread_mutex_t rlock;
 	struct work **works;
 	uint16_t hash_sequence_head;                // HOST:   The next hash sequence # to be sent
 	uint16_t hash_sequence_tail;                // HOST:   Follows device_sequence_tail around to free work
