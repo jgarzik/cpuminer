@@ -31,7 +31,7 @@ char *set_hfa_fan(char *arg);
 #define HASHFAST_MINER_THREADS 1
 #define HFA_CLOCK_DEFAULT 550
 #define HFA_CLOCK_MIN 125
-#define HFA_CLOCK_MAXDIFF 50
+#define HFA_CLOCK_MAXDIFF 100
 #define HFA_TEMP_OVERHEAT 95
 #define HFA_TEMP_TARGET 88
 #define HFA_TEMP_HYSTERESIS 3
