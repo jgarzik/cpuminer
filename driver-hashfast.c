@@ -456,6 +456,8 @@ static void hfa_send_shutdown(struct cgpu_info *hashfast)
 	if (hashfast->usbinfo.nodev)
 		return;
 	hfa_send_frame(hashfast, HF_USB_CMD(OP_USB_SHUTDOWN), 0, NULL, 0);
+	/* Wait to allow device to properly shut down. */
+	cgsleep_ms(1000);
 }
 
 static void hfa_clear_readbuf(struct cgpu_info *hashfast)
