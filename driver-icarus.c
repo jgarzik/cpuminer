@@ -106,7 +106,8 @@ ASSERT1(sizeof(uint32_t) == 4);
 // Per FPGA
 #define CAIRNSMORE2_HASH_TIME 0.0000000066600
 #define NANOSEC 1000000000.0
-#define ANTMINERUSB_HASH_TIME 0.0000000006450
+#define ANTMINERUSB_HASH_MHZ  0.000000125
+#define ANTMINERUSB_HASH_TIME (ANTMINERUSB_HASH_MHZ / (double)(opt_anu_freq))
 #define CAIRNSMORE2_INTS 4
 
 // Icarus Rev3 doesn't send a completion message when it finishes
