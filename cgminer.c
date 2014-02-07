@@ -8349,6 +8349,8 @@ begin_bench:
 		int ts, max_staged = opt_queue;
 		struct pool *pool, *cp;
 		bool lagging = false;
+		struct timespec then;
+		struct timeval now;
 		struct work *work;
 
 		if (opt_work_update)
@@ -8361,6 +8363,10 @@ begin_bench:
 		if (!pool_localgen(cp) && !staged_rollable)
 			max_staged += mining_threads;
 
+		cgtime(&now);
+		then.tv_sec = now.tv_sec + 2;
+		then.tv_nsec = now.tv_usec * 1000;
+
 		mutex_lock(stgd_lock);
 		ts = __total_staged();
 
@@ -8369,7 +8375,7 @@ begin_bench:
 
 		/* Wait until hash_pop tells us we need to create more work */
 		if (ts > max_staged) {
-			pthread_cond_wait(&gws_cond, stgd_lock);
+			pthread_cond_timedwait(&gws_cond, stgd_lock, &then);
 			ts = __total_staged();
 		}
 		mutex_unlock(stgd_lock);
