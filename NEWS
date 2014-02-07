@@ -1,3 +1,108 @@
+Version 3.12.1 - 7th February 2014
+
+- Document new features for antminer U1 and hfa devices.
+- Add support for ANU overclocking.
+- Increase hfa fanspeed by more if we're rising in temp above the target than if
+the temp is staying the same.
+- Add debug output when get_work() is blocked for an extended period and add
+grace time to the device's last valid work to prevent false positives for device
+failure.
+- Issue a shutdown prior to a reset command for hfa devices and lock access to
+reads awaiting the response if the device is already running.
+- Do not register as successful a hfa init sequence that reports the clockrate
+as zero.
+- Show device info in noffset nonce share above target message.
+- Widen lines in top menu to fit extra large share values.
+- Only show one decimal place if pool diff is not an integer.
+- Show serial number as a hex value in hfa verbose startup.
+- Slowly remove work even if it's not being used to keep the getwork counter
+incrementing even if work is not used and as a test that pools are still
+working.
+- Increase the maximum diff between hfa dies to 100Mhz.
+- Show which hfa die is bringing down all the others when decreasing all the
+clock speeds.
+- Increase the decrease when temp has increased more and we want to decrease it
+on hfa.
+- Give device info with share above target message.
+- Allow throttling of hfa dies more frequently and increasing of speeds less
+frequently.
+- Wait after sending a hfa shutdown to allow the device to properly shut down
+before possibly sending it more commands.
+- Minimise the die clock differences in hfa to no more than 50Mhz.
+- Check for when errno is set on windows as well as the windows variant for
+errors.
+- Revert "Update to libusb-1.0.18"
+- Disable fan/die clock control in hfa if the firmware does not support it, with
+notification.
+- Add ability to enter ANU frequency as a multiple of 25 from 150-500.
+- Decrease hfa clock by 10 if a reset is attempted due to the device remaining
+idle.
+- ifdef out icarus options unused without icarus built in.
+- Reorder command line options alphabetically.
+- Add no matching work to hfa API output.
+- Change various logging message levels in the hfa driver.
+- Only adjust clocks if there is no restart in hfa to avoid 2 restarts back to
+back.
+- Ensure we iterate over all dies adjusting temperate for hfa by starting
+iterating after the last die modified.
+- Clamp initial hfa fanspeed to min/max if passed as parameters.
+- Allow hfa fanspeed to be set via command line.
+- Further relax the target temperatures on hfa driver, targetting 88 degrees.
+- Try one more time to get the hfa header on init since it can take 2 seconds
+for all 3 boards on a sierra.
+- Update authors for removal of gpu/scrypt.
+- Wait for 5 temperature updates in hfa before adjusting fanspeed.
+- Have some leeway before starting to throttle hfa dies.
+- Use increments of 10 when increasing hfa clock since it may not have 5 MHz
+granularity internally.
+- Only perform a hfa fan speed update if we have new temps to work with.
+- Correctly measure the hfa max temp and smooth out the changes in its value.
+- Choose better defaults for min/max/default fan settings for hfa driver.
+- bab - reduce def speed, fix speed staying in ranges and report bank/chips in
+ioctl() errors
+- bab - add info about number of boards/chips to each Dead Chain
+- These may not be longs (eg: OSX)... fo a safe cast to ensure.
+- bab - add dead boards and dead chains to stats
+- Add fanspeed to hfa api output and set initial fanspeed to 10%
+- Add hfa fanspeed control to try and maintain a target temperature.
+- API-README correct new text format documentation
+- API allow multiple commands/replies in one request
+- Add op commands necessary to control hfa fanspeeds.
+- Add OP_FAN to hf protocol header.
+- Always show the stratum share lag time in debug mode.
+- Add stratum share response lag time to verbose output if it's greater than 1
+second.
+- Add stratum share submission lag time to verbose information if it's over 1
+second.
+- Check for more interrupted conditions in util.c and handle them gracefully.
+- Send a ping to hfa devices if nothing is sent for over 5 seconds.
+- Add OP_PING to hfa commands
+- Display the hfa serial number as a hexadecimal value.
+- Add the ability to display a hexadecimal 32 bit unsigned integer to the API.
+- Limit all hfa restarts for temperature control to no closer than 15 seconds
+apart.
+- Allow the hfa temp target to be disabled by setting it to zero.
+- Handle interruptions to various select calls in util.c
+- Add sanity check for silly overflows in hfa die temperature readings.
+- Add per-die throttling control for hfa driver based on each die's temperature,
+issuing a suitable reset to maintain the temperature below a configurable target
+temperature.
+- Update hf protocol
+- Do not memcpy in usbutils unless data was transferred.
+- Send a full allotment of jobs to the hfa device after a restart instead of
+reading the status.
+- Export the flush_queue function for use by drivers.
+- Remove wrong goto
+- Remove the unqueued work reference when we discard work from get queued as
+well.
+- Wake the global work scheduler when we remove a work item from the unqueued
+work pointer.
+- Discard work that is stale in the get_queued() function, returning NULL
+instead.
+- Add a call to a driver specific zero stats function when zero stats is called
+to allow each driver to reset its own stats as well if desired.
+
+
 Version 3.12.0 - 29th January 2014
 
 - Add support for AntminerU1 devices with the icarus driver.
