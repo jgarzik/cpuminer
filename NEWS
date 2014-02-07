@@ -1,3 +1,14 @@
+Version 3.12.2 - 8th February 2014
+
+- Adjust antminer U1 timing according to command line frequency set, fixing the
+need for icarus timing on the command line.
+- Read pipe errors that don't clear are worth attempting to reset the usb.
+- Revert "Do away with usb resets entirely since we retry on both pipe and io
+errors now and they're of dubious value."
+- Make the pthread cond wait in the getwork scheduler a timed wait in case we
+miss a wakeup.
+
+
 Version 3.12.1 - 7th February 2014
 
 - Document new features for antminer U1 and hfa devices.
