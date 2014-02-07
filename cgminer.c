@@ -6015,9 +6015,11 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 struct work *get_work(struct thr_info *thr, const int thr_id)
 {
 	struct work *work = NULL;
+	time_t diff_t;
 
 	thread_reportout(thr);
 	applog(LOG_DEBUG, "Popping work from get queue to get work");
+	diff_t = time(NULL);
 	while (!work) {
 		work = hash_pop();
 		if (stale_work(work, false)) {
@@ -6025,6 +6027,14 @@ struct work *get_work(struct thr_info *thr, const int thr_id)
 			work = NULL;
 			wake_gws();
 		}
+	}
+	diff_t = time(NULL) - diff_t;
+	/* Since this is a blocking function, we need to add grace time to
+	 * the device's last valid work to not make outages appear to be
+	 * device failures. */
+	if (diff_t > 0) {
+		applog(LOG_DEBUG, "Get work blocked for %d seconds", (int)diff_t);
+		thr->cgpu->last_device_valid_work += diff_t;
 	}
 	applog(LOG_DEBUG, "Got work from get queue to get work for thread %d", thr_id);
 
