@@ -1164,8 +1164,12 @@ static void hfa_temp_clock(struct cgpu_info *hashfast, struct hashfast_info *inf
 	    (throttled && info->max_temp >= opt_hfa_target - HFA_TEMP_HYSTERESIS)) {
 		/* We should be trying to decrease temperature, if it's not on
 		 * its way down. */
-		if (temp_change >= 0 && info->fanspeed < opt_hfa_fan_max)
-			hfa_set_fanspeed(hashfast, info, 5);
+		if (info->fanspeed < opt_hfa_fan_max) {
+			if (!temp_change)
+				hfa_set_fanspeed(hashfast, info, 5);
+			else if (temp_change > 0)
+				hfa_set_fanspeed(hashfast, info, 10);
+		}
 	} else if (info->max_temp >= opt_hfa_target - HFA_TEMP_HYSTERESIS) {
 		/* In optimal range, try and maintain the same temp */
 		if (temp_change > 0) {
