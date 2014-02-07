@@ -2803,6 +2803,17 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 
 		tot += sent;
 
+		/* Unlike reads, even a timeout error is unrecoverable on
+		 * writes. */
+		if (err) {
+			applog(LOG_WARNING, "%s %i %s usb write err:(%d) %s", cgpu->drv->name,
+			       cgpu->device_id, usb_cmdname(cmd), err, libusb_error_name(err));
+			if (err != LIBUSB_ERROR_NO_DEVICE) {
+				err = libusb_reset_device(usbdev->handle);
+				applog(LOG_WARNING, "%s %i attempted reset got err:(%d) %s",
+				       cgpu->drv->name, cgpu->device_id, err, libusb_error_name(err));
+			}
+		}
 		if (err)
 			break;
 
