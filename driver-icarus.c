@@ -794,6 +794,122 @@ static void get_options(int this_option_offset, struct cgpu_info *icarus, int *b
 	}
 }
 
+unsigned char crc5(unsigned char *ptr, unsigned char len)
+{
+	unsigned char i, j, k;
+	unsigned char crc = 0x1f;
+
+	unsigned char crcin[5] = {1, 1, 1, 1, 1};
+	unsigned char crcout[5] = {1, 1, 1, 1, 1};
+	unsigned char din = 0;
+
+	j = 0x80;
+	k = 0;
+	for (i = 0; i < len; i++) {
+		if (*ptr & j)
+			din = 1;
+		else
+			din = 0;
+		crcout[0] = crcin[4] ^ din;
+		crcout[1] = crcin[0];
+		crcout[2] = crcin[1] ^ crcin[4] ^ din;
+		crcout[3] = crcin[2];
+		crcout[4] = crcin[3];
+
+		j = j >> 1;
+		k++;
+		if (k == 8) {
+			j = 0x80;
+			k = 0;
+			ptr++;
+		}
+		memcpy(crcin, crcout, 5);
+	}
+	crc = 0;
+	if(crcin[4])
+		crc |= 0x10;
+	if(crcin[3])
+		crc |= 0x08;
+	if(crcin[2])
+		crc |= 0x04;
+	if(crcin[1])
+		crc |= 0x02;
+	if(crcin[0])
+		crc |= 0x01;
+	return crc;
+}
+
+static unsigned char anu_freq_table[] = {
+	0x05,	// 150
+	0x06,
+	0x07,	// 200 == default
+	0x08,
+	0x09,
+	0x0a,
+	0x0b,	// 300
+	0x4c,
+	0x4d,
+	0x4e,
+	0x4f,	// 400
+	0x50,
+	0x51,
+	0x52,
+	0x53	// 500
+};
+
+#define ANU_FREQTODATA(freq) (anu_freq_table[(freq - 150) / 25])
+
+static bool set_anu_freq(struct cgpu_info *icarus, struct ICARUS_INFO *info)
+{
+	unsigned char cmd_buf[4], rdreg_buf[4];
+	int amount, err;
+	char buf[512];
+
+	memset(cmd_buf, 0, 4);
+	memset(rdreg_buf, 0, 4);
+	cmd_buf[0] = 2 | 0x80;
+	cmd_buf[1] = ANU_FREQTODATA(opt_anu_freq);	//16-23
+	cmd_buf[2] = 0x81;	//8-15
+	cmd_buf[3] = crc5(cmd_buf, 27);
+
+	rdreg_buf[0] = 4 | 0x80;
+	rdreg_buf[1] = 0;	//16-23
+	rdreg_buf[2] = 0x04;	//8-15
+	rdreg_buf[3] = crc5(rdreg_buf, 27);
+
+	applog(LOG_DEBUG, "%s%i: Send frequency %02x%02x%02x%02x", icarus->drv->name, icarus->device_id,
+	       cmd_buf[0], cmd_buf[1], cmd_buf[2], cmd_buf[3]);
+	err = usb_write_ii(icarus, info->intinfo, (char *)cmd_buf, 4, &amount, C_ANU_SEND_CMD);
+	if (err != LIBUSB_SUCCESS || amount != 4) {
+		applog(LOG_ERR, "%s%i: Write freq Comms error (werr=%d amount=%d)",
+		       icarus->drv->name, icarus->device_id, err, amount);
+		return false;
+	}
+	err = usb_read_ii_timeout(icarus, info->intinfo, buf, 512, &amount, 100, C_GETRESULTS);
+	if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
+		applog(LOG_ERR, "%s%i: Read freq Comms error (rerr=%d amount=%d)",
+		       icarus->drv->name, icarus->device_id, err, amount);
+		return false;
+	}
+
+	applog(LOG_DEBUG, "%s%i: Send freq getstatus %02x%02x%02x%02x", icarus->drv->name, icarus->device_id,
+	       rdreg_buf[0], rdreg_buf[1], rdreg_buf[2], rdreg_buf[3]);
+	err = usb_write_ii(icarus, info->intinfo, (char *)cmd_buf, 4, &amount, C_ANU_SEND_RDREG);
+	if (err != LIBUSB_SUCCESS || amount != 4) {
+		applog(LOG_ERR, "%s%i: Write freq Comms error (werr=%d amount=%d)",
+		       icarus->drv->name, icarus->device_id, err, amount);
+		return false;
+	}
+	err = usb_read_ii_timeout(icarus, info->intinfo, buf, 512, &amount, 100, C_GETRESULTS);
+	if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
+		applog(LOG_ERR, "%s%i: Read freq Comms error (rerr=%d amount=%d)",
+		       icarus->drv->name, icarus->device_id, err, amount);
+		return false;
+	}
+
+	return true;
+}
+
 static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	int this_option_offset = ++option_offset;
@@ -820,6 +936,7 @@ static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb
 	int ret, err, amount, tries, i;
 	bool ok;
 	bool cmr2_ok[CAIRNSMORE2_INTS];
+	bool anu_freqset = false;
 	int cmr2_count;
 
 	if ((sizeof(workdata) << 1) != (sizeof(golden_ob) - 1))
@@ -877,6 +994,12 @@ cmr2_retry:
 	while (!ok && tries-- > 0) {
 		icarus_initialise(icarus, baud);
 
+		if (info->ident == IDENT_ANU && !set_anu_freq(icarus, info)) {
+			applog(LOG_WARNING, "%s %i: Failed to set frequency, too much overclock?",
+			       icarus->drv->name, icarus->device_id);
+			continue;
+		}
+
 		err = usb_write_ii(icarus, info->intinfo,
 				   (char *)(&workdata), sizeof(workdata), &amount, C_SENDWORK);
 
@@ -888,9 +1011,9 @@ cmr2_retry:
 		if (ret != ICA_NONCE_OK)
 			continue;
 
-		if (unlikely(info->nonce_size == ICARUS_READ_SIZE && usb_buffer_size(icarus) == 1)) {
+		if (info->nonce_size == ICARUS_READ_SIZE && usb_buffer_size(icarus) == 1) {
 			usb_buffer_clear(icarus);
-			icarus->usbdev->ident = IDENT_ANU;
+			icarus->usbdev->ident = info->ident = IDENT_ANU;
 			info->nonce_size = ANT_READ_SIZE;
 			info->Hs = ANTMINERUSB_HASH_TIME;
 			icarus->drv->name = "ANU";
@@ -899,9 +1022,12 @@ cmr2_retry:
 		}
 
 		nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
-		if (strncmp(nonce_hex, golden_nonce, 8) == 0)
-			ok = true;
-		else {
+		if (strncmp(nonce_hex, golden_nonce, 8) == 0) {
+			if (info->ident == IDENT_ANU && !anu_freqset)
+				anu_freqset = true;
+			else
+				ok = true;
+		} else {
 			if (tries < 0 && info->ident != IDENT_CMR2) {
 				applog(LOG_ERR,
 					"Icarus Detect: "
