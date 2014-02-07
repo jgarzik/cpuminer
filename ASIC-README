@@ -144,6 +144,7 @@ sudo kextunload -b com.apple.driver.AppleUSBCDCACMData
 
 ASIC SPECIFIC COMMANDS
 
+--anu-freq <arg>    Set AntminerU1 frequency in hex, range 150-500 (default: 200)
 --avalon-auto       Adjust avalon overclock frequency dynamically for best hashrate
 --avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
 --avalon-fan <arg> Set fanspeed percentage for avalon, single value or range (default: 20-100)
@@ -157,8 +158,23 @@ ASIC SPECIFIC COMMANDS
 --bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
 --hfa-hash-clock <arg> Set hashfast clock speed (default: 550)
---hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 85)
+--hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)
+--hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
+--hfa-temp-target <arg> Set the hashfast target temperature (0 to disable) (default: 88)
 --klondike-options <arg> Set klondike options clock:temptarget
+
+
+ANTMINER U1 DEVICES
+
+--anu-freq <arg>    Set AntminerU1 frequency in hex, range 150-500 (default: 200)
+
+By default, Antminer U1 devices run at a clockspeed of 200. This command allows
+you to specify a chosen frequency to attempt to run all ANU devices at and the
+value must be in increments of 25. Note that cgminer reports hashrate ONLY
+FROM VALID HASHES so if you increase the frequency but your hashrate does not
+increase or it decreases and hardware errors start showing up, you have
+overclocked it too much. In the worst case scenario it will fail to start at
+too high a speed.
 
 
 AVALON AND BITBURNER DEVICES
@@ -406,12 +422,30 @@ Note that if instability is detected by cgminer and the device has to undergo
 a reset, cgminer will lower the clockspeed on resetting it each time till the
 value returns to the default of 550.
 
---hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 85)
+--hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)
+
+This changes the range of fanspeeds used on hashfast devices with firmware that
+supports it. Note that the fanspeed will dynamically change to try and maintain
+a target temperature with --hfa-temp-target but if the target temperature is
+disabled, the fanspeed will remain static.
+eg:
+--hfa-fan 25-100
+
+--hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
 
 Cgminer will temporarily stop sending hashfast devices work once this
 temperature is reached. Note that with the water cooling in these devices,
 temperature recovery is likely to be very quick and the device will start
 hashing again after only a very brief period.
+
+--hfa-temp-target <arg> Set the hashfast target temperature (0 to disable) (default: 88)
+
+On hashfast devices with firmware that supports dynamic fanspeed and die speeds,
+cgminer will try to maintain temperature according to this target by adjusting
+fanspeed and then if need be, throttle speeds on a die-by-die basis. Disabling
+this feature will leave a constant fanspeed and die speed but will not disable
+the temp-overheat feature.
+
 
 Other undocumented hashfast command line options are for development purposes
 only at this stage and serve no useful purpose to end users.
