@@ -1,3 +1,13 @@
+Version 3.12.3 - 8th February 2014
+
+- Put the hashfast temperature into the cgpu structure so that it shows up in
+the devs API call.
+- We shouldn't block on no work situations directly from the getwork scheduler
+itself.
+- Revert "Make the pthread cond wait in the getwork scheduler a timed wait in
+case we miss a wakeup."
+
+
 Version 3.12.2 - 8th February 2014
 
 - Adjust antminer U1 timing according to command line frequency set, fixing the
