@@ -1142,6 +1142,7 @@ static void bitfury_shutdown(struct thr_info *thr)
 		default:
 			break;
 	}
+	usb_nodev(bitfury);
 }
 
 /* Currently hardcoded to BF1 devices */
