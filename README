@@ -138,7 +138,7 @@ Usage instructions:  Run "cgminer --help" to see options:
 Usage: cgminer [-DdElmpPQqUsTouOchnV]
 
 Options for both config file and command line:
---anu-freq <arg>    Set AntminerU1 frequency in hex, range 150-500 (default: 200)
+--anu-freq <arg>    Set AntminerU1 frequency in MHz, range 150-500 (default: 200)
 --api-allow <arg>   Allow API access only to the given list of [G:]IP[/Prefix] addresses[/subnets]
 --api-description <arg> Description placed in the API status header, default: cgminer version
 --api-groups <arg>  API one letter groups G:cmd:cmd[,P:cmd:*...] defining the cmds a groups can use

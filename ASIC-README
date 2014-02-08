@@ -144,7 +144,7 @@ sudo kextunload -b com.apple.driver.AppleUSBCDCACMData
 
 ASIC SPECIFIC COMMANDS
 
---anu-freq <arg>    Set AntminerU1 frequency in hex, range 150-500 (default: 200)
+--anu-freq <arg>    Set AntminerU1 frequency in MHz, range 150-500 (default: 200)
 --avalon-auto       Adjust avalon overclock frequency dynamically for best hashrate
 --avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
 --avalon-fan <arg> Set fanspeed percentage for avalon, single value or range (default: 20-100)
@@ -166,7 +166,7 @@ ASIC SPECIFIC COMMANDS
 
 ANTMINER U1 DEVICES
 
---anu-freq <arg>    Set AntminerU1 frequency in hex, range 150-500 (default: 200)
+--anu-freq <arg>    Set AntminerU1 frequency in MHz, range 150-500 (default: 200)
 
 By default, Antminer U1 devices run at a clockspeed of 200. This command allows
 you to specify a chosen frequency to attempt to run all ANU devices at and the

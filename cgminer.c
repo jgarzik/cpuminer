@@ -1114,7 +1114,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_ICARUS
 	OPT_WITH_ARG("--anu-freq",
 		     set_int_150_to_500, &opt_show_intval, &opt_anu_freq,
-		     "Set AntminerU1 frequency in hex, range 150-500"),
+		     "Set AntminerU1 frequency in MHz, range 150-500"),
 #endif
 	OPT_WITH_ARG("--api-allow",
 		     set_api_allow, NULL, NULL,
