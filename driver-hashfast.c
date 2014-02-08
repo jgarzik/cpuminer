@@ -753,6 +753,7 @@ static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_in
 		}
 		/* Exponentially change the max_temp to smooth out troughs. */
 		info->max_temp = info->max_temp * 0.63 + die_temperature * 0.37;
+		hashfast->temp = info->max_temp;
 	}
 
 	if (unlikely(info->max_temp >= opt_hfa_overheat)) {
