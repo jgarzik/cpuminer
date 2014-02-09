@@ -3214,14 +3214,14 @@ static bool benchfile_get_work(struct work *work)
 		}
 	}
 
-	do
-	{
+	do {
 		benchfile_line++;
 
 		// Empty lines and lines starting with '#' or '/' are ignored
 		if (*buf != '\0' && *buf != '#' && *buf != '/') {
 			char *commas[BENCHWORK_COUNT];
 			int i, j, len;
+			long nonce_time;
 
 			commas[0] = buf;
 			for (i = 1; i < BENCHWORK_COUNT; i++) {
@@ -3267,9 +3267,9 @@ static bool benchfile_get_work(struct work *work)
 				j += 8;
 			}
 
-			long time = atol(commas[BENCHWORK_NONCETIME]);
+			nonce_time = atol(commas[BENCHWORK_NONCETIME]);
 
-			sprintf(&(item[j]), "%08lx", time);
+			sprintf(&(item[j]), "%08lx", nonce_time);
 			j += 8;
 
 			strcpy(&(item[j]), commas[BENCHWORK_DIFFBITS]);
