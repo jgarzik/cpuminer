@@ -98,6 +98,10 @@ if HAS_BAB
 cgminer_SOURCES += driver-bab.c
 endif
 
+if HAS_AVALON2
+cgminer_SOURCES += driver-avalon2.c driver-avalon2.h crc16.c crc.h
+endif
+
 if HAS_MINION
 cgminer_SOURCES += driver-minion.c
 endif
