@@ -100,6 +100,29 @@ static char packagename[256];
 
 bool opt_work_update;
 bool opt_protocol;
+static struct benchfile_layout {
+	int length;
+	char *name;
+} benchfile_data[] = {
+	{ 1,	"Version" },
+	{ 64,	"MerkleRoot" },
+	{ 64,	"PrevHash" },
+	{ 8,	"DifficultyBits" },
+	{ 10,	"NonceTime" } // 10 digits
+};
+enum benchwork {
+	BENCHWORK_VERSION = 0,
+	BENCHWORK_MERKLEROOT,
+	BENCHWORK_PREVHASH,
+	BENCHWORK_DIFFBITS,
+	BENCHWORK_NONCETIME,
+	BENCHWORK_COUNT
+};
+static char *opt_benchfile;
+static bool opt_benchfile_display;
+static FILE *benchfile_in;
+static int benchfile_line;
+static int benchfile_work;
 static bool opt_benchmark;
 bool have_longpoll;
 bool want_per_device_stats;
@@ -1188,6 +1211,12 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--balance",
 		     set_balance, &pool_strategy,
 		     "Change multipool strategy from failover to even share balance"),
+	OPT_WITH_ARG("--benchfile",
+			opt_set_charp, opt_show_charp, &opt_benchfile,
+			"Run cgminer in benchmark mode using a work file - produces no shares"),
+	OPT_WITHOUT_ARG("--benchfile-display",
+			opt_set_bool, &opt_benchfile_display,
+			"Display each benchfile nonce found"),
 	OPT_WITHOUT_ARG("--benchmark",
 			opt_set_bool, &opt_benchmark,
 			"Run cgminer in benchmark mode - produces no shares"),
@@ -3147,6 +3176,154 @@ static void get_benchmark_work(struct work *work)
 	calc_diff(work, 0);
 }
 
+static void benchfile_dspwork(struct work *work, uint32_t nonce)
+{
+	char buf[1024];
+	uint32_t dn;
+	int i;
+
+	dn = 0;
+	for (i = 0; i < 4; i++) {
+		dn *= 0x100;
+		dn += nonce & 0xff;
+		nonce /= 0x100;
+	}
+
+	if ((sizeof(work->data) * 2 + 1) > sizeof(buf))
+		quithere(1, "BENCHFILE Invalid buf size");
+
+	__bin2hex(buf, work->data, sizeof(work->data));
+
+	applog(LOG_ERR, "BENCHFILE nonce %u=0x%08x for work=%s",
+			(unsigned int)dn, (unsigned int)dn, buf);
+
+}
+
+static bool benchfile_get_work(struct work *work)
+{
+	char buf[1024];
+	char item[1024];
+	bool got = false;
+
+	if (!benchfile_in) {
+		if (opt_benchfile)
+			benchfile_in = fopen(opt_benchfile, "r");
+		else
+			quit(1, "BENCHFILE Invalid benchfile NULL");
+
+		if (!benchfile_in)
+			quit(1, "BENCHFILE Failed to open benchfile '%s'", opt_benchfile);
+
+		benchfile_line = 0;
+
+		if (!fgets(buf, 1024, benchfile_in))
+			quit(1, "BENCHFILE Failed to read benchfile '%s'", opt_benchfile);
+
+		got = true;
+		benchfile_work = 0;
+	}
+
+	if (!got) {
+		if (!fgets(buf, 1024, benchfile_in)) {
+			if (benchfile_work == 0)
+				quit(1, "BENCHFILE No work in benchfile '%s'", opt_benchfile);
+			fclose(benchfile_in);
+			benchfile_in = NULL;
+			return benchfile_get_work(work);
+		}
+	}
+
+	do {
+		benchfile_line++;
+
+		// Empty lines and lines starting with '#' or '/' are ignored
+		if (*buf != '\0' && *buf != '#' && *buf != '/') {
+			char *commas[BENCHWORK_COUNT];
+			int i, j, len;
+			long nonce_time;
+
+			commas[0] = buf;
+			for (i = 1; i < BENCHWORK_COUNT; i++) {
+				commas[i] = strchr(commas[i-1], ',');
+				if (!commas[i]) {
+					quit(1, "BENCHFILE Invalid input file line %d"
+						" - field count is %d but should be %d",
+						benchfile_line, i, BENCHWORK_COUNT);
+				}
+				len = commas[i] - commas[i-1];
+				if (benchfile_data[i-1].length &&
+				    (len != benchfile_data[i-1].length)) {
+					quit(1, "BENCHFILE Invalid input file line %d "
+						"field %d (%s) length is %d but should be %d",
+						benchfile_line, i,
+						benchfile_data[i-1].name,
+						len, benchfile_data[i-1].length);
+				}
+
+				*(commas[i]++) = '\0';
+			}
+
+			// NonceTime may have LF's etc
+			len = strlen(commas[BENCHWORK_NONCETIME]);
+			if (len < benchfile_data[BENCHWORK_NONCETIME].length) {
+				quit(1, "BENCHFILE Invalid input file line %d field %d"
+					" (%s) length is %d but should be least %d",
+					benchfile_line, BENCHWORK_NONCETIME+1,
+					benchfile_data[BENCHWORK_NONCETIME].name, len,
+					benchfile_data[BENCHWORK_NONCETIME].length);
+			}
+
+			sprintf(item, "0000000%c", commas[BENCHWORK_VERSION][0]);
+
+			j = strlen(item);
+			for (i = benchfile_data[BENCHWORK_PREVHASH].length-8; i >= 0; i -= 8) {
+				sprintf(&(item[j]), "%.8s", &commas[BENCHWORK_PREVHASH][i]);
+				j += 8;
+			}
+
+			for (i = benchfile_data[BENCHWORK_MERKLEROOT].length-8; i >= 0; i -= 8) {
+				sprintf(&(item[j]), "%.8s", &commas[BENCHWORK_MERKLEROOT][i]);
+				j += 8;
+			}
+
+			nonce_time = atol(commas[BENCHWORK_NONCETIME]);
+
+			sprintf(&(item[j]), "%08lx", nonce_time);
+			j += 8;
+
+			strcpy(&(item[j]), commas[BENCHWORK_DIFFBITS]);
+			j += benchfile_data[BENCHWORK_DIFFBITS].length;
+
+			memset(work, 0, sizeof(*work));
+
+			hex2bin(work->data, item, j >> 1);
+
+			calc_midstate(work);
+
+			benchfile_work++;
+
+			return true;
+		}
+	} while (fgets(buf, 1024, benchfile_in));
+
+	if (benchfile_work == 0)
+		quit(1, "BENCHFILE No work in benchfile '%s'", opt_benchfile);
+	fclose(benchfile_in);
+	benchfile_in = NULL;
+	return benchfile_get_work(work);
+}
+
+static void get_benchfile_work(struct work *work)
+{
+	benchfile_get_work(work);
+	work->mandatory = true;
+	work->pool = pools[0];
+	cgtime(&work->tv_getwork);
+	copy_time(&work->tv_getwork_reply, &work->tv_getwork);
+	work->getwork_mode = GETWORK_MODE_BENCHMARK;
+	calc_diff(work, 0);
+}
+
 #ifdef HAVE_CURSES
 static void disable_curses_windows(void)
 {
@@ -3672,7 +3849,7 @@ static bool stale_work(struct work *work, bool share)
 	struct pool *pool;
 	int getwork_delay;
 
-	if (opt_benchmark)
+	if (opt_benchmark || opt_benchfile)
 		return false;
 
 	if (work->work_block != work_block) {
@@ -6207,6 +6384,9 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 		return false;
 	}
 
+	if (opt_benchfile && opt_benchfile_display)
+		benchfile_dspwork(work, nonce);
+
 	return true;
 }
 
@@ -6227,6 +6407,10 @@ bool submit_noffset_nonce(struct thr_info *thr, struct work *work_in, uint32_t n
 	}
 	ret = true;
 	update_work_stats(thr, work);
+
+	if (opt_benchfile && opt_benchfile_display)
+		benchfile_dspwork(work, nonce);
+
 	if (!fulltest(work->hash, work->target)) {
 		applog(LOG_INFO, "%s %d: Share above target", thr->cgpu->drv->name,
 		       thr->cgpu->device_id);
@@ -7035,7 +7219,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 		for (i = 0; i < total_pools; i++) {
 			struct pool *pool = pools[i];
 
-			if (!opt_benchmark)
+			if (!opt_benchmark && !opt_benchfile)
 				reap_curl(pool);
 
 			/* Get a rolling utility per pool over 10 mins */
@@ -8062,12 +8246,15 @@ int main(int argc, char *argv[])
 	if (!config_loaded)
 		load_default_config();
 
-	if (opt_benchmark) {
+	if (opt_benchmark || opt_benchfile) {
 		struct pool *pool;
 
 		pool = add_pool();
 		pool->rpc_url = malloc(255);
-		strcpy(pool->rpc_url, "Benchmark");
+		if (opt_benchfile)
+			strcpy(pool->rpc_url, "Benchfile");
+		else
+			strcpy(pool->rpc_url, "Benchmark");
 		pool->rpc_user = pool->rpc_url;
 		pool->rpc_pass = pool->rpc_url;
 		enable_pool(pool);
@@ -8270,7 +8457,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (opt_benchmark)
+	if (opt_benchmark || opt_benchfile)
 		goto begin_bench;
 
 	for (i = 0; i < total_pools; i++) {
@@ -8437,7 +8624,12 @@ retry:
 			continue;
 		}
 
-		if (opt_benchmark) {
+		if (opt_benchfile) {
+			get_benchfile_work(work);
+			applog(LOG_DEBUG, "Generated benchfile work");
+			stage_work(work);
+			continue;
+		} else if (opt_benchmark) {
 			get_benchmark_work(work);
 			applog(LOG_DEBUG, "Generated benchmark work");
 			stage_work(work);
