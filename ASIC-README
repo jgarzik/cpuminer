@@ -1,10 +1,17 @@
 SUPPORTED DEVICES
 
-Currently supported devices include the Avalon (including BitBurner and
-Klondike), the Butterfly Labs SC range of devices, the ASICMINER block
-erupters, the BF1 (bitfury) USB (red and blue) devices, KnCminer Mercury,
-Saturn and Jupiter devices, BlackArrow Bitfury devices, Bi*fury USB devices,
-Nanofury USB devices, Hashfast devices and Antminer U1 USB devices.
+Currently supported devices include:
+- Avalon (including BitBurner and Klondike)
+- Butterfly Labs SC range
+- ASICMINER block erupters
+- BF1 (bitfury) USB (red and blue)
+- KnCminer Mercury, Saturn and Jupiter
+- BlackArrow Bitfury
+- Bi*fury USB
+- Nanofury USB
+- Hashfast Babyjet and Sierra
+- Antminer U1 USB
+- Cointerra
 
 No COM ports on windows or TTY devices will be used by cgminer as it
 communicates directly with them via USB so it is normal for them to not exist or
@@ -52,6 +59,16 @@ come up as BF1, along with the Bi*fury USB devices which come up as BXF.
 Nanofury devices come up as NF1.
 
 Bitfury USB devices are also set up as per the USB ASICs below.
+
+
+COINTERRA devices
+
+Cointerra devices need the --enable-cointerra option when compiling cgminer.
+
+Cointerra devices come up as CTA devices and currently take no command line
+arguments.
+
+Cointerra USB devices are set up as per the USB ASIC instructions below.
 
 
 HASHFAST devices

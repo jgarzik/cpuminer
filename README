@@ -103,17 +103,28 @@ If building on Red Hat:
 
 CGMiner specific configuration options:
   --enable-avalon         Compile support for Avalon (default disabled)
+  --enable-bab            Compile support for BlackArrow Bitfury (default
+                          disabled)
   --enable-bflsc          Compile support for BFL ASICs (default disabled)
   --enable-bitforce       Compile support for BitForce FPGAs (default
                           disabled)
   --enable-bitfury        Compile support for BitFury ASICs (default disabled)
+  --enable-cointerra      Compile support for Cointerra ASICs (default
+                          disabled)
+  --enable-drillbit       Compile support for Drillbit BitFury ASICs (default
+                          disabled)
   --enable-hashfast       Compile support for Hashfast (default disabled)
   --enable-icarus         Compile support for Icarus (default disabled)
   --enable-knc            Compile support for KnC miners (default disabled)
   --enable-bab            Compile support for BlackArrow Bitfury (default disabled)
   --enable-minion         Compile support for BlackArrow Minion ASIC (default disabled)
   --enable-klondike       Compile support for Klondike (default disabled)
+  --enable-knc            Compile support for KnC miners (default disabled)
+  --enable-minion         Compile support for Minion BlackArrow ASIC (default
+                          disabled)
   --enable-modminer       Compile support for ModMiner FPGAs(default disabled)
+  --disable-libcurl       Disable building with libcurl for getwork and GBT
+                          support
   --without-curses        Compile support for curses TUI (default enabled)
   --with-system-libusb    Compile against dynamic system libusb (default use
                           included static libusb)
@@ -260,7 +271,8 @@ See FGPA-README for more information regarding this.
 Cgminer should automatically find all of your Avalon ASIC, BFL ASIC, BitForce
 FPGAs, Icarus bitstream FPGAs, Klondike ASIC, ASICMINER usb block erupters,
 KnC ASICs, BaB ASICs, Hashfast ASICs, ModMiner FPGAs, BPMC/BGMC BF1 USB ASICs,
-Bi*fury USB ASICs, Nanofury USB ASICs and Antminer U1 USB ASICs.
+Bi*fury USB ASICs, Nanofury USB ASICs, Antminer U1 USB ASICs and Cointerra
+devices.
 
 ---
 
@@ -301,7 +313,7 @@ If your distribution does not have the plugdev group you can create it with:
 
  sudo groupadd plugdev
 
-In order for the BFL devices to instantly be owned by the plugdev group and
+In order for the USB devices to instantly be owned by the plugdev group and
 accessible by anyone from the plugdev group you can copy the file
 "01-cgminer.rules" from the cgminer archive into the /etc/udev/rules.d
 directory with the following command:

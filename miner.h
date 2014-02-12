@@ -234,6 +234,7 @@ static inline int fsync (int fd)
 #define ASIC_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(bflsc) \
 	DRIVER_ADD_COMMAND(bitfury) \
+	DRIVER_ADD_COMMAND(cointerra) \
 	DRIVER_ADD_COMMAND(hashfast) \
 	DRIVER_ADD_COMMAND(klondike) \
 	DRIVER_ADD_COMMAND(knc) \
@@ -598,6 +599,16 @@ static inline void swab256(void *dest_p, const void *src_p)
 	dest[5] = swab32(src[2]);
 	dest[6] = swab32(src[1]);
 	dest[7] = swab32(src[0]);
+}
+
+static inline void flip12(void *dest_p, const void *src_p)
+{
+	uint32_t *dest = dest_p;
+	const uint32_t *src = src_p;
+	int i;
+
+	for (i = 0; i < 3; i++)
+		dest[i] = swab32(src[i]);
 }
 
 static inline void flip32(void *dest_p, const void *src_p)
@@ -1400,6 +1411,7 @@ extern void free_work(struct work *work);
 extern void set_work_ntime(struct work *work, int ntime);
 extern struct work *copy_work_noffset(struct work *base_work, int noffset);
 #define copy_work(work_in) copy_work_noffset(work_in, 0)
+extern uint64_t share_diff(const struct work *work);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);
 

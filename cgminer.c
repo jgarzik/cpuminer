@@ -76,6 +76,10 @@ char *curly = ":D";
 #include "driver-bitfury.h"
 #endif
 
+#ifdef USE_COINTERRA
+#include "driver-cointerra.h"
+#endif
+
 #ifdef USE_HASHFAST
 #include "driver-hashfast.h"
 #endif
@@ -650,6 +654,13 @@ static char *set_int_0_to_100(const char *arg, int *i)
 }
 #endif
 
+#ifdef USE_COINTERRA
+static char *set_int_0_to_255(const char *arg, int *i)
+{
+        return set_int_range(arg, i, 0, 255);
+}
+#endif
+
 #if defined(USE_BFLSC) || defined(USE_BITFURY) || defined(USE_HASHFAST)
 static char *set_int_0_to_200(const char *arg, int *i)
 {
@@ -1211,6 +1222,11 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_compact,
 			"Use compact display without per device statistics"),
 #endif
+#ifdef USE_COINTERRA
+	OPT_WITH_ARG("--cta-load",
+		set_int_0_to_255, NULL, &opt_cta_load,
+		opt_hidden),
+#endif
 	OPT_WITHOUT_ARG("--debug|-D",
 		     enable_debug, &opt_debug,
 		     "Enable debug output"),
@@ -1571,6 +1587,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_BITFURY
 		"bitfury "
+#endif
+#ifdef USE_COINTERRA
+		"cointerra "
 #endif
 #ifdef USE_DRILLBIT
                 "drillbit "
@@ -3714,7 +3733,7 @@ static bool stale_work(struct work *work, bool share)
 	return false;
 }
 
-static uint64_t share_diff(const struct work *work)
+uint64_t share_diff(const struct work *work)
 {
 	bool new_best = false;
 	double d64, s64;

@@ -94,6 +94,10 @@ if HAS_KLONDIKE
 cgminer_SOURCES += driver-klondike.c
 endif
 
+if HAS_COINTERRA
+cgminer_SOURCES += driver-cointerra.c driver-cointerra.h
+endif
+
 if HAS_BAB
 cgminer_SOURCES += driver-bab.c
 endif
