@@ -5183,7 +5183,7 @@ retry:
 	wlogprint("[S]ummary of device information\n");
 	wlogprint("[E]nable device\n");
 	wlogprint("[D]isable device\n");
-	//wlogprint("[U]nplug to allow hotplug restart\n");
+	wlogprint("[U]nplug to allow hotplug restart\n");
 	//wlogprint("[R]elease device from cgminer\n");
 	wlogprint("Select an option or any other key to return\n");
 	logwin_update();
@@ -5244,6 +5244,15 @@ retry:
 		}
 		cgpu = mining_thr[selected]->cgpu;
 		cgpu->deven = DEV_DISABLED;
+		goto retry;
+	} else if (!strncasecmp(&input, "u", 1)) {
+		selected = curses_int("Select device number");
+		if (selected < 0 || selected >= mt)  {
+			wlogprint("Invalid selection\n");
+			goto retry;
+		}
+		cgpu = mining_thr[selected]->cgpu;
+		usb_nodev(cgpu);
 		goto retry;
 	} else
 		clear_logwin();
