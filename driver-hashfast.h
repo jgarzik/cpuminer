@@ -125,7 +125,6 @@ struct hashfast_info {
 	int no_matching_work;
 	int resets;
 	int overheat;
-	double max_temp;
 	int last_max_temp;
 	int temp_updates;
 	int fanspeed;                               // Fanspeed in percent
