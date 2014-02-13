@@ -5143,10 +5143,16 @@ retry:
 }
 
 #ifdef USE_USBUTILS
+static void mt_enable(struct thr_info *mythr)
+{
+	cgsem_post(&mythr->sem);
+}
+
 static void set_usb(void)
 {
 	int selected, i, mt, enabled = 0, disabled = 0, zombie = 0, total = 0;
 	struct cgpu_info *cgpu;
+	struct thr_info *thr;
 	double val;
 	char input;
 
@@ -5175,9 +5181,8 @@ static void set_usb(void)
 		  total, enabled, disabled, zombie);
 retry:
 	wlogprint("[S]ummary of device information\n");
-	//wlogprint("[D]etailed device statistics\n");
-	//wlogprint("[E]nable device\n");
-	//wlogprint("[D]isable device\n");
+	wlogprint("[E]nable device\n");
+	wlogprint("[D]isable device\n");
 	//wlogprint("[U]nplug to allow hotplug restart\n");
 	//wlogprint("[R]elease device from cgminer\n");
 	wlogprint("Select an option or any other key to return\n");
@@ -5215,6 +5220,30 @@ retry:
 		if (cgpu->diff1)
 			val = cgpu->diff_rejected / cgpu->diff1;
 		wlogprint("Device Rejected %.1f%%\n", val);
+		goto retry;
+	} else if (!strncasecmp(&input, "e", 1)) {
+		selected = curses_int("Select device number");
+		if (selected < 0 || selected >= mt)  {
+			wlogprint("Invalid selection\n");
+			goto retry;
+		}
+		cgpu = mining_thr[selected]->cgpu;
+		if (cgpu->usbinfo.nodev) {
+			wlogprint("Device removed, unable to re-enable!\n");
+			goto retry;
+		}
+		thr = get_thread(selected);
+		cgpu->deven = DEV_ENABLED;
+		mt_enable(thr);
+		goto retry;
+	} else if (!strncasecmp(&input, "d", 1)) {
+		selected = curses_int("Select device number");
+		if (selected < 0 || selected >= mt)  {
+			wlogprint("Invalid selection\n");
+			goto retry;
+		}
+		cgpu = mining_thr[selected]->cgpu;
+		cgpu->deven = DEV_DISABLED;
 		goto retry;
 	} else
 		clear_logwin();
