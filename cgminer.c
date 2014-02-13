@@ -5160,6 +5160,7 @@ static void set_usb(void)
 	immedok(logwin, true);
 	clear_logwin();
 
+retry:
 	rd_lock(&mining_thr_lock);
 	mt = mining_threads;
 	rd_unlock(&mining_thr_lock);
@@ -5179,12 +5180,12 @@ static void set_usb(void)
 	wlogprint("Hotplug interval:%d\n", hotplug_time);
 	wlogprint("%d USB devices, %d enabled, %d disabled, %d zombie\n",
 		  total, enabled, disabled, zombie);
-retry:
 	wlogprint("[S]ummary of device information\n");
 	wlogprint("[E]nable device\n");
 	wlogprint("[D]isable device\n");
 	wlogprint("[U]nplug to allow hotplug restart\n");
-	//wlogprint("[R]elease device from cgminer\n");
+	wlogprint("[R]eset device USB\n");
+	//wlogprint("[B]lacklist device from cgminer\n");
 	wlogprint("Select an option or any other key to return\n");
 	logwin_update();
 	input = getch();
@@ -5196,6 +5197,7 @@ retry:
 			goto retry;
 		}
 		cgpu = mining_thr[selected]->cgpu;
+		wlogprint("Device %03u:%03u\n", cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
 		wlogprint("Name %s\n", cgpu->drv->name);
 		wlogprint("ID %d\n", cgpu->device_id);
 		wlogprint("Enabled: %s\n", cgpu->deven != DEV_DISABLED ? "Yes" : "No");
@@ -5257,6 +5259,19 @@ retry:
 			goto retry;
 		}
 		usb_nodev(cgpu);
+		goto retry;
+	} else if (!strncasecmp(&input, "r", 1)) {
+		selected = curses_int("Select device number");
+		if (selected < 0 || selected >= mt)  {
+			wlogprint("Invalid selection\n");
+			goto retry;
+		}
+		cgpu = mining_thr[selected]->cgpu;
+		if (cgpu->usbinfo.nodev) {
+			wlogprint("Device already removed, unable to reset!\n");
+			goto retry;
+		}
+		usb_reset(cgpu);
 		goto retry;
 	} else
 		clear_logwin();
