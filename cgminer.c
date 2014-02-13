@@ -5252,6 +5252,10 @@ retry:
 			goto retry;
 		}
 		cgpu = mining_thr[selected]->cgpu;
+		if (cgpu->usbinfo.nodev) {
+			wlogprint("Device already removed, unable to unplug!\n");
+			goto retry;
+		}
 		usb_nodev(cgpu);
 		goto retry;
 	} else
