@@ -128,7 +128,6 @@ struct avalon_info {
 	int temp0;
 	int temp1;
 	int temp2;
-	int temp_max;
 	int temp_history_count;
 	int temp_history_index;
 	int temp_sum;
