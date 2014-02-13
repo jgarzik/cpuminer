@@ -636,6 +636,7 @@ struct usb_in_use_list {
 
 // List of in use devices
 static struct usb_in_use_list *in_use_head = NULL;
+static struct usb_in_use_list *blacklist_head = NULL;
 
 struct resource_work {
 	bool lock;
@@ -1243,6 +1244,15 @@ static bool __is_in_use(uint8_t bus_number, uint8_t device_address)
 		}
 		in_use_tmp = in_use_tmp->next;
 	}
+	in_use_tmp = blacklist_head;
+	while (in_use_tmp) {
+		if (in_use_tmp->in_use.bus_number == (int)bus_number &&
+		    in_use_tmp->in_use.device_address == (int)device_address) {
+			ret = true;
+			break;
+		}
+		in_use_tmp = in_use_tmp->next;
+	}
 
 	return ret;
 }
@@ -1262,16 +1272,20 @@ static bool is_in_use(libusb_device *dev)
 	return is_in_use_bd(libusb_get_bus_number(dev), libusb_get_device_address(dev));
 }
 
-static void add_in_use(uint8_t bus_number, uint8_t device_address)
+static void add_in_use(uint8_t bus_number, uint8_t device_address, bool blacklist)
 {
-	struct usb_in_use_list *in_use_tmp;
+	struct usb_in_use_list *in_use_tmp, **head;
 	bool found = false;
 
 	mutex_lock(&cgusb_lock);
-	if (unlikely(__is_in_use(bus_number, device_address))) {
+	if (unlikely(!blacklist && __is_in_use(bus_number, device_address))) {
 		found = true;
 		goto nofway;
 	}
+	if (blacklist)
+		head = &blacklist_head;
+	else
+		head = &in_use_head;
 
 	in_use_tmp = calloc(1, sizeof(*in_use_tmp));
 	if (unlikely(!in_use_tmp))
@@ -1279,9 +1293,9 @@ static void add_in_use(uint8_t bus_number, uint8_t device_address)
 	in_use_tmp->in_use.bus_number = (int)bus_number;
 	in_use_tmp->in_use.device_address = (int)device_address;
 	in_use_tmp->next = in_use_head;
-	if (in_use_head)
-		in_use_head->prev = in_use_tmp;
-	in_use_head = in_use_tmp;
+	if (*head)
+		(*head)->prev = in_use_tmp;
+	*head = in_use_tmp;
 nofway:
 	mutex_unlock(&cgusb_lock);
 
@@ -1478,7 +1492,7 @@ void usb_uninit(struct cgpu_info *cgpu)
 /* We have dropped the read devlock before entering this function but we pick
  * up the write lock to prevent any attempts to work on dereferenced code once
  * the nodev flag has been set. */
-static void release_cgpu(struct cgpu_info *cgpu)
+static bool __release_cgpu(struct cgpu_info *cgpu)
 {
 	struct cg_usb_device *cgusb = cgpu->usbdev;
 	bool initted = cgpu->usbinfo.initialised;
@@ -1487,7 +1501,7 @@ static void release_cgpu(struct cgpu_info *cgpu)
 
 	// It has already been done
 	if (cgpu->usbinfo.nodev)
-		return;
+		return false;
 
 	applog(LOG_DEBUG, "USB release %s%i",
 			cgpu->drv->name, cgpu->device_id);
@@ -1520,7 +1534,20 @@ static void release_cgpu(struct cgpu_info *cgpu)
 	}
 
 	_usb_uninit(cgpu);
-	cgminer_usb_unlock_bd(cgpu->drv, cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
+	return true;
+}
+
+static void release_cgpu(struct cgpu_info *cgpu)
+{
+	if (__release_cgpu(cgpu))
+		cgminer_usb_unlock_bd(cgpu->drv, cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
+}
+
+void blacklist_cgpu(struct cgpu_info *cgpu)
+{
+	if (__release_cgpu(cgpu))
+		cgminer_usb_unlock_bd(cgpu->drv, cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
+	add_in_use(cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address, true);
 }
 
 /*
@@ -3526,7 +3553,7 @@ static bool resource_lock(const char *dname, uint8_t bus_number, uint8_t device_
 			goto fail;
 	}
 
-	add_in_use(bus_number, device_address);
+	add_in_use(bus_number, device_address, false);
 	in_use_store_ress(bus_number, device_address, (void *)usbMutex, (void *)sec);
 
 	return true;
@@ -3622,7 +3649,7 @@ fail:
 		goto free_out;
 	}
 
-	add_in_use(bus_number, device_address);
+	add_in_use(bus_number, device_address, false);
 	in_use_store_ress(bus_number, device_address, (void *)key, (void *)sem);
 	return true;
 
