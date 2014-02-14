@@ -5150,7 +5150,7 @@ static void mt_enable(struct thr_info *mythr)
 
 static void set_usb(void)
 {
-	int selected, i, mt, enabled = 0, disabled = 0, zombie = 0, total = 0;
+	int selected, i, mt, enabled, disabled, zombie, total, blacklisted;
 	struct cgpu_info *cgpu;
 	struct thr_info *thr;
 	double val;
@@ -5161,6 +5161,12 @@ static void set_usb(void)
 	clear_logwin();
 
 retry:
+	enabled = 0;
+	disabled = 0;
+	zombie = 0;
+	total = 0;
+	blacklisted = 0;
+
 	rd_lock(&mining_thr_lock);
 	mt = mining_threads;
 	rd_unlock(&mining_thr_lock);
@@ -5175,6 +5181,8 @@ retry:
 			disabled++;
 		else
 			enabled++;
+		if (cgpu->blacklisted)
+			blacklisted++;
 		total++;
 	}
 	wlogprint("Hotplug interval:%d\n", hotplug_time);
@@ -5186,7 +5194,8 @@ retry:
 	wlogprint("[U]nplug to allow hotplug restart\n");
 	wlogprint("[R]eset device USB\n");
 	wlogprint("[L]ist all known devices\n");
-	wlogprint("[B]lacklist current device from cgminer\n");
+	wlogprint("[B]lacklist current device from current instance of cgminer\n");
+	wlogprint("[W]hitelist previously blacklisted device\n");
 	wlogprint("Select an option or any other key to return\n");
 	logwin_update();
 	input = getch();
@@ -5286,6 +5295,34 @@ retry:
 			goto retry;
 		}
 		blacklist_cgpu(cgpu);
+		goto retry;
+	} else if (!strncasecmp(&input, "w", 1)) {
+		if (!blacklisted) {
+			wlogprint("No blacklisted devices!\n");
+			goto retry;
+		}
+		wlogprint("Blacklisted devices:\n");
+		for (i = 0; i < mt; i++) {
+			cgpu = mining_thr[i]->cgpu;
+			if (unlikely(!cgpu))
+				continue;
+			if (cgpu->blacklisted) {
+				wlogprint("%d: %s %d %03u:%03u\n", i, cgpu->drv->name,
+					  cgpu->device_id, cgpu->usbinfo.bus_number,
+					  cgpu->usbinfo.device_address);
+			}
+		}
+		selected = curses_int("Select device number");
+		if (selected < 0 || selected >= mt)  {
+			wlogprint("Invalid selection\n");
+			goto retry;
+		}
+		cgpu = mining_thr[selected]->cgpu;
+		if (!cgpu->blacklisted) {
+			wlogprint("Device not blacklisted, unable to whitelist\n");
+			goto retry;
+		}
+		whitelist_cgpu(cgpu);
 		goto retry;
 	} else if (!strncasecmp(&input, "l", 1)) {
 		usb_all(0);

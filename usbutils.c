@@ -1304,22 +1304,26 @@ nofway:
 				(int)bus_number, (int)device_address);
 }
 
-static void remove_in_use(uint8_t bus_number, uint8_t device_address)
+static void __remove_in_use(uint8_t bus_number, uint8_t device_address, bool blacklist)
 {
-	struct usb_in_use_list *in_use_tmp;
+	struct usb_in_use_list *in_use_tmp, **head;
 	bool found = false;
 
 	mutex_lock(&cgusb_lock);
+	if (blacklist)
+		head = &blacklist_head;
+	else
+		head = &in_use_head;
 
-	in_use_tmp = in_use_head;
+	in_use_tmp = *head;
 	while (in_use_tmp) {
 		if (in_use_tmp->in_use.bus_number == (int)bus_number &&
 		    in_use_tmp->in_use.device_address == (int)device_address) {
 			found = true;
-			if (in_use_tmp == in_use_head) {
-				in_use_head = in_use_head->next;
-				if (in_use_head)
-					in_use_head->prev = NULL;
+			if (in_use_tmp == *head) {
+				*head = (*head)->next;
+				if (*head)
+					(*head)->prev = NULL;
 			} else {
 				in_use_tmp->prev->next = in_use_tmp->next;
 				if (in_use_tmp->next)
@@ -1336,6 +1340,11 @@ static void remove_in_use(uint8_t bus_number, uint8_t device_address)
 	if (!found)
 		applog(LOG_ERR, "FAIL: USB remove not already in use (%d:%d)",
 				(int)bus_number, (int)device_address);
+}
+
+static void remove_in_use(uint8_t bus_number, uint8_t device_address)
+{
+	__remove_in_use(bus_number, device_address, false);
 }
 
 static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint8_t device_address)
@@ -1545,12 +1554,24 @@ static void release_cgpu(struct cgpu_info *cgpu)
 
 void blacklist_cgpu(struct cgpu_info *cgpu)
 {
-	if (cgpu->blacklisted)
+	if (cgpu->blacklisted) {
+		applog(LOG_WARNING, "Device already blacklisted");
 		return;
+	}
+	cgpu->blacklisted = true;
+	add_in_use(cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address, true);
 	if (__release_cgpu(cgpu))
 		cgminer_usb_unlock_bd(cgpu->drv, cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
-	add_in_use(cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address, true);
-	cgpu->blacklisted = true;
+}
+
+void whitelist_cgpu(struct cgpu_info *cgpu)
+{
+	if (!cgpu->blacklisted) {
+		applog(LOG_WARNING, "Device not blacklisted");
+		return;
+	}
+	__remove_in_use(cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address, true);
+	cgpu->blacklisted = false;
 }
 
 /*
