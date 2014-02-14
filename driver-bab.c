@@ -2135,15 +2135,18 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 			witem = k_unlink_tail(babinfo->available_work);
 			K_WUNLOCK(babinfo->available_work);
 			if (!witem) {
-				applog(LOG_ERR, "%s%i: short work list (%d) expected %d - reset",
+				applog(LOG_ERR, "%s%i: short work list (%d) %d expected %d - reset",
 						babcgpu->drv->name, babcgpu->device_id,
-						chip, babinfo->chips);
+						chip, work_items,
+						babinfo->chips - babinfo->total_disabled);
 
 				// Put them back in the order they were taken
 				K_WLOCK(babinfo->available_work);
 				for (j = chip-1; j >= 0; j--) {
-					witem = DATAS(sitem)->witems[j];
-					k_add_tail(babinfo->available_work, witem);
+					if (!(babinfo->disabled[j])) {
+						witem = DATAS(sitem)->witems[j];
+						k_add_tail(babinfo->available_work, witem);
+					}
 				}
 				K_WUNLOCK(babinfo->available_work);
 
