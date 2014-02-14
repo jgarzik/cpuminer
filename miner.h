@@ -423,15 +423,14 @@ struct cgpu_info {
 	void *device_data;
 #ifdef USE_USBUTILS
 	struct cg_usb_device *usbdev;
+	struct cg_usb_info usbinfo;
+	bool blacklisted;
 #endif
 #ifdef USE_AVALON
 	struct work **works;
 	int work_array;
 	int queued;
 	int results;
-#endif
-#ifdef USE_USBUTILS
-	struct cg_usb_info usbinfo;
 #endif
 #ifdef USE_MODMINER
 	char fpgaid;

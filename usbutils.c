@@ -1545,9 +1545,12 @@ static void release_cgpu(struct cgpu_info *cgpu)
 
 void blacklist_cgpu(struct cgpu_info *cgpu)
 {
+	if (cgpu->blacklisted)
+		return;
 	if (__release_cgpu(cgpu))
 		cgminer_usb_unlock_bd(cgpu->drv, cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
 	add_in_use(cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address, true);
+	cgpu->blacklisted = true;
 }
 
 /*
