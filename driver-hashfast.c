@@ -423,12 +423,6 @@ tryagain:
 	       db->sequence_modulus);
 	info->num_sequence = db->sequence_modulus;
 
-	if (!db->hash_clockrate) {
-		applog(LOG_INFO, "%s %d: OP_USB_INIT failed! Clockrate reported as zero",
-		       hashfast->drv->name, hashfast->device_id);
-		return false;
-	}
-
 	// Now a copy of the config data used
 	if (!hfa_get_data(hashfast, (char *)&info->config_data, U32SIZE(info->config_data))) {
 		applog(LOG_WARNING, "%s %d: OP_USB_INIT failed! Failure to get config_data",
@@ -451,6 +445,12 @@ tryagain:
 		       hashfast->drv->name, hashfast->device_id, db->operation_status,
 			(db->operation_status < sizeof(hf_usb_init_errors)/sizeof(hf_usb_init_errors[0])) ?
 			hf_usb_init_errors[db->operation_status] : "Unknown error code");
+		return false;
+	}
+
+	if (!db->hash_clockrate) {
+		applog(LOG_INFO, "%s %d: OP_USB_INIT failed! Clockrate reported as zero",
+		       hashfast->drv->name, hashfast->device_id);
 		return false;
 	}
 
