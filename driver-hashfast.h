@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
  * Copyright 2013 Hashfast
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -125,7 +125,6 @@ struct hashfast_info {
 	int no_matching_work;
 	int resets;
 	int overheat;
-	double max_temp;
 	int last_max_temp;
 	int temp_updates;
 	int fanspeed;                               // Fanspeed in percent

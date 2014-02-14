@@ -1,6 +1,6 @@
 /*
  * Copyright 2013 Avalon project
- * Copyright 2013 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -128,7 +128,6 @@ struct avalon_info {
 	int temp0;
 	int temp1;
 	int temp2;
-	int temp_max;
 	int temp_history_count;
 	int temp_history_index;
 	int temp_sum;

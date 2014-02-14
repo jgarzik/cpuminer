@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Con Kolivas
+ * Copyright 2013-2014 Con Kolivas
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -562,7 +562,7 @@ static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info,
 	}
 
 	mutex_lock(&info->lock);
-	info->temperature = (double)decitemp / 10;
+	bitfury->temp = (double)decitemp / 10;
 	if (decitemp > info->max_decitemp) {
 		info->max_decitemp = decitemp;
 		applog(LOG_DEBUG, "%s %d: New max decitemp %d", bitfury->drv->name,
@@ -1039,7 +1039,7 @@ static struct api_data *bf1_api_stats(struct bitfury_info *info)
 	return root;
 }
 
-static struct api_data *bxf_api_stats(struct bitfury_info *info)
+static struct api_data *bxf_api_stats(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	struct api_data *root = NULL;
 	double nonce_rate;
@@ -1052,7 +1052,7 @@ static struct api_data *bxf_api_stats(struct bitfury_info *info)
 	nonce_rate = (double)info->total_nonces / (double)info->cycles;
 	root = api_add_double(root, "NonceRate", &nonce_rate, true);
 	root = api_add_int(root, "NoMatchingWork", &info->no_matching_work, false);
-	root = api_add_double(root, "Temperature", &info->temperature, false);
+	root = api_add_double(root, "Temperature", &bitfury->temp, false);
 	root = api_add_int(root, "Max DeciTemp", &info->max_decitemp, false);
 	root = api_add_uint8(root, "Clock", &info->clocks, false);
 	root = api_add_int(root, "Core0 hwerror", &info->filtered_hw[0], false);
@@ -1074,7 +1074,7 @@ static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
 			return bf1_api_stats(info);
 			break;
 		case IDENT_BXF:
-			return bxf_api_stats(info);
+			return bxf_api_stats(cgpu, info);
 			break;
 		default:
 			break;
@@ -1088,7 +1088,7 @@ static void bitfury_get_statline_before(char *buf, size_t bufsiz, struct cgpu_in
 
 	switch(info->ident) {
 		case IDENT_BXF:
-			tailsprintf(buf, bufsiz, "%5.1fC         | ", info->temperature);
+			tailsprintf(buf, bufsiz, "%5.1fC         | ", cgpu->temp);
 			break;
 		case IDENT_BF1:
 		default:

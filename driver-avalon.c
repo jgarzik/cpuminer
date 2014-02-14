@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
  * Copyright 2012-2013 Xiangfu <xiangfu@openmobilefree.com>
  * Copyright 2012 Luke Dashjr
  * Copyright 2012 Andrew Smith
@@ -843,7 +843,6 @@ static struct cgpu_info *avalon_detect_one(libusb_device *dev, struct usb_find_d
 	}
 
 	info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
-	info->temp_max = 0;
 	/* This is for check the temp/fan every 3~4s */
 	info->temp_history_count =
 		(4 / (float)((float)info->timeout * (AVALON_A3256 / info->asic) * ((float)1.67/0x32))) + 1;
@@ -1344,8 +1343,11 @@ static bool avalon_prepare(struct thr_info *thr)
 	return true;
 }
 
-static inline void record_temp_fan(struct avalon_info *info, struct avalon_result *ar, float *temp_avg)
+static inline void record_temp_fan(struct cgpu_info *avalon, struct avalon_info *info,
+				   struct avalon_result *ar)
 {
+	double temp_max;
+
 	info->fan0 = ar->fan0 * AVALON_FAN_FACTOR;
 	info->fan1 = ar->fan1 * AVALON_FAN_FACTOR;
 	info->fan2 = ar->fan2 * AVALON_FAN_FACTOR;
@@ -1366,14 +1368,12 @@ static inline void record_temp_fan(struct avalon_info *info, struct avalon_resul
 		info->temp2 = 0 - ((~ar->temp2 & 0x7f) + 1);
 	}
 
-	*temp_avg = info->temp2 > info->temp1 ? info->temp2 : info->temp1;
-
-	if (info->temp0 > info->temp_max)
-		info->temp_max = info->temp0;
-	if (info->temp1 > info->temp_max)
-		info->temp_max = info->temp1;
-	if (info->temp2 > info->temp_max)
-		info->temp_max = info->temp2;
+	temp_max = info->temp0;
+	if (info->temp1 > temp_max)
+		temp_max = info->temp1;
+	if (info->temp2 > temp_max)
+		temp_max = info->temp2;
+	avalon->temp = avalon->temp * 0.63 + temp_max * 0.37;
 }
 
 static void temp_rise(struct avalon_info *info, int temp)
@@ -1439,12 +1439,12 @@ static inline void adjust_fan(struct avalon_info *info)
 static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *info,
 				struct avalon_result *ar)
 {
-	record_temp_fan(info, ar, &(avalon->temp));
+	record_temp_fan(avalon, info, ar);
 	applog(LOG_INFO,
 		"Avalon: Fan1: %d/m, Fan2: %d/m, Fan3: %d/m\t"
-		"Temp1: %dC, Temp2: %dC, Temp3: %dC, TempMAX: %dC",
+		"Temp1: %dC, Temp2: %dC, Temp3: %dC, TempMAX: %.0fC",
 		info->fan0, info->fan1, info->fan2,
-		info->temp0, info->temp1, info->temp2, info->temp_max);
+		info->temp0, info->temp1, info->temp2, avalon->temp);
 	info->temp_history_index++;
 	info->temp_sum += avalon->temp;
 	applog(LOG_DEBUG, "Avalon: temp_index: %d, temp_count: %d, temp_old: %d",
@@ -1603,7 +1603,7 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "temp1", &(info->temp0), false);
 	root = api_add_int(root, "temp2", &(info->temp1), false);
 	root = api_add_int(root, "temp3", &(info->temp2), false);
-	root = api_add_int(root, "temp_max", &(info->temp_max), false);
+	root = api_add_double(root, "temp_max", &cgpu->temp, false);
 
 	root = api_add_percent(root, "Device Hardware%", &hwp, true);
 	root = api_add_int(root, "no_matching_work", &(info->no_matching_work), false);

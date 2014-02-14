@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
  * Copyright 2013 Hashfast Inc.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -752,15 +752,14 @@ static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_in
 				die_temperature = info->die_data[die].temp;
 		}
 		/* Exponentially change the max_temp to smooth out troughs. */
-		info->max_temp = info->max_temp * 0.63 + die_temperature * 0.37;
-		hashfast->temp = info->max_temp;
+		hashfast->temp = hashfast->temp * 0.63 + die_temperature * 0.37;
 	}
 
-	if (unlikely(info->max_temp >= opt_hfa_overheat)) {
+	if (unlikely(hashfast->temp >= opt_hfa_overheat)) {
 		/* -1 means new overheat condition */
 		if (!info->overheat)
 			info->overheat = -1;
-	} else if (unlikely(info->overheat && info->max_temp < opt_hfa_overheat - HFA_TEMP_HYSTERESIS))
+	} else if (unlikely(info->overheat && hashfast->temp < opt_hfa_overheat - HFA_TEMP_HYSTERESIS))
 		info->overheat = 0;
 }
 
@@ -1009,7 +1008,7 @@ static int hfa_jobs(struct cgpu_info *hashfast, struct hashfast_info *info)
 		/* Acknowledge and notify of new condition.*/
 		if (info->overheat < 0) {
 			applog(LOG_WARNING, "%s %d: Hit overheat temp %.1f, throttling!",
-			       hashfast->drv->name, hashfast->device_id, info->max_temp);
+			       hashfast->drv->name, hashfast->device_id, hashfast->temp);
 			/* Value of 1 means acknowledged overheat */
 			info->overheat = 1;
 		}
@@ -1156,13 +1155,13 @@ static void hfa_temp_clock(struct cgpu_info *hashfast, struct hashfast_info *inf
 	if (info->temp_updates < 5)
 		goto dies_only;
 	info->temp_updates = 0;
-	temp_change = info->max_temp - info->last_max_temp;
-	info->last_max_temp = info->max_temp;
+	temp_change = hashfast->temp - info->last_max_temp;
+	info->last_max_temp = hashfast->temp;
 
 	/* Adjust fanspeeds first if possible before die speeds, increasing
 	 * speed quickly and lowering speed slowly */
-	if (info->max_temp > opt_hfa_target ||
-	    (throttled && info->max_temp >= opt_hfa_target - HFA_TEMP_HYSTERESIS)) {
+	if (hashfast->temp > opt_hfa_target ||
+	    (throttled && hashfast->temp >= opt_hfa_target - HFA_TEMP_HYSTERESIS)) {
 		/* We should be trying to decrease temperature, if it's not on
 		 * its way down. */
 		if (info->fanspeed < opt_hfa_fan_max) {
@@ -1171,7 +1170,7 @@ static void hfa_temp_clock(struct cgpu_info *hashfast, struct hashfast_info *inf
 			else if (temp_change > 0)
 				hfa_set_fanspeed(hashfast, info, 10);
 		}
-	} else if (info->max_temp >= opt_hfa_target - HFA_TEMP_HYSTERESIS) {
+	} else if (hashfast->temp >= opt_hfa_target - HFA_TEMP_HYSTERESIS) {
 		/* In optimal range, try and maintain the same temp */
 		if (temp_change > 0) {
 			/* Temp rising, tweak fanspeed up */
@@ -1488,7 +1487,7 @@ static void hfa_statline_before(char *buf, size_t bufsiz, struct cgpu_info *hash
 		}
 	}
 
-	tailsprintf(buf, bufsiz, " max%3.0fC %3.2fV | ", info->max_temp, max_volt);
+	tailsprintf(buf, bufsiz, " max%3.0fC %3.2fV | ", hashfast->temp, max_volt);
 }
 
 static void hfa_init(struct cgpu_info __maybe_unused *hashfast)
