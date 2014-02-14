@@ -5196,6 +5196,7 @@ retry:
 	wlogprint("[L]ist all known devices\n");
 	wlogprint("[B]lacklist current device from current instance of cgminer\n");
 	wlogprint("[W]hitelist previously blacklisted device\n");
+	wlogprint("[H]otplug interval (0 to disable)\n");
 	wlogprint("Select an option or any other key to return\n");
 	logwin_update();
 	input = getch();
@@ -5323,6 +5324,14 @@ retry:
 			goto retry;
 		}
 		whitelist_cgpu(cgpu);
+		goto retry;
+	} else if (!strncasecmp(&input, "h", 1)) {
+		selected = curses_int("Select hotplug interval in seconds (0 to disable)");
+		if (selected < 0 || selected > 9999)  {
+			wlogprint("Invalid value\n");
+			goto retry;
+		}
+		hotplug_time = selected;
 		goto retry;
 	} else if (!strncasecmp(&input, "l", 1)) {
 		usb_all(0);
