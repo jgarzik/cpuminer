@@ -2005,7 +2005,8 @@ static K_ITEM *process_nonce(struct thr_info *thr, struct cgpu_info *babcgpu, K_
 			babinfo->chip_max_bad[chip] = babinfo->chip_cont_bad[chip];
 
 		// Handle chips with only bad results
-		if (babinfo->chip_good[chip] == 0 &&
+		if (babinfo->disabled[chip] == false &&
+		    babinfo->chip_good[chip] == 0 &&
 		    babinfo->chip_bad[chip] >= BAB_BAD_COUNT &&
 		    tdiff(&now, &(babinfo->first_work[chip])) >= BAB_BAD_TO_MIN) {
 			if (babinfo->chip_fast[chip] > babinfo->min_speed)
@@ -2143,10 +2144,9 @@ static bool bab_do_work(struct cgpu_info *babcgpu)
 				// Put them back in the order they were taken
 				K_WLOCK(babinfo->available_work);
 				for (j = chip-1; j >= 0; j--) {
-					if (!(babinfo->disabled[j])) {
-						witem = DATAS(sitem)->witems[j];
+					witem = DATAS(sitem)->witems[j];
+					if (witem)
 						k_add_tail(babinfo->available_work, witem);
-					}
 				}
 				K_WUNLOCK(babinfo->available_work);
 
