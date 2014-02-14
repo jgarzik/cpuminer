@@ -1212,7 +1212,7 @@ static struct opt_table opt_config_table[] = {
 		     set_balance, &pool_strategy,
 		     "Change multipool strategy from failover to even share balance"),
 	OPT_WITH_ARG("--benchfile",
-			opt_set_charp, opt_show_charp, &opt_benchfile,
+			opt_set_charp, NULL, &opt_benchfile,
 			"Run cgminer in benchmark mode using a work file - produces no shares"),
 	OPT_WITHOUT_ARG("--benchfile-display",
 			opt_set_bool, &opt_benchfile_display,
