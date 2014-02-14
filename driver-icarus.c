@@ -224,6 +224,8 @@ struct ICARUS_INFO {
 	bool flash_next_work;
 
 	int nonce_size;
+
+	bool failing;
 };
 
 #define ICARUS_MIDSTATE_SIZE 32
@@ -1251,6 +1253,21 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	uint32_t values;
 	int64_t hash_count_range;
 
+	if (unlikely(last_getwork - icarus->last_device_valid_work > 60)) {
+		if (info->failing) {
+			if (last_getwork - icarus->last_device_valid_work > 120) {
+				applog(LOG_ERR, "%s %d: Device failed to respond to restart",
+				       icarus->drv->name, icarus->device_id);
+				return -1;
+			}
+		} else {
+			applog(LOG_WARNING, "%s %d: No valid hashes for over 1 minute, attempting to reset",
+			       icarus->drv->name, icarus->device_id);
+			usb_reset(icarus);
+			info->failing = true;
+		}
+	}
+
 	// Device is gone
 	if (icarus->usbinfo.nodev)
 		return -1;
@@ -1454,6 +1471,9 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	}
 out:
 	free_work(work);
+
+	if (hash_count > 0)
+		info->failing = false;
 	return hash_count;
 }
 
