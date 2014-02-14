@@ -4479,7 +4479,7 @@ void api(int api_thr_id)
 	json_t *json_config = NULL;
 	json_t *json_val;
 	bool isjson;
-	bool did, isjoin, firstjoin;
+	bool did, isjoin = false, firstjoin;
 	int i;
 
 	SOCKETTYPE *apisock;
