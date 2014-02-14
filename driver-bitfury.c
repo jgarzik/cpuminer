@@ -941,17 +941,43 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *bitfury = thr->cgpu;
 	struct bitfury_info *info = bitfury->device_data;
+	int64_t ret = -1;
+
+	if (unlikely(last_getwork - bitfury->last_device_valid_work > 60)) {
+		if (info->failing) {
+			if (last_getwork - bitfury->last_device_valid_work > 120) {
+				applog(LOG_ERR, "%s %d: Device failed to respond to restart",
+				       bitfury->drv->name, bitfury->device_id);
+				return ret;
+			}
+		} else {
+			applog(LOG_WARNING, "%s %d: No valid hashes for over 1 minute, attempting to reset",
+			       bitfury->drv->name, bitfury->device_id);
+			usb_reset(bitfury);
+			info->failing = true;
+		}
+	}
+
+	if (unlikely(bitfury->usbinfo.nodev))
+		return ret;
 
 	switch(info->ident) {
 		case IDENT_BF1:
-			return bf1_scan(thr, bitfury, info);
+			ret = bf1_scan(thr, bitfury, info);
+			break;
 		case IDENT_BXF:
-			return bxf_scan(bitfury, info);
+			ret = bxf_scan(bitfury, info);
+			break;
 		case IDENT_NF1:
-			return nf1_scan(thr, bitfury, info);
+			ret = nf1_scan(thr, bitfury, info);
+			break;
 		default:
-			return 0;
+			ret = 0;
+			break;
 	}
+	if (ret > 0)
+		info->failing = false;
+	return ret;
 }
 
 static void bxf_send_maxroll(struct cgpu_info *bitfury, int maxroll)

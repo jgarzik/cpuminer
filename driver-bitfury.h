@@ -51,6 +51,7 @@ struct bitfury_info {
 	double saved_nonces;
 	int cycles;
 	bool valid; /* Set on first valid data being found */
+	bool failing; /* Set when an attempted restart has been sent */
 
 	/* BF1 specific data */
 	uint8_t version;
