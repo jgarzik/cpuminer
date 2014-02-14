@@ -2979,8 +2979,9 @@ static void bab_get_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	if (elapsed > 15.0) {
 		K_RLOCK(babinfo->nfree_list);
 		for (i = 0; i < babinfo->chips; i++) {
-			if (babinfo->good_nonces[i]->count == 0 &&
-			    babinfo->bad_nonces[i]->count > 1)
+			if (babinfo->disabled[i] ||
+			    (babinfo->good_nonces[i]->count == 0 &&
+			     babinfo->bad_nonces[i]->count > 1))
 				dead++;
 		}
 		K_RUNLOCK(babinfo->nfree_list);
