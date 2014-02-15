@@ -1337,13 +1337,16 @@ static void __remove_in_use(uint8_t bus_number, uint8_t device_address, bool bla
 			break;
 		}
 		in_use_tmp = in_use_tmp->next;
+		if (in_use_tmp == *head)
+			break;
 	}
 
 	mutex_unlock(&cgusb_lock);
 
-	if (!found)
+	if (!found) {
 		applog(LOG_ERR, "FAIL: USB remove not already in use (%d:%d)",
 				(int)bus_number, (int)device_address);
+	}
 }
 
 static void remove_in_use(uint8_t bus_number, uint8_t device_address)
