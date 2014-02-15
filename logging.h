@@ -29,6 +29,7 @@ extern int opt_log_level;
 #define LOGBUFSIZ 256
 
 extern void _applog(int prio, const char *str, bool force);
+extern void _simplelog(int prio, const char *str, bool force);
 
 #define IN_FMT_FFL " in %s %s():%d"
 
@@ -38,6 +39,16 @@ extern void _applog(int prio, const char *str, bool force);
 			char tmp42[LOGBUFSIZ]; \
 			snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
 			_applog(prio, tmp42, false); \
+		} \
+	} \
+} while (0)
+
+#define simplelog(prio, fmt, ...) do { \
+	if (opt_debug || prio != LOG_DEBUG) { \
+		if (use_syslog || opt_log_output || prio <= opt_log_level) { \
+			char tmp42[LOGBUFSIZ]; \
+			snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
+			_simplelog(prio, tmp42, false); \
 		} \
 	} \
 } while (0)
