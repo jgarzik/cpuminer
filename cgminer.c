@@ -5334,7 +5334,7 @@ retry:
 		hotplug_time = selected;
 		goto retry;
 	} else if (!strncasecmp(&input, "l", 1)) {
-		usb_all(0);
+		usb_list();
 		goto retry;
 	} else
 		clear_logwin();

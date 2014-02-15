@@ -418,6 +418,7 @@ struct cgpu_info;
 bool async_usb_transfers(void);
 void cancel_usb_transfers(void);
 void usb_all(int level);
+void usb_list(void);
 const char *usb_cmdname(enum usb_cmds cmd);
 void usb_applog(struct cgpu_info *cgpu, enum usb_cmds cmd, char *msg, int amount, int err);
 void blacklist_cgpu(struct cgpu_info *cgpu);
