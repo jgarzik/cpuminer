@@ -1340,12 +1340,12 @@ void usb_list(void)
 		libusb_get_string_descriptor_ascii(handle, desc.iProduct, prod, 255);
 		total++;
 		active = how_in_use(bus_number, device_address, &blacklisted);
-		applog(LOG_WARNING, "Bus %u Device %u ID: %04x:%04x %s %s %sactive %s",
+		simplelog(LOG_WARNING, "Bus %u Device %u ID: %04x:%04x %s %s %sactive %s",
 		       bus_number, device_address, desc.idVendor, desc.idProduct,
 		       manuf, prod, active ? "" : "in", blacklisted ? "blacklisted" : "");
 	}
 	libusb_free_device_list(list, 1);
-	applog(LOG_WARNING, "%d total known USB device%s", total, total > 1 ? "s": "");
+	simplelog(LOG_WARNING, "%d total known USB device%s", total, total > 1 ? "s": "");
 }
 
 static void add_in_use(uint8_t bus_number, uint8_t device_address, bool blacklist)
