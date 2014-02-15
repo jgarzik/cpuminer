@@ -14,6 +14,8 @@
 
 static const char *cointerra_hdr = "ZZ";
 
+int opt_ps_load;
+
 static void cta_gen_message(char *msg, char type)
 {
 	memset(msg, 0, CTA_MSG_SIZE);
@@ -60,6 +62,7 @@ static bool cta_open(struct cgpu_info *cointerra)
 	buf[CTA_RESET_TYPE] = CTA_RESET_INIT | CTA_RESET_DIFF;
 	buf[CTA_RESET_DIFF] = diff_to_bits(CTA_INIT_DIFF);
 	buf[CTA_RESET_LOAD] = opt_cta_load ? opt_cta_load : 255;
+	buf[CTA_RESET_PSLOAD] = opt_ps_load;
 
 	if (cointerra->usbinfo.nodev)
 		return ret;
@@ -547,6 +550,9 @@ static void cta_parse_debug(struct cointerra_info *info, char *buf)
 	u16array_from_msg(info->tot_hw_errors, CTA_CORES, CTA_STAT_HW_ERRORS, buf);
 	info->tot_hashes = hu64_from_msg(buf, CTA_STAT_HASHES);
 	info->tot_flushed_hashes = hu64_from_msg(buf, CTA_STAT_FLUSHED_HASHES);
+	info->autovoltage = u8_from_msg(buf, CTA_STAT_AUTOVOLTAGE);
+	info->current_ps_percent = u8_from_msg(buf, CTA_STAT_POWER_PERCENT);
+	info->power_used = hu16_from_msg(buf,CTA_STAT_POWER_USED);
 
 	mutex_unlock(&info->lock);
 }
@@ -826,6 +832,7 @@ resend:
 
 	buf[CTA_RESET_TYPE] = reset_type;
 	buf[CTA_RESET_LOAD] = opt_cta_load ? opt_cta_load : 255;
+	buf[CTA_RESET_PSLOAD] = opt_ps_load;
 
 	applog(LOG_INFO, "%s %d: Sending Reset type %u with diffbits %u", cointerra->drv->name,
 	       cointerra->device_id, reset_type, diffbits);
@@ -1080,6 +1087,9 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 	root = api_add_string(root, "Asic1Core2", bitmaphex, true);
 	__bin2hex(bitmaphex, &info->pipe_bitmap[112], 16);
 	root = api_add_string(root, "Asic1Core3", bitmaphex, true);
+	root = api_add_uint8(root,"AV",&info->autovoltage, false);
+	root = api_add_uint8(root,"Power Supply Percent",&info->current_ps_percent, false);
+	root = api_add_uint16(root,"Power Used",&info->power_used, false);
 
 	return root;
 }

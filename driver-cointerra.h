@@ -33,6 +33,7 @@
 #define CTA_RESET_TYPE		3
 #define CTA_RESET_DIFF		4
 #define CTA_RESET_LOAD		5
+#define CTA_RESET_PSLOAD	6
 #define CTA_DRIVER_TAG		3
 #define CTA_MCU_TAG		5
 #define CTA_MCU_CORE		5
@@ -116,7 +117,10 @@
 #define CTA_STAT_HW_ERRORS	5
 #define CTA_STAT_UPTIME_MS	21
 #define CTA_STAT_HASHES		25
-#define CTA_STAT_FLUSHED_HASHES	33
+#define CTA_STAT_FLUSHED_HASHES 33
+#define CTA_STAT_AUTOVOLTAGE  41
+#define CTA_STAT_POWER_PERCENT 42
+#define CTA_STAT_POWER_USED 43
 
 #define CTA_CORES		8
 #define CTA_PUMPS		2
@@ -127,6 +131,7 @@
 
 
 int opt_cta_load;
+int opt_ps_load;
 
 struct cointerra_info {
 	/* Info data */
@@ -175,6 +180,9 @@ struct cointerra_info {
 	uint64_t tot_hashes;
 	uint64_t tot_reset_hashes;
 	uint64_t tot_flushed_hashes;
+	uint8_t  autovoltage;
+	uint8_t  current_ps_percent;
+	uint16_t power_used;
 
 	/* Calculated totals based on work done and nonces found */
 	uint64_t hashes;

@@ -670,7 +670,7 @@ static char *set_int_0_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 10);
 }
 
-#ifdef USE_AVALON
+#if (defined USE_AVALON)||(defined USE_COINTERRA)
 static char *set_int_0_to_100(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 0, 100);
@@ -1253,8 +1253,11 @@ static struct opt_table opt_config_table[] = {
 #endif
 #ifdef USE_COINTERRA
 	OPT_WITH_ARG("--cta-load",
-		set_int_0_to_255, NULL, &opt_cta_load,
-		opt_hidden),
+		set_int_0_to_255, opt_show_intval, &opt_cta_load,
+		"Set load for CTA devices, 0-255 range"),
+	OPT_WITH_ARG("--ps-load",
+		set_int_0_to_100, opt_show_intval, &opt_ps_load,
+		"Set power supply load for CTA devices, 0-100 range"),
 #endif
 	OPT_WITHOUT_ARG("--debug|-D",
 		     enable_debug, &opt_debug,
