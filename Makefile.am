@@ -12,7 +12,7 @@ endif
 EXTRA_DIST	= example.conf linux-usb-cgminer \
 		  api-example.php miner.php	\
 		  API.class API.java api-example.c windows-build.txt \
-		  bitstreams/* API-README FPGA-README \
+		  bitstreams/README API-README FPGA-README \
 		  bitforce-firmware-flash.c hexdump.c ASIC-README \
 		  01-cgminer.rules
 
@@ -109,5 +109,5 @@ endif
 if HAS_MODMINER
 cgminer_SOURCES += driver-modminer.c
 bitstreamsdir = $(bindir)/bitstreams
-dist_bitstreams_DATA = $(top_srcdir)/bitstreams/*
+dist_bitstreams_DATA = $(top_srcdir)/bitstreams/README
 endif
