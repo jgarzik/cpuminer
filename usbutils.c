@@ -1230,12 +1230,13 @@ static void in_use_get_ress(uint8_t bus_number, uint8_t device_address, void **r
 				(int)bus_number, (int)device_address);
 }
 
-static bool __is_in_use(uint8_t bus_number, uint8_t device_address)
+static bool _in_use(struct usb_in_use_list *head, uint8_t bus_number,
+		    uint8_t device_address)
 {
 	struct usb_in_use_list *in_use_tmp;
 	bool ret = false;
 
-	in_use_tmp = in_use_head;
+	in_use_tmp = head;
 	while (in_use_tmp) {
 		if (in_use_tmp->in_use.bus_number == (int)bus_number &&
 		    in_use_tmp->in_use.device_address == (int)device_address) {
@@ -1243,22 +1244,19 @@ static bool __is_in_use(uint8_t bus_number, uint8_t device_address)
 			break;
 		}
 		in_use_tmp = in_use_tmp->next;
-		if (in_use_tmp == in_use_head)
+		if (in_use_tmp == head)
 			break;
 	}
-	in_use_tmp = blacklist_head;
-	while (in_use_tmp) {
-		if (in_use_tmp->in_use.bus_number == (int)bus_number &&
-		    in_use_tmp->in_use.device_address == (int)device_address) {
-			ret = true;
-			break;
-		}
-		in_use_tmp = in_use_tmp->next;
-		if (in_use_tmp == blacklist_head)
-			break;
-	}
-
 	return ret;
+}
+
+static bool __is_in_use(uint8_t bus_number, uint8_t device_address)
+{
+	if (_in_use(in_use_head, bus_number, device_address))
+		return true;
+	if (_in_use(blacklist_head, bus_number, device_address))
+		return true;
+	return false;
 }
 
 static bool is_in_use_bd(uint8_t bus_number, uint8_t device_address)
