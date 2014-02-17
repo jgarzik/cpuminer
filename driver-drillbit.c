@@ -106,17 +106,6 @@ typedef struct {
 	UT_hash_handle hh;
 } config_setting;
 
-/* Comparatively modest default settings */
-static config_setting default_settings = {
-	key: { 0 },
-	config: {
-		core_voltage: 850,
-		clock_freq: 200,
-		use_ext_clock: 0,
-		clock_div2: 0,
-	},
-};
-
 static config_setting *settings;
 
 /* Return a pointer to the chip_info structure for a given chip id, or NULL otherwise */
@@ -322,11 +311,17 @@ static config_setting *find_settings(struct cgpu_info *drillbit)
 	config_setting *setting;
 	char search_key[9];
 
-	// Search by serial (8 character hex string)
-	sprintf(search_key, "%08x", info->serial);
+	if(!settings) {
+		drvlog(LOG_INFO, "Keeping onboard defaults for device %s (serial %08x)",
+			info->product, info->serial);
+		return NULL;
+	}
+
+	// Search by serial
+	sprintf(search_key, "%08x", drillbit->serial);
 	HASH_FIND_STR(settings, search_key, setting);
 	if (setting) {
-		drvlog(LOG_INFO, "Using unit-specific settings for serial %s", search_key);
+		drvlog(LOG_INFO, "Using serial specific settings for serial %s", search_key);
 		return setting;
 	}
 
@@ -353,12 +348,18 @@ static config_setting *find_settings(struct cgpu_info *drillbit)
 		return setting;
 	}
 
-	// Failing that, return default/generic config (null key)
+	// Check for a generic/catchall drillbit-options argument (key set to NULL)
 	search_key[0] = 0;
 	HASH_FIND_STR(settings, search_key, setting);
-	drvlog(LOG_INFO, "Using non-specific settings for device %s (serial %08x)", info->product,
-	       info->serial);
-	return setting;
+	if (setting) {
+		drvlog(LOG_INFO, "Using non-specific settings for device %s (serial %08x)", info->product,
+			info->serial);
+		return setting;
+	}
+
+	drvlog(LOG_WARNING, "Keeping onboard defaults for device %s (serial %08x)",
+		info->product, info->serial);
+	return NULL;
 }
 
 static void drillbit_send_config(struct cgpu_info *drillbit)
@@ -373,6 +374,8 @@ static void drillbit_send_config(struct cgpu_info *drillbit)
 
 	// Find the relevant board config
 	setting = find_settings(drillbit);
+	if(!setting)
+		return; // Don't update board config from defaults
 	drvlog(LOG_NOTICE, "Config: %s:%d:%d:%d Serial: %08x",
 	       setting->config.use_ext_clock ? "ext" : "int",
 	       setting->config.clock_freq,
@@ -466,9 +469,6 @@ static bool drillbit_parse_options(struct cgpu_info *drillbit)
 	/* Read configuration options (currently global not per-ASIC or per-board) */
 	if (settings != NULL)
 		return true; // Already initialised
-
-	// Start with the system-wide defaults
-	HASH_ADD_STR(settings, key, (&default_settings));
 
 	char *next_opt = opt_drillbit_options;
 	while (next_opt && strlen(next_opt)) {
