@@ -53,26 +53,35 @@ typedef struct {
 #define SZ_SERIALISED_WORKRESULT (4+4*MAX_RESULTS)
 static void deserialise_work_result(WorkResult *work_result, const char *buf);
 
+/* V4 config is the preferred one, used internally, non-ASIC-specific */
+typedef struct {
+	uint16_t core_voltage; // Millivolts
+	uint16_t clock_freq; // Clock frequency in MHz (or clock level 30-48 for Bitfury internal clock level)
+	uint8_t clock_div2;	 // Apply the /2 clock divider (both internal and external), where available
+	uint8_t use_ext_clock; // Flag. Ignored on boards without external clocks
+} BoardConfig;
+
 #define CONFIG_PW1 (1<<0)
 #define CONFIG_PW2 (1<<1)
 
-// Possible core voltage settings on PW1 & PW2
+// Possible core voltage settings on PW1 & PW2, used by legacy V3 config only
 #define CONFIG_CORE_065V 0
 #define CONFIG_CORE_075V CONFIG_PW2
 #define CONFIG_CORE_085V CONFIG_PW1
 #define CONFIG_CORE_095V (CONFIG_PW1|CONFIG_PW2)
 
+/* V3 config is for backwards compatibility with older firmwares */
 typedef struct {
 	uint8_t core_voltage; // Set to flags defined above
 	uint8_t int_clock_level; // Clock level (30-48 without divider), see asic.c for details
-	uint8_t clock_div2;	 // Apply the /2 clock divider (both internal and external)
+	uint8_t clock_div2;	// Apply the /2 clock divider (both internal and external)
 	uint8_t use_ext_clock; // Ignored on boards without external clocks
 	uint16_t ext_clock_freq;
-	uint16_t core_voltage_mv; // set to a plain human-readable integer value (not serialised atm)
-} BoardConfig;
+ } BoardConfigV3;
 
 #define SZ_SERIALISED_BOARDCONFIG 6
-static void serialise_board_config(char *buf, const BoardConfig *boardconfig);
+static void serialise_board_configV4(char *buf, BoardConfig *boardconfig);
+static void serialise_board_configV3(char *buf, BoardConfigV3 *boardconfig);
 
 typedef struct {
 	uint8_t protocol_version;
@@ -101,12 +110,10 @@ typedef struct {
 static config_setting default_settings = {
 	key: { 0 },
 	config: {
-		core_voltage: CONFIG_CORE_085V,
-		core_voltage_mv: 850,
+		core_voltage: 850,
+		clock_freq: 200,
 		use_ext_clock: 0,
-		int_clock_level: 40,
 		clock_div2: 0,
-		ext_clock_freq: 200
 	},
 };
 
@@ -248,7 +255,7 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
 	}
 
 	const int MIN_VERSION = 2;
-	const int MAX_VERSION = 3;
+	const int MAX_VERSION = 4;
 	if (identity.protocol_version < MIN_VERSION) {
 		drvlog(LOG_ERR, "Unknown device protocol version %d.", identity.protocol_version);
 		return false;
@@ -264,7 +271,7 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
 	}
 
 	// load identity data into device info structure
-	info->version = identity.protocol_version;
+	info->protocol_version = identity.protocol_version;
 	if (strncmp(identity.product, "DRILLBIT", sizeof(identity.product)) == 0) {
 		// Hack: first production firmwares all described themselves as DRILLBIT, so fill in the gaps
 		if (identity.num_chips == 1)
@@ -279,7 +286,7 @@ static bool drillbit_getinfo(struct cgpu_info *drillbit, struct drillbit_info *i
 	info->capabilities = identity.capabilities;
 
 	drvlog(LOG_INFO, "Getinfo returned version %d, product %s serial %08x num_chips %d",
-	       info->version, info->product, info->serial, info->num_chips);
+	       info->protocol_version, info->product, info->serial, info->num_chips);
 
 	drillbit_empty_buffer(drillbit);
 	return true;
@@ -359,32 +366,47 @@ static void drillbit_send_config(struct cgpu_info *drillbit)
 	struct drillbit_info *info = drillbit->device_data;
 	char cmd;
 	int amount;
-	char buf[SZ_SERIALISED_BOARDCONFIG];
+	char buf[SZ_SERIALISED_BOARDCONFIG+1];
+	size_t size;
 	config_setting *setting;
+	BoardConfigV3 v3_config;
 
 	// Find the relevant board config
 	setting = find_settings(drillbit);
 	drvlog(LOG_NOTICE, "Config: %s:%d:%d:%d Serial: %08x",
 	       setting->config.use_ext_clock ? "ext" : "int",
-	       setting->config.use_ext_clock ? setting->config.ext_clock_freq : setting->config.int_clock_level,
+	       setting->config.clock_freq,
 	       setting->config.clock_div2 ? 2 : 1,
-	       setting->config.core_voltage_mv,
+	       setting->config.core_voltage,
 	       info->serial);
-
-	drvlog(LOG_INFO, "Sending board configuration voltage=%d use_ext_clock=%d int_clock_level=%d clock_div2=%d ext_clock_freq=%d",
-	       setting->config.core_voltage, setting->config.use_ext_clock,
-	       setting->config.int_clock_level,
-	       setting->config.clock_div2, setting->config.ext_clock_freq);
 
 	if (setting->config.use_ext_clock && !(info->capabilities & CAP_EXT_CLOCK)) {
 		drvlog(LOG_WARNING, "Chosen configuration specifies external clock but this device (serial %08x) has no external clock!", info->serial);
 	}
 
-	cmd = 'C';
-	usb_write_timeout(drillbit, &cmd, 1, &amount, TIMEOUT, C_BF_REQWORK);
-
-	serialise_board_config(buf, &setting->config);
-	usb_write_timeout(drillbit, buf, SZ_SERIALISED_BOARDCONFIG, &amount, TIMEOUT, C_BF_CONFIG);
+	if(info->protocol_version <= 3) {
+		/* Make up a backwards compatible V3 config structure to send to the miner */
+		if(setting->config.core_voltage >= 950)
+			v3_config.core_voltage = CONFIG_CORE_095V;
+		else if (setting->config.core_voltage >= 850)
+			v3_config.core_voltage = CONFIG_CORE_085V;
+		else if (setting->config.core_voltage >= 750)
+			v3_config.core_voltage = CONFIG_CORE_075V;
+		else
+			v3_config.core_voltage = CONFIG_CORE_065V;
+		if(setting->config.clock_freq > 64)
+			v3_config.int_clock_level = setting->config.clock_freq / 5;
+		else
+			v3_config.int_clock_level = setting->config.clock_freq;
+		v3_config.clock_div2 = setting->config.clock_div2;
+		v3_config.use_ext_clock = setting->config.use_ext_clock;
+		v3_config.ext_clock_freq = setting->config.clock_freq;
+		serialise_board_configV3(&buf[1], &v3_config);
+	} else {
+		serialise_board_configV4(&buf[1], &setting->config);
+	}
+	buf[0] = 'C';
+	usb_write_timeout(drillbit, buf, sizeof(buf), &amount, TIMEOUT, C_BF_CONFIG);
 
 	/* Expect a single 'C' byte as acknowledgement */
 	usb_read_simple_response(drillbit, 'C', C_BF_CONFIG); // TODO: verify response
@@ -475,42 +497,13 @@ static bool drillbit_parse_options(struct cgpu_info *drillbit)
 
 		if (!strcmp("int",clksrc)) {
 			parsed_config.use_ext_clock = 0;
-			if (freq < 0 || freq > 63) {
-				quithere(1, "Invalid internal oscillator level %d. Recommended range is %s for this clock divider (possible is 0-63)", freq, parsed_config.clock_div2 ? "48-57":"30-48");
-			}
-			if (parsed_config.clock_div2 && (freq < 48 || freq > 57)) {
-				drvlog(LOG_WARNING, "Internal oscillator level %d outside recommended range 48-57.", freq);
-			}
-			if (!parsed_config.clock_div2 && (freq < 30 || freq > 48)) {
-				drvlog(LOG_WARNING, "Internal oscillator level %d outside recommended range 30-48.", freq);
-			}
-			parsed_config.int_clock_level = freq;
-		} else if (!strcmp("ext", clksrc)) {
+		}
+		else if (!strcmp("ext", clksrc)) {
 			parsed_config.use_ext_clock = 1;
-			parsed_config.ext_clock_freq = freq;
-			if (freq < 80 || freq > 230) {
-				drvlog(LOG_WARNING, "Warning: recommended external clock frequencies are 80-230MHz. Value %d may produce unexpected results.", freq);
-			}
 		} else
 			quithere(1, "Invalid clock source. Valid choices are int, ext.");
 
-		parsed_config.core_voltage_mv = voltage;
-		switch(voltage) {
-		case 650:
-			voltage = CONFIG_CORE_065V;
-			break;
-		case 750:
-			voltage = CONFIG_CORE_075V;
-			break;
-		case 850:
-			voltage = CONFIG_CORE_085V;
-			break;
-		case 950:
-			voltage = CONFIG_CORE_095V;
-			break;
-		default:
-			quithere(1, "Invalid core voltage %d. Valid values 650,750,850,950mV)", voltage);
-		}
+		parsed_config.clock_freq = freq;
 		parsed_config.core_voltage = voltage;
 
 		// Add the new set of settings to the configuration choices hash table
@@ -896,7 +889,7 @@ static struct api_data *drillbit_api_stats(struct cgpu_info *cgpu)
 	char serial[16];
 	int version;
 
-	version = info->version;
+	version = info->protocol_version;
 	root = api_add_int(root, "Protocol Version", &version, true);
 	root = api_add_string(root, "Product", info->product, false);
 	sprintf(serial, "%08x", info->serial);
@@ -975,7 +968,7 @@ static void deserialise_work_result(WorkResult *wr, const char *buf)
 		DESERIALISE(wr->nonce[i]);
 }
 
-static void serialise_board_config(char *buf, const BoardConfig *bc)
+static void serialise_board_configV3(char *buf, BoardConfigV3 *bc)
 {
 	size_t offset = 0;
 	SERIALISE(bc->core_voltage);
@@ -984,6 +977,16 @@ static void serialise_board_config(char *buf, const BoardConfig *bc)
 	SERIALISE(bc->use_ext_clock);
 	SERIALISE(bc->ext_clock_freq);
 }
+
+static void serialise_board_configV4(char *buf, BoardConfig *bc)
+{
+	size_t offset = 0;
+	SERIALISE(bc->core_voltage);
+	SERIALISE(bc->clock_freq);
+	SERIALISE(bc->clock_div2);
+	SERIALISE(bc->use_ext_clock);
+}
+
 
 static void deserialise_identity(Identity *id, const char *buf)
 {

@@ -20,7 +20,7 @@ struct drillbit_chip_info;
 /* drillbit_info structure applies to entire device */
 struct drillbit_info {
   struct cgpu_info *base_cgpu;
-  uint8_t version;
+  uint8_t protocol_version;
   uint8_t num_chips;
   uint16_t capabilities;
   char product[8];
