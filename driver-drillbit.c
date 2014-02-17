@@ -757,7 +757,7 @@ static void drillbit_send_work_to_chip(struct thr_info *thr, struct drillbit_chi
 	struct cgpu_info *drillbit = thr->cgpu;
 	struct work *work;
 	char cmd;
-	char buf[SZ_SERIALISED_WORKREQUEST];
+	char buf[SZ_SERIALISED_WORKREQUEST+1];
 	int amount, i;
 
 	/* Get some new work for the chip */
@@ -768,12 +768,11 @@ static void drillbit_send_work_to_chip(struct thr_info *thr, struct drillbit_chi
 	}
 
 	drvlog(LOG_DEBUG, "Sending work to chip_id %d", chip->chip_id);
-	serialise_work_request(buf, chip->chip_id, work);
+	serialise_work_request(&buf[1], chip->chip_id, work);
 
 	/* Send work to cgminer */
-	cmd = 'W';
-	usb_write_timeout(drillbit, &cmd, 1, &amount, TIMEOUT, C_BF_REQWORK);
-	usb_write_timeout(drillbit, buf, SZ_SERIALISED_WORKREQUEST, &amount, TIMEOUT, C_BF_REQWORK);
+	buf[0] = 'W';
+	usb_write_timeout(drillbit, buf, sizeof(buf), &amount, TIMEOUT, C_BF_REQWORK);
 
 	/* Expect a single 'W' byte as acknowledgement */
 	usb_read_simple_response(drillbit, 'W', C_BF_REQWORK);
