@@ -16,6 +16,7 @@
 #include "sha2.h"
 
 #define TIMEOUT 3000
+#define RESULT_TIMEOUT 5000
 #define MAX_RESULTS 16 // max results from a single chip
 
 #define drvlog(prio, fmt, ...) do { \
@@ -84,6 +85,7 @@ typedef struct {
 /* Capabilities flags known to cgminer */
 #define CAP_TEMP 1
 #define CAP_EXT_CLOCK 2
+#define CAP_IS_AVALON 4
 
 #define SZ_SERIALISED_IDENTITY 16
 static void deserialise_identity(Identity *identity, const char *buf);
@@ -621,13 +623,23 @@ static const uint32_t bf_offsets[] = {-0x800000, 0, -0x400000};
 
 static bool drillbit_checkresults(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
+	struct cgpu_info *drillbit = thr->cgpu;
+	struct drillbit_info *info = drillbit->device_data;
 	int i;
 
-	nonce = decnonce(nonce);
-	for (i = 0; i < BF_OFFSETS; i++) {
-		if (test_nonce(work, nonce + bf_offsets[i])) {
+	if(info->capabilities & CAP_IS_AVALON) {
+		if (test_nonce(work, nonce)) {
 			submit_tested_work(thr, work);
 			return true;
+		}
+	}
+	else { /* Bitfury */
+		nonce = decnonce(nonce);
+		for (i = 0; i < BF_OFFSETS; i++) {
+			if (test_nonce(work, nonce + bf_offsets[i])) {
+				submit_tested_work(thr, work);
+				return true;
+			}
 		}
 	}
 	return false;
@@ -707,11 +719,12 @@ static int check_for_results(struct thr_info *thr)
 			drvlog(LOG_ERR, "Got invalid number of result nonces (%d) for chip id %d", response->num_nonces, response->chip_id);
 			goto cleanup;
 		}
-		for (i = 0; i < response->num_nonces; i++) {
+
+		found = false;
+		for(i = 0; i < response->num_nonces; i++) {
 			if (unlikely(thr->work_restart))
 				goto cleanup;
-			found = false;
-			for (k = 0; k < WORK_HISTORY_LEN; k++) {
+			for(k = 0; k < WORK_HISTORY_LEN; k++) {
 				/* NB we deliberately check all results against all work because sometimes ASICs seem to give multiple "valid" nonces,
 				   and this seems to avoid some result that would otherwise be rejected by the pool.
 
@@ -726,13 +739,14 @@ static int check_for_results(struct thr_info *thr)
 					}
 				}
 			}
-			if (!found && chip->state != IDLE) {
-				/* all nonces we got back from this chip were invalid */
-				inc_hw_errors(thr);
-				chip->error_count++;
-			}
 		}
-		if (chip->state == WORKING_QUEUED && !response->is_idle)
+		drvlog(LOG_DEBUG, "%s nonce %08x", (found ? "Good":"Bad"), response->num_nonces ? response->nonce[0] : 0);
+		if(!found && chip->state != IDLE && response->num_nonces > 0) {
+		  /* all nonces we got back from this chip were invalid */
+		  inc_hw_errors(thr);
+		  chip->error_count++;
+		}
+		if(chip->state == WORKING_QUEUED && !response->is_idle)
 			chip->state = WORKING_NOQUEUED; // Time to queue up another piece of "next work"
 		else
 			chip->state = IDLE; // Uh-oh, we're totally out of work for this ASIC!
@@ -815,8 +829,8 @@ static int64_t drillbit_scanwork(struct thr_info *thr)
 		if (info->chips[i].state == IDLE)
 			continue;
 		ms_diff = ms_tdiff(&tv_now, &info->chips[i].tv_start);
-		if (ms_diff > TIMEOUT) {
-			if (info->chips[i].work_sent_count > 4) {
+		if(ms_diff > RESULT_TIMEOUT) {
+			if(info->chips[i].work_sent_count > 4) {
 				/* Only count ASIC timeouts after the pool has started to send work in earnest,
 				   some pools can create unusual delays early on */
 				drvlog(LOG_ERR, "Timing out unresponsive ASIC %d", info->chips[i].chip_id);
