@@ -1487,7 +1487,8 @@ static void hfa_statline_before(char *buf, size_t bufsiz, struct cgpu_info *hash
 		}
 	}
 
-	tailsprintf(buf, bufsiz, "max%3.0fC %3.2fV", hashfast->temp, max_volt);
+	tailsprintf(buf, bufsiz, "%3.0fC %3d%% %3.2fV", hashfast->temp, info->fanspeed,
+		    max_volt);
 }
 
 static void hfa_init(struct cgpu_info __maybe_unused *hashfast)
