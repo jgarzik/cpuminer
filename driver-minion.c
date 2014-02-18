@@ -2594,7 +2594,7 @@ static void minion_get_statline_before(char *buf, size_t bufsiz, struct cgpu_inf
 	if (max_temp > 99)
 		max_temp = 99;
 
-	tailsprintf(buf, bufsiz, "max%2dC Ch:%2d.%d%*s| ", (int)max_temp,
+	tailsprintf(buf, bufsiz, "max%2dC Ch:%2d.%d%*s", (int)max_temp,
 				 minioninfo->chips, (int)cores, sp, "");
 }
 

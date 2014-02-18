@@ -932,7 +932,7 @@ static void get_bflsc_statline_before(char *buf, size_t bufsiz, struct cgpu_info
 	}
 	rd_unlock(&(sc_info->stat_lock));
 
-	tailsprintf(buf, bufsiz, " max%3.0fC %4.2fV | ", temp, vcc2);
+	tailsprintf(buf, bufsiz, "max%3.0fC %4.2fV", temp, vcc2);
 }
 
 static void flush_one_dev(struct cgpu_info *bflsc, int dev)

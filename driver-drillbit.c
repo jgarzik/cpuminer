@@ -444,8 +444,6 @@ static void drillbit_get_statline_before(char *buf, size_t bufsiz, struct cgpu_i
 		// Space out to the same width as if there was a temp field in place
 		tailsprintf(buf, bufsiz, "           %*s", space, "");
 	}
-
-	tailsprintf(buf, bufsiz, " | ");
 }
 
 

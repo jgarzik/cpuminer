@@ -2299,7 +2299,7 @@ static void curses_print_status(void)
 	wattron(statuswin, A_BOLD);
 	cg_mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
 	wattroff(statuswin, A_BOLD);
-	mvwhline(statuswin, 1, 0, '-', 90);
+	mvwhline(statuswin, 1, 0, '-', 98);
 	cg_mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
 	cg_mvwprintw(statuswin, 3, 0, " ST: %d  SS: %d  NB: %d  LW: %d  GF: %d  RF: %d",
@@ -2320,8 +2320,8 @@ static void curses_print_status(void)
 	wclrtoeol(statuswin);
 	cg_mvwprintw(statuswin, 5, 0, " Block: %s...  Diff:%s  Started: %s  Best share: %s   ",
 		     prev_block, block_diff, blocktime, best_share);
-	mvwhline(statuswin, 6, 0, '-', 90);
-	mvwhline(statuswin, statusy - 1, 0, '-', 90);
+	mvwhline(statuswin, 6, 0, '-', 98);
+	mvwhline(statuswin, statusy - 1, 0, '-', 98);
 #ifdef USE_USBUTILS
 	cg_mvwprintw(statuswin, devcursor - 1, 1, "[U]SB device management [P]ool management [S]ettings [D]isplay options [Q]uit");
 #else
@@ -2342,6 +2342,8 @@ static void adj_fwidth(float var, int *length)
 }
 
 static int dev_width;
+#define STATBEFORELEN 23
+const char blanks[] = "                                        ";
 
 static void curses_print_devstatus(struct cgpu_info *cgpu, int devno, int count)
 {
@@ -2351,6 +2353,7 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int devno, int count)
 	uint64_t dh64, dr64;
 	struct timeval now;
 	double dev_runtime, wu;
+	unsigned int devstatlen;
 
 	if (opt_compact)
 		return;
@@ -2378,7 +2381,10 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int devno, int count)
 	cg_wprintw(statuswin, " %03d: %s %*d: ", devno, cgpu->drv->name, dev_width, cgpu->device_id);
 	logline[0] = '\0';
 	cgpu->drv->get_statline_before(logline, sizeof(logline), cgpu);
-	cg_wprintw(statuswin, "%s", logline);
+	devstatlen = strlen(logline);
+	if (devstatlen < STATBEFORELEN)
+		strncat(logline, blanks, STATBEFORELEN - devstatlen);
+	cg_wprintw(statuswin, "%s | ", logline);
 
 	dh64 = (double)cgpu->total_mhashes / dev_runtime * 1000000ull;
 	dr64 = (double)cgpu->rolling * 1000000ull;
@@ -8048,9 +8054,8 @@ static void noop_reinit_device(struct cgpu_info __maybe_unused *cgpu)
 {
 }
 
-void blank_get_statline_before(char *buf, size_t bufsiz, struct cgpu_info __maybe_unused *cgpu)
+void blank_get_statline_before(char __maybe_unused *buf,size_t __maybe_unused bufsiz, struct cgpu_info __maybe_unused *cgpu)
 {
-	tailsprintf(buf, bufsiz, "               | ");
 }
 
 static void noop_get_statline(char __maybe_unused *buf, size_t __maybe_unused bufsiz, struct cgpu_info __maybe_unused *cgpu)

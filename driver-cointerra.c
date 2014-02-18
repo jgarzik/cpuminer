@@ -1108,7 +1108,7 @@ static void cta_statline_before(char *buf, size_t bufsiz, struct cgpu_info *coin
 	}
 	max_volt /= 100;
 
-	tailsprintf(buf, bufsiz, "%3d %3.1fC %2.1fV | ", freq, cointerra->temp, max_volt);
+	tailsprintf(buf, bufsiz, "%3d %3.1fC %2.1fV", freq, cointerra->temp, max_volt);
 }
 
 struct device_drv cointerra_drv = {

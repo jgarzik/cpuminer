@@ -298,11 +298,7 @@ static void get_bitforce_statline_before(char *buf, size_t bufsiz, struct cgpu_i
 	float gt = bitforce->temp;
 
 	if (gt > 0)
-		tailsprintf(buf, bufsiz, "%5.1fC ", gt);
-	else
-		tailsprintf(buf, bufsiz, "       ");
-
-	tailsprintf(buf, bufsiz, "        | ");
+		tailsprintf(buf, bufsiz, "%5.1fC", gt);
 }
 
 static bool bitforce_thread_prepare(__maybe_unused struct thr_info *thr)

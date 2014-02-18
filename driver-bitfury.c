@@ -1114,11 +1114,10 @@ static void bitfury_get_statline_before(char *buf, size_t bufsiz, struct cgpu_in
 
 	switch(info->ident) {
 		case IDENT_BXF:
-			tailsprintf(buf, bufsiz, "%5.1fC         | ", cgpu->temp);
+			tailsprintf(buf, bufsiz, "%5.1fC", cgpu->temp);
 			break;
 		case IDENT_BF1:
 		default:
-			tailsprintf(buf, bufsiz, "               | ");
 			break;
 	}
 }

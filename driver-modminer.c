@@ -734,7 +734,7 @@ static bool modminer_fpga_init(struct thr_info *thr)
 
 static void get_modminer_statline_before(char *buf, size_t bufsiz, struct cgpu_info *modminer)
 {
-	tailsprintf(buf, bufsiz, " %s%.1fC %3uMHz  | ",
+	tailsprintf(buf, bufsiz, "%s%.1fC %3uMHz",
 			(modminer->temp < 10) ? " " : "",
 			modminer->temp,
 			(unsigned int)(modminer->clock));

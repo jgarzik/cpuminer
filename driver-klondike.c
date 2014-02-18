@@ -1446,7 +1446,7 @@ static void get_klondike_statline_before(char *buf, size_t siz, struct cgpu_info
 	if (strlen(tmp) < 4)
 		strcat(tmp, " ");
 
-	tailsprintf(buf, siz, "%3dMHz %2d%% %s| ", (int)clock, fan, tmp);
+	tailsprintf(buf, siz, "%3dMHz %2d%% %s", (int)clock, fan, tmp);
 }
 
 static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)

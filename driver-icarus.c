@@ -1513,10 +1513,6 @@ static void icarus_statline_before(char *buf, size_t bufsiz, struct cgpu_info *c
 
 	if (info->ident == IDENT_CMR2 && info->cmr2_speed > 0)
 		tailsprintf(buf, bufsiz, "%5.1fMhz", (float)(info->cmr2_speed) * ICARUS_CMR2_SPEED_FACTOR);
-	else
-		tailsprintf(buf, bufsiz, "       ");
-
-	tailsprintf(buf, bufsiz, "        | ");
 }
 
 static void icarus_shutdown(__maybe_unused struct thr_info *thr)

@@ -2987,13 +2987,13 @@ static void bab_get_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 		K_RUNLOCK(babinfo->nfree_list);
 	}
 
-	tailsprintf(buf, bufsiz, "%d.%02d.%03d D:%03d | ",
+	tailsprintf(buf, bufsiz, "%d.%02d.%03d D:%03d",
 				 babinfo->banks,
 				 babinfo->boards,
 				 babinfo->chips,
 				 dead);
 #else
-	tailsprintf(buf, bufsiz, "B:%d B:%02d C:%03d | ",
+	tailsprintf(buf, bufsiz, "B:%d B:%02d C:%03d",
 				 babinfo->banks,
 				 babinfo->boards,
 				 babinfo->chips);
