@@ -1441,7 +1441,7 @@ static void get_klondike_statline_before(char *buf, size_t siz, struct cgpu_info
 	if (clock > 999) // error - so truncate it
 		clock = 999;
 
-	tailsprintf(buf, siz, "%3dMHz %3d%% %.1fC", (int)clock, fan, cvtKlnToC(temp));
+	tailsprintf(buf, siz, "%3dMHz %3d%% %.1fC", (int)clock, (int)fan, cvtKlnToC(temp));
 }
 
 static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
