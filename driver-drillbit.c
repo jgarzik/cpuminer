@@ -318,7 +318,7 @@ static config_setting *find_settings(struct cgpu_info *drillbit)
 	}
 
 	// Search by serial
-	sprintf(search_key, "%08x", drillbit->serial);
+	sprintf(search_key, "%08x", info->serial);
 	HASH_FIND_STR(settings, search_key, setting);
 	if (setting) {
 		drvlog(LOG_INFO, "Using serial specific settings for serial %s", search_key);
