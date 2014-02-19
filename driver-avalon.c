@@ -1479,7 +1479,7 @@ static void get_avalon_statline_before(char *buf, size_t bufsiz, struct cgpu_inf
 			temp = 99;
 		if (temp < 0)
 			temp = 0;
-		tailsprintf(buf, bufsiz, "%2dC %3d %4dmV", temp, info->frequency, info->core_voltage);
+		tailsprintf(buf, bufsiz, "%2dC %3dMHz %4dmV", temp, info->frequency, info->core_voltage);
 	} else {
 		/* Find the lowest fan speed of the ASIC cooling fans. */
 		if (info->fan1 >= 0 && info->fan1 < lowfan)

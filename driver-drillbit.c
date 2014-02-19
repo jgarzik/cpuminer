@@ -422,27 +422,17 @@ static void drillbit_updatetemps(struct thr_info *thr)
 static void drillbit_get_statline_before(char *buf, size_t bufsiz, struct cgpu_info *drillbit)
 {
 	struct drillbit_info *info = drillbit->device_data;
-	int temp, max_temp, space = 0;
 
-	temp = (int)(info->temp);
-
-	tailsprintf(buf, bufsiz, "%c%d", info->product[0], info->num_chips);
-	if (info->num_chips < 10)
-		space++;
-
-	if ((info->capabilities & CAP_TEMP) && temp != 0) {
-		if (temp > 999) // Fixed display space
-			temp = 999;
-		max_temp = (int)(info->max_temp);
-		if (max_temp > 999) // Fixed display space
-			max_temp = 999;
-		if (max_temp < 100)
-			space++;
-		tailsprintf(buf, bufsiz, " %2d max%d.%d%*s",
-					 temp / 10, max_temp / 10, max_temp % 10, space, "");
+	if ((info->capabilities & CAP_TEMP) && info->temp != 0) {
+		tailsprintf(buf, bufsiz, "%c%2d %.1fC max%.1fC",
+					 info->product[0],
+					 info->num_chips,
+					 (float)(info->temp/10.0),
+					 (float)(info->max_temp/10.0));
 	} else {
-		// Space out to the same width as if there was a temp field in place
-		tailsprintf(buf, bufsiz, "           %*s", space, "");
+		tailsprintf(buf, bufsiz, "%c%2d",
+					 info->product[0],
+					 info->num_chips);
 	}
 }
 
