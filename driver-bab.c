@@ -2970,33 +2970,34 @@ static void bab_get_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 #if UPDATE_HISTORY
 	struct timeval now;
 	double elapsed;
-	int i, dead = 0;
+	int i, bad = 0;
 
 	cgtime(&now);
 	elapsed = tdiff(&now, &(babcgpu->dev_start_tv));
 
-	// At least get 15s of nonces before saying anything is dead
+	// At least get 15s of nonces before saying anything is bad
 	if (elapsed > 15.0) {
 		K_RLOCK(babinfo->nfree_list);
 		for (i = 0; i < babinfo->chips; i++) {
-			if (babinfo->disabled[i] ||
-			    (babinfo->good_nonces[i]->count == 0 &&
-			     babinfo->bad_nonces[i]->count > 1))
-				dead++;
+			if (babinfo->good_nonces[i]->count == 0 &&
+			     babinfo->bad_nonces[i]->count > 1)
+				bad++;
 		}
 		K_RUNLOCK(babinfo->nfree_list);
 	}
 
+	tailsprintf(buf, bufsiz, "%d.%02d.%03d B:%03d D:%03d",
+				 babinfo->banks,
+				 babinfo->boards,
+				 babinfo->chips,
+				 bad,
+				 babinfo->total_disabled);
+#else
 	tailsprintf(buf, bufsiz, "%d.%02d.%03d D:%03d",
 				 babinfo->banks,
 				 babinfo->boards,
 				 babinfo->chips,
-				 dead);
-#else
-	tailsprintf(buf, bufsiz, "B:%d B:%02d C:%03d",
-				 babinfo->banks,
-				 babinfo->boards,
-				 babinfo->chips);
+				 babinfo->total_disabled);
 #endif
 }
 #endif
