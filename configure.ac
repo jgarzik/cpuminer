@@ -504,9 +504,9 @@ else
 fi
 
 if test "x$avalon2" = xyes; then
-	echo "  Avalon2.ASICs.........: Enabled"
+	echo "  Avalon2.ASICs........: Enabled"
 else
-	echo "  Avalon2.ASICs.........: Disabled"
+	echo "  Avalon2.ASICs........: Disabled"
 fi
 
 if test "x$minion" = xyes; then
@@ -601,7 +601,7 @@ echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
 echo
-if test "x$dlibusb" != xno; then
+if test "x$want_usbutils$dlibusb" = xyesyes; then
 echo "*** SYSTEM LIBUSB BEING ADDED - NOT RECOMMENDED UNLESS YOU ARE UNABLE TO COMPILE THE INCLUDED LIBUSB ***"
 echo
 fi
