@@ -458,9 +458,9 @@ tryagain:
 	return true;
 }
 
-static void hfa_clear_readbuf(struct cgpu_info *hashfast)
+static bool hfa_clear_readbuf(struct cgpu_info *hashfast)
 {
-	int amount, ret;
+	int amount, ret = 0;
 	char buf[512];
 
 	do {
@@ -468,6 +468,10 @@ static void hfa_clear_readbuf(struct cgpu_info *hashfast)
 			break;
 		ret = usb_read(hashfast, buf, 512, &amount, C_HF_CLEAR_READ);
 	} while (!ret || amount);
+
+	if (ret && ret != LIBUSB_ERROR_TIMEOUT)
+		return false;
+	return true;
 }
 
 static bool hfa_send_shutdown(struct cgpu_info *hashfast)
@@ -480,7 +484,8 @@ static bool hfa_send_shutdown(struct cgpu_info *hashfast)
 	 * discard any work it thinks is in flight for a cleaner restart. */
 	if (!hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), 0, (uint8_t *)NULL, 0))
 		return ret;
-	hfa_clear_readbuf(hashfast);
+	if (!hfa_clear_readbuf(hashfast))
+		return ret;
 	if (hfa_send_frame(hashfast, HF_USB_CMD(OP_USB_SHUTDOWN), 0, NULL, 0)) {
 		/* Wait to allow device to properly shut down. */
 		cgsleep_ms(1000);
@@ -542,7 +547,8 @@ static bool hfa_initialise(struct cgpu_info *hashfast)
 	if (hashfast->usbinfo.nodev)
 		return false;
 
-	hfa_clear_readbuf(hashfast);
+	if (!hfa_clear_readbuf(hashfast))
+		return false;
 
 	err = usb_transfer(hashfast, 0, 9, 1, 0, C_ATMEL_RESET);
 	if (!err)
@@ -1270,8 +1276,9 @@ static bool hfa_running_reset(struct cgpu_info *hashfast, struct hashfast_info *
 	 * inhibit the read thread from reading our response to the
 	 * OP_USB_INIT */
 	mutex_lock(&info->rlock);
-	hfa_clear_readbuf(hashfast);
-	ret = hfa_reset(hashfast, info);
+	ret = hfa_clear_readbuf(hashfast);
+	if (ret)
+		ret = hfa_reset(hashfast, info);
 	mutex_unlock(&info->rlock);
 
 out:
