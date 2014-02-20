@@ -464,8 +464,10 @@ static bool hfa_clear_readbuf(struct cgpu_info *hashfast)
 	char buf[512];
 
 	do {
-		if (hashfast->usbinfo.nodev)
+		if (hashfast->usbinfo.nodev) {
+			ret = LIBUSB_ERROR_NO_DEVICE;
 			break;
+		}
 		ret = usb_read(hashfast, buf, 512, &amount, C_HF_CLEAR_READ);
 	} while (!ret || amount);
 
