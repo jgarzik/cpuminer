@@ -1267,6 +1267,7 @@ dies_only:
 static bool hfa_running_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
 	bool ret;
+	int i;
 
 	ret = hfa_send_shutdown(hashfast);
 	if (!ret)
@@ -1279,6 +1280,8 @@ static bool hfa_running_reset(struct cgpu_info *hashfast, struct hashfast_info *
 	ret = hfa_clear_readbuf(hashfast);
 	if (ret)
 		ret = hfa_reset(hashfast, info);
+	for (i = 0; i < info->asic_count; i++)
+		info->die_data[i].hash_clock = info->base_clock;
 	mutex_unlock(&info->rlock);
 
 out:
