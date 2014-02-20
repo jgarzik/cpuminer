@@ -458,20 +458,6 @@ tryagain:
 	return true;
 }
 
-static bool hfa_send_shutdown(struct cgpu_info *hashfast)
-{
-	bool ret = false;
-
-	if (hashfast->usbinfo.nodev)
-		return ret;
-	if (hfa_send_frame(hashfast, HF_USB_CMD(OP_USB_SHUTDOWN), 0, NULL, 0)) {
-		/* Wait to allow device to properly shut down. */
-		cgsleep_ms(1000);
-		ret = true;
-	}
-	return ret;
-}
-
 static void hfa_clear_readbuf(struct cgpu_info *hashfast)
 {
 	int amount, ret;
@@ -482,6 +468,25 @@ static void hfa_clear_readbuf(struct cgpu_info *hashfast)
 			break;
 		ret = usb_read(hashfast, buf, 512, &amount, C_HF_CLEAR_READ);
 	} while (!ret || amount);
+}
+
+static bool hfa_send_shutdown(struct cgpu_info *hashfast)
+{
+	bool ret = false;
+
+	if (hashfast->usbinfo.nodev)
+		return ret;
+	/* Send a restart before the shutdown frame to tell the device to
+	 * discard any work it thinks is in flight for a cleaner restart. */
+	if (!hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), 0, (uint8_t *)NULL, 0))
+		return ret;
+	hfa_clear_readbuf(hashfast);
+	if (hfa_send_frame(hashfast, HF_USB_CMD(OP_USB_SHUTDOWN), 0, NULL, 0)) {
+		/* Wait to allow device to properly shut down. */
+		cgsleep_ms(1000);
+		ret = true;
+	}
+	return ret;
 }
 
 static bool hfa_detect_common(struct cgpu_info *hashfast)
