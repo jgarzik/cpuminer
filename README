@@ -335,14 +335,22 @@ On OSX, like Linux, no drivers need to be installed. However some devices
 like the bitfury USB sticks automatically load a driver thinking they're a
 modem and the driver needs to be unloaded for cgminer to work:
 
-sudo kextunload -b com.apple.driver.AppleUSBCDC
-sudo kextunload -b com.apple.driver.AppleUSBCDCACMData
+ sudo kextunload -b com.apple.driver.AppleUSBCDC
+ sudo kextunload -b com.apple.driver.AppleUSBCDCACMData
+
+There may be a limit to the number of USB devices that you are allowed to start.
+The following set of commands, followed by a reboot will increase that:
+
+ sudo su
+ touch /etc/sysctl.conf
+ echo kern.sysv.semume=100 >> /etc/sysctl.conf
+ chown root:wheel /etc/sysctl.conf
+ chmod 0644 /etc/sysctl.conf
 
 Some devices need superuser access to mine on them so cgminer may need to
 be started with sudo
 i.e.:
-sudo cgminer <insert commands here>
-
+ sudo cgminer <insert commands here>
 
 
 ---
