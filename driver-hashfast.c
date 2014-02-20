@@ -1298,8 +1298,8 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 		return -1;
 	}
 
-	if (unlikely(last_getwork - hashfast->last_device_valid_work > 60)) {
-		applog(LOG_WARNING, "%s %d: No valid hashes for over 1 minute, attempting to reset",
+	if (unlikely(last_getwork - hashfast->last_device_valid_work > 15)) {
+		applog(LOG_WARNING, "%s %d: No valid hashes for over 15 seconds, attempting to reset",
 		       hashfast->drv->name, hashfast->device_id);
 		if (info->hash_clock_rate > HFA_CLOCK_DEFAULT) {
 			info->hash_clock_rate -= 10;
