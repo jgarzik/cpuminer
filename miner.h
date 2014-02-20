@@ -244,6 +244,7 @@ static inline int fsync (int fd)
 	DRIVER_ADD_COMMAND(drillbit) \
 	DRIVER_ADD_COMMAND(bab) \
 	DRIVER_ADD_COMMAND(minion) \
+	DRIVER_ADD_COMMAND(avalon2) \
 	DRIVER_ADD_COMMAND(avalon)
 
 #define DRIVER_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
@@ -429,7 +430,7 @@ struct cgpu_info {
 	struct cg_usb_info usbinfo;
 	bool blacklisted;
 #endif
-#ifdef USE_AVALON
+#if defined(USE_AVALON) || defined(USE_AVALON2)
 	struct work **works;
 	int work_array;
 	int queued;
