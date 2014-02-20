@@ -1807,12 +1807,12 @@ static void process_history(struct cgpu_info *babcgpu, int chip, struct timeval 
 
 				babinfo->chip_fast[chip]--;
 
-				applog(LOG_WARNING, "%s%d: Chip %d DEAD - speed down from %d to %d",
+				applog(LOG_WARNING, "%s%d: Chip %d BAD - speed down from %d to %d",
 						    babcgpu->drv->name, babcgpu->device_id,
 						    chip, (int)chip_fast, (int)chip_fast - 1);
 			} else {
 				/*
-				 * Permanently DEAD since we're already at the minumum speed
+				 * Permanently BAD since we're already at the minumum speed
 				 * but only getting bad nonces
 				 */
 				if (babinfo->bad_msg[chip] == false) {
@@ -1827,7 +1827,7 @@ static void process_history(struct cgpu_info *babcgpu, int chip, struct timeval 
 		}
 
 		/*
-		 * It 'was' permanently DEAD but a good nonce came back!
+		 * It 'was' permanently BAD but a good nonce came back!
 		 */
 		if (babinfo->bad_msg[chip]) {
 			applog(LOG_WARNING, "%s%d: Chip %d REVIVED - at speed %d",
