@@ -90,6 +90,7 @@ struct hf_long_usb_stats1 {
 struct hf_die_data {
 	int hash_clock;
 	double temp;
+	double board_temp;
 	time_t last_restart;
 };
 

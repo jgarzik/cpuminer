@@ -718,7 +718,7 @@ static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_in
 	int num_included = (h->data_length * 4) / sizeof(struct hf_g1_die_data);
 	int i, j, die = h->chip_address;
 
-	float die_temperature;
+	float die_temperature, board_temp;
 	float core_voltage[6];
 
 	// Copy in the data. They're numbered sequentially from the starting point
@@ -732,27 +732,37 @@ static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_in
 		/* Sanity checking */
 		if (unlikely(die_temperature > 255))
 			die_temperature = info->die_data[die].temp;
-		info->die_data[die].temp = die_temperature;
+		else
+			info->die_data[die].temp = die_temperature;
+		board_temp = board_temperature(d->temperature);
+		if (unlikely(board_temp > 255))
+			board_temp = info->die_data[die].board_temp;
+		else
+			info->die_data[die].board_temp = board_temp;
 		for (j = 0; j < 6; j++)
 			core_voltage[j] = GN_CORE_VOLTAGE(d->die.core_voltage[j]);
 
 		applog(LOG_DEBUG, "%s %d: die %2d: OP_DIE_STATUS Temps die %.1fC board %.1fC vdd's %.2f %.2f %.2f %.2f %.2f %.2f",
-			hashfast->drv->name, hashfast->device_id, die, die_temperature, board_temperature(d->temperature),
+			hashfast->drv->name, hashfast->device_id, die, die_temperature, board_temp,
 			core_voltage[0], core_voltage[1], core_voltage[2],
 			core_voltage[3], core_voltage[4], core_voltage[5]);
 		// XXX Convert board phase currents, voltage, temperature
 	}
 	if (die == info->asic_count - 1) {
-		info->temp_updates++;
 		/* We have a full set of die temperatures, find the highest
-		 * current die temp. */
-		die_temperature = 0;
+		 * current temperature. */
+		float max_temp = 0;
+
+		info->temp_updates++;
+
 		for (die = 0; die < info->asic_count; die++) {
-			if (info->die_data[die].temp > die_temperature)
-				die_temperature = info->die_data[die].temp;
+			if (info->die_data[die].temp > max_temp)
+				max_temp = info->die_data[die].temp;
+			if (info->die_data[die].board_temp > max_temp)
+				max_temp = info->die_data[die].board_temp;
 		}
 		/* Exponentially change the max_temp to smooth out troughs. */
-		hashfast->temp = hashfast->temp * 0.63 + die_temperature * 0.37;
+		hashfast->temp = hashfast->temp * 0.63 + max_temp * 0.37;
 	}
 
 	if (unlikely(hashfast->temp >= opt_hfa_overheat)) {
