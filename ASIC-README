@@ -92,6 +92,11 @@ Currently the U1 USB sticks are supported and come up as ANU devices. They
 are also set up as per the USB ASICs below. They need no options to work well
 but will accept all the icarus options.
 
+
+BITMINE A1 devices
+
+Bitmine A1 devices need the --enable-bitmine_A1 compile option set.
+
 ---
 GETTING STARTED WITH USB ASICS
 
@@ -466,6 +471,19 @@ the temp-overheat feature.
 
 Other undocumented hashfast command line options are for development purposes
 only at this stage and serve no useful purpose to end users.
+
+
+Bitmine A1 Devices
+
+--bitmine-a1-options <ref_clk>:<sys_clk>:<spi_clk>:<max_chip>
+ref_clk:  reference clock in kHz                      (default: 16000)
+sys_clk:  target system clock in kHz to be set in PLL (default: 250000)
+spi_clk:  SPI clock in kHz                            (default: 800)
+max_chip: [debug/testing] limit chip chain
+
+Set 0 for fields you want to keep untouched to default, e.g.
+--bitmine-a1-options 0:0:400
+to only set SPI clock to 400kHz
 
 ---
 

@@ -202,6 +202,9 @@ char *opt_klondike_options = NULL;
 char *opt_drillbit_options = NULL;
 #endif
 char *opt_bab_options = NULL;
+#ifdef USE_BITMINE_A1
+char *opt_bitmine_a1_options = NULL;
+#endif
 #ifdef USE_USBUTILS
 char *opt_usb_select = NULL;
 int opt_usbdump = -1;
@@ -1128,7 +1131,14 @@ static char *set_bab_options(const char *arg)
 	return NULL;
 }
 #endif
+#ifdef USE_BITMINE_A1
+static char *set_bitmine_a1_options(const char *arg)
+{
+	opt_set_charp(arg, &opt_bitmine_a1_options);
 
+	return NULL;
+}
+#endif
 #ifdef USE_USBUTILS
 static char *set_usb_select(const char *arg)
 {
@@ -1330,6 +1340,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--klondike-options",
 		     set_klondike_options, NULL, NULL,
 		     "Set klondike options clock:temptarget"),
+#endif
+#ifdef USE_BITMINE_A1
+	OPT_WITH_ARG("--bitmine-a1-options",
+		     set_bitmine_a1_options, NULL, NULL,
+		     "Bitmine A1 options ref_clk_khz:sys_clk_khz:spi_clk_khz:override_chip_num"),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
@@ -1646,6 +1661,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_MODMINER
 		"modminer "
+#endif
+#ifdef USE_BITMINE_A1
+		"Bitmine.A1 "
 #endif
 		"mining support.\n"
 		, packagename);
@@ -4674,6 +4692,10 @@ void write_config(FILE *fcfg)
 #endif
 	if (opt_bab_options)
 		fprintf(fcfg, ",\n\"bab-options\" : \"%s\"", json_escape(opt_bab_options));
+#ifdef USE_BITMINE_A1
+	if (opt_bitmine_a1_options)
+		fprintf(fcfg, ",\n\"bitmine-a1-options\" : \"%s\"", json_escape(opt_bitmine_a1_options));
+#endif
 #ifdef USE_USBUTILS
 	if (opt_usb_select)
 		fprintf(fcfg, ",\n\"usb\" : \"%s\"", json_escape(opt_usb_select));
@@ -7517,7 +7539,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 		}
 
 		cgsleep_ms(30000);
-			
+
 	}
 	return NULL;
 }
@@ -8757,7 +8779,7 @@ begin_bench:
 
 		cgpu->rolling = cgpu->total_mhashes = 0;
 	}
-	
+
 	cgtime(&total_tv_start);
 	cgtime(&total_tv_end);
 	get_datestamp(datestamp, sizeof(datestamp), &total_tv_start);
