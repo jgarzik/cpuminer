@@ -1417,7 +1417,6 @@ static void get_klondike_statline_before(char *buf, size_t siz, struct cgpu_info
 	uint16_t fan = 0;
 	uint16_t clock = 0;
 	int dev, slaves;
-	char tmp[16];
 
 	if (klninfo->status == NULL) {
 		blank_get_statline_before(buf, siz, klncgpu);
@@ -1436,17 +1435,13 @@ static void get_klondike_statline_before(char *buf, size_t siz, struct cgpu_info
 	fan /= slaves + 1;
 	//fan *= 100/255; // <-- You can't do this because int 100 / int 255 == 0
         fan = 100 * fan / 255;
-	if (fan > 99) // short on screen space
-		fan = 99;
+	if (fan > 100)
+		fan = 100;
 	clock /= slaves + 1;
 	if (clock > 999) // error - so truncate it
 		clock = 999;
 
-	snprintf(tmp, sizeof(tmp), "%2.0fC", cvtKlnToC(temp));
-	if (strlen(tmp) < 4)
-		strcat(tmp, " ");
-
-	tailsprintf(buf, siz, "%3dMHz %2d%% %s", (int)clock, fan, tmp);
+	tailsprintf(buf, siz, "%3dMHz %3d%% %.1fC", (int)clock, (int)fan, cvtKlnToC(temp));
 }
 
 static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
