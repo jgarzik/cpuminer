@@ -453,6 +453,7 @@ tryagain:
 		       hashfast->drv->name, hashfast->device_id);
 		return false;
 	}
+	info->base_clock = db->hash_clockrate;
 
 	return true;
 }
@@ -1497,8 +1498,8 @@ static void hfa_statline_before(char *buf, size_t bufsiz, struct cgpu_info *hash
 		}
 	}
 
-	tailsprintf(buf, bufsiz, "%3.0fC %3d%% %3.2fV", hashfast->temp, info->fanspeed,
-		    max_volt);
+	tailsprintf(buf, bufsiz, "%3dMHz %3.0fC %3d%% %3.2fV", info->base_clock,
+		    hashfast->temp, info->fanspeed, max_volt);
 }
 
 static void hfa_init(struct cgpu_info __maybe_unused *hashfast)

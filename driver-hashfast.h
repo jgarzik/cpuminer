@@ -105,6 +105,7 @@ struct hashfast_info {
 	struct hf_long_usb_stats1 stats1;
 	struct hf_die_data *die_data;
 	int hash_clock_rate;                        // Hash clock rate to use, in Mhz
+	int base_clock;                             // Clock rate we actually got
 	struct hf_usb_init_base usb_init_base;      // USB Base information from USB_INIT
 	struct hf_config_data config_data;          // Configuration data used from USB_INIT
 	int core_bitmap_size;                       // in bytes
