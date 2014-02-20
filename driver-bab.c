@@ -268,6 +268,7 @@ typedef struct witem {
 	struct work *work;
 	struct bab_work_send chip_input;
 	bool ci_setup;
+	bool rolled;
 	int nonces;
 	struct timeval work_start;
 } WITEM;
@@ -465,6 +466,8 @@ struct bab_info {
 	uint8_t bad_fast[BAB_MAXCHIPS];
 	bool dead_msg[BAB_MAXCHIPS];
 #endif
+	uint64_t work_unrolled;
+	uint64_t work_rolled;
 
 	// bab-options (in order)
 	uint8_t max_speed;
@@ -549,6 +552,13 @@ struct bab_info {
  */
 #define BAB_BAD_DEAD (BAB_BAD_TO_MIN * 2)
 
+/*
+ * Maximum bab_queue_full() will roll work if it is allowed to
+ * Since work can somtimes (rarely) queue up with many chips,
+ * limit it to avoid it getting too much range in the pending work
+ */
+#define BAB_MAX_ROLLTIME 42
+
 static void bab_ms3steps(uint32_t *p)
 {
 	uint32_t a, b, c, d, e, f, g, h, new_e, new_a;
@@ -632,7 +642,10 @@ static void cleanup_older(struct cgpu_info *babcgpu, int chip, K_ITEM *witem)
 
 		k_unlink_item(babinfo->chip_work[chip], tail);
 		K_WUNLOCK(babinfo->chip_work[chip]);
-		work_completed(babcgpu, DATAW(tail)->work);
+		if (DATAW(tail)->rolled)
+			free_work(DATAW(tail)->work);
+		else
+			work_completed(babcgpu, DATAW(tail)->work);
 		K_WLOCK(babinfo->chip_work[chip]);
 		k_add_head(babinfo->wfree_list, tail);
 		tail = babinfo->chip_work[chip]->tail;
@@ -643,7 +656,10 @@ static void cleanup_older(struct cgpu_info *babcgpu, int chip, K_ITEM *witem)
 		while (tail && tail != witem) {
 			k_unlink_item(babinfo->chip_work[chip], tail);
 			K_WUNLOCK(babinfo->chip_work[chip]);
-			work_completed(babcgpu, DATAW(tail)->work);
+			if (DATAW(tail)->rolled)
+				free_work(DATAW(tail)->work);
+			else
+				work_completed(babcgpu, DATAW(tail)->work);
 			K_WLOCK(babinfo->chip_work[chip]);
 			k_add_head(babinfo->wfree_list, tail);
 			tail = babinfo->chip_work[chip]->tail;
@@ -2299,10 +2315,11 @@ static void bab_shutdown(struct thr_info *thr)
 static bool bab_queue_full(struct cgpu_info *babcgpu)
 {
 	struct bab_info *babinfo = (struct bab_info *)(babcgpu->device_data);
-	struct work *work;
+	int roll, roll_limit = BAB_MAX_ROLLTIME;
+	struct work *work, *usework;
 	K_ITEM *item;
-	int count;
-	bool ret;
+	int count, need;
+	bool ret, rolled;
 
 	K_RLOCK(babinfo->available_work);
 	count = babinfo->available_work->count;
@@ -2311,18 +2328,39 @@ static bool bab_queue_full(struct cgpu_info *babcgpu)
 	if (count >= (babinfo->chips - babinfo->total_disabled))
 		ret = true;
 	else {
+		need = (babinfo->chips - babinfo->total_disabled) - count;
 		work = get_queued(babcgpu);
 		if (work) {
-			K_WLOCK(babinfo->wfree_list);
-			item = k_unlink_head_zero(babinfo->wfree_list);
-			DATAW(item)->work = work;
-			k_add_head(babinfo->available_work, item);
-			K_WUNLOCK(babinfo->wfree_list);
-		} else
+			if (roll_limit > work->drv_rolllimit)
+				roll_limit = work->drv_rolllimit;
+			roll = 0;
+			do {
+				if (roll == 0) {
+					usework = work;
+					babinfo->work_unrolled++;
+					rolled = false;
+				} else {
+					usework = copy_work_noffset(work, roll);
+					babinfo->work_rolled++;
+					rolled = true;
+				}
+
+				K_WLOCK(babinfo->wfree_list);
+				item = k_unlink_head_zero(babinfo->wfree_list);
+				DATAW(item)->work = usework;
+				DATAW(item)->rolled = rolled;
+				k_add_head(babinfo->available_work, item);
+				K_WUNLOCK(babinfo->wfree_list);
+			} while (--need > 0 && ++roll <= roll_limit);
+		} else {
 			// Avoid a hard loop when we can't get work fast enough
 			cgsleep_us(42);
+		}
 
-		ret = false;
+		if (need > 0)
+			ret = false;
+		else
+			ret = true;
 	}
 
 	return ret;
@@ -2946,6 +2984,9 @@ static struct api_data *bab_api_stats(struct cgpu_info *babcgpu)
 
 	root = api_add_int(root, "Reply Wait", &(babinfo->reply_wait), true);
 	root = api_add_uint64(root, "Reply Waits", &(babinfo->reply_waits), true);
+
+	root = api_add_uint64(root, "Work Unrolled", &(babinfo->work_unrolled), true);
+	root = api_add_uint64(root, "Work Rolled", &(babinfo->work_rolled), true);
 
 	i = (int)(babinfo->max_speed);
 	root = api_add_int(root, bab_options[0], &i, true);
