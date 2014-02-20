@@ -37,7 +37,7 @@ char *set_hfa_fan(char *arg);
 #define HFA_TEMP_HYSTERESIS 3
 #define HFA_FAN_DEFAULT 33
 #define HFA_FAN_MAX 85
-#define HFA_FAN_MIN 10
+#define HFA_FAN_MIN 5
 
 // Matching fields for hf_statistics, but large #s for local accumulation, per-die
 struct hf_long_statistics {
