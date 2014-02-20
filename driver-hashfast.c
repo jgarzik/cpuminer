@@ -526,7 +526,7 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 	if (unlikely(!(info->die_data)))
 		quit(1, "Failed to calloc die_data");
 	for (i = 0; i < info->asic_count; i++)
-		info->die_data[i].hash_clock = info->hash_clock_rate;
+		info->die_data[i].hash_clock = info->base_clock;
 
 	// The per-die statistics array
 	info->die_statistics = calloc(info->asic_count, sizeof(struct hf_long_statistics));
