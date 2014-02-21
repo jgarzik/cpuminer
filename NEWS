@@ -1,3 +1,101 @@
+Version 4.0.0 - 21st February 2014
+
+- Check for error from setfloatval
+- Halfdelay cannot be larger than 255.
+- Allow any arbitrary frequency to be specified for ANU devices and try to find
+the nearest frequency when initialising it, reporting if the frequency is not
+exactly as requested.
+- Only show system libusb warning when appropriate during configure.
+- Merge branch 'avalon2' of https://github.com/xiangfu/cgminer into
+xiangfu-avalon2
+- Hfa cooling remains satisfactory down to a minimum fanspeed of 5%
+- Give a nodev error if we have already set nodev in hfa clear readbuf to avoid
+further usb comms attempts.
+- Fix missing include
+- Move bitmine options to alphabetic positioning.
+- bab - missed a few 'DEAD's in last commit
+- bab - use 'bad' instead of 'dead' as per the screen B:
+- bab - roll work if possible to reduce CPU
+- Update the per die hash clock data on a running reset on hfa devices.
+- Set the per die clock on hfa to the known starting base clock instead of our
+requested clock rate.
+- Hfa device failure can be detected within 15 seconds so we should try
+restarting it sooner to avoid tripping the device's own watchdog.
+- Check return result of hfa clear readbuf to minimise error messages on device
+failure.
+- Put MHz into cta statline description.
+- Send a work restart with every shutdown message to hfa devices to clear any
+work that might be stale on the next restart.
+- Store the hfa hash_clock rate and display it in the statline.
+- Store the maximum board temperature for hfa devices and take that into
+consideration when calculating the highest temperature as well as the dies.
+- A1: CoinCraft-Desk driver variant
+- Initial import of Bitmine.ch A1 SPI driver
+- klondike ensure stats type matches
+- avalon, bab, drillbit, klondike use more screen space rather than truncating
+info
+- Add hashfast fanspeed% to statline display.
+- Move driver statline padding to cgminer.c, expanding width of maximum
+displayable statistics and window width to add more info.
+- Prune old stratum shares that we've seen no response for over 2 minutes to
+avoid memory leaks for pools that don't respond about some shares.
+- Add warning if system libusb is being added.
+- Only run ./configure with autogen.sh if extra parameters are passed to it.
+- Updated cointerra features.
+- Add le16toh defines for platforms that may be missing it.
+- Remove modminer bitstreams from distribution and replace with a README saying
+what file needs to be added if modminer build is still desired.
+- Use the simplelog function from usb_list()
+- Add a simplelog function that does not log date and time.
+- Use a unique usb_list function displaying only pertinent information when
+listing usb devices from the menu.
+- Abstract out the _in_use function to take different linked lists.
+- Break out of linked list loop in remove_in_use in case we've gone over the
+whole list.
+- Check for hfa invalid hash clockrate after other error messages.
+- Detect non-responsive icarus devices and attempt a usb reset before killing
+them after 2 minutes of no hashes.
+- Detect non-responsive bitfury devices and try a usb reset on them before
+killing their instances off after 2 minutes of no activity.
+- Allow hotplug interval to be changed from the USB menu.
+- Prevent recursive loop in __is_in_use linked list walking.
+- Add the ability to whitelist previously blacklisted usb devices from the menu.
+- Use a bool in struct cgpu to know when a usb device has been blacklisted,
+avoiding blacklisting it more than once.
+- bab - ensure disabled chips are counted in the screen dead chip counter
+- bab - only disable the chip once ...
+- bab - short work list skip disabled chips
+- api.c avoid incorrect gcc warning
+- cgminer -h crash fix
+- Add blacklisting as an option to the USB menu.
+- Add a mechanism to blacklist a usb device from its cgpu.
+- Add an option to the USB menu to list all known devices.
+- Add an option to send a USB reset via the USB menu.
+- Add a usb_reset by cgpu function to usbutils.
+- Add warning for attempting to unplug a usb device that is already removed.
+- Add USB Unplug option to USB management device management menu.
+- Add enable and disable USB device functions to the menu.
+- Add a [U]SB menu item, initially with just statistics per device, adding
+device number to the device status window display.
+- Reuse the cgpu temp entry for avalon and bitfury devices, changing avalon to a
+damped value.
+- Store the cointerra maximum temperature in the cgpu struct as an exponentially
+changing value based on the maximum temperature.
+- Reuse the cgpu->temp entry for max temperature in hfa driver.
+- bab - disable chips that return only bad results
+- Add driver for cointerra devices.
+- Add Avalon2 (2U size machine) support
+- miner.php - define a default rigport (that can be changed) and don't require a
+port number in the rigs array
+- miner.php allow links for rig buttons in tables and allow using the 4th IP
+octet if no rig name - default disabled for both
+- format fix and bad variable usage fix for --benchfile
+- Allow running cgminer in benchmark mode with a work file --benchfile
+- ANU frequency is in MHz, not hex.
+- Remove bitfury devices from the usb list on shutdown in case they have stopped
+responding but have not had a fatal usb error.
+
+
 Version 3.12.3 - 8th February 2014
 
 - Put the hashfast temperature into the cgpu structure so that it shows up in
