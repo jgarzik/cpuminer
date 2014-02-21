@@ -1082,6 +1082,9 @@ static char *set_float_125_to_500(const char *arg, float *i)
 {
 	char *err = opt_set_floatval(arg, i);
 
+	if (err)
+		return err;
+
 	if (*i < 125 || *i > 500)
 		return "Value out of range";
 
