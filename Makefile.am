@@ -14,6 +14,7 @@ EXTRA_DIST	= example.conf linux-usb-cgminer \
 		  API.class API.java api-example.c windows-build.txt \
 		  bitstreams/README API-README FPGA-README \
 		  bitforce-firmware-flash.c hexdump.c ASIC-README \
+		  A1-desk-board-selector.c A1-desk-board-selector-tca9535.c \
 		  01-cgminer.rules
 
 SUBDIRS		= lib compat ccan
