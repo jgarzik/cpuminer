@@ -297,7 +297,7 @@ struct hf_usb_init_header {
 	uint8_t  pll_bypass:1;                  // Force PLL bypass, hash clock = ref clock
 	uint8_t  no_asic_initialization:1;      // Do not perform automatic ASIC initialization
 	uint8_t  do_atspeed_core_tests:1;       // Do core tests at speed, return second bitmap
-	uint8_t  leave_powered_down:1;          // Init USB only, leave device powered down
+	uint8_t  shed_supported:1;              // Host supports gwq status shed_count
 
 	uint16_t hash_clock;                    // Requested hash clock frequency
 
