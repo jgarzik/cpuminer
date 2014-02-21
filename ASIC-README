@@ -205,12 +205,13 @@ ANTMINER U1 DEVICES
 --anu-freq <arg>    Set AntminerU1 frequency in MHz, range 150-500 (default: 200)
 
 By default, Antminer U1 devices run at a clockspeed of 200. This command allows
-you to specify a chosen frequency to attempt to run all ANU devices at and the
-value must be in increments of 25. Note that cgminer reports hashrate ONLY
-FROM VALID HASHES so if you increase the frequency but your hashrate does not
-increase or it decreases and hardware errors start showing up, you have
-overclocked it too much. In the worst case scenario it will fail to start at
-too high a speed.
+you to specify a chosen frequency to attempt to run all ANU devices at. Cgminer
+will try to find the nearest frequency the device supports and will report if
+the frequency is not exactly as requested. Note that cgminer reports hashrate
+ONLY FROM VALID HASHES so if you increase the frequency but your hashrate does
+not increase or it decreases and hardware errors start showing up, you have
+overclocked it too much. In the worst case scenario it will fail to start at too
+high a speed. Most will run happily up to 250.
 
 
 AVALON AND BITBURNER DEVICES

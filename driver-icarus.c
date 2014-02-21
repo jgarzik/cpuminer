@@ -38,6 +38,7 @@
 #include <strings.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <math.h>
 
 #include "config.h"
 
@@ -842,25 +843,45 @@ unsigned char crc5(unsigned char *ptr, unsigned char len)
 	return crc;
 }
 
-static unsigned char anu_freq_table[] = {
-	0x05,	// 150
-	0x06,
-	0x07,	// 200 == default
-	0x08,
-	0x09,
-	0x0a,
-	0x0b,	// 300
-	0x4c,
-	0x4d,
-	0x4e,
-	0x4f,	// 400
-	0x50,
-	0x51,
-	0x52,
-	0x53	// 500
-};
+static bool anu_freqfound = false;
+static uint16_t anu_freq_hex;
 
-#define ANU_FREQTODATA(freq) (anu_freq_table[(freq - 150) / 25])
+static void anu_find_freqhex(void)
+{
+	float fout, best_fout = opt_anu_freq;
+	int od, nf, nr, no, n, m, bs;
+	float best_diff = 1000;
+
+	anu_freqfound = true;
+
+	for (od = 0; od < 4; od++) {
+		no = 1 << od;
+		for (n = 0; n < 16; n++) {
+			nr = n + 1;
+			for (m = 0; m < 64; m++) {
+				nf = m + 1;
+				fout = 25 * (float)nf /((float)(nr) * (float)(no));
+				if (fabsf(fout - opt_anu_freq)  > best_diff)
+					continue;
+				if (500 <= (fout * no) && (fout * no) <= 1000)
+					bs = 1;
+				else
+					bs = 0;
+				best_diff = fabsf(fout - opt_anu_freq);
+				best_fout = fout;
+				anu_freq_hex = (bs << 14) | (m << 7) | (n << 2) | od;
+				if (fout == opt_anu_freq) {
+					applog(LOG_DEBUG, "ANU found exact frequency %.1f with hex %04x",
+					       opt_anu_freq, anu_freq_hex);
+					return;
+				}
+			}
+		}
+	}
+	opt_anu_freq = best_fout;
+	applog(LOG_NOTICE, "ANU found nearest frequency %.1f with hex %04x", opt_anu_freq,
+	       anu_freq_hex);
+}
 
 static bool set_anu_freq(struct cgpu_info *icarus, struct ICARUS_INFO *info)
 {
@@ -868,11 +889,13 @@ static bool set_anu_freq(struct cgpu_info *icarus, struct ICARUS_INFO *info)
 	int amount, err;
 	char buf[512];
 
+	if (!anu_freqfound)
+		anu_find_freqhex();
 	memset(cmd_buf, 0, 4);
 	memset(rdreg_buf, 0, 4);
 	cmd_buf[0] = 2 | 0x80;
-	cmd_buf[1] = ANU_FREQTODATA(opt_anu_freq);	//16-23
-	cmd_buf[2] = 0x81;	//8-15
+	cmd_buf[1] = (anu_freq_hex & 0xff00u) >> 8;
+	cmd_buf[2] = (anu_freq_hex & 0x00ffu);
 	cmd_buf[3] = crc5(cmd_buf, 27);
 
 	rdreg_buf[0] = 4 | 0x80;

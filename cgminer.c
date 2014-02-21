@@ -192,7 +192,7 @@ static bool no_work;
 #ifdef USE_ICARUS
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
-int opt_anu_freq = 200;
+float opt_anu_freq = 200;
 #endif
 bool opt_worktime;
 #ifdef USE_AVALON
@@ -1078,17 +1078,13 @@ static char *set_icarus_timing(const char *arg)
 	return NULL;
 }
 
-static char *set_int_150_to_500(const char *arg, int *i)
+static char *set_float_125_to_500(const char *arg, float *i)
 {
-	char *err = set_int_range(arg, i, 150, 500);
-	int mult;
+	char *err = opt_set_floatval(arg, i);
 
-	if (err)
-		return err;
-	mult = *i / 25;
-	mult *= 25;
-	if (mult != *i)
-		return "Frequency must be a multiple of 25";
+	if (*i < 125 || *i > 500)
+		return "Value out of range";
+
 	return NULL;
 }
 #endif
@@ -1161,8 +1157,8 @@ static char *set_null(const char __maybe_unused *arg)
 static struct opt_table opt_config_table[] = {
 #ifdef USE_ICARUS
 	OPT_WITH_ARG("--anu-freq",
-		     set_int_150_to_500, &opt_show_intval, &opt_anu_freq,
-		     "Set AntminerU1 frequency in MHz, range 150-500"),
+		     set_float_125_to_500, &opt_show_intval, &opt_anu_freq,
+		     "Set AntminerU1 frequency in MHz, range 125-500"),
 #endif
 	OPT_WITH_ARG("--api-allow",
 		     set_api_allow, NULL, NULL,
