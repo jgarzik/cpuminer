@@ -1023,6 +1023,13 @@ static bool hfa_prepare(struct thr_info *thr)
 	return true;
 }
 
+/* If this ever returns 0 it means we have shed all the cores which will lead
+ * to no work being done which will trigger the watchdog. */
+static inline int hfa_basejobs(struct hashfast_info *info)
+{
+	return info->usb_init_base.inflight_target - info->shed_count;
+}
+
 /* Figure out how many jobs to send. */
 static int hfa_jobs(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
@@ -1040,12 +1047,15 @@ static int hfa_jobs(struct cgpu_info *hashfast, struct hashfast_info *info)
 	}
 
 	mutex_lock(&info->lock);
-	ret = info->usb_init_base.inflight_target - HF_SEQUENCE_DISTANCE(info->hash_sequence_head, info->device_sequence_tail);
+	ret = hfa_basejobs(info) - HF_SEQUENCE_DISTANCE(info->hash_sequence_head, info->device_sequence_tail);
 	/* Place an upper limit on how many jobs to queue to prevent sending
-	 * more  work than the device can use after a period of outage. */
-	if (ret > info->usb_init_base.inflight_target)
-		ret = info->usb_init_base.inflight_target;
+	 * more work than the device can use after a period of outage. */
+	if (ret > hfa_basejobs(info))
+		ret = hfa_basejobs(info);
 	mutex_unlock(&info->lock);
+
+	if (unlikely(ret < 0))
+		ret = 0;
 
 out:
 	return ret;
@@ -1338,7 +1348,7 @@ restart:
 		}
 		/* Give a full allotment of jobs after a restart, not waiting
 		 * for the status update telling us how much to give. */
-		jobs = info->usb_init_base.inflight_target;
+		jobs = hfa_basejobs(info);
 	} else {
 		/* Only adjust die clocks if there's no restart since two
 		 * restarts back to back get ignored. */
