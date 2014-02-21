@@ -8797,8 +8797,8 @@ int main(int argc, char *argv[])
 			}
 #ifdef HAVE_CURSES
 			if (use_curses) {
-				halfdelay(600);
-				applog(LOG_ERR, "Press any key to exit, or cgminer will try again in 60s.");
+				halfdelay(255);
+				applog(LOG_ERR, "Press any key to exit, or cgminer will try again in 30s.");
 				if (getch() != ERR)
 					quit(0, "No servers could be used! Exiting.");
 				cbreak();
