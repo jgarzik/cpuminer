@@ -419,7 +419,21 @@ WHILE RUNNING:
 
 The following options are available while running with a single keypress:
 
-[P]ool management [S]ettings [D]isplay options [Q]uit
+ [U]SB device management [P]ool management [S]ettings [D]isplay options [Q]uit
+
+
+U gives you:
+
+[S]ummary of device information
+[E]nable device
+[D]isable device
+[U]nplug to allow hotplug restart
+[R]eset device USB
+[L]ist all known devices
+[B]lacklist current device from current instance of cgminer
+[W]hitelist previously blacklisted device
+[H]otplug interval (0 to disable)
+
 
 P gives you:
 
