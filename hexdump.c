@@ -27,7 +27,7 @@ static char nibble[] = {
 
 #define BYTES_PER_LINE 0x10
 
-void hexdump(const uint8_t *p, unsigned int len)
+static void hexdump(const uint8_t *p, unsigned int len)
 {
 	unsigned int i, addr;
 	unsigned int wordlen = sizeof(void*);
