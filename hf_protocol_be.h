@@ -1,5 +1,5 @@
 //
-// Copyright 2013 HashFast LLC
+// Copyright 2013, 2014 HashFast Technologies LLC
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License as published by the Free
@@ -157,7 +157,7 @@ struct hf_usb_init_header {
 	uint8_t  operation_code;
 	uint8_t  spare1;
 
-	uint8_t  leave_powered_down:1;          // Init USB only, leave device powered down
+	uint8_t  shed_supported:1;              // Host supports gwq status shed_count
 	uint8_t  do_atspeed_core_tests:1;       // Do core tests at speed, return second bitmap
 	uint8_t  no_asic_initialization:1;      // Do not perform automatic ASIC initialization
 	uint8_t  pll_bypass:1;                  // Force PLL bypass, hash clock = ref clock
@@ -255,7 +255,7 @@ struct hf_usb_stats1 {
 
 	uint8_t  max_tx_buffers;                        // Maximum # of send buffers ever used
 	uint8_t  max_rx_buffers;                        // Maximum # of receive buffers ever used
-	} __attribute__((packed,aligned(4)));
+} __attribute__((packed,aligned(4)));
 
 // Information for an OP_USB_NOTICE frame
 struct hf_usb_notice_data {
