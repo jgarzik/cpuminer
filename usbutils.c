@@ -2747,7 +2747,9 @@ err_retry:
 	}
 	if (err == LIBUSB_ERROR_IO && ++err_retries < USB_RETRY_MAX)
 		goto err_retry;
-	if (!NODEV(err) && (endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)
+	if (NODEV(err))
+		*transferred = 0;
+	else if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)
 		memcpy(data, buf, *transferred);
 
 	return err;
