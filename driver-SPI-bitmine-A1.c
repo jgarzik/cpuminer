@@ -188,7 +188,7 @@ static void applog_hexdump(char *prefix, uint8_t *buff, int len, int level)
 		}
 		pos += sprintf(pos, "%.2X ", buff[i]);
 	}
-	applog(LOG_DEBUG, "%s", line);
+	applog(level, "%s", line);
 }
 
 static void hexdump(char *prefix, uint8_t *buff, int len)
@@ -1006,7 +1006,7 @@ static int64_t A1_scanwork(struct thr_info *thr)
 	}
 	/* in case of no progress, prevent busy looping */
 	if (!work_updated)
-		cgsleep_ms(160);
+		cgsleep_ms(40);
 
 	return (int64_t)nonce_ranges_processed << 32;
 }
