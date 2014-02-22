@@ -7203,6 +7203,7 @@ void *miner_thread(void *userdata)
 	cgsem_wait(&mythr->sem);
 
 	set_highprio();
+	cgpu->last_device_valid_work = time(NULL);
 	drv->hash_work(mythr);
 out:
 	drv->thread_shutdown(mythr);
