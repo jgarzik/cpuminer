@@ -667,11 +667,9 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 			timing_mode_str(info->timing_mode),
 			info->read_time, info->read_time_limit, info->Hs);
 
-	/* Set the time to detect a dead device to 10 nonce ranges or 1 minute,
-	 * whichever is larger. */
-	fail_time = info->Hs * 0xffffffffull * 10;
-	if (fail_time < 60)
-		fail_time = 60;
+	/* Set the time to detect a dead device to 25 full nonce ranges. */
+	fail_time = info->Hs * 0xffffffffull * 25.0;
+	/* Integer accuracy is definitely enough. */
 	info->fail_time = fail_time;
 }
 
