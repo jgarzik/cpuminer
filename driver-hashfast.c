@@ -495,29 +495,58 @@ static bool hfa_send_shutdown(struct cgpu_info *hashfast)
 	return ret;
 }
 
-static void hfa_inherit_device(struct cgpu_info *hashfast, struct cgpu_info *cgpu)
+/* Look for a matching zombie instance and inherit values from it if it exists */
+static bool hfa_inherit_device(struct cgpu_info *hashfast)
 {
-	struct hashfast_info *info = hashfast->device_data, *cinfo = cgpu->device_data;
-	int newdevice_id;
+	struct hashfast_info *info = hashfast->device_data, *cinfo = NULL;
+	struct cgpu_info *cgpu, *found = NULL;
+	int newdevice_id, i;
+
+	/* If the device doesn't have a serial number, don't try to match it
+	 * with a zombie instance. */
+	if (!info->serial_number)
+		return false;
+
+	/* See if we can find a zombie instance of the same device */
+	for (i = 0; i < mining_threads; i++) {
+		struct hashfast_info *cinfo;
+
+		cgpu = mining_thr[i]->cgpu;
+		if (!cgpu)
+			continue;
+		if (cgpu == hashfast)
+			continue;
+		if (cgpu->drv->drv_id != DRIVER_hashfast)
+			continue;
+		if (!cgpu->usbinfo.nodev)
+			continue;
+		cinfo = cgpu->device_data;
+		if (info->serial_number == cinfo->serial_number) {
+			found = cgpu;
+			break;
+		}
+	}
+	if (!found)
+		return false;
 
 	applog(LOG_INFO, "Found matching zombie device for %s %d at device %d",
-	       hashfast->drv->name, hashfast->device_id, cgpu->device_id);
+	       hashfast->drv->name, hashfast->device_id, found->device_id);
 	/* Make the new device instance inherit relevant data
-		* from the old instance. */
+	 * from the old instance. */
 	newdevice_id = hashfast->device_id;
-	hashfast->device_id = cgpu->device_id;
-	cgpu->device_id = newdevice_id;
+	hashfast->device_id = found->device_id;
+	found->device_id = newdevice_id;
 	info->resets = cinfo->resets;
 	if (info->hash_clock_rate != cinfo->hash_clock_rate) {
 		info->hash_clock_rate = cinfo->hash_clock_rate;
 		hfa_reset(hashfast, hashfast->device_data);
 	}
+	return true;
 }
 
 static bool hfa_detect_common(struct cgpu_info *hashfast)
 {
 	struct hashfast_info *info;
-	struct cgpu_info *cgpu;
 	bool ret;
 	int i;
 
@@ -560,28 +589,6 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 
 	info->cgpu = hashfast;
 
-	/* If the device doesn't have a serial number, don't try to match it
-	 * with a zombie instance. */
-	if (!info->serial_number)
-		return true;
-
-	/* See if we can find a zombie instance of the same device */
-	for (i = 0; i < mining_threads; i++) {
-		struct hashfast_info *cinfo;
-
-		cgpu = mining_thr[i]->cgpu;
-		if (!cgpu)
-			continue;
-		if (cgpu == hashfast)
-			continue;
-		if (cgpu->drv->drv_id != DRIVER_hashfast)
-			continue;
-		if (!cgpu->usbinfo.nodev)
-			continue;
-		cinfo = cgpu->device_data;
-		if (info->serial_number == cinfo->serial_number)
-			hfa_inherit_device(hashfast, cgpu);
-	}
 	return true;
 }
 
@@ -1051,6 +1058,9 @@ static bool hfa_prepare(struct thr_info *thr)
 	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
 	struct timeval now;
+
+	if (info->serial_number)
+		hfa_inherit_device(hashfast);
 
 	mutex_init(&info->lock);
 	mutex_init(&info->rlock);
