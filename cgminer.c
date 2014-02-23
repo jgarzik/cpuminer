@@ -6491,6 +6491,13 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	cgtime(&work->tv_staged);
 }
 
+/* The time difference in seconds between when this device last got work via
+ * get_work() and generated a valid share. */
+int share_work_tdiff(struct cgpu_info *cgpu)
+{
+	return cgpu->last_device_valid_work - cgpu->last_getwork;
+}
+
 struct work *get_work(struct thr_info *thr, const int thr_id)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
