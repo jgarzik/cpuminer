@@ -772,7 +772,7 @@ out:
 	return ret;
 }
 
-static bool hfa_running_shutdown(struct cgpu_info *hashfast, struct hashfast_info *info);
+static void hfa_running_shutdown(struct cgpu_info *hashfast, struct hashfast_info *info);
 
 static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_info *info,
 				 struct hf_header *h)
@@ -1389,28 +1389,30 @@ dies_only:
 	}
 }
 
-static bool hfa_running_shutdown(struct cgpu_info *hashfast, struct hashfast_info *info)
+static void hfa_running_shutdown(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
-	bool ret;
-	int i;
+	/* If the device has already disapperaed, don't drop the clock in case
+	 * it was just unplugged as opposed to a failure. */
+	if (hashfast->usbinfo.nodev)
+		return;
 
-	ret = hfa_send_shutdown(hashfast);
-	if (!ret)
-		goto out;
+	if (info->hash_clock_rate > HFA_CLOCK_DEFAULT) {
+		info->hash_clock_rate -= 10;
+		if (info->hash_clock_rate < HFA_CLOCK_DEFAULT)
+			info->hash_clock_rate = HFA_CLOCK_DEFAULT;
+		applog(LOG_WARNING, "%s %d: Decreasing clock speed to %d with reset",
+			hashfast->drv->name, hashfast->device_id, info->hash_clock_rate);
+	}
 
-	/* hfa_reset is the only other place we read from the device so we must
-	 * inhibit the read thread from reading our response to the
-	 * OP_USB_INIT */
+	if (!hfa_send_shutdown(hashfast))
+		return;
+
+	if (hashfast->usbinfo.nodev)
+		return;
+
 	mutex_lock(&info->rlock);
-	ret = hfa_clear_readbuf(hashfast);
-	if (ret)
-		ret = hfa_reset(hashfast, info);
-	for (i = 0; i < info->asic_count; i++)
-		info->die_data[i].hash_clock = info->base_clock;
+	hfa_clear_readbuf(hashfast);
 	mutex_unlock(&info->rlock);
-
-out:
-	return ret;
 }
 
 static int64_t hfa_scanwork(struct thr_info *thr)
@@ -1434,13 +1436,6 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 	if (unlikely(share_work_tdiff(hashfast) > fail_time)) {
 		applog(LOG_WARNING, "%s %d: No valid hashes for over %.0f seconds, shutting down thread",
 		       hashfast->drv->name, hashfast->device_id, fail_time);
-		if (info->hash_clock_rate > HFA_CLOCK_DEFAULT) {
-			info->hash_clock_rate -= 10;
-			if (info->hash_clock_rate < HFA_CLOCK_DEFAULT)
-				info->hash_clock_rate = HFA_CLOCK_DEFAULT;
-			applog(LOG_WARNING, "%s %d: Decreasing clock speed to %d with reset",
-			       hashfast->drv->name, hashfast->device_id, info->hash_clock_rate);
-		}
 		hfa_running_shutdown(hashfast, info);
 		return -1;
 	}
