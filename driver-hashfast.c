@@ -1337,7 +1337,7 @@ static bool hfa_running_reset(struct cgpu_info *hashfast, struct hashfast_info *
 	bool ret;
 	int i;
 
-	ret = hfa_send_shutdown(hashfast);
+	ret = hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), 0, (uint8_t *)NULL, 0);
 	if (!ret)
 		goto out;
 
