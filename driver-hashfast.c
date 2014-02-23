@@ -486,8 +486,6 @@ static bool hfa_send_shutdown(struct cgpu_info *hashfast)
 	 * discard any work it thinks is in flight for a cleaner restart. */
 	if (!hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), 0, (uint8_t *)NULL, 0))
 		return ret;
-	if (!hfa_clear_readbuf(hashfast))
-		return ret;
 	if (hfa_send_frame(hashfast, HF_USB_CMD(OP_USB_SHUTDOWN), 0, NULL, 0)) {
 		/* Wait to allow device to properly shut down. */
 		cgsleep_ms(1000);
