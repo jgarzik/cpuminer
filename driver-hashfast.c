@@ -566,9 +566,14 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 		return true;
 
 	/* See if we can find a zombie instance of the same device */
-	list_for_each_cgpu(i, cgpu) {
+	for (i = 0; i < mining_threads; i++) {
 		struct hashfast_info *cinfo;
 
+		cgpu = mining_thr[i]->cgpu;
+		if (!cgpu)
+			continue;
+		if (cgpu == hashfast)
+			continue;
 		if (cgpu->drv->drv_id != DRIVER_hashfast)
 			continue;
 		if (!cgpu->usbinfo.nodev)

@@ -288,10 +288,6 @@ struct strategies {
 
 struct cgpu_info;
 
-#define list_for_each_cgpu(thri, cgpu0) \
-	for (thri = 0, cgpu0 = mining_thr[thri]->cgpu; thri < mining_threads; \
-		thri++, cgpu0 = mining_thr[thri]->cgpu)
-
 extern void blank_get_statline_before(char *buf, size_t bufsiz, struct cgpu_info __maybe_unused *cgpu);
 
 struct api_data;
