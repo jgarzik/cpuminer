@@ -1427,6 +1427,8 @@ static void hfa_running_shutdown(struct cgpu_info *hashfast, struct hashfast_inf
 	mutex_lock(&info->rlock);
 	hfa_clear_readbuf(hashfast);
 	mutex_unlock(&info->rlock);
+
+	usb_nodev(hashfast);
 }
 
 static int64_t hfa_scanwork(struct thr_info *thr)
@@ -1642,8 +1644,11 @@ static void hfa_statline_before(char *buf, size_t bufsiz, struct cgpu_info *hash
 		    hashfast->temp, info->fanspeed, max_volt);
 }
 
-static void hfa_init(struct cgpu_info __maybe_unused *hashfast)
+/* We cannot re-initialise so just shut down the device for it to hotplug
+ * again. */
+static void hfa_reinit(struct cgpu_info *hashfast)
 {
+	hfa_running_shutdown(hashfast, hashfast->device_data);
 }
 
 static void hfa_free_all_work(struct hashfast_info *info)
@@ -1688,6 +1693,6 @@ struct device_drv hashfast_drv = {
 	.scanwork = hfa_scanwork,
 	.get_api_stats = hfa_api_stats,
 	.get_statline_before = hfa_statline_before,
-	.reinit_device = hfa_init,
+	.reinit_device = hfa_reinit,
 	.thread_shutdown = hfa_shutdown,
 };
