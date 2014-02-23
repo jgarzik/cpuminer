@@ -665,14 +665,14 @@ out:
 
 static bool hfa_initialise(struct cgpu_info *hashfast)
 {
-	int err;
+	int err = 7;
 
 	if (hashfast->usbinfo.nodev)
 		return false;
 
 	if (!hfa_clear_readbuf(hashfast))
 		return false;
-
+#ifdef WIN32
 	err = usb_transfer(hashfast, 0, 9, 1, 0, C_ATMEL_RESET);
 	if (!err)
 		err = usb_transfer(hashfast, 0x21, 0x22, 0, 0, C_ATMEL_OPEN);
@@ -690,6 +690,7 @@ static bool hfa_initialise(struct cgpu_info *hashfast)
 		applog(LOG_INFO, "%s %d: Failed to open with error %s",
 		       hashfast->drv->name, hashfast->device_id, libusb_error_name(err));
 	}
+#endif
 	/* Must have transmitted init sequence sized buffer */
 	return (err == 7);
 }
