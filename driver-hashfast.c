@@ -132,7 +132,8 @@ static const struct hfa_cmd hfa_cmds[] = {
 	{OP_PING, "OP_PING", C_HF_PING},
 	{OP_CORE_MAP, "OP_CORE_MAP", C_NULL},
 	{OP_VERSION, "OP_VERSION", C_NULL},			// 32
-	{OP_FAN, "OP_FAN", C_HF_FAN}
+	{OP_FAN, "OP_FAN", C_HF_FAN},
+	{OP_NAME, "OP_NAME", C_OP_NAME}
 };
 
 #define HF_USB_CMD_OFFSET (128 - 18)
@@ -308,6 +309,24 @@ static const char *hf_usb_init_errors[] = {
 	"Timeout after mixed reconfiguration"
 };
 
+static bool hfa_clear_readbuf(struct cgpu_info *hashfast);
+
+/* If no opname or an invalid opname is set, change it to the serial number if
+ * it exists, or a random name based on timestamp if not. */
+static void hfa_choose_opname(struct hashfast_info *info)
+{
+	struct timeval tv_now;
+	uint64_t usecs;
+
+	if (info->serial_number) {
+		sprintf(info->op_name, "%x", info->serial_number);
+		return;
+	}
+	cgtime(&tv_now);
+	usecs = (uint64_t)(tv_now.tv_sec) * (uint64_t)1000000 + (uint64_t)tv_now.tv_usec;
+	sprintf(info->op_name, "%"PRIu64, usecs);
+}
+
 static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
 	struct hf_usb_init_header usb_init[2], *hu = usb_init;
@@ -459,6 +478,39 @@ tryagain:
 	info->serial_number = db->serial_number;
 	info->base_clock = db->hash_clockrate;
 
+	hfa_clear_readbuf(hashfast);
+
+	/* Try sending and receiving an OP_NAME */
+	if (!hfa_send_frame(hashfast, HF_USB_CMD(OP_NAME), 0, (uint8_t *)NULL, 0)) {
+		applog(LOG_WARNING, "%s %d: Failed to send OP_NAME!", hashfast->drv->name,
+		       hashfast->device_id);
+		return false;
+	}
+	ret = hfa_get_header(hashfast, h, &hcrc);
+	if (!ret) {
+		applog(LOG_WARNING, "%s %d: Failed to receive OP_NAME response", hashfast->drv->name,
+		       hashfast->device_id);
+		return false;
+	}
+	/* Only try to parse the name if the firmware supports OP_NAME */
+	if (h->operation_code == OP_NAME) {
+		if (!hfa_get_data(hashfast, info->op_name, 32)) {
+			applog(LOG_WARNING, "%s %d: OP_NAME failed! Failure to get op_name data",
+			       hashfast->drv->name, hashfast->device_id);
+			return false;
+		}
+		for (i = 0; i < 32; i++) {
+			if (i > 0 && info->op_name[i] == '\0')
+				break;
+			/* Make sure the op_name is valid ascii only */
+			if (info->op_name[i] < 32 || info->op_name[i] > 126) {
+				hfa_choose_opname(info);
+				break;
+			}
+		}
+		applog(LOG_INFO, "%s %d: Opname set to %s", hashfast->drv->name,
+		       hashfast->device_id, info->op_name);
+	}
 	return true;
 }
 

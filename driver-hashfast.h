@@ -115,6 +115,7 @@ struct hashfast_info {
 	int group_ntime_roll;                       // Total ntime roll amount per group
 	int core_ntime_roll;                        // Total core ntime roll amount
 	uint32_t serial_number;                     // db->serial_number if it exists
+	char op_name[36];
 
 	pthread_mutex_t lock;
 	pthread_mutex_t rlock;
