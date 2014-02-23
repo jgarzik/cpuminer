@@ -509,8 +509,6 @@ static bool hfa_inherit_device(struct cgpu_info *hashfast)
 
 	/* See if we can find a zombie instance of the same device */
 	for (i = 0; i < mining_threads; i++) {
-		struct hashfast_info *cinfo;
-
 		cgpu = mining_thr[i]->cgpu;
 		if (!cgpu)
 			continue;
