@@ -521,6 +521,8 @@ static bool hfa_inherit_device(struct cgpu_info *hashfast)
 		if (!cgpu->usbinfo.nodev)
 			continue;
 		cinfo = cgpu->device_data;
+		if (!cinfo)
+			continue;
 		if (info->serial_number == cinfo->serial_number) {
 			found = cgpu;
 			break;
