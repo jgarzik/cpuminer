@@ -470,7 +470,7 @@ static bool hfa_clear_readbuf(struct cgpu_info *hashfast)
 			break;
 		}
 		ret = usb_read(hashfast, buf, 512, &amount, C_HF_CLEAR_READ);
-	} while (!ret);
+	} while (!ret && amount);
 
 	if (ret && ret != LIBUSB_ERROR_TIMEOUT)
 		return false;
