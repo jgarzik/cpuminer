@@ -311,20 +311,40 @@ static const char *hf_usb_init_errors[] = {
 
 static bool hfa_clear_readbuf(struct cgpu_info *hashfast);
 
+struct op_nameframe {
+	struct hf_header h;
+	char name[32];
+} __attribute__((packed));
+
 /* If no opname or an invalid opname is set, change it to the serial number if
  * it exists, or a random name based on timestamp if not. */
-static void hfa_choose_opname(struct hashfast_info *info)
+static void hfa_choose_opname(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
-	struct timeval tv_now;
+	const uint8_t opcode = HF_USB_CMD(OP_NAME);
+	struct op_nameframe nameframe;
+	struct hf_header *h = (struct hf_header *)&nameframe;
+	const int tx_length = sizeof(struct op_nameframe);
 	uint64_t usecs;
 
-	if (info->serial_number) {
+	if (info->serial_number)
 		sprintf(info->op_name, "%x", info->serial_number);
-		return;
+	else {
+		struct timeval tv_now;
+
+		cgtime(&tv_now);
+		usecs = (uint64_t)(tv_now.tv_sec) * (uint64_t)1000000 + (uint64_t)tv_now.tv_usec;
+		sprintf(info->op_name, "%"PRIu64, usecs);
 	}
-	cgtime(&tv_now);
-	usecs = (uint64_t)(tv_now.tv_sec) * (uint64_t)1000000 + (uint64_t)tv_now.tv_usec;
-	sprintf(info->op_name, "%"PRIu64, usecs);
+	memset(&nameframe, 0, sizeof(nameframe));
+	strncpy(nameframe.name, info->op_name, 32);
+	h->preamble = HF_PREAMBLE;
+	h->operation_code = hfa_cmds[opcode].cmd;
+	h->core_address = 1;
+	h->data_length = 32 / 4;
+	h->crc8 = hfa_crc8((unsigned char *)h);
+	applog(LOG_DEBUG, "%s %d: Opname being set to %s", hashfast->drv->name,
+	       hashfast->device_id, info->op_name);
+	__hfa_send_frame(hashfast, opcode, tx_length, (uint8_t *)&nameframe);
 }
 
 static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
@@ -507,7 +527,7 @@ tryagain:
 				break;
 			/* Make sure the op_name is valid ascii only */
 			if (info->op_name[i] < 32 || info->op_name[i] > 126) {
-				hfa_choose_opname(info);
+				hfa_choose_opname(hashfast, info);
 				break;
 			}
 		}
