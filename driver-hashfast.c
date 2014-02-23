@@ -652,8 +652,13 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 		if (info->hash_clock_rate != cinfo->hash_clock_rate) {
 			info->hash_clock_rate = cinfo->hash_clock_rate;
 			ret = hfa_reset(hashfast, hashfast->device_data);
-			if (!ret)
+			if (!ret) {
+				hfa_send_shutdown(hashfast);
+				hfa_clear_readbuf(hashfast);
+				free(info);
+				hashfast->device_data = NULL;
 				return false;
+			}
 		}
 	}
 
