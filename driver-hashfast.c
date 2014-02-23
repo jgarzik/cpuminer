@@ -1400,18 +1400,17 @@ static void hfa_running_shutdown(struct cgpu_info *hashfast, struct hashfast_inf
 		return;
 
 	if (info->hash_clock_rate > HFA_CLOCK_DEFAULT) {
-		struct hashfast_info *cinfo;
+		info->hash_clock_rate -= 10;
+		if (info->hash_clock_rate < HFA_CLOCK_DEFAULT)
+			info->hash_clock_rate = HFA_CLOCK_DEFAULT;
+		if (info->old_cgpu && info->old_cgpu->device_data) {
+			struct hashfast_info *cinfo = info->old_cgpu->device_data;
 
-		/* Set the master device's clock speed if this is a copy */
-		if (info->old_cgpu && info->old_cgpu->device_data)
-			cinfo = info->old_cgpu->device_data;
-		else
-			cinfo = info;
-		cinfo->hash_clock_rate -= 10;
-		if (cinfo->hash_clock_rate < HFA_CLOCK_DEFAULT)
-			cinfo->hash_clock_rate = HFA_CLOCK_DEFAULT;
+			/* Set the master device's clock speed if this is a copy */
+			cinfo->hash_clock_rate = info->hash_clock_rate;
+		}
 		applog(LOG_WARNING, "%s %d: Decreasing clock speed to %d with reset",
-			hashfast->drv->name, hashfast->device_id, cinfo->hash_clock_rate);
+			hashfast->drv->name, hashfast->device_id, info->hash_clock_rate);
 	}
 
 	if (!hfa_send_shutdown(hashfast))
