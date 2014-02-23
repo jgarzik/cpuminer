@@ -1322,7 +1322,7 @@ static void hfa_temp_clock(struct cgpu_info *hashfast, struct hashfast_info *inf
 		if (temp_change > 0) {
 			/* Temp rising, tweak fanspeed up */
 			if (info->fanspeed < opt_hfa_fan_max)
-				hfa_set_fanspeed(hashfast, info, 1);
+				hfa_set_fanspeed(hashfast, info, 2);
 		} else if (temp_change < 0) {
 			/* Temp falling, tweak fanspeed down */
 			if (info->fanspeed > opt_hfa_fan_min)
