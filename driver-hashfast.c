@@ -730,6 +730,7 @@ static struct cgpu_info *hfa_detect_one(libusb_device *dev, struct usb_find_devi
 	if (opt_hfa_dfu_boot) {
 		hfa_dfu_boot(hashfast);
 		hashfast = usb_free_cgpu(hashfast);
+		opt_hfa_dfu_boot = false;
 		return NULL;
 	}
 	if (!hfa_detect_common(hashfast)) {
