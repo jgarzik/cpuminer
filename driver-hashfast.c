@@ -1303,6 +1303,7 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
 	int jobs, ret, cycles = 0;
+	double fail_time;
 	int64_t hashes;
 
 	if (unlikely(hashfast->usbinfo.nodev)) {
@@ -1311,9 +1312,13 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 		return -1;
 	}
 
-	if (unlikely(last_getwork - hashfast->last_device_valid_work > 15)) {
-		applog(LOG_WARNING, "%s %d: No valid hashes for over 15 seconds, attempting to reset",
-		       hashfast->drv->name, hashfast->device_id);
+	/* Base the fail time on no valid nonces for 25 full nonce ranges at
+	 * the current expected hashrate. */
+	fail_time = 25.0 * (double)hashfast->drv->max_diff * 0xffffffffull /
+		(double)(info->base_clock * 1000000) / hfa_basejobs(info);
+	if (unlikely(last_getwork - hashfast->last_device_valid_work > fail_time)) {
+		applog(LOG_WARNING, "%s %d: No valid hashes for over %.0f seconds, attempting to reset",
+		       hashfast->drv->name, hashfast->device_id, fail_time);
 		if (info->hash_clock_rate > HFA_CLOCK_DEFAULT) {
 			info->hash_clock_rate -= 10;
 			if (info->hash_clock_rate < opt_hfa_hash_clock)
