@@ -943,9 +943,9 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 	struct bitfury_info *info = bitfury->device_data;
 	int64_t ret = -1;
 
-	if (unlikely(last_getwork - bitfury->last_device_valid_work > 60)) {
+	if (unlikely(share_work_tdiff(bitfury) > 60)) {
 		if (info->failing) {
-			if (last_getwork - bitfury->last_device_valid_work > 120) {
+			if (share_work_tdiff(bitfury) > 120) {
 				applog(LOG_ERR, "%s %d: Device failed to respond to restart",
 				       bitfury->drv->name, bitfury->device_id);
 				return ret;

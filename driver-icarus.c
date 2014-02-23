@@ -1283,9 +1283,9 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	uint32_t values;
 	int64_t hash_count_range;
 
-	if (unlikely(last_getwork - icarus->last_device_valid_work > info->fail_time)) {
+	if (unlikely(share_work_tdiff(icarus) > info->fail_time)) {
 		if (info->failing) {
-			if (last_getwork - icarus->last_device_valid_work > info->fail_time + 60) {
+			if (share_work_tdiff(icarus) > info->fail_time + 60) {
 				applog(LOG_ERR, "%s %d: Device failed to respond to restart",
 				       icarus->drv->name, icarus->device_id);
 				return -1;
