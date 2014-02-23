@@ -614,6 +614,26 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 		goto out;
 	}
 
+	info->cgpu = hashfast;
+	/* Look for a matching zombie instance and inherit values from it if it
+	 * exists. */
+	info->old_cgpu = hfa_old_device(hashfast, info);
+	if (info->old_cgpu) {
+		struct hashfast_info *cinfo = info->old_cgpu->device_data;
+
+		applog(LOG_INFO, "Found matching zombie device for %s %d at device %d",
+		       hashfast->drv->name, hashfast->device_id, info->old_cgpu->device_id);
+		info->resets = cinfo->resets;
+		/* Reset the device with the last hash_clock_rate if it's
+		 * different. */
+		if (info->hash_clock_rate != cinfo->hash_clock_rate) {
+			info->hash_clock_rate = cinfo->hash_clock_rate;
+			ret = hfa_reset(hashfast, hashfast->device_data);
+			if (!ret)
+				goto out;
+		}
+	}
+
 	// The per-die status array
 	info->die_status = calloc(info->asic_count, sizeof(struct hf_g1_die_data));
 	if (unlikely(!(info->die_status)))
@@ -634,25 +654,6 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 	if (!info->works)
 		quit(1, "Failed to calloc info works in hfa_detect_common");
 
-	info->cgpu = hashfast;
-	/* Look for a matching zombie instance and inherit values from it if it
-	 * exists. */
-	info->old_cgpu = hfa_old_device(hashfast, info);
-	if (info->old_cgpu) {
-		struct hashfast_info *cinfo = info->old_cgpu->device_data;
-
-		applog(LOG_INFO, "Found matching zombie device for %s %d at device %d",
-		       hashfast->drv->name, hashfast->device_id, info->old_cgpu->device_id);
-		info->resets = cinfo->resets;
-		/* Reset the device with the last hash_clock_rate if it's
-		 * different. */
-		if (info->hash_clock_rate != cinfo->hash_clock_rate) {
-			info->hash_clock_rate = cinfo->hash_clock_rate;
-			ret = hfa_reset(hashfast, hashfast->device_data);
-			if (!ret)
-				goto out;
-		}
-	}
 out:
 	if (!ret) {
 		hfa_send_shutdown(hashfast);
