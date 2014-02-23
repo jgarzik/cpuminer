@@ -500,7 +500,7 @@ static bool hfa_inherit_device(struct cgpu_info *hashfast)
 {
 	struct hashfast_info *info = hashfast->device_data, *cinfo = NULL;
 	struct cgpu_info *cgpu, *found = NULL;
-	int newdevice_id, i;
+	int i;
 
 	/* If the device doesn't have a serial number, don't try to match it
 	 * with a zombie instance. */
@@ -533,9 +533,7 @@ static bool hfa_inherit_device(struct cgpu_info *hashfast)
 	       hashfast->drv->name, hashfast->device_id, found->device_id);
 	/* Make the new device instance inherit relevant data
 	 * from the old instance. */
-	newdevice_id = hashfast->device_id;
 	hashfast->device_id = found->device_id;
-	found->device_id = newdevice_id;
 	info->resets = cinfo->resets;
 	if (info->hash_clock_rate != cinfo->hash_clock_rate) {
 		info->hash_clock_rate = cinfo->hash_clock_rate;
