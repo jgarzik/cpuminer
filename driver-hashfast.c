@@ -302,7 +302,10 @@ static const char *hf_usb_init_errors[] = {
 	"Main board FPGA register read/write test failed",
 	"ASIC core power fault",
 	"Dynamic baud rate change timeout",
-	"Address failure"
+	"Address failure",
+	"Regulator programming error",
+	"Address range inconsistent after mixed reconfiguration",
+	"Timeout after mixed reconfiguration"
 };
 
 static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)

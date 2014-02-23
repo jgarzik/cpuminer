@@ -81,6 +81,7 @@
 #define OP_CORE_MAP                     141         // Return core map
 #define OP_VERSION                      142         // Version information
 #define OP_FAN                          143         // Set Fan Speed
+#define OP_NAME                         144         // System name write/read
 #define OP_USB_DEBUG                    255
 
 // HashFast vendor and product ID's
@@ -113,6 +114,9 @@
 #define E_CORE_POWER_FAULT              17
 #define E_BAUD_TIMEOUT                  18
 #define E_ADDRESS_FAILURE               19
+#define E_IR_PROG_FAILURE               20
+#define E_MIXED_MISMATCH                21
+#define E_MIXED_TIMEOUT                 22
 
 #define U32SIZE(x)                      (sizeof(x)/sizeof(uint32_t))
 
