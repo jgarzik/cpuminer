@@ -96,6 +96,7 @@ struct hf_die_data {
 
 struct hashfast_info {
 	struct cgpu_info *cgpu;                     // Points back to parent structure
+	struct cgpu_info *old_cgpu  ;               // Points to old structure if hotplugged same device
 	int asic_count;                             // # of chips in the chain
 	int core_count;                             // # of cores per chip
 	int device_type;                            // What sort of device this is

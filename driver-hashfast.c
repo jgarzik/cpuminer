@@ -495,11 +495,10 @@ static bool hfa_send_shutdown(struct cgpu_info *hashfast)
 	return ret;
 }
 
-/* Look for a matching zombie instance and inherit values from it if it exists */
-static bool hfa_inherit_device(struct cgpu_info *hashfast)
+static struct cgpu_info *hfa_old_device(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
-	struct hashfast_info *info = hashfast->device_data, *cinfo = NULL;
 	struct cgpu_info *cgpu, *found = NULL;
+	struct hashfast_info *cinfo = NULL;
 	int i;
 
 	/* If the device doesn't have a serial number, don't try to match it
@@ -526,20 +525,7 @@ static bool hfa_inherit_device(struct cgpu_info *hashfast)
 			break;
 		}
 	}
-	if (!found)
-		return false;
-
-	applog(LOG_INFO, "Found matching zombie device for %s %d at device %d",
-	       hashfast->drv->name, hashfast->device_id, found->device_id);
-	/* Make the new device instance inherit relevant data
-	 * from the old instance. */
-	hashfast->device_id = found->device_id;
-	info->resets = cinfo->resets;
-	if (info->hash_clock_rate != cinfo->hash_clock_rate) {
-		info->hash_clock_rate = cinfo->hash_clock_rate;
-		hfa_reset(hashfast, hashfast->device_data);
-	}
-	return true;
+	return found;
 }
 
 static bool hfa_detect_common(struct cgpu_info *hashfast)
@@ -586,6 +572,24 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 		quit(1, "Failed to calloc info works in hfa_detect_common");
 
 	info->cgpu = hashfast;
+	/* Look for a matching zombie instance and inherit values from it if it
+	 * exists. */
+	info->old_cgpu = hfa_old_device(hashfast, info);
+	if (info->old_cgpu) {
+		struct hashfast_info *cinfo = info->old_cgpu->device_data;
+
+		applog(LOG_INFO, "Found matching zombie device for %s %d at device %d",
+		       hashfast->drv->name, hashfast->device_id, info->old_cgpu->device_id);
+		info->resets = cinfo->resets;
+		/* Reset the device with the last hash_clock_rate if it's
+		 * different. */
+		if (info->hash_clock_rate != cinfo->hash_clock_rate) {
+			info->hash_clock_rate = cinfo->hash_clock_rate;
+			ret = hfa_reset(hashfast, hashfast->device_data);
+			if (!ret)
+				return false;
+		}
+	}
 
 	return true;
 }
@@ -1057,8 +1061,9 @@ static bool hfa_prepare(struct thr_info *thr)
 	struct hashfast_info *info = hashfast->device_data;
 	struct timeval now;
 
-	if (info->serial_number)
-		hfa_inherit_device(hashfast);
+	/* Inherit the old device id */
+	if (info->old_cgpu)
+		hashfast->device_id = info->old_cgpu->device_id;
 
 	mutex_init(&info->lock);
 	mutex_init(&info->rlock);
