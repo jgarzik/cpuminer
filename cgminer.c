@@ -6495,14 +6495,13 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
  * get_work() and generated a valid share. */
 int share_work_tdiff(struct cgpu_info *cgpu)
 {
-	return cgpu->last_getwork - cgpu->last_device_valid_work;
+	return last_getwork - cgpu->last_device_valid_work;
 }
 
 struct work *get_work(struct thr_info *thr, const int thr_id)
 {
-	struct cgpu_info *cgpu = thr->cgpu;
 	struct work *work = NULL;
-	time_t now_t, diff_t;
+	time_t diff_t;
 
 	thread_reportout(thr);
 	applog(LOG_DEBUG, "Popping work from get queue to get work");
@@ -6515,22 +6514,20 @@ struct work *get_work(struct thr_info *thr, const int thr_id)
 			wake_gws();
 		}
 	}
-	now_t = time(NULL);
-	diff_t = now_t - diff_t;
+	diff_t = time(NULL) - diff_t;
 	/* Since this is a blocking function, we need to add grace time to
 	 * the device's last valid work to not make outages appear to be
 	 * device failures. */
 	if (diff_t > 0) {
 		applog(LOG_DEBUG, "Get work blocked for %d seconds", (int)diff_t);
-		cgpu->last_device_valid_work += diff_t;
+		thr->cgpu->last_device_valid_work += diff_t;
 	}
-	cgpu->last_getwork = now_t;
 	applog(LOG_DEBUG, "Got work from get queue to get work for thread %d", thr_id);
 
 	work->thr_id = thr_id;
 	thread_reportin(thr);
 	work->mined = true;
-	work->device_diff = MIN(cgpu->drv->max_diff, work->work_difficulty);
+	work->device_diff = MIN(thr->cgpu->drv->max_diff, work->work_difficulty);
 	return work;
 }
 
