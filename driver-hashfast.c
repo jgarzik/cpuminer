@@ -597,7 +597,7 @@ static struct cgpu_info *hfa_old_device(struct cgpu_info *hashfast, struct hashf
 static bool hfa_detect_common(struct cgpu_info *hashfast)
 {
 	struct hashfast_info *info;
-	bool ret;
+	bool ret = false;
 	int i;
 
 	info = calloc(sizeof(struct hashfast_info), 1);
@@ -606,16 +606,13 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 	hashfast->device_data = info;
 	/* hashfast_reset should fill in details for info */
 	ret = hfa_reset(hashfast, info);
-	if (!ret) {
-		hfa_send_shutdown(hashfast);
-		hfa_clear_readbuf(hashfast);
-		free(info);
-		hashfast->device_data = NULL;
-		return false;
-	}
+	if (!ret)
+		goto out;
 
-	if (hashfast->usbinfo.nodev)
-		return false;
+	if (hashfast->usbinfo.nodev) {
+		ret = false;
+		goto out;
+	}
 
 	// The per-die status array
 	info->die_status = calloc(info->asic_count, sizeof(struct hf_g1_die_data));
@@ -652,17 +649,18 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 		if (info->hash_clock_rate != cinfo->hash_clock_rate) {
 			info->hash_clock_rate = cinfo->hash_clock_rate;
 			ret = hfa_reset(hashfast, hashfast->device_data);
-			if (!ret) {
-				hfa_send_shutdown(hashfast);
-				hfa_clear_readbuf(hashfast);
-				free(info);
-				hashfast->device_data = NULL;
-				return false;
-			}
+			if (!ret)
+				goto out;
 		}
 	}
-
-	return true;
+out:
+	if (!ret) {
+		hfa_send_shutdown(hashfast);
+		hfa_clear_readbuf(hashfast);
+		free(info);
+		hashfast->device_data = NULL;
+	}
+	return ret;
 }
 
 static bool hfa_initialise(struct cgpu_info *hashfast)
