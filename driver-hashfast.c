@@ -368,6 +368,9 @@ resend:
 	if (unlikely(hashfast->usbinfo.nodev))
 		return false;
 
+	if (!hfa_clear_readbuf(hashfast))
+		return false;
+
 	if (!hfa_send_packet(hashfast, (struct hf_header *)hu, HF_USB_CMD(OP_USB_INIT)))
 		return false;
 
