@@ -421,7 +421,6 @@ tryagain:
 	       db->inflight_target);
 	applog(LOG_INFO, "%s %d:      sequence_modulus: %d", hashfast->drv->name, hashfast->device_id,
 	       db->sequence_modulus);
-	info->num_sequence = db->sequence_modulus;
 
 	// Now a copy of the config data used
 	if (!hfa_get_data(hashfast, (char *)&info->config_data, U32SIZE(info->config_data))) {
@@ -453,6 +452,8 @@ tryagain:
 		       hashfast->drv->name, hashfast->device_id);
 		return false;
 	}
+	info->num_sequence = db->sequence_modulus;
+	info->serial_number = db->serial_number;
 	info->base_clock = db->hash_clockrate;
 
 	return true;
@@ -494,9 +495,29 @@ static bool hfa_send_shutdown(struct cgpu_info *hashfast)
 	return ret;
 }
 
+static void hfa_inherit_device(struct cgpu_info *hashfast, struct cgpu_info *cgpu)
+{
+	struct hashfast_info *info = hashfast->device_data, *cinfo = cgpu->device_data;
+	int newdevice_id;
+
+	applog(LOG_INFO, "Found matching zombie device for %s %d at device %d",
+	       hashfast->drv->name, hashfast->device_id, cgpu->device_id);
+	/* Make the new device instance inherit relevant data
+		* from the old instance. */
+	newdevice_id = hashfast->device_id;
+	hashfast->device_id = cgpu->device_id;
+	cgpu->device_id = newdevice_id;
+	info->resets = cinfo->resets;
+	if (info->hash_clock_rate != cinfo->hash_clock_rate) {
+		info->hash_clock_rate = cinfo->hash_clock_rate;
+		hfa_reset(hashfast, hashfast->device_data);
+	}
+}
+
 static bool hfa_detect_common(struct cgpu_info *hashfast)
 {
 	struct hashfast_info *info;
+	struct cgpu_info *cgpu;
 	bool ret;
 	int i;
 
@@ -537,6 +558,25 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 	if (!info->works)
 		quit(1, "Failed to calloc info works in hfa_detect_common");
 
+	info->cgpu = hashfast;
+
+	/* If the device doesn't have a serial number, don't try to match it
+	 * with a zombie instance. */
+	if (!info->serial_number)
+		return true;
+
+	/* See if we can find a zombie instance of the same device */
+	list_for_each_cgpu(i, cgpu) {
+		struct hashfast_info *cinfo;
+
+		if (cgpu->drv->drv_id != DRIVER_hashfast)
+			continue;
+		if (!cgpu->usbinfo.nodev)
+			continue;
+		cinfo = cgpu->device_data;
+		if (info->serial_number == cinfo->serial_number)
+			hfa_inherit_device(hashfast, cgpu);
+	}
 	return true;
 }
 
@@ -1323,8 +1363,6 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 			info->hash_clock_rate -= 10;
 			if (info->hash_clock_rate < HFA_CLOCK_DEFAULT)
 				info->hash_clock_rate = HFA_CLOCK_DEFAULT;
-			if (info->hash_clock_rate < opt_hfa_hash_clock)
-				opt_hfa_hash_clock = info->hash_clock_rate;
 			applog(LOG_WARNING, "%s %d: Decreasing clock speed to %d with reset",
 			       hashfast->drv->name, hashfast->device_id, info->hash_clock_rate);
 		}

@@ -95,6 +95,7 @@ struct hf_die_data {
 };
 
 struct hashfast_info {
+	struct cgpu_info *cgpu;                     // Points back to parent structure
 	int asic_count;                             // # of chips in the chain
 	int core_count;                             // # of cores per chip
 	int device_type;                            // What sort of device this is
@@ -112,6 +113,7 @@ struct hashfast_info {
 	uint32_t *core_bitmap;                      // Core OK bitmap test results, run with PLL Bypassed
 	int group_ntime_roll;                       // Total ntime roll amount per group
 	int core_ntime_roll;                        // Total core ntime roll amount
+	uint32_t serial_number;                     // db->serial_number if it exists
 
 	pthread_mutex_t lock;
 	pthread_mutex_t rlock;
