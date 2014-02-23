@@ -575,7 +575,15 @@ static struct cgpu_info *hfa_old_device(struct cgpu_info *hashfast, struct hashf
 		cinfo = cgpu->device_data;
 		if (!cinfo)
 			continue;
+		if (info->op_name[0] != '\0' && !strncmp(info->op_name, cinfo->op_name, 32)) {
+			applog(LOG_DEBUG, "%s %d: Found old device based on OP_NAME %s",
+			       hashfast->drv->name, hashfast->device_id, info->op_name);
+			found = cgpu;
+			break;
+		}
 		if (info->serial_number == cinfo->serial_number) {
+			applog(LOG_DEBUG, "%s %d: Found old device based on serial number %x",
+			       hashfast->drv->name, hashfast->device_id, info->serial_number);
 			found = cgpu;
 			break;
 		}
