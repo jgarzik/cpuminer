@@ -709,7 +709,7 @@ out:
 	return ret;
 }
 
-static bool hfa_running_reset(struct cgpu_info *hashfast, struct hashfast_info *info);
+static bool hfa_running_shutdown(struct cgpu_info *hashfast, struct hashfast_info *info);
 
 static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_info *info,
 				 struct hf_header *h)
@@ -723,15 +723,9 @@ static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_inf
 
 	/* This is a special flag that the thermal overload has been tripped */
 	if (unlikely(h->core_address & 0x80)) {
-		applog(LOG_ERR, "%s %d Thermal overload tripped! Resetting device",
+		applog(LOG_ERR, "%s %d Thermal overload tripped! Shutting down device",
 		       hashfast->drv->name, hashfast->device_id);
-		if (hfa_running_reset(hashfast, info)) {
-			applog(LOG_NOTICE, "%s %d: Succesfully reset, continuing operation",
-			       hashfast->drv->name, hashfast->device_id);
-			return;
-		}
-		applog(LOG_WARNING, "%s %d Failed to reset device, killing off thread to allow re-hotplug",
-		       hashfast->drv->name, hashfast->device_id);
+		hfa_running_shutdown(hashfast, info);
 		usb_nodev(hashfast);
 		return;
 	}
@@ -1332,12 +1326,12 @@ dies_only:
 	}
 }
 
-static bool hfa_running_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
+static bool hfa_running_shutdown(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
 	bool ret;
 	int i;
 
-	ret = hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), 0, (uint8_t *)NULL, 0);
+	ret = hfa_send_shutdown(hashfast);
 	if (!ret)
 		goto out;
 
@@ -1375,7 +1369,7 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 	fail_time = 25.0 * (double)hashfast->drv->max_diff * 0xffffffffull /
 		(double)(info->base_clock * 1000000) / hfa_basejobs(info);
 	if (unlikely(share_work_tdiff(hashfast) > fail_time)) {
-		applog(LOG_WARNING, "%s %d: No valid hashes for over %.0f seconds, attempting to reset",
+		applog(LOG_WARNING, "%s %d: No valid hashes for over %.0f seconds, shutting down thread",
 		       hashfast->drv->name, hashfast->device_id, fail_time);
 		if (info->hash_clock_rate > HFA_CLOCK_DEFAULT) {
 			info->hash_clock_rate -= 10;
@@ -1384,14 +1378,8 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 			applog(LOG_WARNING, "%s %d: Decreasing clock speed to %d with reset",
 			       hashfast->drv->name, hashfast->device_id, info->hash_clock_rate);
 		}
-		ret = hfa_running_reset(hashfast, info);
-		if (!ret) {
-			applog(LOG_ERR, "%s %d: Failed to reset after hash failure, disabling",
-			       hashfast->drv->name, hashfast->device_id);
-			return -1;
-		}
-		applog(LOG_NOTICE, "%s %d: Reset successful", hashfast->drv->name,
-		       hashfast->device_id);
+		hfa_running_shutdown(hashfast, info);
+		return -1;
 	}
 
 	if (unlikely(thr->work_restart)) {
@@ -1400,12 +1388,8 @@ restart:
 		thr->work_restart = false;
 		ret = hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), 0, (uint8_t *)NULL, 0);
 		if (unlikely(!ret)) {
-			ret = hfa_running_reset(hashfast, info);
-			if (unlikely(!ret)) {
-				applog(LOG_ERR, "%s %d: Failed to reset after write failure, disabling",
-				       hashfast->drv->name, hashfast->device_id);
-				return -1;
-			}
+			hfa_running_shutdown(hashfast, info);
+			return -1;
 		}
 		/* Give a full allotment of jobs after a restart, not waiting
 		 * for the status update telling us how much to give. */
@@ -1461,12 +1445,8 @@ restart:
 			sequence = 0;
 		ret = hfa_send_frame(hashfast, OP_HASH, sequence, (uint8_t *)&op_hash_data, sizeof(op_hash_data));
 		if (unlikely(!ret)) {
-			ret = hfa_running_reset(hashfast, info);
-			if (unlikely(!ret)) {
-				applog(LOG_ERR, "%s %d: Failed to reset after write failure, disabling",
-				       hashfast->drv->name, hashfast->device_id);
-				return -1;
-			}
+			hfa_running_shutdown(hashfast, info);
+			return -1;
 		}
 
 		mutex_lock(&info->lock);
