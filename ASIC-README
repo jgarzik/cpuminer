@@ -195,6 +195,7 @@ ASIC SPECIFIC COMMANDS
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
 --hfa-hash-clock <arg> Set hashfast clock speed (default: 550)
 --hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)
+--hfa-name <arg>    Set a unique name for a single hashfast device specified with --usb or the first device found
 --hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
 --hfa-temp-target <arg> Set the hashfast target temperature (0 to disable) (default: 88)
 --klondike-options <arg> Set klondike options clock:temptarget
@@ -482,6 +483,22 @@ cgminer will try to maintain temperature according to this target by adjusting
 fanspeed and then if need be, throttle speeds on a die-by-die basis. Disabling
 this feature will leave a constant fanspeed and die speed but will not disable
 the temp-overheat feature.
+
+--hfa-name <arg>    Set a unique name for a single hashfast device specified with --usb or the first device found
+
+This command allows you to specify the unique name stored in nvram on a single
+hashfast device. This name can be queried from the API stats command and comes
+up as "op name". Discrete names are used by cgminer to try to maintain settings
+across restarts, unplugs/hotplugs and so on. If this command is used by itself,
+the name will be given to the first hashfast device it encounters and then
+cgminer will proceed to go back to regular mining. If you have multiple devices,
+it is best to discretely choose the device you wish to use with the --usb
+command. For example
+'lsusb' on linux shows the following devices (297c:0001 is a hfa device):
+ Bus 001 Device 079: ID 297c:0001
+ Bus 004 Device 042: ID 297c:0001
+If you wished to name the second device Slug you would add the commands:
+ --hfa-name Slug --usb 4:42
 
 
 Other undocumented hashfast command line options are for development purposes
