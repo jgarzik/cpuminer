@@ -614,6 +614,21 @@ static struct cgpu_info *hfa_old_device(struct cgpu_info *hashfast, struct hashf
 	return found;
 }
 
+static void hfa_set_clock(struct cgpu_info *hashfast, struct hashfast_info *info)
+{
+	uint16_t hdata;
+	int i;
+
+	hdata = (WR_CLOCK_VALUE << WR_COMMAND_SHIFT) | info->hash_clock_rate;
+
+	hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), hdata, (uint8_t *)NULL, 0);
+	/* We won't know what the real clock is in this case without a
+	 * usb_init_base message so we have to assume it's what we asked. */
+	info->base_clock = info->hash_clock_rate;
+	for (i = 0; i < info->asic_count; i++)
+		info->die_data[i].hash_clock = info->base_clock;
+}
+
 static bool hfa_detect_common(struct cgpu_info *hashfast)
 {
 	struct hashfast_info *info;
@@ -632,26 +647,6 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 	if (hashfast->usbinfo.nodev) {
 		ret = false;
 		goto out;
-	}
-
-	info->cgpu = hashfast;
-	/* Look for a matching zombie instance and inherit values from it if it
-	 * exists. */
-	info->old_cgpu = hfa_old_device(hashfast, info);
-	if (info->old_cgpu) {
-		struct hashfast_info *cinfo = info->old_cgpu->device_data;
-
-		applog(LOG_INFO, "Found matching zombie device for %s %d at device %d",
-		       hashfast->drv->name, hashfast->device_id, info->old_cgpu->device_id);
-		info->resets = cinfo->resets;
-		/* Reset the device with the last hash_clock_rate if it's
-		 * different. */
-		if (info->hash_clock_rate != cinfo->hash_clock_rate) {
-			info->hash_clock_rate = cinfo->hash_clock_rate;
-			ret = hfa_reset(hashfast, hashfast->device_data);
-			if (!ret)
-				goto out;
-		}
 	}
 
 	// The per-die status array
@@ -674,6 +669,23 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 	if (!info->works)
 		quit(1, "Failed to calloc info works in hfa_detect_common");
 
+	info->cgpu = hashfast;
+	/* Look for a matching zombie instance and inherit values from it if it
+	 * exists. */
+	info->old_cgpu = hfa_old_device(hashfast, info);
+	if (info->old_cgpu) {
+		struct hashfast_info *cinfo = info->old_cgpu->device_data;
+
+		applog(LOG_INFO, "Found matching zombie device for %s %d at device %d",
+		       hashfast->drv->name, hashfast->device_id, info->old_cgpu->device_id);
+		info->resets = cinfo->resets;
+		/* Set the device with the last hash_clock_rate if it's
+		 * different. */
+		if (info->hash_clock_rate != cinfo->hash_clock_rate) {
+			info->hash_clock_rate = cinfo->hash_clock_rate;
+			hfa_set_clock(hashfast, info);
+		}
+	}
 out:
 	if (!ret) {
 		hfa_send_shutdown(hashfast);
