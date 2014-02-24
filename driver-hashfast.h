@@ -27,6 +27,7 @@ int opt_hfa_fan_max;
 int opt_hfa_fan_min;
 
 char *set_hfa_fan(char *arg);
+char *opt_hfa_name;
 
 #define HASHFAST_MINER_THREADS 1
 #define HFA_CLOCK_DEFAULT 550

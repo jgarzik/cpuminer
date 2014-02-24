@@ -27,6 +27,7 @@ bool opt_hfa_dfu_boot;
 int opt_hfa_fan_default = HFA_FAN_DEFAULT;
 int opt_hfa_fan_max = HFA_FAN_MAX;
 int opt_hfa_fan_min = HFA_FAN_MIN;
+char *opt_hfa_name;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Support for the CRC's used in header (CRC-8) and packet body (CRC-32)
@@ -316,14 +317,29 @@ struct op_nameframe {
 	char name[32];
 } __attribute__((packed));
 
-/* If no opname or an invalid opname is set, change it to the serial number if
- * it exists, or a random name based on timestamp if not. */
-static void hfa_choose_opname(struct cgpu_info *hashfast, struct hashfast_info *info)
+static void hfa_write_opname(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
 	const uint8_t opcode = HF_USB_CMD(OP_NAME);
 	struct op_nameframe nameframe;
 	struct hf_header *h = (struct hf_header *)&nameframe;
 	const int tx_length = sizeof(struct op_nameframe);
+
+	memset(&nameframe, 0, sizeof(nameframe));
+	strncpy(nameframe.name, info->op_name, 30);
+	h->preamble = HF_PREAMBLE;
+	h->operation_code = hfa_cmds[opcode].cmd;
+	h->core_address = 1;
+	h->data_length = 32 / 4;
+	h->crc8 = hfa_crc8((unsigned char *)h);
+	applog(LOG_DEBUG, "%s %d: Opname being set to %s", hashfast->drv->name,
+	       hashfast->device_id, info->op_name);
+	__hfa_send_frame(hashfast, opcode, tx_length, (uint8_t *)&nameframe);
+}
+
+/* If no opname or an invalid opname is set, change it to the serial number if
+ * it exists, or a random name based on timestamp if not. */
+static void hfa_choose_opname(struct cgpu_info *hashfast, struct hashfast_info *info)
+{
 	uint64_t usecs;
 
 	if (info->serial_number)
@@ -335,16 +351,7 @@ static void hfa_choose_opname(struct cgpu_info *hashfast, struct hashfast_info *
 		usecs = (uint64_t)(tv_now.tv_sec) * (uint64_t)1000000 + (uint64_t)tv_now.tv_usec;
 		sprintf(info->op_name, "%lx", usecs);
 	}
-	memset(&nameframe, 0, sizeof(nameframe));
-	strncpy(nameframe.name, info->op_name, 32);
-	h->preamble = HF_PREAMBLE;
-	h->operation_code = hfa_cmds[opcode].cmd;
-	h->core_address = 1;
-	h->data_length = 32 / 4;
-	h->crc8 = hfa_crc8((unsigned char *)h);
-	applog(LOG_DEBUG, "%s %d: Opname being set to %s", hashfast->drv->name,
-	       hashfast->device_id, info->op_name);
-	__hfa_send_frame(hashfast, opcode, tx_length, (uint8_t *)&nameframe);
+	hfa_write_opname(hashfast, info);
 }
 
 static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
@@ -773,6 +780,17 @@ static struct cgpu_info *hfa_detect_one(libusb_device *dev, struct usb_find_devi
 	}
 	if (!add_cgpu(hashfast))
 		return NULL;
+
+	if (opt_hfa_name) {
+		struct hashfast_info *info = hashfast->device_data;
+
+		strncpy(info->op_name, opt_hfa_name, 30);
+		applog(LOG_NOTICE, "%s %d %03d:%03d: Writing name %s", hashfast->drv->name,
+		       hashfast->device_id, hashfast->usbinfo.bus_number, hashfast->usbinfo.device_address,
+		       info->op_name);
+		hfa_write_opname(hashfast, info);
+		opt_hfa_name = NULL;
+	}
 
 	return hashfast;
 }
