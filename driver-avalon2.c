@@ -153,6 +153,27 @@ static int job_idcmp(uint8_t *job_id, char *pool_job_id)
 	return 0;
 }
 
+static inline int get_temp_max(struct avalon2_info *info)
+{
+	int i;
+	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i++) {
+		if (info->temp_max <= info->temp[i])
+			info->temp_max = info->temp[i];
+	}
+	return info->temp_max;
+}
+
+/* http://www.onsemi.com/pub_link/Collateral/ADP3208D.PDF */
+static inline uint32_t encode_voltage(uint32_t v)
+{
+	return rev8((0x78 - v / 125) << 1 | 1) << 8;
+}
+
+static inline uint32_t decode_voltage(uint32_t v)
+{
+	return (0x78 - (rev8(v >> 8) >> 1)) * 125;
+}
+
 extern void submit_nonce2_nonce(struct thr_info *thr, uint32_t pool_no, uint32_t nonce2, uint32_t nonce);
 static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg)
 {
@@ -241,6 +262,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			memcpy(&(info->get_voltage[modular_id]), ar->data + 12, 4);
 			memcpy(&(info->local_work[modular_id]), ar->data + 16, 4);
 			memcpy(&(info->hw_work[modular_id]), ar->data + 20, 4);
+
 			info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]);
 			info->get_voltage[modular_id] = be32toh(info->get_voltage[modular_id]);
 			info->local_work[modular_id] = be32toh(info->local_work[modular_id]);
@@ -249,7 +271,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			info->local_works[modular_id] += info->local_work[modular_id];
 			info->hw_works[modular_id] += info->hw_work[modular_id];
 
-			avalon2->temp = info->temp[0]; /* FIXME: */
+			info->get_voltage[modular_id] = decode_voltage(info->get_voltage[modular_id]);
+			avalon2->temp = get_temp_max(info);
 			break;
 		case AVA2_P_ACKDETECT:
 			break;
@@ -364,7 +387,6 @@ static int avalon2_send_pkg(int fd, const struct avalon2_pkg *pkg,
 
 static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 {
-	/* FIXME: what if new stratum arrive when writing */
 	struct avalon2_pkg pkg;
 	int i, a, b, tmp;
 	unsigned char target[32];
@@ -693,8 +715,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		tmp = be32toh(info->fan_pwm);
 		memcpy(send_pkg.data, &tmp, 4);
 
-		/* http://www.onsemi.com/pub_link/Collateral/ADP3208D.PDF */
-		tmp = rev8((0x78 - info->set_voltage / 125) << 1 | 1) << 8;
+		tmp = encode_voltage(info->set_voltage);
 		tmp = be32toh(tmp);
 		memcpy(send_pkg.data + 4, &tmp, 4);
 
