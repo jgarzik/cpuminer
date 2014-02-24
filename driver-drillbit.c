@@ -374,10 +374,8 @@ static config_setting *find_settings(struct cgpu_info *drillbit)
 static void drillbit_send_config(struct cgpu_info *drillbit)
 {
 	struct drillbit_info *info = drillbit->device_data;
-	char cmd;
 	int amount;
 	char buf[SZ_SERIALISED_BOARDCONFIG+1];
-	size_t size;
 	config_setting *setting;
 	BoardConfigV3 v3_config;
 
@@ -660,9 +658,9 @@ static void drillbit_check_autotune(struct thr_info *thr, struct drillbit_chip_i
 	   every RETUNE_EVERY results (errors and successes totalled, error count should be between
 	   the low and high limits given.
 	*/
-	const int TUNE_UP_EVERY = 100;
-	const int ERROR_LOW = 1;
-	const int ERROR_HIGH = 3;
+	const uint32_t TUNE_UP_EVERY = 100;
+	const uint32_t ERROR_LOW = 1;
+	const uint32_t ERROR_HIGH = 3;
 
 	/* Check auto parameters */
 	if(chip->success_auto + chip->error_auto < TUNE_UP_EVERY && chip->error_auto < ERROR_HIGH*2)
@@ -805,7 +803,6 @@ static void drillbit_send_work_to_chip(struct thr_info *thr, struct drillbit_chi
 {
 	struct cgpu_info *drillbit = thr->cgpu;
 	struct work *work;
-	char cmd;
 	char buf[SZ_SERIALISED_WORKREQUEST+1];
 	int amount, i;
 
