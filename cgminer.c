@@ -209,6 +209,7 @@ char *opt_klondike_options = NULL;
 #endif
 #ifdef USE_DRILLBIT
 char *opt_drillbit_options = NULL;
+bool opt_drillbit_autotune = false;
 #endif
 char *opt_bab_options = NULL;
 #ifdef USE_BITMINE_A1
@@ -1342,6 +1343,9 @@ static struct opt_table opt_config_table[] = {
         OPT_WITH_ARG("--drillbit-options",
                      set_drillbit_options, NULL, NULL,
                      "Set drillbit options <int|ext>:clock[:clock_divider][:voltage]"),
+        OPT_WITHOUT_ARG("--drillbit-autotune",
+                        opt_set_bool, &opt_drillbit_autotune,
+                        "Enable drillbit automatic clock speed tuning"),
 #endif
 	OPT_WITH_ARG("--expiry|-E",
 		     set_int_0_to_9999, opt_show_intval, &opt_expiry,

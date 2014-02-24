@@ -61,6 +61,15 @@ typedef struct {
 	uint8_t use_ext_clock; // Flag. Ignored on boards without external clocks
 } BoardConfig;
 
+typedef struct
+{
+	uint16_t chip_id;
+	uint8_t increase_clock;
+} AutoTuneRequest;
+
+#define SZ_SERIALISED_AUTOTUNEREQUEST 3
+static void serialise_autotune_request(char *buf, AutoTuneRequest *aq);
+
 #define CONFIG_PW1 (1<<0)
 #define CONFIG_PW2 (1<<1)
 
@@ -638,6 +647,44 @@ static bool drillbit_checkresults(struct thr_info *thr, struct work *work, uint3
 	return false;
 }
 
+/* Check if this ASIC should be tweaked up or down in clock speed */
+static void drillbit_check_autotune(struct thr_info *thr, struct drillbit_chip_info *chip)
+{
+	struct cgpu_info *drillbit = thr->cgpu;
+	AutoTuneRequest request;
+	char buf[SZ_SERIALISED_AUTOTUNEREQUEST+1];
+	int amount;
+	float ratio;
+
+	/* autotune tries to keep ratio of HW errors within these margins:
+	   every RETUNE_EVERY results (errors and successes totalled, error count should be between
+	   the low and high limits given.
+	*/
+	const int TUNE_UP_EVERY = 100;
+	const int ERROR_LOW = 1;
+	const int ERROR_HIGH = 3;
+
+	/* Check auto parameters */
+	if(chip->success_auto + chip->error_auto < TUNE_UP_EVERY && chip->error_auto < ERROR_HIGH*2)
+		return;
+
+	ratio = 100 * (float)chip->error_auto / (chip->success_auto + chip->error_auto);
+	applog(LOG_DEBUG, "Chip id %d has error ratio %3.1f%%", chip->chip_id, ratio);
+
+	if(chip->error_auto < ERROR_LOW || chip->error_auto > ERROR_HIGH) {
+		/* Value should be tweaked */
+		buf[0] = 'A';
+		request.chip_id = chip->chip_id;
+		request.increase_clock = chip->error_auto < ERROR_LOW;
+		serialise_autotune_request(&buf[1], &request);
+		usb_write_timeout(drillbit, buf, sizeof(buf), &amount, TIMEOUT, C_BF_AUTOTUNE);
+		usb_read_simple_response(drillbit, 'A', C_BF_AUTOTUNE);
+	}
+
+	chip->success_auto = 0;
+	chip->error_auto = 0;
+}
+
 // Check and submit back any pending work results from firmware,
 // returns number of successful results found
 static int check_for_results(struct thr_info *thr)
@@ -713,20 +760,18 @@ static int check_for_results(struct thr_info *thr)
 			goto cleanup;
 		}
 
-		found = false;
 		for(i = 0; i < response->num_nonces; i++) {
 			if (unlikely(thr->work_restart))
 				goto cleanup;
+			found = false;
 			for(k = 0; k < WORK_HISTORY_LEN; k++) {
 				/* NB we deliberately check all results against all work because sometimes ASICs seem to give multiple "valid" nonces,
 				   and this seems to avoid some result that would otherwise be rejected by the pool.
-
-				   However we only count one success per result set to avoid artificially inflating the hashrate.
-				   A smarter thing to do here might be to look at the full set of nonces in the response and start from the "best" one first.
 				*/
 				if (chip->current_work[k] && drillbit_checkresults(thr, chip->current_work[k], response->nonce[i])) {
 					if (!found) {
 						chip->success_count++;
+						chip->success_auto++;
 						successful_results++;
 						found = true;
 					}
@@ -735,14 +780,18 @@ static int check_for_results(struct thr_info *thr)
 		}
 		drvlog(LOG_DEBUG, "%s nonce %08x", (found ? "Good":"Bad"), response->num_nonces ? response->nonce[0] : 0);
 		if(!found && chip->state != IDLE && response->num_nonces > 0) {
-		  /* all nonces we got back from this chip were invalid */
-		  inc_hw_errors(thr);
-		  chip->error_count++;
+			/* all nonces we got back from this chip were invalid */
+			inc_hw_errors(thr);
+			chip->error_count++;
+			chip->error_auto++;
 		}
 		if(chip->state == WORKING_QUEUED && !response->is_idle)
 			chip->state = WORKING_NOQUEUED; // Time to queue up another piece of "next work"
 		else
 			chip->state = IDLE; // Uh-oh, we're totally out of work for this ASIC!
+
+		if(opt_drillbit_autotune && info->protocol_version >= 4)
+			drillbit_check_autotune(thr, chip);
 	}
 
 cleanup:
@@ -827,6 +876,7 @@ static int64_t drillbit_scanwork(struct thr_info *thr)
 				   some pools can create unusual delays early on */
 				drvlog(LOG_ERR, "Timing out unresponsive ASIC %d", info->chips[i].chip_id);
 				info->chips[i].timeout_count++;
+				info->chips[i].error_auto++;
 			}
 			info->chips[i].state = IDLE;
 			drillbit_send_work_to_chip(thr, &info->chips[i]);
@@ -986,6 +1036,12 @@ static void serialise_board_configV4(char *buf, BoardConfig *bc)
 	SERIALISE(bc->use_ext_clock);
 }
 
+static void serialise_autotune_request(char *buf, AutoTuneRequest *aq)
+{
+	size_t offset = 0;
+	SERIALISE(aq->chip_id);
+	SERIALISE(aq->increase_clock);
+}
 
 static void deserialise_identity(Identity *id, const char *buf)
 {

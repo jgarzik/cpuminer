@@ -47,6 +47,8 @@ struct drillbit_chip_info {
   uint32_t error_count;
   uint32_t timeout_count;
   uint32_t work_sent_count;
+  uint32_t success_auto;
+  uint32_t error_auto;
 };
 
 #endif /* BITFURY_H */
