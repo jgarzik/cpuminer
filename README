@@ -170,15 +170,16 @@ Options for both config file and command line:
 --avalon-freq <arg> Set frequency range for avalon-auto, single value or range
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq:tech
 --avalon-temp <arg> Set avalon target temperature (default: 50)
+--bab-options <arg> Set BaB options max:def:min:up:down:hz:delay:trf
 --balance           Change multipool strategy from failover to even share balance
 --benchfile <arg>   Run cgminer in benchmark mode using a work file - produces no shares
 --benchfile-display Display each benchfile nonce found
 --benchmark         Run cgminer in benchmark mode - produces no shares
 --bfl-range         Use nonce range on bitforce devices if supported
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 85)
---bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
 --bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
+--bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
 --compact           Use compact display without per device statistics
 --debug|-D          Enable debug output
@@ -188,6 +189,12 @@ Options for both config file and command line:
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --fix-protocol      Do not redirect to a different getwork protocol (eg. stratum)
+--hfa-hash-clock <arg> Set hashfast clock speed (default: 550)
+--hfa-fail-drop <arg> Set how many MHz to drop clockspeed each failure on an overlocked hashfast device (default: 10)
+--hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)
+--hfa-name <arg>    Set a unique name for a single hashfast device specified with --usb or the first device found
+--hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
+--hfa-temp-target <arg> Set the hashfast target temperature (0 to disable) (default: 88)
 --hotplug <arg>     Seconds between hotplug checks (0 means never check)
 --klondike-options <arg> Set klondike options clock:temptarget
 --load-balance      Change multipool strategy from failover to quota based balance
@@ -232,11 +239,10 @@ Loaded at start and used when saving without a name.
 --version|-V        Display version and exit
 
 
-USB device (ASIC and FPGA) options:
+Silent USB device (ASIC and FPGA) options:
 
 --icarus-options <arg> Set specific FPGA board configurations - one set of values for all or comma separated
 --icarus-timing <arg> Set how the Icarus timing is calculated - one setting/value for all or comma separated
---usb <arg>         USB device selection (See below)
 --usb-dump          (See FPGA-README)
 
 See FGPA-README or ASIC-README for more information regarding these.
