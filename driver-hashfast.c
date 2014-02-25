@@ -221,11 +221,13 @@ static bool hfa_send_packet(struct cgpu_info *hashfast, struct hf_header *h, int
 	return true;
 }
 
+#define HFA_GET_HEADER_BUFSIZE 512
+
 static bool hfa_get_header(struct cgpu_info *hashfast, struct hf_header *h, uint8_t *computed_crc)
 {
 	int amount, ret, orig_len, len, ofs = 0;
 	cgtimer_t ts_start;
-	char buf[512];
+	char buf[HFA_GET_HEADER_BUFSIZE];
 	char *header;
 
 	if (unlikely(hashfast->usbinfo.nodev))
@@ -247,6 +249,11 @@ static bool hfa_get_header(struct cgpu_info *hashfast, struct hf_header *h, uint
 
 		if (unlikely(hashfast->usbinfo.nodev))
 			return false;
+		if(ofs + len > HFA_GET_HEADER_BUFSIZE) {
+			// Not expected to happen.
+			applog(LOG_WARNING, "hfa_get_header() tried to overflow buf[].");
+			return false;
+		}
 		ret = usb_read(hashfast, buf + ofs, len, &amount, C_HF_GETHEADER);
 
 		if (unlikely(ret && ret != LIBUSB_ERROR_TIMEOUT))
@@ -260,6 +267,11 @@ static bool hfa_get_header(struct cgpu_info *hashfast, struct hf_header *h, uint
 				ofs -= header - buf;
 			}
 			len -= ofs;
+		}
+		else {
+			/* HF_PREAMBLE not found, toss all the useless leading data. */
+			ofs = 0;
+			len = sizeof(*h);
 		}
 	} while (len > 0);
 
