@@ -367,8 +367,6 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	uint8_t hcrc;
 	bool ret;
 
-	info->resets++;
-
 	/* Hash clock rate in Mhz */
 	if (!info->hash_clock_rate)
 		info->hash_clock_rate = opt_hfa_hash_clock;
@@ -1187,7 +1185,6 @@ static bool hfa_prepare(struct thr_info *thr)
 	cgtime(&now);
 	get_datestamp(hashfast->init, sizeof(hashfast->init), &now);
 	hashfast->last_device_valid_work = time(NULL);
-	info->resets = 0;
 	hfa_set_fanspeed(hashfast, info, opt_hfa_fan_default);
 
 	return true;
@@ -1448,6 +1445,8 @@ dies_only:
 
 static void hfa_running_shutdown(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
+	info->resets++;
+
 	/* If the device has already disapperaed, don't drop the clock in case
 	 * it was just unplugged as opposed to a failure. */
 	if (hashfast->usbinfo.nodev)
