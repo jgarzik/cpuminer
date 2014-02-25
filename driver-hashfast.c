@@ -1639,7 +1639,7 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 	root = api_add_string(root, "hardware rev", buf, true);
 	root = api_add_hex32(root, "serial number", &db->serial_number, true);
 	varint = db->hash_clockrate;
-	root = api_add_int(root, "hash clockrate", &varint, true);
+	root = api_add_int(root, "base clockrate", &varint, true);
 	varint = db->inflight_target;
 	root = api_add_int(root, "inflight target", &varint, true);
 	varint = db->sequence_modulus;
