@@ -1367,11 +1367,15 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	curr_hw_errors = icarus->hw_errors;
 	if (submit_nonce(thr, work, nonce))
 		info->failing = false;
-	was_hw_error = (curr_hw_errors > icarus->hw_errors);
+	was_hw_error = (curr_hw_errors < icarus->hw_errors);
 
-	hash_count = (nonce & info->nonce_mask);
-	hash_count++;
-	hash_count *= info->fpga_count;
+	if (was_hw_error)
+		hash_count = 0;
+	else {
+		hash_count = (nonce & info->nonce_mask);
+		hash_count++;
+		hash_count *= info->fpga_count;
+	}
 
 #if 0
 	// This appears to only return zero nonce values
