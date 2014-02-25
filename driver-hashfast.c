@@ -1692,6 +1692,7 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 	root = api_add_uint64(root, "raw hashcount", &info->raw_hashes, false);
 	root = api_add_uint64(root, "calc hashcount", &info->calc_hashes, false);
 	root = api_add_int(root, "no matching work", &info->no_matching_work, false);
+	root = api_add_uint16(root, "shed count", &info->shed_count, false);
 	root = api_add_int(root, "resets", &info->resets, false);
 
 	return root;
