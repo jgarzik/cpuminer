@@ -589,11 +589,6 @@ static struct cgpu_info *hfa_old_device(struct cgpu_info *hashfast, struct hashf
 	struct hashfast_info *cinfo = NULL;
 	int i;
 
-	/* If the device doesn't have a serial number, don't try to match it
-	 * with a zombie instance. */
-	if (!info->serial_number)
-		return false;
-
 	/* See if we can find a zombie instance of the same device */
 	for (i = 0; i < mining_threads; i++) {
 		cgpu = mining_thr[i]->cgpu;
@@ -614,7 +609,7 @@ static struct cgpu_info *hfa_old_device(struct cgpu_info *hashfast, struct hashf
 			found = cgpu;
 			break;
 		}
-		if (info->serial_number == cinfo->serial_number) {
+		if (info->serial_number && info->serial_number == cinfo->serial_number) {
 			applog(LOG_DEBUG, "%s %d: Found old device based on serial number %x",
 			       hashfast->drv->name, hashfast->device_id, info->serial_number);
 			found = cgpu;
