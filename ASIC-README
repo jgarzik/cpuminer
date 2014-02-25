@@ -194,6 +194,7 @@ ASIC SPECIFIC COMMANDS
 --bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
 --hfa-hash-clock <arg> Set hashfast clock speed (default: 550)
+--hfa-fail-drop <arg> Set how many MHz to drop clockspeed each failure on an overlocked hashfast device (default: 10)
 --hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)
 --hfa-name <arg>    Set a unique name for a single hashfast device specified with --usb or the first device found
 --hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
@@ -459,6 +460,13 @@ This will change the initialisation clock speed on all attached hfa devices.
 Note that if instability is detected by cgminer and the device has to undergo
 a reset, cgminer will lower the clockspeed on resetting it each time till the
 value returns to the default of 550.
+
+--hfa-fail-drop <arg> Set how many MHz to drop clockspeed each failure on an overlocked hashfast device (default: 10)
+
+If you overclock your hashfast device with --hfa-hash-clock and cgminer detects
+it failing to return hashes, it will restart it at a lower clock speed if
+possible. Changing this value will allow you to choose how much it will lower
+the clock speed or to disable this function entirely.
 
 --hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)
 

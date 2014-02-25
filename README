@@ -258,6 +258,7 @@ ASIC only options:
 --bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
 --hfa-hash-clock <arg> Set hashfast clock speed (default: 550)
+--hfa-fail-drop <arg> Set how many MHz to drop clockspeed each failure on an overlocked hashfast device (default: 10)
 --hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)
 --hfa-name <arg>    Set a unique name for a single hashfast device specified with --usb or the first device found
 --hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
