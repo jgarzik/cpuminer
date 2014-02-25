@@ -1,3 +1,96 @@
+
+
+- Read in hfa stream until we get a HF_PREAMBLE
+- Add shed count to hfa API stats output.
+- Display the base clockrate for hfa devices with a different name to per die
+clockrates to be able to easily distinguish them.
+- Use op_name if possible first with hfa devices to detect old instances and be
+able to choose the starting clockspeed before sending an init sequence,
+reverting to setting op name and serial number as fallbacks.
+- Make hfa resets properly inherit across a shutdown.
+- Don't break out of hfa_old_device early if there's no serial number.
+- Fix harmless warning.
+- Allow the drop in MHz per hfa failure to be specified on the command line.
+- Icarus - ignore HW errors in hash rate ... and fix detection of them
+- Enable the hfa shed supported feature by default.
+- Add to udev rules hfa devices for firmware writing.
+- Remove ENV from hashfast udev rules.
+- Add a --hfa-name command that allows one to specify the unique opname for a
+hashfast device.
+- Ava2 decode the voltage, get the temp_max
+- Set the clock rate with a work restart instead of an init when changing to old
+clocks for hfa
+- Set opname on hfa devices without a serial number to a hex value based on time
+to not overflow the field.
+- Add op name to hfa API stats output if it exists.
+- Set the actual op_name in hfa devices if cgminer is choosing it itself due to
+it being invalid.
+- Re-init an hfa device to its old data before setting up info structures as
+their sizes may change.
+- Remove the usb device whenever we do a running shutdown on hfa and do a
+shutdown as the imitated reinit  to allow it to hotplug again.
+- Reset opt hfa dfu boot after it's used.
+- Comment out windows only transfer on hfa startup.
+- Clean up structures unused in case of all failures in hfa detect common
+- Clear all structures should we fail to hfa reset on adjusting clock on a
+hotplug.
+- Set master and copy cgpu hash clock rate for hfa when dropping it on a
+restart.
+- Set the master hfa clock speed to lower when shutting down a copy.
+- Do a clear readbuf on any hfa reset in case the device  has not yet cleanly
+shut down.
+- Increase hfa fanspeed slightly more when it's rising in the optimal range than
+falling.
+- Always decrease hfa clock speed on a running shutdown and don't try sending an
+init frame since it will be dropped regardless.
+- Match hfa devices to old ones based on OP_NAME values before serial numbers if
+possible.
+- Read off the OP_NAME if it exists and is supported on hfa devices, setting it
+to the device serial number or a timestamp if it is invalid.
+- Updated hf protocol
+- Check for an amount along with no error in hfa clear readbuf
+- Hfa clear readbuf can return a nonsense amount when there's a return error so
+ignore the amount.
+- Running resets always cause a shutdown on hfa meaning the device will
+disappear with modern firmware so always kill off the threads to allow
+re-hotplugging.
+- Reset the hfa hash clock rate to the old one if we find an old instance, only
+setting the device id in hfa_prepare
+- Keep the device_id on the original zombie thread for HFA in case of further
+resets.
+- Break out of hfa inherit if there is no device data.
+- Inherit the hfa zombie instance after the device id has been allocated.
+- The list_for_each_cgpu macro will dereference when there are no mining threads
+yet.
+- Make hfa hotplug inherit some parameters from a previous instance if the
+serial number exists and is matching, avoiding dropping the clock on all
+devices.
+- Per device last getwork won't work if the device stops asking for work.
+- Use the share_work_tdiff function in the driver watchdogs.
+- Provide a helper function for determining time between valid share and getwork
+per device.
+- Store last_getwork time on a per-device basis.
+- Limit the decrease of hfa clock rate on reset to the default clockrate.
+- Base the hfa failure time on the current expected hashrate instead of a static
+15 seconds.
+- We shouldn't be trying to read from the hfa_send_shutdown function itself.
+- Reset the icarus failing flag only when a valid nonce is found.
+- Transferred value is corrupt on a NODEV error in usbutils.
+- Set each miner thread last valid work just before starting its hash loop in
+case there are delays at startup.
+- Only memcopy *transferred data in usbutils if we have received only success or
+a non-fatal error.
+- Increase to 25 nonce ranges on icarus fail detect.
+- Set icarus device fail time to be dependent on device speed to avoid falsely
+detecting failure on slower AMU devices.
+- Updated hf protocol header.
+- Updated BE hf protocol header.
+- Take into account shed cores on hfa devices when determining how many jobs to
+send.
+- Fix compilation error with two avalon types.
+- Fix missing A1 files from distribution.
+
+
 Version 4.0.0 - 21st February 2014
 
 - Check for error from setfloatval
