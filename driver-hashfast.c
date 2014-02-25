@@ -27,6 +27,8 @@ bool opt_hfa_dfu_boot;
 int opt_hfa_fan_default = HFA_FAN_DEFAULT;
 int opt_hfa_fan_max = HFA_FAN_MAX;
 int opt_hfa_fan_min = HFA_FAN_MIN;
+int opt_hfa_fail_drop = 10;
+
 char *opt_hfa_name;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1456,8 +1458,8 @@ static void hfa_running_shutdown(struct cgpu_info *hashfast, struct hashfast_inf
 	if (hashfast->usbinfo.nodev)
 		return;
 
-	if (info->hash_clock_rate > HFA_CLOCK_DEFAULT) {
-		info->hash_clock_rate -= 10;
+	if (info->hash_clock_rate > HFA_CLOCK_DEFAULT && opt_hfa_fail_drop) {
+		info->hash_clock_rate -= opt_hfa_fail_drop;
 		if (info->hash_clock_rate < HFA_CLOCK_DEFAULT)
 			info->hash_clock_rate = HFA_CLOCK_DEFAULT;
 		if (info->old_cgpu && info->old_cgpu->device_data) {

@@ -677,12 +677,10 @@ static char *set_int_0_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 10);
 }
 
-#if (defined USE_AVALON)||(defined USE_COINTERRA)
-static char *set_int_0_to_100(const char *arg, int *i)
+static char __maybe_unused *set_int_0_to_100(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 0, 100);
 }
-#endif
 
 #ifdef USE_COINTERRA
 static char *set_int_0_to_255(const char *arg, int *i)
@@ -1307,6 +1305,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--hfa-hash-clock",
 		     set_int_0_to_9999, opt_show_intval, &opt_hfa_hash_clock,
 		     "Set hashfast clock speed"),
+	OPT_WITH_ARG("--hfa-fail-drop",
+		     set_int_0_to_100, opt_show_intval, &opt_hfa_fail_drop,
+		     "Set how many MHz to drop clockspeed each failure on an overlocked hashfast device"),
 	OPT_WITH_ARG("--hfa-fan",
 		     set_hfa_fan, NULL, NULL,
 		     "Set fanspeed percentage for hashfast, single value or range (default: 10-85)"),

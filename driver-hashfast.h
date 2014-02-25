@@ -25,6 +25,7 @@ bool opt_hfa_dfu_boot;
 int opt_hfa_fan_default;
 int opt_hfa_fan_max;
 int opt_hfa_fan_min;
+int opt_hfa_fail_drop;
 
 char *set_hfa_fan(char *arg);
 char *opt_hfa_name;
