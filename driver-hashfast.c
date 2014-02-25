@@ -345,7 +345,7 @@ static void hfa_choose_opname(struct cgpu_info *hashfast, struct hashfast_info *
 	uint64_t usecs;
 
 	if (info->serial_number)
-		sprintf(info->op_name, "%x", info->serial_number);
+		sprintf(info->op_name, "%08x", info->serial_number);
 	else {
 		struct timeval tv_now;
 
@@ -367,7 +367,8 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	uint8_t hcrc;
 	bool ret;
 
-	/* Hash clock rate in Mhz */
+	/* Hash clock rate in Mhz. Set to opt_hfa_hash_clock if it has not
+	 * been inherited across a restart. */
 	if (!info->hash_clock_rate)
 		info->hash_clock_rate = opt_hfa_hash_clock;
 	info->group_ntime_roll = opt_hfa_ntime_roll;
@@ -466,7 +467,7 @@ tryagain:
 	       (db->firmware_rev >> 8) & 0xff, db->firmware_rev & 0xff);
 	applog(LOG_INFO, "%s %d:      hardware_rev:    %d.%d", hashfast->drv->name, hashfast->device_id,
 	       (db->hardware_rev >> 8) & 0xff, db->hardware_rev & 0xff);
-	applog(LOG_INFO, "%s %d:      serial number:   0x%08x", hashfast->drv->name, hashfast->device_id,
+	applog(LOG_INFO, "%s %d:      serial number:   %08x", hashfast->drv->name, hashfast->device_id,
 	       db->serial_number);
 	applog(LOG_INFO, "%s %d:      hash clockrate:  %d Mhz", hashfast->drv->name, hashfast->device_id,
 	       db->hash_clockrate);
@@ -511,37 +512,6 @@ tryagain:
 
 	hfa_clear_readbuf(hashfast);
 
-	/* Try sending and receiving an OP_NAME */
-	if (!hfa_send_frame(hashfast, HF_USB_CMD(OP_NAME), 0, (uint8_t *)NULL, 0)) {
-		applog(LOG_WARNING, "%s %d: Failed to send OP_NAME!", hashfast->drv->name,
-		       hashfast->device_id);
-		return false;
-	}
-	ret = hfa_get_header(hashfast, h, &hcrc);
-	if (!ret) {
-		applog(LOG_WARNING, "%s %d: Failed to receive OP_NAME response", hashfast->drv->name,
-		       hashfast->device_id);
-		return false;
-	}
-	/* Only try to parse the name if the firmware supports OP_NAME */
-	if (h->operation_code == OP_NAME) {
-		if (!hfa_get_data(hashfast, info->op_name, 32)) {
-			applog(LOG_WARNING, "%s %d: OP_NAME failed! Failure to get op_name data",
-			       hashfast->drv->name, hashfast->device_id);
-			return false;
-		}
-		for (i = 0; i < 32; i++) {
-			if (i > 0 && info->op_name[i] == '\0')
-				break;
-			/* Make sure the op_name is valid ascii only */
-			if (info->op_name[i] < 32 || info->op_name[i] > 126) {
-				hfa_choose_opname(hashfast, info);
-				break;
-			}
-		}
-		applog(LOG_INFO, "%s %d: Opname set to %s", hashfast->drv->name,
-		       hashfast->device_id, info->op_name);
-	}
 	return true;
 }
 
@@ -602,14 +572,10 @@ static struct cgpu_info *hfa_old_device(struct cgpu_info *hashfast, struct hashf
 		if (!cinfo)
 			continue;
 		if (info->op_name[0] != '\0' && !strncmp(info->op_name, cinfo->op_name, 32)) {
-			applog(LOG_DEBUG, "%s %d: Found old device based on OP_NAME %s",
-			       hashfast->drv->name, hashfast->device_id, info->op_name);
 			found = cgpu;
 			break;
 		}
 		if (info->serial_number && info->serial_number == cinfo->serial_number) {
-			applog(LOG_DEBUG, "%s %d: Found old device based on serial number %x",
-			       hashfast->drv->name, hashfast->device_id, info->serial_number);
 			found = cgpu;
 			break;
 		}
@@ -634,18 +600,78 @@ static void hfa_set_clock(struct cgpu_info *hashfast, struct hashfast_info *info
 
 static bool hfa_detect_common(struct cgpu_info *hashfast)
 {
+	bool has_opname = false, opname_valid = true, ret = false;
 	struct hashfast_info *info;
-	bool ret = false;
+	char buf[1024];
+	struct hf_header *h = (struct hf_header *)buf;
+	uint8_t hcrc;
 	int i;
 
 	info = calloc(sizeof(struct hashfast_info), 1);
 	if (!info)
 		quit(1, "Failed to calloc hashfast_info in hfa_detect_common");
 	hashfast->device_data = info;
+
+	/* Try sending and receiving an OP_NAME */
+	if (!hfa_send_frame(hashfast, HF_USB_CMD(OP_NAME), 0, (uint8_t *)NULL, 0)) {
+		applog(LOG_WARNING, "%s %d: Failed to send OP_NAME!", hashfast->drv->name,
+		       hashfast->device_id);
+		return false;
+	}
+	ret = hfa_get_header(hashfast, h, &hcrc);
+	if (!ret) {
+		/* We should receive a response even if it OP_NAME isn't
+		 * supported. */
+		applog(LOG_WARNING, "%s: Failed to receive OP_NAME response", hashfast->drv->name);
+		return false;
+	}
+
+	/* Only try to parse the name if the firmware supports OP_NAME */
+	if (h->operation_code == OP_NAME) {
+		if (!hfa_get_data(hashfast, info->op_name, 32 / 4)) {
+			applog(LOG_WARNING, "%s %d: OP_NAME failed! Failure to get op_name data",
+			       hashfast->drv->name, hashfast->device_id);
+			return false;
+		}
+		has_opname = true;
+		applog(LOG_DEBUG, "%s: Returned an OP_NAME", hashfast->drv->name);
+		for (i = 0; i < 32; i++) {
+			if (i > 0 && info->op_name[i] == '\0')
+				break;
+			/* Make sure the op_name is valid ascii only */
+			if (info->op_name[i] < 32 || info->op_name[i] > 126) {
+				opname_valid = false;
+				break;
+			}
+		}
+	}
+
+	info->cgpu = hashfast;
+	/* Look for a matching zombie instance and inherit values from it if it
+	 * exists. */
+	if (has_opname && opname_valid) {
+		info->old_cgpu = hfa_old_device(hashfast, info);
+		if (info->old_cgpu) {
+			struct hashfast_info *cinfo = info->old_cgpu->device_data;
+
+			applog(LOG_NOTICE, "%s: Found old instance by op name %s at device %d",
+			hashfast->drv->name, info->op_name, info->old_cgpu->device_id);
+			info->resets = cinfo->resets;
+			info->hash_clock_rate = cinfo->hash_clock_rate;
+		} else {
+			applog(LOG_NOTICE, "%s: Found device with name %s", hashfast->drv->name,
+			       info->op_name);
+		}
+	}
+
 	/* hashfast_reset should fill in details for info */
 	ret = hfa_reset(hashfast, info);
 	if (!ret)
 		goto out;
+
+	/* We will have extracted the serial number by now */
+	if (has_opname && !opname_valid)
+		hfa_choose_opname(hashfast, info);
 
 	if (hashfast->usbinfo.nodev) {
 		ret = false;
@@ -672,15 +698,17 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 	if (!info->works)
 		quit(1, "Failed to calloc info works in hfa_detect_common");
 
-	info->cgpu = hashfast;
-	/* Look for a matching zombie instance and inherit values from it if it
-	 * exists. */
-	info->old_cgpu = hfa_old_device(hashfast, info);
-	if (info->old_cgpu) {
+	/* If we haven't found a matching old instance, we might not have
+	 * a valid op_name yet or lack support so try to match based on
+	 * serial number. */
+	if (!info->old_cgpu)
+		info->old_cgpu = hfa_old_device(hashfast, info);
+
+	if (!has_opname && info->old_cgpu) {
 		struct hashfast_info *cinfo = info->old_cgpu->device_data;
 
-		applog(LOG_INFO, "Found matching zombie device for %s %d at device %d",
-		       hashfast->drv->name, hashfast->device_id, info->old_cgpu->device_id);
+		applog(LOG_NOTICE, "%s: Found old instance by serial number %08x at device %d",
+		       hashfast->drv->name, info->serial_number, info->old_cgpu->device_id);
 		info->resets = cinfo->resets;
 		/* Set the device with the last hash_clock_rate if it's
 		 * different. */
