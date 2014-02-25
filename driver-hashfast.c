@@ -351,7 +351,7 @@ static void hfa_choose_opname(struct cgpu_info *hashfast, struct hashfast_info *
 
 		cgtime(&tv_now);
 		usecs = (uint64_t)(tv_now.tv_sec) * (uint64_t)1000000 + (uint64_t)tv_now.tv_usec;
-		sprintf(info->op_name, "%lx", usecs);
+		sprintf(info->op_name, "%lx", (long unsigned int)usecs);
 	}
 	hfa_write_opname(hashfast, info);
 }
