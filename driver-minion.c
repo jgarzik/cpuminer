@@ -2569,33 +2569,22 @@ static void minion_get_statline_before(char *buf, size_t bufsiz, struct cgpu_inf
 {
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	uint16_t max_temp, cores;
-	int chip, sp;
+	int chip;
 
 	max_temp = 0;
 	cores = 0;
 	mutex_lock(&(minioninfo->sta_lock));
-		for (chip = 0; chip < MINION_CHIPS; chip++) {
-			if (minioninfo->chip[chip]) {
-				cores += minioninfo->chip_status[chip].cores;
-				if (max_temp < minioninfo->chip_status[chip].temp)
-					max_temp = minioninfo->chip_status[chip].temp;
-			}
+	for (chip = 0; chip < MINION_CHIPS; chip++) {
+		if (minioninfo->chip[chip]) {
+			cores += minioninfo->chip_status[chip].cores;
+			if (max_temp < minioninfo->chip_status[chip].temp)
+				max_temp = minioninfo->chip_status[chip].temp;
 		}
+	}
 	mutex_unlock(&(minioninfo->sta_lock));
 
-	sp = 0;
-	if (cores < 100) {
-		sp++;
-		if (cores < 10)
-			sp++;
-	}
-
-	// Space limited - 99 means 99 or more
-	if (max_temp > 99)
-		max_temp = 99;
-
-	tailsprintf(buf, bufsiz, "max%2dC Ch:%2d.%d%*s", (int)max_temp,
-				 minioninfo->chips, (int)cores, sp, "");
+	tailsprintf(buf, bufsiz, "max%3dC Ch:%2d Co:%d",
+				 (int)max_temp, minioninfo->chips, (int)cores);
 }
 
 #define CHIPS_PER_STAT 8
