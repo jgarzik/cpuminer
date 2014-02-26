@@ -2184,7 +2184,8 @@ static struct usb_find_devices *usb_check(__maybe_unused struct device_drv *drv,
 	return NULL;
 }
 
-void usb_detect(struct device_drv *drv, struct cgpu_info *(*device_detect)(struct libusb_device *, struct usb_find_devices *))
+void __usb_detect(struct device_drv *drv, struct cgpu_info *(*device_detect)(struct libusb_device *, struct usb_find_devices *),
+		  bool single)
 {
 	libusb_device **list;
 	ssize_t count, i;
@@ -2244,6 +2245,8 @@ void usb_detect(struct device_drv *drv, struct cgpu_info *(*device_detect)(struc
 				}
 				free(found);
 			}
+			if (single)
+				break;
 		}
 	}
 
