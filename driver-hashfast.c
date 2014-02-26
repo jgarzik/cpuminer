@@ -836,7 +836,7 @@ static void hfa_detect(bool __maybe_unused hotplug)
 	/* Set up the CRC tables only once. */
 	if (!hfa_crc8_set)
 		hfa_init_crc8();
-	usb_detect(&hashfast_drv, hfa_detect_one);
+	usb_detect_one(&hashfast_drv, hfa_detect_one);
 }
 
 static bool hfa_get_packet(struct cgpu_info *hashfast, struct hf_header *h)
