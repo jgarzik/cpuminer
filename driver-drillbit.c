@@ -854,13 +854,14 @@ static int64_t drillbit_scanwork(struct thr_info *thr)
 	struct drillbit_info *info = drillbit->device_data;
 	struct drillbit_chip_info *chip;
 	struct timeval tv_now;
-	int amount, i, j, ms_diff, result_count = 0;;
+	int amount, i, j, ms_diff, result_count = 0, sent_count = 0;;
 	char buf[200];
 
 	/* send work to an any chip without queued work */
-	for (i = 0; i < info->num_chips; i++) {
+	for (i = 0; i < info->num_chips && sent_count < 8; i++) {
 		if (info->chips[i].state != WORKING_QUEUED) {
 			drillbit_send_work_to_chip(thr, &info->chips[i]);
+			sent_count++;
 		}
 		if (unlikely(thr->work_restart) || unlikely(drillbit->usbinfo.nodev))
 			goto cascade;
