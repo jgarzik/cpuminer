@@ -2891,7 +2891,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 {
 	unsigned char *ptr, usbbuf[USB_READ_BUFSIZE];
 	struct timeval read_start, tv_finish;
-	int bufleft, err, got, tot, pstate;
+	int bufleft, err, got, tot, pstate, tried_reset;
 	struct cg_usb_device *usbdev;
 	unsigned int initial_timeout;
 	bool first = true;
@@ -2946,6 +2946,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 
 	initial_timeout = timeout;
 	cgtime(&read_start);
+	tried_reset = 0;
 	while (bufleft > 0 && !eom) {
 		err = usb_perform_transfer(cgpu, usbdev, intinfo, epinfo, ptr, usbbufread,
 					&got, timeout, MODE_BULK_READ, cmd,
@@ -2976,11 +2977,14 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		if (err && err != LIBUSB_ERROR_TIMEOUT) {
 			applog(LOG_WARNING, "%s %i %s usb read err:(%d) %s", cgpu->drv->name,
 			       cgpu->device_id, usb_cmdname(cmd), err, libusb_error_name(err));
-			if (err != LIBUSB_ERROR_NO_DEVICE) {
+			if (err != LIBUSB_ERROR_NO_DEVICE && !tried_reset) {
 				err = libusb_reset_device(usbdev->handle);
+				tried_reset = 1; // don't call reset twice in a row
 				applog(LOG_WARNING, "%s %i attempted reset got err:(%d) %s",
 				       cgpu->drv->name, cgpu->device_id, err, libusb_error_name(err));
 			}
+		} else {
+			tried_reset = 0;
 		}
 		ptr += got;
 		bufleft -= got;
@@ -3040,7 +3044,7 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 	struct timeval write_start, tv_finish;
 	struct cg_usb_device *usbdev;
 	unsigned int initial_timeout;
-	int err, sent, tot, pstate;
+	int err, sent, tot, pstate, tried_reset;
 	bool first = true;
 	double done;
 
@@ -3065,6 +3069,7 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 	err = LIBUSB_SUCCESS;
 	initial_timeout = timeout;
 	cgtime(&write_start);
+	tried_reset = 0;
 	while (bufsiz > 0) {
 		int tosend = bufsiz;
 
@@ -3094,11 +3099,14 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 		if (err) {
 			applog(LOG_WARNING, "%s %i %s usb write err:(%d) %s", cgpu->drv->name,
 			       cgpu->device_id, usb_cmdname(cmd), err, libusb_error_name(err));
-			if (err != LIBUSB_ERROR_NO_DEVICE) {
+			if (err != LIBUSB_ERROR_NO_DEVICE && !tried_reset) {
 				err = libusb_reset_device(usbdev->handle);
+				tried_reset = 1; // don't try reset twice in a row
 				applog(LOG_WARNING, "%s %i attempted reset got err:(%d) %s",
 				       cgpu->drv->name, cgpu->device_id, err, libusb_error_name(err));
 			}
+		} else {
+			tried_reset = 0;
 		}
 		if (err)
 			break;
