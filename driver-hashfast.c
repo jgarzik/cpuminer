@@ -901,6 +901,7 @@ static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_inf
 			applog(LOG_ERR, "%s %d: Bad work sequence tail",
 			       hashfast->drv->name, hashfast->device_id);
 			hashfast->shutdown = true;
+			usb_nodev(hashfast);
 			break;
 		}
 		applog(LOG_DEBUG, "%s %d: Completing work on hash_sequence_tail %d",
