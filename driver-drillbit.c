@@ -117,6 +117,8 @@ typedef struct {
 
 static config_setting *settings;
 
+static void drillbit_empty_buffer(struct cgpu_info *drillbit);
+
 /* Return a pointer to the chip_info structure for a given chip id, or NULL otherwise */
 static struct drillbit_chip_info *find_chip(struct drillbit_info *info, uint16_t chip_id) {
 	int i;
@@ -151,6 +153,7 @@ static bool usb_read_fixed_size(struct cgpu_info *drillbit, void *result, size_t
 	}
 	drvlog(LOG_ERR, "Read incomplete fixed size packet - got %d bytes / %d (timeout %d)",
 			(int)count, (int)result_size, timeout);
+	drillbit_empty_buffer(drillbit);
 	return false;
 }
 
@@ -734,6 +737,7 @@ static int check_for_results(struct thr_info *thr)
 			goto cleanup;
 		if (!usb_read_fixed_size(drillbit, buf, SZ_SERIALISED_WORKRESULT, TIMEOUT, C_BF_GETRES)) {
 			drvlog(LOG_ERR, "Failed to read response data packet idx %d count 0x%x", j, result_count);
+			drillbit_empty_buffer(drillbit);
 			goto cleanup;
 		}
 		deserialise_work_result(&responses[j], buf);
@@ -748,6 +752,7 @@ static int check_for_results(struct thr_info *thr)
 		chip = find_chip(info, response->chip_id);
 		if (!chip) {
 			drvlog(LOG_ERR, "Got work result for unknown chip id %d", response->chip_id);
+			drillbit_empty_buffer(drillbit);
 			continue;
 		}
 		if (chip->state == IDLE) {
@@ -755,6 +760,7 @@ static int check_for_results(struct thr_info *thr)
 		}
 		if (response->num_nonces > MAX_RESULTS) {
 			drvlog(LOG_ERR, "Got invalid number of result nonces (%d) for chip id %d", response->num_nonces, response->chip_id);
+			drillbit_empty_buffer(drillbit);
 			goto cleanup;
 		}
 
@@ -793,7 +799,6 @@ static int check_for_results(struct thr_info *thr)
 	}
 
 cleanup:
-	drillbit_empty_buffer(drillbit);
 	if (responses)
 		free(responses);
 	return successful_results;
@@ -912,8 +917,6 @@ static int64_t drillbit_scanwork(struct thr_info *thr)
 	drillbit_updatetemps(thr);
 
 cascade:
-	drillbit_empty_buffer(drillbit);
-
 	if (unlikely(drillbit->usbinfo.nodev)) {
 		drvlog(LOG_WARNING, "Device disappeared, disabling thread");
 		return -1;
