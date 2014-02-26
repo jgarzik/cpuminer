@@ -2232,6 +2232,8 @@ void __usb_detect(struct device_drv *drv, struct cgpu_info *(*device_detect)(str
 
 		found = usb_check(drv, list[i]);
 		if (found != NULL) {
+			bool new_dev = false;
+
 			if (is_in_use(list[i]) || cgminer_usb_lock(drv, list[i]) == false)
 				free(found);
 			else {
@@ -2239,13 +2241,14 @@ void __usb_detect(struct device_drv *drv, struct cgpu_info *(*device_detect)(str
 				if (!cgpu)
 					cgminer_usb_unlock(drv, list[i]);
 				else {
+					new_dev = true;
 					cgpu->usbinfo.initialised = true;
 					total_count++;
 					drv_count[drv->drv_id].count++;
 				}
 				free(found);
 			}
-			if (single)
+			if (single && new_dev)
 				break;
 		}
 	}
