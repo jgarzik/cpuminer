@@ -4806,18 +4806,6 @@ void zero_stats(void)
 	}
 }
 
-static void set_highprio(void)
-{
-#ifndef WIN32
-	int ret = nice(-10);
-
-	if (!ret)
-		applog(LOG_DEBUG, "Unable to set thread to high priority");
-#else
-	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
-#endif
-}
-
 static void set_lowprio(void)
 {
 #ifndef WIN32
@@ -7213,7 +7201,6 @@ void *miner_thread(void *userdata)
 	applog(LOG_DEBUG, "Waiting on sem in miner thread");
 	cgsem_wait(&mythr->sem);
 
-	set_highprio();
 	cgpu->last_device_valid_work = time(NULL);
 	drv->hash_work(mythr);
 out:
