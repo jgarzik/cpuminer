@@ -369,16 +369,18 @@ static void hfa_choose_opname(struct cgpu_info *hashfast, struct hashfast_info *
 	hfa_write_opname(hashfast, info);
 }
 
+static bool hfa_send_shutdown(struct cgpu_info *hashfast);
+
 static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
 	struct hf_usb_init_header usb_init[2], *hu = usb_init;
 	struct hf_usb_init_base *db;
         struct hf_usb_init_options *ho;
 	int retries = 0, i;
+	bool ret = false;
 	char buf[1024];
 	struct hf_header *h = (struct hf_header *)buf;
 	uint8_t hcrc;
-	bool ret;
 
 	/* Hash clock rate in Mhz. Set to opt_hfa_hash_clock if it has not
 	 * been inherited across a restart. */
@@ -409,13 +411,13 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	       hashfast->drv->name, hashfast->device_id);
 resend:
 	if (unlikely(hashfast->usbinfo.nodev))
-		return false;
+		goto out;
 
 	if (!hfa_clear_readbuf(hashfast))
-		return false;
+		goto out;
 
 	if (!hfa_send_packet(hashfast, (struct hf_header *)hu, HF_USB_CMD(OP_USB_INIT)))
-		return false;
+		goto out;
 
 	// Check for the correct response.
 	// We extend the normal timeout - a complete device initialization, including
@@ -424,7 +426,7 @@ tryagain:
 	for (i = 0; i < 10; i++) {
 		ret = hfa_get_header(hashfast, h, &hcrc);
 		if (unlikely(hashfast->usbinfo.nodev))
-			return false;
+			goto out;
 		if (ret)
 			break;
 	}
@@ -432,11 +434,12 @@ tryagain:
 		if (retries++ < 3)
 			goto resend;
 		applog(LOG_WARNING, "%s %d: OP_USB_INIT failed!", hashfast->drv->name, hashfast->device_id);
-		return false;
+		goto out;
 	}
 	if (h->crc8 != hcrc) {
 		applog(LOG_WARNING, "%s %d: OP_USB_INIT failed! CRC mismatch", hashfast->drv->name, hashfast->device_id);
-		return false;
+		ret = false;
+		goto out;
 	}
 	if (h->operation_code != OP_USB_INIT) {
 		// This can happen if valid packet(s) were in transit *before* the OP_USB_INIT arrived
@@ -446,7 +449,8 @@ tryagain:
 		hfa_get_data(hashfast, buf, h->data_length);
 		if (retries++ < 3)
 			goto tryagain;
-		return false;
+		ret = false;
+		goto out;
 	}
 
 	applog(LOG_DEBUG, "%s %d: Good reply to OP_USB_INIT", hashfast->drv->name, hashfast->device_id);
@@ -474,7 +478,8 @@ tryagain:
 	if (!hfa_get_data(hashfast, (char *)&info->usb_init_base, U32SIZE(info->usb_init_base))) {
 		applog(LOG_WARNING, "%s %d: OP_USB_INIT failed! Failure to get usb_init_base data",
 		       hashfast->drv->name, hashfast->device_id);
-		return false;
+		ret = false;
+		goto out;
 	}
 	db = &info->usb_init_base;
 	applog(LOG_INFO, "%s %d:      firmware_rev:    %d.%d", hashfast->drv->name, hashfast->device_id,
@@ -494,7 +499,8 @@ tryagain:
 	if (!hfa_get_data(hashfast, (char *)&info->config_data, U32SIZE(info->config_data))) {
 		applog(LOG_WARNING, "%s %d: OP_USB_INIT failed! Failure to get config_data",
 		       hashfast->drv->name, hashfast->device_id);
-		return false;
+		ret = false;
+		goto out;
 	}
 
 	// Now the core bitmap
@@ -503,7 +509,8 @@ tryagain:
 		quit(1, "Failed to malloc info core bitmap in hfa_reset");
 	if (!hfa_get_data(hashfast, (char *)info->core_bitmap, info->core_bitmap_size / 4)) {
 		applog(LOG_WARNING, "%s %d: OP_USB_INIT failed! Failure to get core_bitmap", hashfast->drv->name, hashfast->device_id);
-		return false;
+		ret = false;
+		goto out;
 	}
 
 	// See if the initialization suceeded
@@ -512,21 +519,27 @@ tryagain:
 		       hashfast->drv->name, hashfast->device_id, db->operation_status,
 			(db->operation_status < sizeof(hf_usb_init_errors)/sizeof(hf_usb_init_errors[0])) ?
 			hf_usb_init_errors[db->operation_status] : "Unknown error code");
-		return false;
+		ret = false;
+		goto out;
 	}
 
 	if (!db->hash_clockrate) {
 		applog(LOG_INFO, "%s %d: OP_USB_INIT failed! Clockrate reported as zero",
 		       hashfast->drv->name, hashfast->device_id);
-		return false;
+		ret = false;
+		goto out;
 	}
 	info->num_sequence = db->sequence_modulus;
 	info->serial_number = db->serial_number;
 	info->base_clock = db->hash_clockrate;
 
-	hfa_clear_readbuf(hashfast);
-
-	return true;
+	ret = hfa_clear_readbuf(hashfast);
+out:
+	if (!ret) {
+		hfa_send_shutdown(hashfast);
+		usb_nodev(hashfast);
+	}
+	return ret;
 }
 
 static bool hfa_clear_readbuf(struct cgpu_info *hashfast)
