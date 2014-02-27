@@ -612,8 +612,8 @@ static void hfa_set_clock(struct cgpu_info *hashfast, struct hashfast_info *info
 
 static bool hfa_detect_common(struct cgpu_info *hashfast)
 {
-	bool has_opname = false, opname_valid = true, ret = false;
 	struct hashfast_info *info;
+	bool ret = false;
 	char buf[1024];
 	struct hf_header *h = (struct hf_header *)buf;
 	uint8_t hcrc;
@@ -645,14 +645,14 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 			       hashfast->drv->name, hashfast->device_id);
 			return false;
 		}
-		has_opname = true;
+		info->has_opname = info->opname_valid = true;
 		applog(LOG_DEBUG, "%s: Returned an OP_NAME", hashfast->drv->name);
 		for (i = 0; i < 32; i++) {
 			if (i > 0 && info->op_name[i] == '\0')
 				break;
 			/* Make sure the op_name is valid ascii only */
 			if (info->op_name[i] < 32 || info->op_name[i] > 126) {
-				opname_valid = false;
+				info->opname_valid = false;
 				break;
 			}
 		}
@@ -661,7 +661,7 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 	info->cgpu = hashfast;
 	/* Look for a matching zombie instance and inherit values from it if it
 	 * exists. */
-	if (has_opname && opname_valid) {
+	if (info->has_opname && info->opname_valid) {
 		info->old_cgpu = hfa_old_device(hashfast, info);
 		if (info->old_cgpu) {
 			struct hashfast_info *cinfo = info->old_cgpu->device_data;
@@ -682,7 +682,7 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 		goto out;
 
 	/* We will have extracted the serial number by now */
-	if (has_opname && !opname_valid)
+	if (info->has_opname && !info->opname_valid)
 		hfa_choose_opname(hashfast, info);
 
 	if (hashfast->usbinfo.nodev) {
@@ -716,7 +716,7 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 	if (!info->old_cgpu)
 		info->old_cgpu = hfa_old_device(hashfast, info);
 
-	if (!has_opname && info->old_cgpu) {
+	if (!info->has_opname && info->old_cgpu) {
 		struct hashfast_info *cinfo = info->old_cgpu->device_data;
 
 		applog(LOG_NOTICE, "%s: Found old instance by serial number %08x at device %d",
