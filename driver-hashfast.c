@@ -863,8 +863,10 @@ static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_inf
 		if (++info->hash_sequence_tail >= info->num_sequence)
 			info->hash_sequence_tail = 0;
 		if (unlikely(!(work = info->works[info->hash_sequence_tail]))) {
-			applog(LOG_ERR, "%s %d: Bad work sequence tail",
-			       hashfast->drv->name, hashfast->device_id);
+			applog(LOG_ERR, "%s %d: Bad work sequence tail %d head %d devhead %d devtail %d sequence %d",
+			       hashfast->drv->name, hashfast->device_id, info->hash_sequence_tail,
+			       info->hash_sequence_head, info->device_sequence_head,
+			       info->device_sequence_tail, info->num_sequence);
 			hashfast->shutdown = true;
 			usb_nodev(hashfast);
 			break;
