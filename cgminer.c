@@ -8184,10 +8184,21 @@ static void noop_thread_enable(struct thr_info __maybe_unused *thr)
 static void noop_detect(bool __maybe_unused hotplug)
 {
 }
+
+static struct api_data *noop_get_api_stats(struct cgpu_info __maybe_unused *cgpu)
+{
+	return NULL;
+}
+
+static void noop_hash_work(struct thr_info __maybe_unused *thr)
+{
+}
+
 #define noop_flush_work noop_reinit_device
 #define noop_update_work noop_reinit_device
 #define noop_queue_full noop_get_stats
 #define noop_zero_stats noop_reinit_device
+#define noop_identify_device noop_reinit_device
 
 /* Fill missing driver drv functions with noops */
 void fill_device_drv(struct device_drv *drv)
@@ -8230,6 +8241,42 @@ void fill_device_drv(struct device_drv *drv)
 		drv->max_diff = 1;
 	if (!drv->working_diff)
 		drv->working_diff = 1;
+}
+
+void null_device_drv(struct device_drv *drv)
+{
+	drv->drv_detect = &noop_detect;
+	drv->reinit_device = &noop_reinit_device;
+	drv->get_statline_before = &blank_get_statline_before;
+	drv->get_statline = &noop_get_statline;
+	drv->get_api_stats = &noop_get_api_stats;
+	drv->get_stats = &noop_get_stats;
+	drv->identify_device = &noop_identify_device;
+	drv->set_device = NULL;
+
+	drv->thread_prepare = &noop_thread_prepare;
+	drv->can_limit_work = &noop_can_limit_work;
+	drv->thread_init = &noop_thread_init;
+	drv->prepare_work = &noop_prepare_work;
+
+	/* This should make the miner thread just exit */
+	drv->hash_work = &noop_hash_work;
+
+	drv->hw_error = &noop_hw_error;
+	drv->thread_shutdown = &noop_thread_shutdown;
+	drv->thread_enable = &noop_thread_enable;
+
+	drv->zero_stats = &noop_zero_stats;
+
+	drv->hash_work = &noop_hash_work;
+
+	drv->queue_full = &noop_queue_full;
+	drv->flush_work = &noop_flush_work;
+	drv->update_work = &noop_update_work;
+
+	drv->zero_stats = &noop_zero_stats;
+	drv->max_diff = 1;
+	drv->working_diff = 1;
 }
 
 void enable_device(struct cgpu_info *cgpu)
