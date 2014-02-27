@@ -1807,8 +1807,8 @@ static void hfa_shutdown(struct thr_info *thr)
 	free(info->die_statistics);
 	free(info->die_status);
 	free(info->die_data);
-	hashfast->device_data = NULL;
-	free(info);
+	/* Keep the device data intact to allow new instances to match old
+	 * ones. */
 }
 
 struct device_drv hashfast_drv = {
