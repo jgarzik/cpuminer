@@ -7226,7 +7226,6 @@ void *miner_thread(void *userdata)
 	applog(LOG_DEBUG, "Waiting on sem in miner thread");
 	cgsem_wait(&mythr->sem);
 
-	set_highprio();
 	cgpu->last_device_valid_work = time(NULL);
 	drv->hash_work(mythr);
 out:
@@ -8944,6 +8943,8 @@ begin_bench:
 	/* Just to be sure */
 	if (total_control_threads != 8)
 		quit(1, "incorrect total_control_threads (%d) should be 8", total_control_threads);
+
+	set_highprio();
 
 	/* Once everything is set up, main() becomes the getwork scheduler */
 	while (42) {
