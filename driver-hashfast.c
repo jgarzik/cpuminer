@@ -646,7 +646,7 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 		if (!hfa_get_data(hashfast, info->op_name, 32 / 4)) {
 			applog(LOG_WARNING, "%s %d: OP_NAME failed! Failure to get op_name data",
 			       hashfast->drv->name, hashfast->device_id);
-			return false;
+			goto out;
 		}
 		info->has_opname = info->opname_valid = true;
 		applog(LOG_DEBUG, "%s: Returned an OP_NAME", hashfast->drv->name);
@@ -681,9 +681,10 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 
 out:
 	if (!ret) {
-		hfa_clear_readbuf(hashfast);
-		free(info);
+		if (!hashfast->usbinfo.nodev)
+			hfa_clear_readbuf(hashfast);
 		hashfast->device_data = NULL;
+		free(info);
 	}
 	return ret;
 }
@@ -1235,8 +1236,9 @@ out:
 		ret = false;
 
 	if (!ret) {
-		if (!hashfast->usbinfo.nodev)
-			hfa_clear_readbuf(hashfast);
+		hfa_clear_readbuf(hashfast);
+		free(info);
+		hashfast->device_data = NULL;
 		usb_nodev(hashfast);
 	}
 		
@@ -1725,11 +1727,14 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 
 static void hfa_statline_before(char *buf, size_t bufsiz, struct cgpu_info *hashfast)
 {
-	struct hashfast_info *info = hashfast->device_data;
+	struct hashfast_info *info;
 	struct hf_g1_die_data *d;
 	double max_volt;
 	int i;
 
+	if (!hashfast->device_data)
+		return;
+	info = hashfast->device_data;
 	max_volt = 0.0;
 
 	for (i = 0; i < info->asic_count; i++) {
@@ -1782,8 +1787,8 @@ static void hfa_shutdown(struct thr_info *thr)
 	free(info->die_statistics);
 	free(info->die_status);
 	free(info->die_data);
-	/* Don't free info here since it will be accessed by statline before
-	 * if a device is removed. */
+	hashfast->device_data = NULL;
+	free(info);
 }
 
 struct device_drv hashfast_drv = {
