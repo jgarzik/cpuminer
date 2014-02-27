@@ -1665,12 +1665,16 @@ restart:
 
 static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 {
-	struct hashfast_info *info = cgpu->device_data;
+	struct hashfast_info *info;
 	struct hf_long_usb_stats1 *s1;
 	struct api_data *root = NULL;
 	struct hf_usb_init_base *db;
 	int varint, i;
 	char buf[64];
+
+	info = cgpu->device_data;
+	if (!info)
+		return NULL;
 
 	root = api_add_int(root, "asic count", &info->asic_count, false);
 	root = api_add_int(root, "core count", &info->core_count, false);
