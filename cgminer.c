@@ -7456,6 +7456,9 @@ static void *longpoll_thread(void __maybe_unused *userdata)
 
 void reinit_device(struct cgpu_info *cgpu)
 {
+	if (cgpu->deven == DEV_DISABLED)
+		return;
+
 #ifdef USE_USBUTILS
 	/* Attempt a usb device reset if the device has gone sick */
 	if (cgpu->usbdev && cgpu->usbdev->handle)
