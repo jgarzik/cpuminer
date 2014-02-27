@@ -7709,6 +7709,9 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			char dev_str[8];
 			int gpu;
 
+			if (!thr)
+				continue;
+
 			cgpu->drv->get_stats(cgpu);
 
 			gpu = cgpu->device_id;
