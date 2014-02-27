@@ -28,6 +28,7 @@ int opt_hfa_fan_default = HFA_FAN_DEFAULT;
 int opt_hfa_fan_max = HFA_FAN_MAX;
 int opt_hfa_fan_min = HFA_FAN_MIN;
 int opt_hfa_fail_drop = 10;
+bool opt_hfa_noshed;
 
 char *opt_hfa_name;
 
@@ -391,7 +392,8 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	hu->preamble = HF_PREAMBLE;
 	hu->operation_code = OP_USB_INIT;
 	hu->protocol = PROTOCOL_GLOBAL_WORK_QUEUE;	// Protocol to use
-	hu->shed_supported = true;
+	if (!opt_hfa_noshed)
+		hu->shed_supported = true;
 	// Force PLL bypass
 	hu->pll_bypass = opt_hfa_pll_bypass;
 	hu->hash_clock = info->hash_clock_rate;		// Hash clock rate in Mhz
