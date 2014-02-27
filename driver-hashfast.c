@@ -1233,9 +1233,8 @@ out:
 		ret = false;
 
 	if (!ret) {
-		hfa_clear_readbuf(hashfast);
-		free(info);
-		hashfast->device_data = NULL;
+		if (!hashfast->usbinfo.nodev)
+			hfa_clear_readbuf(hashfast);
 		usb_nodev(hashfast);
 	}
 		
