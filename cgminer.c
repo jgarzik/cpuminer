@@ -2389,7 +2389,7 @@ const char blanks[] = "                                        ";
 
 static void curses_print_devstatus(struct cgpu_info *cgpu, int devno, int count)
 {
-	static int dawidth = 1, drwidth = 1, hwwidth = 1, wuwidth = 1;
+	static int devno_width = 1, dawidth = 1, drwidth = 1, hwwidth = 1, wuwidth = 1;
 	char logline[256];
 	char displayed_hashes[16], displayed_rolling[16];
 	uint64_t dh64, dr64;
@@ -2420,7 +2420,9 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int devno, int count)
 	wu = cgpu->diff1 / dev_runtime * 60;
 
 	wmove(statuswin,devcursor + count, 0);
-	cg_wprintw(statuswin, " %03d: %s %*d: ", devno, cgpu->drv->name, dev_width, cgpu->device_id);
+	adj_width(devno, &devno_width);
+	cg_wprintw(statuswin, " %*d: %s %*d: ", devno_width, devno, cgpu->drv->name,
+		   dev_width, cgpu->device_id);
 	logline[0] = '\0';
 	cgpu->drv->get_statline_before(logline, sizeof(logline), cgpu);
 	devstatlen = strlen(logline);
