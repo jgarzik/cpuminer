@@ -678,6 +678,7 @@ endian_flip128(void __maybe_unused *dest_p, const void __maybe_unused *src_p)
 #endif
 
 extern double cgpu_runtime(struct cgpu_info *cgpu);
+extern void __quit(int status, bool clean);
 extern void _quit(int status);
 
 /*

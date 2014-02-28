@@ -82,6 +82,15 @@ extern void _simplelog(int prio, const char *str, bool force);
 	_quit(status); \
 } while (0)
 
+#define early_quit(status, fmt, ...) do { \
+	if (fmt) { \
+		char tmp42[LOGBUFSIZ]; \
+		snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
+		_applog(LOG_ERR, tmp42, true); \
+	} \
+	__quit(status, false); \
+} while (0)
+
 #define quithere(status, fmt, ...) do { \
 	if (fmt) { \
 		char tmp42[LOGBUFSIZ]; \

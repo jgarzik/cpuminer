@@ -7891,9 +7891,14 @@ static void clean_up(bool restarting)
 	curl_global_cleanup();
 }
 
-void _quit(int status)
+void __quit(int status, bool clean)
 {
-	clean_up(false);
+	if (clean)
+		clean_up(false);
+#ifdef HAVE_CURSES
+	else
+		disable_curses();
+#endif
 
 #if defined(unix) || defined(__APPLE__)
 	if (forkpid > 0) {
@@ -7903,6 +7908,11 @@ void _quit(int status)
 #endif
 
 	exit(status);
+}
+
+void _quit(int status)
+{
+	__quit(status, true);
 }
 
 #ifdef HAVE_CURSES
@@ -8543,7 +8553,7 @@ int main(int argc, char *argv[])
 	/* This dangerous functions tramples random dynamically allocated
 	 * variables so do it before anything at all */
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
-		quit(1, "Failed to curl_global_init");
+		early_quit(1, "Failed to curl_global_init");
 
 #if LOCK_TRACKING
 	// Must be first
@@ -8570,19 +8580,19 @@ int main(int argc, char *argv[])
 
 	mutex_init(&lp_lock);
 	if (unlikely(pthread_cond_init(&lp_cond, NULL)))
-		quit(1, "Failed to pthread_cond_init lp_cond");
+		early_quit(1, "Failed to pthread_cond_init lp_cond");
 
 	mutex_init(&restart_lock);
 	if (unlikely(pthread_cond_init(&restart_cond, NULL)))
-		quit(1, "Failed to pthread_cond_init restart_cond");
+		early_quit(1, "Failed to pthread_cond_init restart_cond");
 
 	if (unlikely(pthread_cond_init(&gws_cond, NULL)))
-		quit(1, "Failed to pthread_cond_init gws_cond");
+		early_quit(1, "Failed to pthread_cond_init gws_cond");
 
 	/* Create a unique get work queue */
 	getq = tq_new();
 	if (!getq)
-		quit(1, "Failed to create getq");
+		early_quit(1, "Failed to create getq");
 	/* We use the getq mutex as the staged lock */
 	stgd_lock = &getq->mutex;
 
@@ -8630,7 +8640,7 @@ int main(int argc, char *argv[])
 
 	opt_parse(&argc, argv, applog_and_exit);
 	if (argc != 1)
-		quit(1, "Unexpected extra commandline arguments");
+		early_quit(1, "Unexpected extra commandline arguments");
 
 	if (!config_loaded)
 		load_default_config();
@@ -8690,7 +8700,7 @@ int main(int argc, char *argv[])
 	total_control_threads = 8;
 	control_thr = calloc(total_control_threads, sizeof(*thr));
 	if (!control_thr)
-		quit(1, "Failed to calloc control_thr");
+		early_quit(1, "Failed to calloc control_thr");
 
 	gwsched_thr_id = 0;
 
@@ -8702,7 +8712,7 @@ int main(int argc, char *argv[])
 	usbres_thr_id = 1;
 	thr = &control_thr[usbres_thr_id];
 	if (thr_info_create(thr, NULL, usb_resource_thread, thr))
-		quit(1, "usb resource thread create failed");
+		early_quit(1, "usb resource thread create failed");
 	pthread_detach(thr->pth);
 #endif
 
@@ -8721,7 +8731,7 @@ int main(int argc, char *argv[])
 			else
 				applog(LOG_ERR, " %2d. %s %d (driver: %s)", i, cgpu->drv->name, cgpu->device_id, cgpu->drv->dname);
 		}
-		quit(0, "%d devices listed", total_devices);
+		early_quit(0, "%d devices listed", total_devices);
 	}
 
 	mining_threads = 0;
@@ -8750,7 +8760,7 @@ int main(int argc, char *argv[])
 	}
 #else
 	if (!total_devices)
-		quit(1, "All devices disabled, cannot mine!");
+		early_quit(1, "All devices disabled, cannot mine!");
 #endif
 
 	most_devices = total_devices;
@@ -8773,7 +8783,7 @@ int main(int argc, char *argv[])
 #ifdef HAVE_CURSES
 		if (!use_curses || !input_pool(false))
 #endif
-			quit(1, "Pool setup failed");
+			early_quit(1, "Pool setup failed");
 	}
 
 	for (i = 0; i < total_pools; i++) {
@@ -8785,11 +8795,11 @@ int main(int argc, char *argv[])
 
 		if (!pool->rpc_userpass) {
 			if (!pool->rpc_user || !pool->rpc_pass)
-				quit(1, "No login credentials supplied for pool %u %s", i, pool->rpc_url);
+				early_quit(1, "No login credentials supplied for pool %u %s", i, pool->rpc_url);
 			siz = strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2;
 			pool->rpc_userpass = malloc(siz);
 			if (!pool->rpc_userpass)
-				quit(1, "Failed to malloc userpass");
+				early_quit(1, "Failed to malloc userpass");
 			snprintf(pool->rpc_userpass, siz, "%s:%s", pool->rpc_user, pool->rpc_pass);
 		}
 	}
@@ -8808,11 +8818,11 @@ int main(int argc, char *argv[])
 
 	mining_thr = calloc(mining_threads, sizeof(thr));
 	if (!mining_thr)
-		quit(1, "Failed to calloc mining_thr");
+		early_quit(1, "Failed to calloc mining_thr");
 	for (i = 0; i < mining_threads; i++) {
 		mining_thr[i] = calloc(1, sizeof(*thr));
 		if (!mining_thr[i])
-			quit(1, "Failed to calloc mining_thr[%d]", i);
+			early_quit(1, "Failed to calloc mining_thr[%d]", i);
 	}
 
 	// Start threads
@@ -8833,7 +8843,7 @@ int main(int argc, char *argv[])
 				continue;
 
 			if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
-				quit(1, "thread %d create failed", thr->id);
+				early_quit(1, "thread %d create failed", thr->id);
 
 			cgpu->thr[j] = thr;
 
@@ -8883,11 +8893,11 @@ int main(int argc, char *argv[])
 				halfdelay(255);
 				applog(LOG_ERR, "Press any key to exit, or cgminer will try again in 30s.");
 				if (getch() != ERR)
-					quit(0, "No servers could be used! Exiting.");
+					early_quit(0, "No servers could be used! Exiting.");
 				cbreak();
 			} else
 #endif
-				quit(0, "No servers could be used! Exiting.");
+				early_quit(0, "No servers could be used! Exiting.");
 		}
 	} while (!pools_active);
 
@@ -8907,27 +8917,27 @@ begin_bench:
 	thr = &control_thr[watchpool_thr_id];
 	/* start watchpool thread */
 	if (thr_info_create(thr, NULL, watchpool_thread, NULL))
-		quit(1, "watchpool thread create failed");
+		early_quit(1, "watchpool thread create failed");
 	pthread_detach(thr->pth);
 
 	watchdog_thr_id = 3;
 	thr = &control_thr[watchdog_thr_id];
 	/* start watchdog thread */
 	if (thr_info_create(thr, NULL, watchdog_thread, NULL))
-		quit(1, "watchdog thread create failed");
+		early_quit(1, "watchdog thread create failed");
 	pthread_detach(thr->pth);
 
 	/* Create API socket thread */
 	api_thr_id = 5;
 	thr = &control_thr[api_thr_id];
 	if (thr_info_create(thr, NULL, api_thread, thr))
-		quit(1, "API thread create failed");
+		early_quit(1, "API thread create failed");
 
 #ifdef USE_USBUTILS
 	hotplug_thr_id = 6;
 	thr = &control_thr[hotplug_thr_id];
 	if (thr_info_create(thr, NULL, hotplug_thread, thr))
-		quit(1, "hotplug thread create failed");
+		early_quit(1, "hotplug thread create failed");
 	pthread_detach(thr->pth);
 #endif
 
@@ -8938,13 +8948,13 @@ begin_bench:
 	input_thr_id = 7;
 	thr = &control_thr[input_thr_id];
 	if (thr_info_create(thr, NULL, input_thread, thr))
-		quit(1, "input thread create failed");
+		early_quit(1, "input thread create failed");
 	pthread_detach(thr->pth);
 #endif
 
 	/* Just to be sure */
 	if (total_control_threads != 8)
-		quit(1, "incorrect total_control_threads (%d) should be 8", total_control_threads);
+		early_quit(1, "incorrect total_control_threads (%d) should be 8", total_control_threads);
 
 	set_highprio();
 
