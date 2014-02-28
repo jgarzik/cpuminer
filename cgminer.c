@@ -8544,10 +8544,11 @@ static void initialise_usb(void) {
 int main(int argc, char *argv[])
 {
 	struct sigaction handler;
+	bool pool_msg = false;
 	struct thr_info *thr;
 	struct block *block;
+	int i, j, slept = 0;
 	unsigned int k;
-	int i, j;
 	char *s;
 
 	/* This dangerous functions tramples random dynamically allocated
@@ -8866,40 +8867,38 @@ int main(int argc, char *argv[])
 		pool->idle = true;
 	}
 
+	/* Look for at least one active pool before starting */
 	applog(LOG_NOTICE, "Probing for an alive pool");
+	probe_pools();
 	do {
-		int slept = 0;
+		sleep(1);
+		slept++;
+	} while (!pools_active && slept < 60);
 
-		/* Look for at least one active pool before starting */
-		probe_pools();
-		do {
-			sleep(1);
-			slept++;
-		} while (!pools_active && slept < 60);
-
-		if (!pools_active) {
+	while (!pools_active) {
+		if (!pool_msg) {
 			applog(LOG_ERR, "No servers were found that could be used to get work from.");
 			applog(LOG_ERR, "Please check the details from the list below of the servers you have input");
 			applog(LOG_ERR, "Most likely you have input the wrong URL, forgotten to add a port, or have not set up workers");
 			for (i = 0; i < total_pools; i++) {
-				struct pool *pool;
+				struct pool *pool = pools[i];
 
-				pool = pools[i];
 				applog(LOG_WARNING, "Pool: %d  URL: %s  User: %s  Password: %s",
-				       i, pool->rpc_url, pool->rpc_user, pool->rpc_pass);
+				i, pool->rpc_url, pool->rpc_user, pool->rpc_pass);
 			}
-#ifdef HAVE_CURSES
-			if (use_curses) {
-				halfdelay(255);
-				applog(LOG_ERR, "Press any key to exit, or cgminer will try again in 30s.");
-				if (getch() != ERR)
-					early_quit(0, "No servers could be used! Exiting.");
-				cbreak();
-			} else
-#endif
-				early_quit(0, "No servers could be used! Exiting.");
+			pool_msg = true;
+			if (use_curses)
+				applog(LOG_ERR, "Press any key to exit, or cgminer will wait indefinitely for an alive pool.");
 		}
-	} while (!pools_active);
+		if (!use_curses)
+			early_quit(0, "No servers could be used! Exiting.");
+#ifdef HAVE_CURSES
+		halfdelay(10);
+		if (getch() != ERR)
+			early_quit(0, "No servers could be used! Exiting.");
+		cbreak();
+#endif
+	};
 
 begin_bench:
 	total_mhashes_done = 0;
