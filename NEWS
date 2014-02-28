@@ -1,5 +1,46 @@
+Version 4.0.1 - 28th February 2014
 
-
+- Refresh the log window on pool failure message at startup.
+- Rework the pool fail to connect at startup to not get stuck indefinitely
+repeatedly probing pools with new threads and to exit immediately when any key
+is pressed.
+- Use an early_quit function for shutting down when we have not successfully
+initialised that does not try to clean up.
+- Add more information to a hfa bad sequence tail event.
+- Increase the work queue at the top end if we've hit the bottom as well.
+- Set the work generation thread high priority, not the miner threads.
+- Bringing each hfa device online takes a lot of work generation so only ever do
+one at a time.
+- Increase the opt_queue if we can hit the maximum amount asked for but are
+still bottoming out.
+- Keep the old hfa device data intact with a clean thread shutdown to allow it
+to be re-hotplugged with the old information.
+- Cope with the API calling hfa on partially initialised devices having no info.
+- Show only as many digits as are required to display the number of devices.
+- Cold plug only one hashfast device to get started, and then hotplug many to
+minimise startup delays and possible communication delays causing failed first
+starts.
+- Send a shutdown and do a usb_nodev if hfa_reset fails.
+- Null a device driver should thread prepare fail.
+- Add a function for making all driver functions noops.
+- Don't try to reinit a device that's disabled.
+- Disable a device that fails to prepare.
+- Check for lack of thread in watchdog thread for a failed startup.
+- Make all device_data dereferences in the hfa driver safe by not accessing it
+in statline before when it's non-existent.
+- Add an option to disable dynamic core shedding on hashfast devices.
+- Do not remove the info struct on a failure to hfa prepare.
+- Detect an hfa device purely on the basis of getting a valid header response to
+an OP_NAME query, leaving init to hfa_prepare which will allow multiple devices
+to start without holding each other up at startup.
+- Store the presence and validity of opname in the hfa info.
+- api - buffer size off by 1 for joined commands
+- minion - clean up statline
+- Only break out of usb_detect_one when a new device is found.
+- Use usb_detect_one in the hfa driver.
+- Provide a usb_detect_one wrapper which only plugs one device at a time,
+breaking out otherwise.
+- Issue a usb_nodev on a bad work sequence tail in hfa
 - Read in hfa stream until we get a HF_PREAMBLE
 - Add shed count to hfa API stats output.
 - Display the base clockrate for hfa devices with a different name to per die
