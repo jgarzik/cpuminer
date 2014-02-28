@@ -838,6 +838,7 @@ static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_inf
 				 struct hf_header *h)
 {
 	struct hf_gwq_data *g = (struct hf_gwq_data *)(h + 1);
+	bool starved = false;
 	uint16_t head_job;
 	struct work *work;
 
@@ -866,12 +867,14 @@ static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_inf
 	while (info->device_sequence_tail != info->hash_sequence_tail) {
 		if (++info->hash_sequence_tail >= info->num_sequence)
 			info->hash_sequence_tail = 0;
-		if (info->hash_sequence_tail == head_job) {
+		if (!starved && info->hash_sequence_tail == head_job) {
 			applog(LOG_WARNING, "%s %d: Work sequence starved", hashfast->drv->name,
 			       hashfast->device_id);
-			break;
+			starved = true;
 		}
 		if (unlikely(!(work = info->works[info->hash_sequence_tail]))) {
+			if (starved)
+				continue;
 			applog(LOG_ERR, "%s %d: Bad work sequence tail %d head %d devhead %d devtail %d sequence %d",
 			       hashfast->drv->name, hashfast->device_id, info->hash_sequence_tail,
 			       info->hash_sequence_head, info->device_sequence_head,
