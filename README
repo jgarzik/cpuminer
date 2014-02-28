@@ -193,6 +193,7 @@ Options for both config file and command line:
 --hfa-fail-drop <arg> Set how many MHz to drop clockspeed each failure on an overlocked hashfast device (default: 10)
 --hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)
 --hfa-name <arg>    Set a unique name for a single hashfast device specified with --usb or the first device found
+--hfa-noshed        Disable hashfast dynamic core disabling feature
 --hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
 --hfa-temp-target <arg> Set the hashfast target temperature (0 to disable) (default: 88)
 --hotplug <arg>     Seconds between hotplug checks (0 means never check)
@@ -267,6 +268,7 @@ ASIC only options:
 --hfa-fail-drop <arg> Set how many MHz to drop clockspeed each failure on an overlocked hashfast device (default: 10)
 --hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)
 --hfa-name <arg>    Set a unique name for a single hashfast device specified with --usb or the first device found
+--hfa-noshed        Disable hashfast dynamic core disabling feature
 --hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
 --hfa-temp-target <arg> Set the hashfast target temperature (0 to disable) (default: 88)
 --klondike-options <arg> Set klondike options clock:temptarget
