@@ -60,6 +60,9 @@ static cgtimer_t usb11_cgt;
 #define DRILLBIT_TIMEOUT_MS 999
 #define ICARUS_TIMEOUT_MS 999
 
+// There is no windows version
+#define ANT_S1_TIMEOUT_MS 200
+
 #ifdef WIN32
 #define BFLSC_TIMEOUT_MS 999
 #define BITFORCE_TIMEOUT_MS 999
@@ -320,6 +323,17 @@ static struct usb_epinfo cointerra_epinfos[] = {
 
 static struct usb_intinfo cointerra_ints[] = {
 	USB_EPS(0, cointerra_epinfos)
+};
+#endif
+
+#ifdef USE_ANT_S1
+static struct usb_epinfo ants1_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0, 0 }
+};
+
+static struct usb_intinfo ants1_ints[] = {
+	USB_EPS(0, ants1_epinfos)
 };
 #endif
 
@@ -588,6 +602,18 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = COINTERRA_TIMEOUT_MS,
 		.latency = LATENCY_STD,
 		INTINFO(cointerra_ints) },
+#endif
+#ifdef USE_ANT_S1
+	{
+		.drv = DRIVER_ants1,
+		.name = "ANT",
+		.ident = IDENT_ANT,
+		.idVendor = 0x4254,
+		.idProduct = 0x4153,
+		.config = 1,
+		.timeout = ANT_S1_TIMEOUT_MS,
+		.latency = LATENCY_ANTS1,
+		INTINFO(ants1_ints) },
 #endif
 	{ DRIVER_MAX, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, NULL }
 };

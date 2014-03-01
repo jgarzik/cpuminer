@@ -135,6 +135,7 @@ struct usb_intinfo {
 enum sub_ident {
 	IDENT_UNK = 0,
 	IDENT_AMU,
+	IDENT_ANT,
 	IDENT_ANU,
 	IDENT_AVA,
 	IDENT_BAJ,
@@ -179,6 +180,7 @@ struct usb_find_devices {
  * baud rate, to avoid status bytes being interleaved in larger transfers. */
 #define LATENCY_UNUSED 0
 #define LATENCY_STD 32
+#define LATENCY_ANTS1 10
 
 enum usb_types {
 	USB_TYPE_STD = 0,
