@@ -1428,6 +1428,7 @@ enum api_data_type {
 	API_STRING,
 	API_CONST,
 	API_UINT8,
+	API_INT16,
 	API_UINT16,
 	API_INT,
 	API_UINT,
