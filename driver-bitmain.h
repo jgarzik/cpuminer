@@ -1,6 +1,7 @@
 /*
  * Copyright 2013 BitMain project
  * Copyright 2013 BitMain <xlc1985@126.com>
+ * Copyright 2014 Andrew Smith
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -11,7 +12,7 @@
 #ifndef BITMAIN_H
 #define BITMAIN_H
 
-#ifdef USE_BITMAIN
+#ifdef USE_ANT_S1
 
 #include "util.h"
 
@@ -197,7 +198,6 @@ struct bitmain_info {
 
 	struct thr_info *thr;
 	pthread_t read_thr;
-	pthread_t write_thr;
 	pthread_mutex_t lock;
 	pthread_mutex_t qlock;
 	pthread_cond_t qcond;
@@ -232,7 +232,6 @@ struct bitmain_info {
 ASSERT1(sizeof(uint32_t) == 4);
 
 extern struct bitmain_info **bitmain_info;
-extern char opt_bitmain_dev[256];
 extern int opt_bitmain_temp;
 extern int opt_bitmain_overheat;
 extern int opt_bitmain_fan_min;
@@ -240,9 +239,8 @@ extern int opt_bitmain_fan_max;
 extern int opt_bitmain_freq_min;
 extern int opt_bitmain_freq_max;
 extern bool opt_bitmain_auto;
-extern char *set_bitmain_dev(char *arg);
 extern char *set_bitmain_fan(char *arg);
 extern char *set_bitmain_freq(char *arg);
 
-#endif /* USE_BITMAIN */
+#endif /* USE_ANT_S1 */
 #endif	/* BITMAIN_H */

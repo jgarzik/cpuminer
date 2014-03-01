@@ -37,3 +37,6 @@ ATTRS{idVendor}=="198c", ATTRS{idProduct}=="b1f1", SUBSYSTEM=="usb", ACTION=="ad
 
 # NF1
 ATTRS{idVendor}=="04d8", ATTRS{idProduct}=="00de", SUBSYSTEM=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+
+# ANT_S1
+ATTRS{idVendor}=="4254", ATTRS{idProduct}=="4153", SUBSYSTEM=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"

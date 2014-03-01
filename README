@@ -105,6 +105,8 @@ If building on Ubuntu:
 	sudo apt-get install build-essential autoconf automake libtool libcurl3-dev libudev-dev
 
 CGMiner specific configuration options:
+  --enable-ants1          Compile support for Antminer S1 Bitmain (default
+                          disabled)
   --enable-avalon         Compile support for Avalon (default disabled)
   --enable-bab            Compile support for BlackArrow Bitfury (default
                           disabled)
@@ -119,8 +121,6 @@ CGMiner specific configuration options:
   --enable-hashfast       Compile support for Hashfast (default disabled)
   --enable-icarus         Compile support for Icarus (default disabled)
   --enable-knc            Compile support for KnC miners (default disabled)
-  --enable-bab            Compile support for BlackArrow Bitfury (default disabled)
-  --enable-minion         Compile support for BlackArrow Minion ASIC (default disabled)
   --enable-klondike       Compile support for Klondike (default disabled)
   --enable-knc            Compile support for KnC miners (default disabled)
   --enable-minion         Compile support for Minion BlackArrow ASIC (default
@@ -180,6 +180,13 @@ Options for both config file and command line:
 --bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
 --bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
+--bitmain-auto      Adjust bitmain overclock frequency dynamically for best hashrate
+--bitmain-cutoff    Set bitmain overheat cut off temperature
+--bitmain-fan       Set fanspeed percentage for bitmain, single value or range (default: 20-100)
+--bitmain-freq      Set frequency range for bitmain-auto, single value or range
+--bitmain-hwerror   Set bitmain device detect hardware error
+--bitmain-options   Set bitmain options baud:miners:asic:timeout:freq
+--bitmain-temp      Set bitmain target temperature
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
 --compact           Use compact display without per device statistics
 --debug|-D          Enable debug output
