@@ -15,7 +15,7 @@
 #define CTA_READ_TIMEOUT 1
 #define CTA_READ_INTERVAL 100
 #define CTA_SCAN_INTERVAL 500
-#define CTA_RESET_TIMEOUT 200
+#define CTA_RESET_TIMEOUT 1000
 
 #define CTA_INIT_DIFF		32*0.9999847412109375
 
@@ -118,9 +118,15 @@
 #define CTA_STAT_UPTIME_MS	21
 #define CTA_STAT_HASHES		25
 #define CTA_STAT_FLUSHED_HASHES 33
-#define CTA_STAT_AUTOVOLTAGE  41
-#define CTA_STAT_POWER_PERCENT 42
-#define CTA_STAT_POWER_USED 43
+#define CTA_STAT_AUTOVOLTAGE	41
+#define CTA_STAT_POWER_PERCENT	42
+#define CTA_STAT_POWER_USED	43
+#define CTA_STAT_VOLTAGE	45
+#define CTA_STAT_IPOWER_USED	47
+#define CTA_STAT_IVOLTAGE	49
+#define CTA_STAT_PS_TEMP1	51
+#define CTA_STAT_PS_TEMP2	53
+
 
 #define CTA_CORES		8
 #define CTA_PUMPS		2
@@ -183,6 +189,11 @@ struct cointerra_info {
 	uint8_t  autovoltage;
 	uint8_t  current_ps_percent;
 	uint16_t power_used;
+	uint16_t power_voltage;
+	uint16_t ipower_used;
+	uint16_t ipower_voltage;
+	uint16_t power_temps[2];
+
 
 	/* Calculated totals based on work done and nonces found */
 	uint64_t hashes;

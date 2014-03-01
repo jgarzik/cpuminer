@@ -566,6 +566,11 @@ static void cta_parse_debug(struct cointerra_info *info, char *buf)
 	info->autovoltage = u8_from_msg(buf, CTA_STAT_AUTOVOLTAGE);
 	info->current_ps_percent = u8_from_msg(buf, CTA_STAT_POWER_PERCENT);
 	info->power_used = hu16_from_msg(buf,CTA_STAT_POWER_USED);
+	info->power_voltage = hu16_from_msg(buf,CTA_STAT_VOLTAGE);
+	info->ipower_used = hu16_from_msg(buf,CTA_STAT_IPOWER_USED);
+	info->ipower_voltage = hu16_from_msg(buf,CTA_STAT_IVOLTAGE);
+	info->power_temps[0] = hu16_from_msg(buf,CTA_STAT_PS_TEMP1);
+	info->power_temps[1] = hu16_from_msg(buf,CTA_STAT_PS_TEMP2);
 
 	mutex_unlock(&info->lock);
 }
@@ -1013,11 +1018,11 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 	/* Status readings */
 	for (i = 0; i < CTA_CORES; i++) {
 		sprintf(buf, "CoreTemp%d", i);
-		root = api_add_uint16(root, buf, &info->coretemp[i], false);
+		root = api_add_int16(root, buf, &info->coretemp[i], false);
 	}
-	root = api_add_uint16(root, "Ambient Low", &info->ambtemp_low, false);
-	root = api_add_uint16(root, "Ambient Avg", &info->ambtemp_avg, false);
-	root = api_add_uint16(root, "Ambient High", &info->ambtemp_high, false);
+	root = api_add_int16(root, "Ambient Low", &info->ambtemp_low, false);
+	root = api_add_int16(root, "Ambient Avg", &info->ambtemp_avg, false);
+	root = api_add_int16(root, "Ambient High", &info->ambtemp_high, false);
 	for (i = 0; i < CTA_PUMPS; i++) {
 		sprintf(buf, "PumpRPM%d", i);
 		root = api_add_uint16(root, buf, &info->pump_tachs[i], false);
@@ -1103,6 +1108,12 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 	root = api_add_uint8(root,"AV",&info->autovoltage, false);
 	root = api_add_uint8(root,"Power Supply Percent",&info->current_ps_percent, false);
 	root = api_add_uint16(root,"Power Used",&info->power_used, false);
+	root = api_add_uint16(root,"IOUT",&info->power_used, false);
+	root = api_add_uint16(root,"VOUT",&info->power_voltage, false);
+	root = api_add_uint16(root,"IIN",&info->ipower_used, false);
+	root = api_add_uint16(root,"VIN",&info->ipower_voltage, false);
+	root = api_add_uint16(root,"PSTemp1",&info->power_temps[0], false);
+	root = api_add_uint16(root,"PSTemp2",&info->power_temps[1], false);
 
 	return root;
 }
@@ -1119,9 +1130,9 @@ static void cta_statline_before(char *buf, size_t bufsiz, struct cgpu_info *coin
 		if (info->corefreqs[i] > freq)
 			freq = info->corefreqs[i];
 	}
-	max_volt /= 100;
+	max_volt /= 1000;
 
-	tailsprintf(buf, bufsiz, "%3dMHz %3.1fC %2.1fV", freq, cointerra->temp, max_volt);
+	tailsprintf(buf, bufsiz, "%4dMHz %3.1fC %3.2fV", freq, cointerra->temp, max_volt);
 }
 
 struct device_drv cointerra_drv = {
