@@ -45,6 +45,19 @@ static bool cta_reset_init(char *buf)
 	return ((buf[CTA_MSG_TYPE] == CTA_RECV_RDONE) && ((buf[CTA_RESET_TYPE]&0x3) == CTA_RESET_INIT));
 }
 
+static char *mystrstr(char *haystack, int size, const char *needle)
+{
+	int loop = 0;
+
+	while (loop < (size-1)) {
+		if ((haystack[loop] == needle[0])&&
+		    (haystack[loop+1] == needle[1]))
+			return &haystack[loop];
+		loop++;
+	}
+	return NULL;
+}
+
 static bool cta_open(struct cgpu_info *cointerra)
 {
 	int err, amount, offset = 0;
@@ -101,7 +114,7 @@ static bool cta_open(struct cgpu_info *cointerra)
 		if (!amount)
 			continue;
 
-		msg = strstr(buf, cointerra_hdr);
+		msg = mystrstr(buf, amount, cointerra_hdr);
 		if (!msg) {
 			/* Keep the last byte in case it's the first byte of
 			 * the 2 byte header. */
@@ -635,7 +648,7 @@ static void *cta_recv_thread(void *arg)
 		offset += amount;
 
 		while (offset >= CTA_MSG_SIZE) {
-			char *msg = strstr(buf, cointerra_hdr);
+			char *msg = mystrstr(buf, offset, cointerra_hdr);
 			int begin;
 
 			if (unlikely(!msg)) {
