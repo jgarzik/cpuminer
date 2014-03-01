@@ -617,7 +617,6 @@ char *bin2hex(const unsigned char *p, size_t len)
 	return s;
 }
 
-/* Does the reverse of bin2hex but does not allocate any ram */
 static const int hex2bin_tbl[256] = {
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
@@ -636,6 +635,8 @@ static const int hex2bin_tbl[256] = {
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 };
+
+/* Does the reverse of bin2hex but does not allocate any ram */
 bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
 {
 	int nibble1, nibble2;
@@ -1497,8 +1498,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 {
 	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit,
 	     *ntime, *header;
+	unsigned char *cb1 = NULL, *cb2 = NULL;
 	size_t cb1_len, cb2_len, alloc_len;
-	unsigned char *cb1, *cb2;
 	bool clean, ret = false;
 	int merkles, i;
 	json_t *arr;
@@ -1565,8 +1566,12 @@ static bool parse_notify(struct pool *pool, json_t *val)
 			pool->swork.merkle_bin[i] = malloc(32);
 			if (unlikely(!pool->swork.merkle_bin[i]))
 				quit(1, "Failed to malloc pool swork merkle_bin");
-			hex2bin(pool->swork.merkle_bin[i], merkle, 32);
+			ret = hex2bin(pool->swork.merkle_bin[i], merkle, 32);
 			free(merkle);
+			if (unlikely(!ret)) {
+				applog(LOG_ERR, "Failed to convert merkle to merkle_bin in parse_notify");
+				goto out_unlock;
+			}
 		}
 	}
 	pool->swork.merkles = merkles;
@@ -1593,17 +1598,24 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		pool->swork.nbit,
 		"00000000", /* nonce */
 		workpadding);
-	if (unlikely(!hex2bin(pool->header_bin, header, 128)))
-		quit(1, "Failed to convert header to header_bin in parse_notify");
+	ret = hex2bin(pool->header_bin, header, 128);
+	if (unlikely(!ret)) {
+		applog(LOG_ERR, "Failed to convert header to header_bin in parse_notify");
+		goto out_unlock;
+	}
 
-	cb1 = calloc(cb1_len, 1);
-	if (unlikely(!cb1))
-		quithere(1, "Failed to calloc cb1 in parse_notify");
-	hex2bin(cb1, coinbase1, cb1_len);
-	cb2 = calloc(cb2_len, 1);
-	if (unlikely(!cb2))
-		quithere(1, "Failed to calloc cb2 in parse_notify");
-	hex2bin(cb2, coinbase2, cb2_len);
+	cb1 = alloca(cb1_len);
+	ret = hex2bin(cb1, coinbase1, cb1_len);
+	if (unlikely(!ret)) {
+		applog(LOG_ERR, "Failed to convert cb1 to cb1_bin in parse_notify");
+		goto out_unlock;
+	}
+	cb2 = alloca(cb2_len);
+	ret = hex2bin(cb2, coinbase2, cb2_len);
+	if (unlikely(!ret)) {
+		applog(LOG_ERR, "Failed to convert cb2 to cb2_bin in parse_notify");
+		goto out_unlock;
+	}
 	free(pool->coinbase);
 	align_len(&alloc_len);
 	pool->coinbase = calloc(alloc_len, 1);
@@ -1612,6 +1624,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	memcpy(pool->coinbase, cb1, cb1_len);
 	memcpy(pool->coinbase + cb1_len, pool->nonce1bin, pool->n1_len);
 	memcpy(pool->coinbase + cb1_len + pool->n1_len + pool->n2size, cb2, cb2_len);
+out_unlock:
 	cg_wunlock(&pool->data_lock);
 
 	if (opt_protocol) {
@@ -1626,13 +1639,10 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	}
 	free(coinbase1);
 	free(coinbase2);
-	free(cb1);
-	free(cb2);
 
 	/* A notify message is the closest stratum gets to a getwork */
 	pool->getwork_requested++;
 	total_getworks++;
-	ret = true;
 	if (pool == current_pool())
 		opt_work_update = true;
 out:
