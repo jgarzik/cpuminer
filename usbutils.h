@@ -210,6 +210,8 @@ struct cg_usb_device {
 	char buffer[USB_MAX_READ];
 	uint32_t bufsiz;
 	uint32_t bufamt;
+	bool usb11; // USB 1.1 flag for convenience
+	bool tt; // Enable the transaction translator
 };
 
 #define USB_NOSTAT 0

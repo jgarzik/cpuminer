@@ -2010,6 +2010,10 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 	}
 
 	cgusb->usbver = cgusb->descriptor->bcdUSB;
+	if (cgusb->usbver < 0x0200) {
+		cgusb->usb11 = true;
+		cgusb->tt = true;
+	}
 
 // TODO: allow this with the right version of the libusb include and running library
 //	cgusb->speed = libusb_get_device_speed(dev);
@@ -2951,10 +2955,10 @@ out_noerrmsg:
 int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, int timeout, enum usb_cmds cmd)
 {
 	struct timeval write_start, tv_finish;
-	bool first = true, usb11 = false;
 	struct cg_usb_device *usbdev;
 	unsigned int initial_timeout;
 	int err, sent, tot, pstate;
+	bool first = true;
 	double done;
 
 	DEVRLOCK(cgpu, pstate);
@@ -2971,8 +2975,6 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 	}
 
 	usbdev = cgpu->usbdev;
-	if (usbdev->descriptor->bcdUSB < 0x0200)
-		usb11 = true;
 	if (timeout == DEVTIMEOUT)
 		timeout = usbdev->found->timeout;
 
@@ -2986,7 +2988,7 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 		/* USB 1.1 devices don't handle zero packets well so split them
 		 * up to not have the final transfer equal to the wMaxPacketSize
 		 * or they will stall waiting for more data. */
-		if (usb11) {
+		if (usbdev->usb11) {
 			struct usb_epinfo *ue = &usbdev->found->intinfos[intinfo].epinfos[epinfo];
 
 			if (tosend == ue->wMaxPacketSize) {
@@ -2997,7 +2999,7 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 		}
 		err = usb_perform_transfer(cgpu, usbdev, intinfo, epinfo, (unsigned char *)buf,
 					tosend, &sent, timeout, MODE_BULK_WRITE,
-					cmd, first ? SEQ0 : SEQ1, false, usb11);
+					cmd, first ? SEQ0 : SEQ1, false, usbdev->tt);
 		cgtime(&tv_finish);
 
 		USBDEBUG("USB debug: @_usb_write(%s (nodev=%s)) err=%d%s sent=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), sent);
