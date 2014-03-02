@@ -436,6 +436,49 @@ out:
 	return ret;
 }
 
+static void bxm_empty_buffer(struct cgpu_info *bitfury)
+{
+	char buf[512];
+	int amount;
+
+	do {
+		usb_read_once(bitfury, buf, 512, &amount, C_BXM_FLUSH);
+	} while (amount);
+}
+
+static bool bxm_open(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	char buf[4];
+	int err;
+
+	bxm_empty_buffer(bitfury);
+	/* Device likes being reset first. */
+	usb_reset(bitfury);
+	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_RESET_REQUEST, SIO_RESET_SIO, 1, C_BXM_RESET);
+	if (err)
+		return false;
+	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_SET_LATENCY_TIMER_REQUEST, BXM_LATENCY_MS, 1, C_BXM_SETLATENCY);
+	if (err)
+		return false;
+	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_SET_EVENT_CHAR_REQUEST, 0x00, 1, C_BXM_SECR);
+	if (err)
+		return false;
+
+	return true;
+}
+
+static bool bxm_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	bool ret;
+
+	ret = bxm_open(bitfury, info);
+	if (ret) {
+		applog(LOG_INFO, "%s %d: Successfully opened at %s", bitfury->drv->name, bitfury->device_id,
+		       bitfury->device_path);
+	}
+	return ret;
+}
+
 static struct cgpu_info *bitfury_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *bitfury;
@@ -464,6 +507,9 @@ static struct cgpu_info *bitfury_detect_one(struct libusb_device *dev, struct us
 			break;
 		case IDENT_NF1:
 			ret = nf1_detect_one(bitfury, info);
+			break;
+		case IDENT_BXM:
+			ret = bxm_detect_one(bitfury, info);
 			break;
 		default:
 			applog(LOG_INFO, "%s %d: Unrecognised bitfury device",
