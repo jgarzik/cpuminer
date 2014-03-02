@@ -547,6 +547,13 @@ static bool bxm_spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
 		       bitfury->device_id, err, amount, info->spibufsz);
 		return false;
 	}
+	amount = usb_buffer_size(bitfury);
+	if (amount) {
+		applog(LOG_ERR, "%s %d: SPI RX Extra read buffer size %d", bitfury->drv->name,
+		       bitfury->device_id, amount);
+		bxm_empty_buffer(bitfury);
+		return false;
+	}
 	return true;
 }
 
@@ -1252,6 +1259,89 @@ static int64_t nf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 	return ret;
 }
 
+static bool bxm_sendHashData(struct thr_info *thr, struct cgpu_info *bitfury,
+			     struct bitfury_info *info)
+{
+	unsigned *newbuf = info->newbuf;
+	unsigned *oldbuf = info->oldbuf;
+	struct bitfury_payload *p = &(info->payload);
+	struct bitfury_payload *op = &(info->opayload);
+	unsigned int localvec[20];
+
+	/* Programming next value */
+	memcpy(localvec, p, 20 * 4);
+	ms3steps(localvec);
+
+	spi_clear_buf(info);
+	spi_add_break(info);
+	spi_add_data(info, 0x3000, (void*)localvec, 19 * 4);
+	if (!bxm_spi_txrx(bitfury, info))
+		return false;
+
+	memcpy(newbuf, info->spibuf + 4, 17 * 4);
+
+	info->job_switched = newbuf[16] != oldbuf[16];
+
+	if (likely(info->second_run)) {
+		if (info->job_switched) {
+			int i;
+
+			for (i = 0; i < 16; i++) {
+				if (oldbuf[i] != newbuf[i] && info->owork) {
+					uint32_t nonce; //possible nonce
+
+					nonce = decnonce(newbuf[i]);
+					if (bitfury_checkresults(thr, info->owork, nonce))
+						info->nonces++;
+				}
+			}
+
+			memcpy(op, p, sizeof(struct bitfury_payload));
+			memcpy(oldbuf, newbuf, 17 * 4);
+		}
+	} else
+		info->second_run = true;
+
+	cgsleep_ms(BITFURY_REFRESH_DELAY);
+
+	return true;
+}
+
+static int64_t bxm_scan(struct thr_info *thr, struct cgpu_info *bitfury,
+			struct bitfury_info *info)
+{
+	int64_t ret = 0;
+
+	if (!info->work) {
+		info->work = get_work(thr, thr->id);
+		if (unlikely(thr->work_restart)) {
+			free_work(info->work);
+			info->work = NULL;
+			return 0;
+		}
+		bitfury_work_to_payload(&info->payload, info->work);
+	}
+	if (!bxm_sendHashData(thr, bitfury, info))
+		return -1;
+
+	if (info->job_switched) {
+		if (likely(info->owork))
+			free_work(info->owork);
+		info->owork = info->work;
+		info->work = NULL;
+	}
+
+	ret = bitfury_rate(info);
+
+	if (unlikely(bitfury->usbinfo.nodev)) {
+		applog(LOG_WARNING, "%s %d: Device disappeared, disabling thread",
+		       bitfury->drv->name, bitfury->device_id);
+		ret = -1;
+	}
+
+	return ret;
+}
+
 static int64_t bitfury_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *bitfury = thr->cgpu;
@@ -1285,6 +1375,9 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 			break;
 		case IDENT_NF1:
 			ret = nf1_scan(thr, bitfury, info);
+			break;
+		case IDENT_BXM:
+			ret = bxm_scan(thr, bitfury, info);
 			break;
 		default:
 			ret = 0;
