@@ -520,6 +520,36 @@ static uint16_t calc_divisor(uint32_t system_clock, uint32_t freq)
 	return divisor;
 }
 
+static bool bxm_spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	int err, amount, len;
+	uint16_t length;
+	char buf[1024];
+
+	len = info->spibufsz;
+	length = info->spibufsz - 1; //FTDI length is shifted by one 0x0000 = one byte
+	buf[0] = READ_WRITE_BYTES_SPI0;
+	buf[1] = length & 0x00FF;
+	buf[2] = (length & 0xFF00) >> 8;
+	memcpy(&buf[3], info->spibuf, info->spibufsz);
+	info->spibufsz += 3;
+	err = usb_write(bitfury, buf, info->spibufsz, &amount, C_BXM_SPITX);
+	if (err || amount != info->spibufsz) {
+		applog(LOG_ERR, "%s %d: SPI TX error %d, sent %d of %d", bitfury->drv->name,
+		       bitfury->device_id, err, amount, info->spibufsz);
+		return false;
+	}
+	info->spibufsz = len;
+	/* We shouldn't even get a timeout error on reads in spi mode */
+	err = usb_read(bitfury, info->spibuf, len, &amount, C_BXM_SPIRX);
+	if (err || amount != len) {
+		applog(LOG_ERR, "%s %d: SPI RX error %d, read %d of %d", bitfury->drv->name,
+		       bitfury->device_id, err, amount, info->spibufsz);
+		return false;
+	}
+	return true;
+}
+
 static void bxm_close(struct cgpu_info *bitfury)
 {
 	unsigned char bitmask = 0;
