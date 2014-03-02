@@ -12,6 +12,7 @@ Currently supported devices include:
 - Hashfast Babyjet and Sierra
 - Antminer U1 USB
 - Cointerra
+- Antminer S1
 
 No COM ports on windows or TTY devices will be used by cgminer as it
 communicates directly with them via USB so it is normal for them to not exist or
@@ -84,13 +85,22 @@ HFS: Hashfast Sierra
 HFA: Hashfast non standard (eg. a Babyjet with an added board)
 
 
-ANTMINER devices
+ANTMINER U1 devices
 
 Antminer devices need the --enable-icarus option when compiling cgminer.
 
 Currently the U1 USB sticks are supported and come up as ANU devices. They
 are also set up as per the USB ASICs below. They need no options to work well
 but will accept all the icarus options.
+
+
+ANTMINER S1 devices
+
+Antminer S1 devices need the --enable-ants1 option when compiling cgminer.
+
+They are custom OpenWRT linux devices
+
+They are recognised with the name ANT
 
 
 BITMINE A1 devices
@@ -192,6 +202,13 @@ ASIC SPECIFIC COMMANDS
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
 --bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
 --bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
+--bitmain-auto      Adjust bitmain overclock frequency dynamically for best hashrate
+--bitmain-cutoff    Set bitmain overheat cut off temperature
+--bitmain-fan       Set fanspeed percentage for bitmain, single value or range (default: 20-100)
+--bitmain-freq      Set frequency range for bitmain-auto, single value or range
+--bitmain-hwerror   Set bitmain device detect hardware error
+--bitmain-options   Set bitmain options baud:miners:asic:timeout:freq
+--bitmain-temp      Set bitmain target temperature
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
 --hfa-hash-clock <arg> Set hashfast clock speed (default: 550)
 --hfa-fail-drop <arg> Set how many MHz to drop clockspeed each failure on an overlocked hashfast device (default: 10)
@@ -201,6 +218,21 @@ ASIC SPECIFIC COMMANDS
 --hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
 --hfa-temp-target <arg> Set the hashfast target temperature (0 to disable) (default: 88)
 --klondike-options <arg> Set klondike options clock:temptarget
+
+
+ANTMINER S1 DEVICES
+
+--bitmain-auto      Adjust bitmain overclock frequency dynamically for best hashrate
+--bitmain-cutoff    Set bitmain overheat cut off temperature
+--bitmain-fan       Set fanspeed percentage for bitmain, single value or range (default: 20-100)
+--bitmain-freq      Set frequency range for bitmain-auto, single value or range
+--bitmain-hwerror   Set bitmain device detect hardware error
+--bitmain-options   Set bitmain options baud:miners:asic:timeout:freq
+--bitmain-temp      Set bitmain target temperature
+
+The Antminer S1 device comes with it's own operating system and a preinstalled
+version of cgminer as part of the flash firmware. No configuration should be
+necessary.
 
 
 ANTMINER U1 DEVICES

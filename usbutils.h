@@ -135,6 +135,7 @@ struct usb_intinfo {
 enum sub_ident {
 	IDENT_UNK = 0,
 	IDENT_AMU,
+	IDENT_ANT,
 	IDENT_ANU,
 	IDENT_AVA,
 	IDENT_BAJ,
@@ -179,6 +180,7 @@ struct usb_find_devices {
  * baud rate, to avoid status bytes being interleaved in larger transfers. */
 #define LATENCY_UNUSED 0
 #define LATENCY_STD 32
+#define LATENCY_ANTS1 10
 
 enum usb_types {
 	USB_TYPE_STD = 0,
@@ -405,7 +407,14 @@ struct cg_usb_info {
 	USB_ADD_COMMAND(C_MCP_SETSPISETTING, "MCPSetSPISetting") \
 	USB_ADD_COMMAND(C_MCP_GETSPISETTING, "MCPGetSPISetting") \
 	USB_ADD_COMMAND(C_MCP_SPITRANSFER, "MCPSPITransfer") \
-	USB_ADD_COMMAND(C_MCP_SPICANCEL, "MCPSPICancel")
+	USB_ADD_COMMAND(C_MCP_SPICANCEL, "MCPSPICancel") \
+	USB_ADD_COMMAND(C_BITMAIN_SEND, "BitmainSend") \
+	USB_ADD_COMMAND(C_BITMAIN_READ, "BitmainRead") \
+	USB_ADD_COMMAND(C_BITMAIN_TOKEN_TXCONFIG, "BitmainTokenTxConfig") \
+	USB_ADD_COMMAND(C_BITMAIN_TOKEN_TXTASK, "BitmainTokenTxTask") \
+	USB_ADD_COMMAND(C_BITMAIN_TOKEN_RXSTATUS, "BitmainTokenRxStatus") \
+	USB_ADD_COMMAND(C_BITMAIN_DATA_RXSTATUS, "BitmainDataRxStatus") \
+	USB_ADD_COMMAND(C_BITMAIN_DATA_RXNONCE, "BitmainDataRxNonce")
 
 /* Create usb_cmds enum from USB_PARSE_COMMANDS macro */
 enum usb_cmds {
