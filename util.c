@@ -1763,19 +1763,17 @@ bool parse_method(struct pool *pool, char *s)
 	char *buf;
 
 	if (!s)
-		return ret;
+		goto out;
 
 	val = JSON_LOADS(s, &err);
 	if (!val) {
 		applog(LOG_INFO, "JSON decode failed(%d): %s", err.line, err.text);
-		return ret;
+		goto out;
 	}
 
 	method = json_object_get(val, "method");
-	if (!method) {
-		json_decref(val);
-		return ret;
-	}
+	if (!method)
+		goto out_decref;
 	err_val = json_object_get(val, "error");
 	params = json_object_get(val, "params");
 
@@ -1788,52 +1786,44 @@ bool parse_method(struct pool *pool, char *s)
 			ss = strdup("(unknown reason)");
 
 		applog(LOG_INFO, "JSON-RPC method decode failed: %s", ss);
-
-		json_decref(val);
 		free(ss);
-
-		return ret;
+		goto out_decref;
 	}
 
 	buf = (char *)json_string_value(method);
-	if (!buf) {
-		json_decref(val);
-		return ret;
-	}
+	if (!buf)
+		goto out_decref;
 
 	if (!strncasecmp(buf, "mining.notify", 13)) {
 		if (parse_notify(pool, params))
 			pool->stratum_notify = ret = true;
 		else
 			pool->stratum_notify = ret = false;
-		json_decref(val);
-		return ret;
+		goto out_decref;
 	}
 
-	if (!strncasecmp(buf, "mining.set_difficulty", 21) && parse_diff(pool, params)) {
-		ret = true;
-		json_decref(val);
-		return ret;
+	if (!strncasecmp(buf, "mining.set_difficulty", 21)) {
+		ret = parse_diff(pool, params);
+		goto out_decref;
 	}
 
-	if (!strncasecmp(buf, "client.reconnect", 16) && parse_reconnect(pool, params)) {
-		ret = true;
-		json_decref(val);
-		return ret;
+	if (!strncasecmp(buf, "client.reconnect", 16)) {
+		ret = parse_reconnect(pool, params);
+		goto out_decref;
 	}
 
-	if (!strncasecmp(buf, "client.get_version", 18) && send_version(pool, val)) {
-		ret = true;
-		json_decref(val);
-		return ret;
+	if (!strncasecmp(buf, "client.get_version", 18)) {
+		ret =  send_version(pool, val);
+		goto out_decref;
 	}
 
-	if (!strncasecmp(buf, "client.show_message", 19) && show_message(pool, params)) {
-		ret = true;
-		json_decref(val);
-		return ret;
+	if (!strncasecmp(buf, "client.show_message", 19)) {
+		ret = show_message(pool, params);
+		goto out_decref;
 	}
+out_decref:
 	json_decref(val);
+out:
 	return ret;
 }
 
