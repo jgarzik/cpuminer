@@ -579,6 +579,10 @@ static bool bxm_open(struct cgpu_info *bitfury)
 	int amount, err;
 	char buf[4];
 
+	/* Enable the transaction translator emulator for these devices
+	 * otherwise we may write to them too quickly. */
+	bitfury->usbdev->tt = true;
+
 	bxm_empty_buffer(bitfury);
 	/* Device likes being reset first. */
 	usb_reset(bitfury);
@@ -729,8 +733,8 @@ static bool bxm_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 		goto out;
 
 	/* Do a dummy read */
-	memset(info->spibuf, 0, 64);
-	info->spibufsz = 64;
+	memset(info->spibuf, 0, 80);
+	info->spibufsz = 80;
 	ret = bxm_spi_txrx(bitfury, info);
 	if (!ret)
 		goto out;
