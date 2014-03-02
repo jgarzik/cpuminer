@@ -497,6 +497,19 @@ static void bxm_empty_buffer(struct cgpu_info *bitfury)
 	} while (amount);
 }
 
+static bool bxm_purge_buffers(struct cgpu_info *bitfury)
+{
+	int err;
+
+	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_RESET_REQUEST, SIO_RESET_PURGE_RX, 1, C_BXM_PURGERX);
+	if (err)
+		return false;
+	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_RESET_REQUEST, SIO_RESET_PURGE_TX, 1, C_BXM_PURGETX);
+	if (err)
+		return false;
+	return true;
+}
+
 /* Calculate required divisor for desired frequency see FTDI AN_108 page 19*/
 static uint16_t calc_divisor(uint32_t system_clock, uint32_t freq)
 {
@@ -505,6 +518,17 @@ static uint16_t calc_divisor(uint32_t system_clock, uint32_t freq)
 	divisor /= 2;
 	divisor -= 1;
 	return divisor;
+}
+
+static void bxm_close(struct cgpu_info *bitfury)
+{
+	unsigned char bitmask = 0;
+	unsigned char mode = BITMODE_RESET;
+	unsigned short usb_val = bitmask;
+
+	//Need to do BITMODE_RESET before close per FTDI
+	usb_val |= (mode << 8);
+	usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_SET_BITMODE_REQUEST, usb_val, 1, C_BXM_SETBITMODE);
 }
 
 static bool bxm_open(struct cgpu_info *bitfury, struct bitfury_info *info)
@@ -521,7 +545,7 @@ static bool bxm_open(struct cgpu_info *bitfury, struct bitfury_info *info)
 	bxm_empty_buffer(bitfury);
 	/* Device likes being reset first. */
 	usb_reset(bitfury);
-	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_RESET_REQUEST, SIO_RESET_SIO, 1, C_BXM_RESET);
+	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_RESET_REQUEST, SIO_RESET_SIO, 1, C_BXM_SRESET);
 	if (err)
 		return false;
 	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_SET_LATENCY_TIMER_REQUEST, BXM_LATENCY_MS, 1, C_BXM_SETLATENCY);
@@ -585,15 +609,83 @@ static bool bxm_open(struct cgpu_info *bitfury, struct bitfury_info *info)
 	return true;
 }
 
+static bool bxm_set_CS_low(struct cgpu_info *bitfury)
+{
+	char buf[4] = { 0 };
+	int err, amount;
+
+	buf[0] = SET_OUT_ADBUS;
+	buf[1] &= ~DEFAULT_STATE; //Bitmask for LOW_PORT
+	buf[2] = DEFAULT_DIR;
+	err = usb_write(bitfury, buf, 3, &amount, C_BXM_CSLOW);
+	if (err || amount != 3)
+		return false;
+
+	return true;
+}
+
+static bool bxm_set_CS_high(struct cgpu_info *bitfury)
+{
+	char buf[4] = { 0 };
+	int err, amount;
+
+	buf[0] = SET_OUT_ADBUS;
+	buf[1] = DEFAULT_STATE; //Bitmask for LOW_PORT
+	buf[2] = DEFAULT_DIR;
+	err = usb_write(bitfury, buf, 3, &amount, C_BXM_CSHIGH);
+	if (err || amount != 3)
+		return false;
+
+	return true;
+}
+
+static bool bxm_reset_bitfury(struct cgpu_info *bitfury)
+{
+	char buf[20] = { 0 };
+	char rst_buf[8] = {0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00};
+	int err, amount;
+
+	//Set the FTDI CS pin HIGH. This will gate the clock to the Bitfury chips so we can send the reset sequence.
+	if (!bxm_set_CS_high(bitfury))
+		return false;
+
+	buf[0] = WRITE_BYTES_SPI0;
+	buf[1] = (uint8_t)16 - (uint8_t)1;
+	buf[2] = 0;
+	memcpy(&buf[3], rst_buf, 8);
+	memcpy(&buf[11], rst_buf, 8);
+	err = usb_write(bitfury, buf, 19, &amount, C_BXM_RESET);
+	if (err || amount != 19)
+		return false;
+
+	if (!bxm_set_CS_low(bitfury))
+		return false;
+
+	return true;
+}
+
 static bool bxm_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	bool ret;
 
 	ret = bxm_open(bitfury, info);
-	if (ret) {
-		applog(LOG_INFO, "%s %d: Successfully opened at %s", bitfury->drv->name, bitfury->device_id,
-		       bitfury->device_path);
-	}
+	if (!ret)
+		goto out;
+	ret = bxm_purge_buffers(bitfury);
+	if (!ret)
+		goto out;
+	ret = bxm_reset_bitfury(bitfury);
+	if (!ret)
+		goto out;
+	ret = bxm_purge_buffers(bitfury);
+	if (!ret)
+		goto out;
+
+	applog(LOG_INFO, "%s %d: Successfully opened at %s", bitfury->drv->name, bitfury->device_id,
+	       bitfury->device_path);
+out:
+	if (!ret)
+		bxm_close(bitfury);
 	return ret;
 }
 
