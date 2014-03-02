@@ -242,7 +242,7 @@ bool spi_reset(struct cgpu_info *bitfury, struct bitfury_info *info)
 	return true;
 }
 
-bool spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
+bool mcp_spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	unsigned int length, sendrcv;
 	int offset = 0;
@@ -267,6 +267,45 @@ bool spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
 	if (sendrcv != length) {
 		applog(LOG_WARNING, "%s %d: Send/Receive size mismatch sent %d received %d",
 		       bitfury->drv->name, bitfury->device_id, length, sendrcv);
+		return false;
+	}
+	return true;
+}
+
+#define READ_WRITE_BYTES_SPI0     0x31
+
+bool ftdi_spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	int err, amount, len;
+	uint16_t length;
+	char buf[1024];
+
+	len = info->spibufsz;
+	length = info->spibufsz - 1; //FTDI length is shifted by one 0x0000 = one byte
+	buf[0] = READ_WRITE_BYTES_SPI0;
+	buf[1] = length & 0x00FF;
+	buf[2] = (length & 0xFF00) >> 8;
+	memcpy(&buf[3], info->spibuf, info->spibufsz);
+	info->spibufsz += 3;
+	err = usb_write(bitfury, buf, info->spibufsz, &amount, C_BXM_SPITX);
+	if (err || amount != (int)info->spibufsz) {
+		applog(LOG_ERR, "%s %d: SPI TX error %d, sent %d of %d", bitfury->drv->name,
+		       bitfury->device_id, err, amount, info->spibufsz);
+		return false;
+	}
+	info->spibufsz = len;
+	/* We shouldn't even get a timeout error on reads in spi mode */
+	err = usb_read(bitfury, info->spibuf, len, &amount, C_BXM_SPIRX);
+	if (err || amount != len) {
+		applog(LOG_ERR, "%s %d: SPI RX error %d, read %d of %d", bitfury->drv->name,
+		       bitfury->device_id, err, amount, info->spibufsz);
+		return false;
+	}
+	amount = usb_buffer_size(bitfury);
+	if (amount) {
+		applog(LOG_ERR, "%s %d: SPI RX Extra read buffer size %d", bitfury->drv->name,
+		       bitfury->device_id, amount);
+		usb_buffer_clear(bitfury);
 		return false;
 	}
 	return true;
@@ -306,7 +345,7 @@ bool libbitfury_sendHashData(struct thr_info *thr, struct cgpu_info *bitfury,
 	spi_clear_buf(info);
 	spi_add_break(info);
 	spi_add_data(info, 0x3000, (void*)localvec, 19 * 4);
-	if (!spi_txrx(bitfury, info))
+	if (!info->spi_txrx(bitfury, info))
 		return false;
 
 	memcpy(newbuf, info->spibuf + 4, 17 * 4);

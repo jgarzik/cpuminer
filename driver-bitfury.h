@@ -104,6 +104,8 @@ struct bitfury_info {
 	bool second_run;
 	struct work *work;
 	struct work *owork;
+
+	bool (*spi_txrx)(struct cgpu_info *, struct bitfury_info *info);
 };
 
 #endif /* BITFURY_H */

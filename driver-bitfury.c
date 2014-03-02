@@ -354,7 +354,7 @@ static bool nf1_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
 	spi_send_conf(info);
 	spi_send_init(info);
 	spi_reset(bitfury, info);
-	return spi_txrx(bitfury, info);
+	return info->spi_txrx(bitfury, info);
 }
 
 static bool nf1_set_spi_settings(struct cgpu_info *bitfury, struct bitfury_info *info)
@@ -373,6 +373,7 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	bool ret = false;
 	int i, val;
 
+	info->spi_txrx = &mcp_spi_txrx;
 	mcp2210_get_gpio_settings(bitfury, mcp);
 
 	for (i = 0; i < 9; i++) {
@@ -508,43 +509,6 @@ static uint16_t calc_divisor(uint32_t system_clock, uint32_t freq)
 	divisor /= 2;
 	divisor -= 1;
 	return divisor;
-}
-
-static bool bxm_spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
-{
-	int err, amount, len;
-	uint16_t length;
-	char buf[1024];
-
-	len = info->spibufsz;
-	length = info->spibufsz - 1; //FTDI length is shifted by one 0x0000 = one byte
-	buf[0] = READ_WRITE_BYTES_SPI0;
-	buf[1] = length & 0x00FF;
-	buf[2] = (length & 0xFF00) >> 8;
-	memcpy(&buf[3], info->spibuf, info->spibufsz);
-	info->spibufsz += 3;
-	err = usb_write(bitfury, buf, info->spibufsz, &amount, C_BXM_SPITX);
-	if (err || amount != (int)info->spibufsz) {
-		applog(LOG_ERR, "%s %d: SPI TX error %d, sent %d of %d", bitfury->drv->name,
-		       bitfury->device_id, err, amount, info->spibufsz);
-		return false;
-	}
-	info->spibufsz = len;
-	/* We shouldn't even get a timeout error on reads in spi mode */
-	err = usb_read(bitfury, info->spibuf, len, &amount, C_BXM_SPIRX);
-	if (err || amount != len) {
-		applog(LOG_ERR, "%s %d: SPI RX error %d, read %d of %d", bitfury->drv->name,
-		       bitfury->device_id, err, amount, info->spibufsz);
-		return false;
-	}
-	amount = usb_buffer_size(bitfury);
-	if (amount) {
-		applog(LOG_ERR, "%s %d: SPI RX Extra read buffer size %d", bitfury->drv->name,
-		       bitfury->device_id, amount);
-		usb_buffer_clear(bitfury);
-		return false;
-	}
-	return true;
 }
 
 static void bxm_close(struct cgpu_info *bitfury)
@@ -699,13 +663,14 @@ static bool bxm_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
 	spi_set_freq(info);
 	spi_send_conf(info);
 	spi_send_init(info);
-	return bxm_spi_txrx(bitfury, info);
+	return info->spi_txrx(bitfury, info);
 }
 
 static bool bxm_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	bool ret;
 
+	info->spi_txrx = &ftdi_spi_txrx;
 	ret = bxm_open(bitfury);
 	if (!ret)
 		goto out;
@@ -722,7 +687,7 @@ static bool bxm_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	/* Do a dummy read */
 	memset(info->spibuf, 0, 80);
 	info->spibufsz = 80;
-	ret = bxm_spi_txrx(bitfury, info);
+	ret = info->spi_txrx(bitfury, info);
 	if (!ret)
 		goto out;
 	/* FIXME make configurable and use a faster default. */
@@ -1250,54 +1215,6 @@ static int64_t nf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 	return ret;
 }
 
-static bool bxm_sendHashData(struct thr_info *thr, struct cgpu_info *bitfury,
-			     struct bitfury_info *info)
-{
-	unsigned *newbuf = info->newbuf;
-	unsigned *oldbuf = info->oldbuf;
-	struct bitfury_payload *p = &(info->payload);
-	struct bitfury_payload *op = &(info->opayload);
-	unsigned int localvec[20];
-
-	/* Programming next value */
-	memcpy(localvec, p, 20 * 4);
-	ms3steps(localvec);
-
-	spi_clear_buf(info);
-	spi_add_break(info);
-	spi_add_data(info, 0x3000, (void*)localvec, 19 * 4);
-	if (!bxm_spi_txrx(bitfury, info))
-		return false;
-
-	memcpy(newbuf, info->spibuf + 4, 17 * 4);
-
-	info->job_switched = newbuf[16] != oldbuf[16];
-
-	if (likely(info->second_run)) {
-		if (info->job_switched) {
-			int i;
-
-			for (i = 0; i < 16; i++) {
-				if (oldbuf[i] != newbuf[i] && info->owork) {
-					uint32_t nonce; //possible nonce
-
-					nonce = decnonce(newbuf[i]);
-					if (bitfury_checkresults(thr, info->owork, nonce))
-						info->nonces++;
-				}
-			}
-
-			memcpy(op, p, sizeof(struct bitfury_payload));
-			memcpy(oldbuf, newbuf, 17 * 4);
-		}
-	} else
-		info->second_run = true;
-
-	cgsleep_ms(BITFURY_REFRESH_DELAY);
-
-	return true;
-}
-
 static int64_t bxm_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 			struct bitfury_info *info)
 {
@@ -1312,7 +1229,7 @@ static int64_t bxm_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 		}
 		bitfury_work_to_payload(&info->payload, info->work);
 	}
-	if (!bxm_sendHashData(thr, bitfury, info))
+	if (!libbitfury_sendHashData(thr, bitfury, info))
 		return -1;
 
 	if (info->job_switched) {
