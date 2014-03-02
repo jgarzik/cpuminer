@@ -116,6 +116,10 @@ if HAS_MINION
 cgminer_SOURCES += driver-minion.c
 endif
 
+if HAS_ANT_S1
+cgminer_SOURCES += driver-bitmain.c driver-bitmain.h
+endif
+
 if HAS_MODMINER
 cgminer_SOURCES += driver-modminer.c
 bitstreamsdir = $(bindir)/bitstreams
