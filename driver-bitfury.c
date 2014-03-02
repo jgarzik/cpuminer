@@ -23,6 +23,57 @@ int opt_nf1_bits = 50;
 #define BF1MSGSIZE 7
 #define BF1INFOSIZE 14
 
+#define TWELVE_MHZ 12000000
+
+//Low port pins
+#define SK      1
+#define DO      2
+#define DI      4
+#define CS      8
+#define GPIO0   16
+#define GPIO1   32
+#define GPIO2   64
+#define GPIO3   128
+
+//GPIO pins
+#define GPIOL0  0
+#define GPIOL1  1
+#define GPIOL2  2
+#define GPIOL3  3
+#define GPIOH   4
+#define GPIOH1  5
+#define GPIOH2  6
+#define GPIOH3  7
+#define GPIOH4  8
+#define GPIOH5  9
+#define GPIOH6  10
+#define GPIOH7  11
+
+#define DEFAULT_DIR            (SK | DO | CS | GPIO0 | GPIO1 | GPIO2 | GPIO3)  /* Setup default input or output state per FTDI for SPI */
+#define DEFAULT_STATE          (CS)                                       /* CS idles high, CLK idles LOW for SPI0 */
+
+//MPSSE commands from FTDI AN_108
+#define INVALID_COMMAND           0xAB
+#define ENABLE_ADAPTIVE_CLOCK     0x96
+#define DISABLE_ADAPTIVE_CLOCK    0x97
+#define ENABLE_3_PHASE_CLOCK      0x8C
+#define DISABLE_3_PHASE_CLOCK     0x8D
+#define TCK_X5                    0x8A
+#define TCK_D5                    0x8B
+#define CLOCK_N_CYCLES            0x8E
+#define CLOCK_N8_CYCLES           0x8F
+#define PULSE_CLOCK_IO_HIGH       0x94
+#define PULSE_CLOCK_IO_LOW        0x95
+#define CLOCK_N8_CYCLES_IO_HIGH   0x9C
+#define CLOCK_N8_CYCLES_IO_LOW    0x9D
+#define TRISTATE_IO               0x9E
+#define TCK_DIVISOR               0x86
+#define LOOPBACK_END              0x85
+#define SET_OUT_ADBUS             0x80
+#define SET_OUT_ACBUS             0x82
+#define WRITE_BYTES_SPI0          0x11
+#define READ_WRITE_BYTES_SPI0     0x31
+
 static void bf1_empty_buffer(struct cgpu_info *bitfury)
 {
 	char buf[512];
@@ -446,10 +497,26 @@ static void bxm_empty_buffer(struct cgpu_info *bitfury)
 	} while (amount);
 }
 
+/* Calculate required divisor for desired frequency see FTDI AN_108 page 19*/
+static uint16_t calc_divisor(uint32_t system_clock, uint32_t freq)
+{
+	uint16_t divisor = system_clock / freq;
+
+	divisor /= 2;
+	divisor -= 1;
+	return divisor;
+}
+
 static bool bxm_open(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
+	unsigned char mode = BITMODE_RESET;
+	unsigned char bitmask = 0;
+	unsigned short usb_val = bitmask;
+	uint32_t system_clock = TWELVE_MHZ;
+	uint32_t freq = 200000;
+	uint16_t divisor = calc_divisor(system_clock,freq);
+	int amount, err;
 	char buf[4];
-	int err;
 
 	bxm_empty_buffer(bitfury);
 	/* Device likes being reset first. */
@@ -462,6 +529,57 @@ static bool bxm_open(struct cgpu_info *bitfury, struct bitfury_info *info)
 		return false;
 	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_SET_EVENT_CHAR_REQUEST, 0x00, 1, C_BXM_SECR);
 	if (err)
+		return false;
+
+	//Do a BITMODE_RESET
+	usb_val |= (mode << 8);
+	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_SET_BITMODE_REQUEST, usb_val, 1, C_BXM_SETBITMODE);
+	if (err)
+		return false;
+	//Now set to MPSSE mode
+	bitmask = 0;
+	mode = BITMODE_MPSSE;
+	usb_val = bitmask;
+	usb_val |= (mode << 8);
+	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_SET_BITMODE_REQUEST, usb_val, 1, C_BXM_SETBITMODE);
+	if (err)
+		return false;
+
+	//Now set the clock divisor
+	//First send just the 0x8B command to set the system clock to 12MHz
+	memset(buf, 0, 4);
+	buf[0] = TCK_D5;
+	err = usb_write(bitfury, buf, 1, &amount, C_BXM_CLOCK);
+	if (err || amount != 1)
+		return false;
+
+	buf[0] = TCK_DIVISOR;
+	buf[1] = (divisor & 0xFF);
+	buf[2] = ((divisor >> 8) & 0xFF);
+	err = usb_write(bitfury, buf, 3, &amount, C_BXM_CLOCKDIV);
+	if (err || amount != 3)
+		return false;
+
+	//Disable internal loopback
+	buf[0] = LOOPBACK_END;
+	err = usb_write(bitfury, buf, 1, &amount, C_BXM_LOOP);
+	if (err || amount != 1)
+		return false;
+
+	//Now set direction and idle (initial) states for the pins
+	buf[0] = SET_OUT_ADBUS;
+	buf[1] = DEFAULT_STATE; //Bitmask for LOW_PORT
+	buf[2] = DEFAULT_DIR;
+	err = usb_write(bitfury, buf, 3, &amount, C_BXM_ADBUS);
+	if (err || amount != 3)
+		return false;
+
+	//Set the pin states for the HIGH_BITS port as all outputs, all low
+	buf[0] = SET_OUT_ACBUS;
+	buf[1] = 0x00; //Bitmask for HIGH_PORT
+	buf[2] = 0xFF;
+	err = usb_write(bitfury, buf, 3, &amount, C_BXM_ACBUS);
+	if (err || amount != 3)
 		return false;
 
 	return true;
