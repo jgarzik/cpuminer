@@ -487,16 +487,6 @@ out:
 	return ret;
 }
 
-static void bxm_empty_buffer(struct cgpu_info *bitfury)
-{
-	char buf[512];
-	int amount;
-
-	do {
-		usb_read_once(bitfury, buf, 512, &amount, C_BXM_FLUSH);
-	} while (amount);
-}
-
 static bool bxm_purge_buffers(struct cgpu_info *bitfury)
 {
 	int err;
@@ -551,7 +541,7 @@ static bool bxm_spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
 	if (amount) {
 		applog(LOG_ERR, "%s %d: SPI RX Extra read buffer size %d", bitfury->drv->name,
 		       bitfury->device_id, amount);
-		bxm_empty_buffer(bitfury);
+		usb_buffer_clear(bitfury);
 		return false;
 	}
 	return true;
@@ -583,9 +573,6 @@ static bool bxm_open(struct cgpu_info *bitfury)
 	 * otherwise we may write to them too quickly. */
 	bitfury->usbdev->tt = true;
 
-	bxm_empty_buffer(bitfury);
-	/* Device likes being reset first. */
-	usb_reset(bitfury);
 	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_RESET_REQUEST, SIO_RESET_SIO, 1, C_BXM_SRESET);
 	if (err)
 		return false;
