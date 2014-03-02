@@ -164,6 +164,15 @@ static struct usb_epinfo nf1_epinfos[] = {
 static struct usb_intinfo nf1_ints[] = {
 	USB_EPS(0, nf1_epinfos)
 };
+
+static struct usb_epinfo bxm_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	512,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	512,	EPO(2), 0, 0 }
+};
+
+static struct usb_intinfo bxm_ints[] = {
+	USB_EPS(0, bxm_epinfos)
+};
 #endif
 
 #ifdef USE_DRILLBIT
@@ -400,6 +409,17 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = BITFURY_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
 		INTINFO(nf1_ints)
+	},
+	{
+		.drv = DRIVER_bitfury,
+		.name = "BXM",
+		.ident = IDENT_BXM,
+		.idVendor = 0x0403,
+		.idProduct = 0x6014,
+		.config = 1,
+		.timeout = BITFURY_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		INTINFO(bxm_ints)
 	},
 #endif
 #ifdef USE_DRILLBIT
