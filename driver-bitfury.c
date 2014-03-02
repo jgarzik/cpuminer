@@ -476,7 +476,7 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 
 	update_usb_stats(bitfury);
 	applog(LOG_INFO, "%s %d: Successfully initialised %s",
-	bitfury->drv->name, bitfury->device_id, bitfury->device_path);
+	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
 	spi_clear_buf(info);
 
 	info->total_nonces = 1;
@@ -534,7 +534,7 @@ static bool bxm_spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
 	memcpy(&buf[3], info->spibuf, info->spibufsz);
 	info->spibufsz += 3;
 	err = usb_write(bitfury, buf, info->spibufsz, &amount, C_BXM_SPITX);
-	if (err || amount != info->spibufsz) {
+	if (err || amount != (int)info->spibufsz) {
 		applog(LOG_ERR, "%s %d: SPI TX error %d, sent %d of %d", bitfury->drv->name,
 		       bitfury->device_id, err, amount, info->spibufsz);
 		return false;
@@ -561,7 +561,7 @@ static void bxm_close(struct cgpu_info *bitfury)
 	usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_SET_BITMODE_REQUEST, usb_val, 1, C_BXM_SETBITMODE);
 }
 
-static bool bxm_open(struct cgpu_info *bitfury, struct bitfury_info *info)
+static bool bxm_open(struct cgpu_info *bitfury)
 {
 	unsigned char mode = BITMODE_RESET;
 	unsigned char bitmask = 0;
@@ -694,11 +694,21 @@ static bool bxm_reset_bitfury(struct cgpu_info *bitfury)
 	return true;
 }
 
+static bool bxm_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	spi_clear_buf(info);
+	spi_add_break(info);
+	spi_set_freq(info);
+	spi_send_conf(info);
+	spi_send_init(info);
+	return bxm_spi_txrx(bitfury, info);
+}
+
 static bool bxm_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	bool ret;
 
-	ret = bxm_open(bitfury, info);
+	ret = bxm_open(bitfury);
 	if (!ret)
 		goto out;
 	ret = bxm_purge_buffers(bitfury);
@@ -711,8 +721,27 @@ static bool bxm_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	if (!ret)
 		goto out;
 
-	applog(LOG_INFO, "%s %d: Successfully opened at %s", bitfury->drv->name, bitfury->device_id,
-	       bitfury->device_path);
+	/* Do a dummy read */
+	memset(info->spibuf, 0, 64);
+	info->spibufsz = 64;
+	ret = bxm_spi_txrx(bitfury, info);
+	if (!ret)
+		goto out;
+	/* FIXME make configurable and use a faster default. */
+	info->osc6_bits = 25;
+	ret = bxm_reinit(bitfury, info);
+	if (!ret)
+		goto out;
+
+	if (!add_cgpu(bitfury))
+		quit(1, "Failed to add_cgpu in bxm_detect_one");
+
+	update_usb_stats(bitfury);
+	applog(LOG_INFO, "%s %d: Successfully initialised %s",
+	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
+	spi_clear_buf(info);
+
+	info->total_nonces = 1;
 out:
 	if (!ret)
 		bxm_close(bitfury);
