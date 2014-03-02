@@ -23,6 +23,57 @@ int opt_nf1_bits = 50;
 #define BF1MSGSIZE 7
 #define BF1INFOSIZE 14
 
+#define TWELVE_MHZ 12000000
+
+//Low port pins
+#define SK      1
+#define DO      2
+#define DI      4
+#define CS      8
+#define GPIO0   16
+#define GPIO1   32
+#define GPIO2   64
+#define GPIO3   128
+
+//GPIO pins
+#define GPIOL0  0
+#define GPIOL1  1
+#define GPIOL2  2
+#define GPIOL3  3
+#define GPIOH   4
+#define GPIOH1  5
+#define GPIOH2  6
+#define GPIOH3  7
+#define GPIOH4  8
+#define GPIOH5  9
+#define GPIOH6  10
+#define GPIOH7  11
+
+#define DEFAULT_DIR            (SK | DO | CS | GPIO0 | GPIO1 | GPIO2 | GPIO3)  /* Setup default input or output state per FTDI for SPI */
+#define DEFAULT_STATE          (CS)                                       /* CS idles high, CLK idles LOW for SPI0 */
+
+//MPSSE commands from FTDI AN_108
+#define INVALID_COMMAND           0xAB
+#define ENABLE_ADAPTIVE_CLOCK     0x96
+#define DISABLE_ADAPTIVE_CLOCK    0x97
+#define ENABLE_3_PHASE_CLOCK      0x8C
+#define DISABLE_3_PHASE_CLOCK     0x8D
+#define TCK_X5                    0x8A
+#define TCK_D5                    0x8B
+#define CLOCK_N_CYCLES            0x8E
+#define CLOCK_N8_CYCLES           0x8F
+#define PULSE_CLOCK_IO_HIGH       0x94
+#define PULSE_CLOCK_IO_LOW        0x95
+#define CLOCK_N8_CYCLES_IO_HIGH   0x9C
+#define CLOCK_N8_CYCLES_IO_LOW    0x9D
+#define TRISTATE_IO               0x9E
+#define TCK_DIVISOR               0x86
+#define LOOPBACK_END              0x85
+#define SET_OUT_ADBUS             0x80
+#define SET_OUT_ACBUS             0x82
+#define WRITE_BYTES_SPI0          0x11
+#define READ_WRITE_BYTES_SPI0     0x31
+
 static void bf1_empty_buffer(struct cgpu_info *bitfury)
 {
 	char buf[512];
@@ -303,7 +354,7 @@ static bool nf1_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
 	spi_send_conf(info);
 	spi_send_init(info);
 	spi_reset(bitfury, info);
-	return spi_txrx(bitfury, info);
+	return info->spi_txrx(bitfury, info);
 }
 
 static bool nf1_set_spi_settings(struct cgpu_info *bitfury, struct bitfury_info *info)
@@ -322,6 +373,7 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	bool ret = false;
 	int i, val;
 
+	info->spi_txrx = &mcp_spi_txrx;
 	mcp2210_get_gpio_settings(bitfury, mcp);
 
 	for (i = 0; i < 9; i++) {
@@ -425,7 +477,7 @@ static bool nf1_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 
 	update_usb_stats(bitfury);
 	applog(LOG_INFO, "%s %d: Successfully initialised %s",
-	bitfury->drv->name, bitfury->device_id, bitfury->device_path);
+	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
 	spi_clear_buf(info);
 
 	info->total_nonces = 1;
@@ -433,6 +485,229 @@ out:
 	if (!ret)
 		nf1_close(bitfury);
 
+	return ret;
+}
+
+static bool bxm_purge_buffers(struct cgpu_info *bitfury)
+{
+	int err;
+
+	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_RESET_REQUEST, SIO_RESET_PURGE_RX, 1, C_BXM_PURGERX);
+	if (err)
+		return false;
+	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_RESET_REQUEST, SIO_RESET_PURGE_TX, 1, C_BXM_PURGETX);
+	if (err)
+		return false;
+	return true;
+}
+
+/* Calculate required divisor for desired frequency see FTDI AN_108 page 19*/
+static uint16_t calc_divisor(uint32_t system_clock, uint32_t freq)
+{
+	uint16_t divisor = system_clock / freq;
+
+	divisor /= 2;
+	divisor -= 1;
+	return divisor;
+}
+
+static void bxm_close(struct cgpu_info *bitfury)
+{
+	unsigned char bitmask = 0;
+	unsigned char mode = BITMODE_RESET;
+	unsigned short usb_val = bitmask;
+
+	//Need to do BITMODE_RESET before close per FTDI
+	usb_val |= (mode << 8);
+	usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_SET_BITMODE_REQUEST, usb_val, 1, C_BXM_SETBITMODE);
+}
+
+static bool bxm_open(struct cgpu_info *bitfury)
+{
+	unsigned char mode = BITMODE_RESET;
+	unsigned char bitmask = 0;
+	unsigned short usb_val = bitmask;
+	uint32_t system_clock = TWELVE_MHZ;
+	uint32_t freq = 200000;
+	uint16_t divisor = calc_divisor(system_clock,freq);
+	int amount, err;
+	char buf[4];
+
+	/* Enable the transaction translator emulator for these devices
+	 * otherwise we may write to them too quickly. */
+	bitfury->usbdev->tt = true;
+
+	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_RESET_REQUEST, SIO_RESET_SIO, 1, C_BXM_SRESET);
+	if (err)
+		return false;
+	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_SET_LATENCY_TIMER_REQUEST, BXM_LATENCY_MS, 1, C_BXM_SETLATENCY);
+	if (err)
+		return false;
+	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_SET_EVENT_CHAR_REQUEST, 0x00, 1, C_BXM_SECR);
+	if (err)
+		return false;
+
+	//Do a BITMODE_RESET
+	usb_val |= (mode << 8);
+	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_SET_BITMODE_REQUEST, usb_val, 1, C_BXM_SETBITMODE);
+	if (err)
+		return false;
+	//Now set to MPSSE mode
+	bitmask = 0;
+	mode = BITMODE_MPSSE;
+	usb_val = bitmask;
+	usb_val |= (mode << 8);
+	err = usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_SET_BITMODE_REQUEST, usb_val, 1, C_BXM_SETBITMODE);
+	if (err)
+		return false;
+
+	//Now set the clock divisor
+	//First send just the 0x8B command to set the system clock to 12MHz
+	memset(buf, 0, 4);
+	buf[0] = TCK_D5;
+	err = usb_write(bitfury, buf, 1, &amount, C_BXM_CLOCK);
+	if (err || amount != 1)
+		return false;
+
+	buf[0] = TCK_DIVISOR;
+	buf[1] = (divisor & 0xFF);
+	buf[2] = ((divisor >> 8) & 0xFF);
+	err = usb_write(bitfury, buf, 3, &amount, C_BXM_CLOCKDIV);
+	if (err || amount != 3)
+		return false;
+
+	//Disable internal loopback
+	buf[0] = LOOPBACK_END;
+	err = usb_write(bitfury, buf, 1, &amount, C_BXM_LOOP);
+	if (err || amount != 1)
+		return false;
+
+	//Now set direction and idle (initial) states for the pins
+	buf[0] = SET_OUT_ADBUS;
+	buf[1] = DEFAULT_STATE; //Bitmask for LOW_PORT
+	buf[2] = DEFAULT_DIR;
+	err = usb_write(bitfury, buf, 3, &amount, C_BXM_ADBUS);
+	if (err || amount != 3)
+		return false;
+
+	//Set the pin states for the HIGH_BITS port as all outputs, all low
+	buf[0] = SET_OUT_ACBUS;
+	buf[1] = 0x00; //Bitmask for HIGH_PORT
+	buf[2] = 0xFF;
+	err = usb_write(bitfury, buf, 3, &amount, C_BXM_ACBUS);
+	if (err || amount != 3)
+		return false;
+
+	return true;
+}
+
+static bool bxm_set_CS_low(struct cgpu_info *bitfury)
+{
+	char buf[4] = { 0 };
+	int err, amount;
+
+	buf[0] = SET_OUT_ADBUS;
+	buf[1] &= ~DEFAULT_STATE; //Bitmask for LOW_PORT
+	buf[2] = DEFAULT_DIR;
+	err = usb_write(bitfury, buf, 3, &amount, C_BXM_CSLOW);
+	if (err || amount != 3)
+		return false;
+
+	return true;
+}
+
+static bool bxm_set_CS_high(struct cgpu_info *bitfury)
+{
+	char buf[4] = { 0 };
+	int err, amount;
+
+	buf[0] = SET_OUT_ADBUS;
+	buf[1] = DEFAULT_STATE; //Bitmask for LOW_PORT
+	buf[2] = DEFAULT_DIR;
+	err = usb_write(bitfury, buf, 3, &amount, C_BXM_CSHIGH);
+	if (err || amount != 3)
+		return false;
+
+	return true;
+}
+
+static bool bxm_reset_bitfury(struct cgpu_info *bitfury)
+{
+	char buf[20] = { 0 };
+	char rst_buf[8] = {0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00};
+	int err, amount;
+
+	//Set the FTDI CS pin HIGH. This will gate the clock to the Bitfury chips so we can send the reset sequence.
+	if (!bxm_set_CS_high(bitfury))
+		return false;
+
+	buf[0] = WRITE_BYTES_SPI0;
+	buf[1] = (uint8_t)16 - (uint8_t)1;
+	buf[2] = 0;
+	memcpy(&buf[3], rst_buf, 8);
+	memcpy(&buf[11], rst_buf, 8);
+	err = usb_write(bitfury, buf, 19, &amount, C_BXM_RESET);
+	if (err || amount != 19)
+		return false;
+
+	if (!bxm_set_CS_low(bitfury))
+		return false;
+
+	return true;
+}
+
+static bool bxm_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	spi_clear_buf(info);
+	spi_add_break(info);
+	spi_set_freq(info);
+	spi_send_conf(info);
+	spi_send_init(info);
+	return info->spi_txrx(bitfury, info);
+}
+
+static bool bxm_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	bool ret;
+
+	info->spi_txrx = &ftdi_spi_txrx;
+	ret = bxm_open(bitfury);
+	if (!ret)
+		goto out;
+	ret = bxm_purge_buffers(bitfury);
+	if (!ret)
+		goto out;
+	ret = bxm_reset_bitfury(bitfury);
+	if (!ret)
+		goto out;
+	ret = bxm_purge_buffers(bitfury);
+	if (!ret)
+		goto out;
+
+	/* Do a dummy read */
+	memset(info->spibuf, 0, 80);
+	info->spibufsz = 80;
+	ret = info->spi_txrx(bitfury, info);
+	if (!ret)
+		goto out;
+	/* FIXME make configurable and use a faster default. */
+	info->osc6_bits = 50;
+	ret = bxm_reinit(bitfury, info);
+	if (!ret)
+		goto out;
+
+	if (!add_cgpu(bitfury))
+		quit(1, "Failed to add_cgpu in bxm_detect_one");
+
+	update_usb_stats(bitfury);
+	applog(LOG_INFO, "%s %d: Successfully initialised %s",
+	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
+	spi_clear_buf(info);
+
+	info->total_nonces = 1;
+out:
+	if (!ret)
+		bxm_close(bitfury);
 	return ret;
 }
 
@@ -464,6 +739,9 @@ static struct cgpu_info *bitfury_detect_one(struct libusb_device *dev, struct us
 			break;
 		case IDENT_NF1:
 			ret = nf1_detect_one(bitfury, info);
+			break;
+		case IDENT_BXM:
+			ret = bxm_detect_one(bitfury, info);
 			break;
 		default:
 			applog(LOG_INFO, "%s %d: Unrecognised bitfury device",
@@ -937,6 +1215,41 @@ static int64_t nf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 	return ret;
 }
 
+static int64_t bxm_scan(struct thr_info *thr, struct cgpu_info *bitfury,
+			struct bitfury_info *info)
+{
+	int64_t ret = 0;
+
+	if (!info->work) {
+		info->work = get_work(thr, thr->id);
+		if (unlikely(thr->work_restart)) {
+			free_work(info->work);
+			info->work = NULL;
+			return 0;
+		}
+		bitfury_work_to_payload(&info->payload, info->work);
+	}
+	if (!libbitfury_sendHashData(thr, bitfury, info))
+		return -1;
+
+	if (info->job_switched) {
+		if (likely(info->owork))
+			free_work(info->owork);
+		info->owork = info->work;
+		info->work = NULL;
+	}
+
+	ret = bitfury_rate(info);
+
+	if (unlikely(bitfury->usbinfo.nodev)) {
+		applog(LOG_WARNING, "%s %d: Device disappeared, disabling thread",
+		       bitfury->drv->name, bitfury->device_id);
+		ret = -1;
+	}
+
+	return ret;
+}
+
 static int64_t bitfury_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *bitfury = thr->cgpu;
@@ -970,6 +1283,9 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 			break;
 		case IDENT_NF1:
 			ret = nf1_scan(thr, bitfury, info);
+			break;
+		case IDENT_BXM:
+			ret = bxm_scan(thr, bitfury, info);
 			break;
 		default:
 			ret = 0;
@@ -1116,7 +1432,6 @@ static void bitfury_get_statline_before(char *buf, size_t bufsiz, struct cgpu_in
 		case IDENT_BXF:
 			tailsprintf(buf, bufsiz, "%5.1fC", cgpu->temp);
 			break;
-		case IDENT_BF1:
 		default:
 			break;
 	}
@@ -1137,7 +1452,6 @@ static void bitfury_init(struct cgpu_info *bitfury)
 		case IDENT_BF1:
 			bf1_init(bitfury);
 			break;
-		case IDENT_BXF:
 		default:
 			break;
 	}
@@ -1163,6 +1477,9 @@ static void bitfury_shutdown(struct thr_info *thr)
 			break;
 		case IDENT_NF1:
 			nf1_close(bitfury);
+			break;
+		case IDENT_BXM:
+			bxm_close(bitfury);
 			break;
 		default:
 			break;

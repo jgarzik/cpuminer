@@ -33,6 +33,20 @@ extern int opt_nf1_bits;
 #define SPIBUF_SIZE 16384
 #define BITFURY_REFRESH_DELAY 100
 
+#define SIO_RESET_REQUEST 0
+#define SIO_SET_LATENCY_TIMER_REQUEST 0x09
+#define SIO_SET_EVENT_CHAR_REQUEST    0x06
+#define SIO_SET_ERROR_CHAR_REQUEST    0x07
+#define SIO_SET_BITMODE_REQUEST       0x0B
+#define SIO_RESET_PURGE_RX 1
+#define SIO_RESET_PURGE_TX 2
+
+#define BITMODE_RESET 0x00
+#define BITMODE_MPSSE 0x02
+#define SIO_RESET_SIO 0
+
+#define BXM_LATENCY_MS 2
+
 struct bitfury_payload {
 	unsigned char midstate[32];
 	unsigned int junk[8];
@@ -90,6 +104,8 @@ struct bitfury_info {
 	bool second_run;
 	struct work *work;
 	struct work *owork;
+
+	bool (*spi_txrx)(struct cgpu_info *, struct bitfury_info *info);
 };
 
 #endif /* BITFURY_H */
