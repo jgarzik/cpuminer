@@ -1372,7 +1372,6 @@ static void bitfury_get_statline_before(char *buf, size_t bufsiz, struct cgpu_in
 		case IDENT_BXF:
 			tailsprintf(buf, bufsiz, "%5.1fC", cgpu->temp);
 			break;
-		case IDENT_BF1:
 		default:
 			break;
 	}
@@ -1393,7 +1392,6 @@ static void bitfury_init(struct cgpu_info *bitfury)
 		case IDENT_BF1:
 			bf1_init(bitfury);
 			break;
-		case IDENT_BXF:
 		default:
 			break;
 	}
@@ -1419,6 +1417,9 @@ static void bitfury_shutdown(struct thr_info *thr)
 			break;
 		case IDENT_NF1:
 			nf1_close(bitfury);
+			break;
+		case IDENT_BXM:
+			bxm_close(bitfury);
 			break;
 		default:
 			break;
