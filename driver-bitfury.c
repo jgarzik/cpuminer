@@ -739,7 +739,7 @@ static bool bxm_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	if (!ret)
 		goto out;
 	/* FIXME make configurable and use a faster default. */
-	info->osc6_bits = 25;
+	info->osc6_bits = 50;
 	ret = bxm_reinit(bitfury, info);
 	if (!ret)
 		goto out;
