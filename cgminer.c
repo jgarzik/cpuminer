@@ -3577,7 +3577,7 @@ void app_restart(void)
 {
 	applog(LOG_WARNING, "Attempting to restart %s", packagename);
 
-	__kill_work();
+	cg_completion_timeout(&__kill_work, NULL, 5000);
 	clean_up(true);
 
 #if defined(unix) || defined(__APPLE__)
@@ -7953,8 +7953,24 @@ static void clean_up(bool restarting)
 	curl_global_cleanup();
 }
 
+/* Should all else fail and we're unable to clean up threads due to locking
+ * issues etc, just silently exit. */
+static void *killall_thread(void __maybe_unused *arg)
+{
+	pthread_detach(pthread_self());
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+	sleep(5);
+	exit(1);
+	return NULL;
+}
+
 void __quit(int status, bool clean)
 {
+	pthread_t killall_t;
+
+	if (unlikely(pthread_create(&killall_t, NULL, killall_thread, NULL)))
+		exit(1);
+
 	if (clean)
 		clean_up(false);
 #ifdef HAVE_CURSES
@@ -7968,6 +7984,7 @@ void __quit(int status, bool clean)
 		forkpid = 0;
 	}
 #endif
+	pthread_cancel(killall_t);
 
 	exit(status);
 }
