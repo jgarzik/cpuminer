@@ -102,7 +102,8 @@ If building on Red Hat:
                          curl libcurl libcurl-devel openssh
 
 If building on Ubuntu:
-	sudo apt-get install build-essential autoconf automake libtool libcurl3-dev libudev-dev
+	sudo apt-get install build-essential autoconf automake libtool pkg-config \
+                             libcurl3-dev libudev-dev
 
 CGMiner specific configuration options:
   --enable-ants1          Compile support for Antminer S1 Bitmain (default

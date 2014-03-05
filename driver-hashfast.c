@@ -650,26 +650,27 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 	if (!ret) {
 		/* We should receive a valid header even if OP_NAME isn't
 		 * supported by the firmware. */
-		applog(LOG_WARNING, "%s: Failed to receive OP_NAME response", hashfast->drv->name);
-		goto out;
-	}
-
-	/* Only try to parse the name if the firmware supports OP_NAME */
-	if (h->operation_code == OP_NAME) {
-		if (!hfa_get_data(hashfast, info->op_name, 32 / 4)) {
-			applog(LOG_WARNING, "%s %d: OP_NAME failed! Failure to get op_name data",
-			       hashfast->drv->name, hashfast->device_id);
-			goto out;
-		}
-		info->has_opname = info->opname_valid = true;
-		applog(LOG_DEBUG, "%s: Returned an OP_NAME", hashfast->drv->name);
-		for (i = 0; i < 32; i++) {
-			if (i > 0 && info->op_name[i] == '\0')
-				break;
-			/* Make sure the op_name is valid ascii only */
-			if (info->op_name[i] < 32 || info->op_name[i] > 126) {
-				info->opname_valid = false;
-				break;
+		applog(LOG_NOTICE, "%s %d: Firmware upgrade required to support module Naming.",
+			hashfast->drv->name, hashfast->device_id);
+		ret = true;
+	} else {
+		/* Only try to parse the name if the firmware supports OP_NAME */
+		if (h->operation_code == OP_NAME) {
+			if (!hfa_get_data(hashfast, info->op_name, 32 / 4)) {
+				applog(LOG_WARNING, "%s %d: OP_NAME failed! Failure to get op_name data",
+			       	hashfast->drv->name, hashfast->device_id);
+				goto out;
+			}
+			info->has_opname = info->opname_valid = true;
+			applog(LOG_DEBUG, "%s: Returned an OP_NAME", hashfast->drv->name);
+			for (i = 0; i < 32; i++) {
+				if (i > 0 && info->op_name[i] == '\0')
+					break;
+				/* Make sure the op_name is valid ascii only */
+				if (info->op_name[i] < 32 || info->op_name[i] > 126) {
+					info->opname_valid = false;
+					break;
+				}
 			}
 		}
 	}
