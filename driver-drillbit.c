@@ -101,9 +101,10 @@ typedef struct {
 } Identity;
 
 /* Capabilities flags known to cgminer */
-#define CAP_TEMP 1
-#define CAP_EXT_CLOCK 2
-#define CAP_IS_AVALON 4
+#define CAP_TEMP (1<<0)
+#define CAP_EXT_CLOCK (1<<1)
+#define CAP_IS_AVALON (1<<2)
+#define CAP_WARRANTY_VOID (1<<3)
 
 #define SZ_SERIALISED_IDENTITY 16
 static void deserialise_identity(Identity *identity, const char *buf);
@@ -579,6 +580,10 @@ static struct cgpu_info *drillbit_detect_one(struct libusb_device *dev, struct u
 		goto out_close;
 
 	update_usb_stats(drillbit);
+
+	if(info->capabilities & CAP_WARRANTY_VOID) {
+		drvlog(LOG_WARNING, "This board's warranty is void due to overclocking past limits.");
+	}
 
 	drillbit_send_config(drillbit);
 
