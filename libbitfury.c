@@ -340,10 +340,9 @@ bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32_t nonc
 bool libbitfury_sendHashData(struct thr_info *thr, struct cgpu_info *bitfury,
 			     struct bitfury_info *info)
 {
-	unsigned *newbuf = info->newbuf;
+	unsigned newbuf[17];
 	unsigned *oldbuf = info->oldbuf;
 	struct bitfury_payload *p = &(info->payload);
-	struct bitfury_payload *op = &(info->opayload);
 	unsigned int localvec[20];
 
 	/* Programming next value */
@@ -374,7 +373,6 @@ bool libbitfury_sendHashData(struct thr_info *thr, struct cgpu_info *bitfury,
 				}
 			}
 
-			memcpy(op, p, sizeof(struct bitfury_payload));
 			memcpy(oldbuf, newbuf, 17 * 4);
 		}
 	} else

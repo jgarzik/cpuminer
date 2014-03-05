@@ -97,8 +97,6 @@ struct bitfury_info {
 	unsigned int spibufsz;
 	int osc6_bits;
 	struct bitfury_payload payload;
-	struct bitfury_payload opayload;
-	unsigned newbuf[17];
 	unsigned oldbuf[17];
 	bool job_switched;
 	bool second_run;
