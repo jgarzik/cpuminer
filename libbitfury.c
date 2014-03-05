@@ -181,6 +181,14 @@ void spi_add_break(struct bitfury_info *info)
 	spi_add_buf(info, "\x4", 1);
 }
 
+void spi_add_fasync(struct bitfury_info *info, int n)
+{
+	int i;
+
+	for (i = 0; i < n; i++)
+		spi_add_buf(info, "\x5", 1);
+}
+
 static void spi_add_buf_reverse(struct bitfury_info *info, const char *buf, const int sz)
 {
 	int i;

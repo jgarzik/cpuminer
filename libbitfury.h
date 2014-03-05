@@ -21,6 +21,7 @@ void spi_send_init(struct bitfury_info *info);
 void spi_clear_buf(struct bitfury_info *info);
 void spi_add_buf(struct bitfury_info *info, const void *buf, const int sz);
 void spi_add_break(struct bitfury_info *info);
+void spi_add_fasync(struct bitfury_info *info, int n);
 void spi_add_data(struct bitfury_info *info, uint16_t addr, const void *buf, int len);
 bool spi_reset(struct cgpu_info *bitfury, struct bitfury_info *info);
 bool mcp_spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info);
