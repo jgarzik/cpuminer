@@ -49,6 +49,8 @@ struct drillbit_chip_info {
   uint32_t work_sent_count;
   uint32_t success_auto;
   uint32_t error_auto;
+  int auto_delta;
+  int auto_max;
 };
 
 #endif /* BITFURY_H */

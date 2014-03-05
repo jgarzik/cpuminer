@@ -466,11 +466,24 @@ Drillbit Systems Devices
 * voltage is ASIC core voltage in millivolts, available values vary per board but
   default is 850 and the recommended maximum is 950 (Bitfury) and 1000 (Avalon.)
 
---drillbit-autotune
+--drillbit-auto <every>:[<gooderr>:<baderr>:<maxerr>]
 
 If supported by firmware and device, this feature allows cgminer to
 automatically tweak each ASIC's clock rate up and down in to achieve
 optimal performance.
+
+* every - only required param, check each ASIC after each block of
+  this many work units. Recommended value 100.
+* gooderr - the "Good" threshold is when less hardware errors than
+  this per "every" work units, the clock rate will be increased.
+  Default value 1.
+* baderr - the "Bad" threshold is when more hardware errors than
+  this per "every" work units, the clock rate will be decreased.
+  Default value 3.
+* maxerr - the "Max" threshold is when more hardware errors than
+  this per "every" work units (including pre-empting before
+  "every" work units is up), the clock rate will be decreased and
+  will not be increased again past this point. Default value 10.
 
 
 BlackArrow Bitfury devices

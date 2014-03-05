@@ -120,6 +120,12 @@ static config_setting *settings;
 
 static void drillbit_empty_buffer(struct cgpu_info *drillbit);
 
+/* Automatic tuning parameters */
+static uint32_t auto_every = 100;
+static uint32_t auto_good = 1;
+static uint32_t auto_bad = 3;
+static uint32_t auto_max = 10;
+
 /* Return a pointer to the chip_info structure for a given chip id, or NULL otherwise */
 static struct drillbit_chip_info *find_chip(struct drillbit_info *info, uint16_t chip_id) {
 	int i;
@@ -529,6 +535,18 @@ static bool drillbit_parse_options(struct cgpu_info *drillbit)
 		if (next_opt)
 			next_opt++;
 	}
+
+	if(opt_drillbit_auto) {
+		sscanf(opt_drillbit_auto, "%d:%d:%d:%d",
+			&auto_every, &auto_good, &auto_bad, &auto_max);
+		if(auto_max < auto_bad) {
+			quithere(1, "Bad drillbit-auto: MAX limit must be greater than BAD limit");
+		}
+		if(auto_bad < auto_good) {
+			quithere(1, "Bad drillbit-auto: GOOD limit must be greater than BAD limit");
+		}
+	}
+
 	return true;
 }
 
@@ -565,6 +583,7 @@ static struct cgpu_info *drillbit_detect_one(struct libusb_device *dev, struct u
 	info->chips = calloc(sizeof(struct drillbit_chip_info), info->num_chips);
 	for (i = 0; i < info->num_chips; i++) {
 		info->chips[i].chip_id = i;
+		info->chips[i].auto_max = 999;
 	}
 
 	/* Send reset request */
@@ -654,37 +673,51 @@ static bool drillbit_checkresults(struct thr_info *thr, struct work *work, uint3
 }
 
 /* Check if this ASIC should be tweaked up or down in clock speed */
-static void drillbit_check_autotune(struct thr_info *thr, struct drillbit_chip_info *chip)
+static void drillbit_check_auto(struct thr_info *thr, struct drillbit_chip_info *chip)
 {
 	struct cgpu_info *drillbit = thr->cgpu;
 	AutoTuneRequest request;
 	char buf[SZ_SERIALISED_AUTOTUNEREQUEST+1];
 	int amount;
 	float ratio;
+	bool tune_up, tune_down;
 
-	/* autotune tries to keep ratio of HW errors within these margins:
-	   every RETUNE_EVERY results (errors and successes totalled, error count should be between
-	   the low and high limits given.
+	/*
+	  Only check automatic tuning every "auto_every" work units,
+	  or if the error count exceeds the 'max' count
 	*/
-	const uint32_t TUNE_UP_EVERY = 100;
-	const uint32_t ERROR_LOW = 1;
-	const uint32_t ERROR_HIGH = 3;
-
-	/* Check auto parameters */
-	if(chip->success_auto + chip->error_auto < TUNE_UP_EVERY && chip->error_auto < ERROR_HIGH*2)
+	if(chip->success_auto + chip->error_auto < auto_every &&
+		(chip->error_auto < auto_max))
 		return;
 
-	ratio = 100 * (float)chip->error_auto / (chip->success_auto + chip->error_auto);
-	applog(LOG_DEBUG, "Chip id %d has error ratio %3.1f%%", chip->chip_id, ratio);
+	tune_up = chip->error_auto < auto_good && chip->auto_delta < chip->auto_max;
+	tune_down = chip->error_auto > auto_bad;
 
-	if(chip->error_auto < ERROR_LOW || chip->error_auto > ERROR_HIGH) {
+
+	drvlog(tune_up||tune_down ? LOG_NOTICE : LOG_DEBUG,
+		"Chip id %d has %d/%d error rate %s", chip->chip_id, chip->error_auto,
+		chip->error_auto + chip->success_auto,
+		tune_up ? " - tuning up" : tune_down ? " - tuning down" : " - no change");
+
+	if(tune_up || tune_down) {
 		/* Value should be tweaked */
 		buf[0] = 'A';
 		request.chip_id = chip->chip_id;
-		request.increase_clock = chip->error_auto < ERROR_LOW;
+		request.increase_clock = tune_up;
 		serialise_autotune_request(&buf[1], &request);
 		usb_write_timeout(drillbit, buf, sizeof(buf), &amount, TIMEOUT, C_BF_AUTOTUNE);
 		usb_read_simple_response(drillbit, 'A', C_BF_AUTOTUNE);
+		if(tune_up) {
+			chip->auto_delta++;
+		} else {
+			chip->auto_delta--;
+			if(chip->error_auto >= auto_max
+				&& chip->success_count + chip->error_count > auto_every) {
+				drvlog(LOG_ERR, "Chip id %d capping auto delta at max %d",chip->chip_id,
+					chip->auto_delta);
+				chip->auto_max = chip->auto_delta;
+			}
+		}
 	}
 
 	chip->success_auto = 0;
@@ -799,8 +832,8 @@ static int check_for_results(struct thr_info *thr)
 		else
 			chip->state = IDLE; // Uh-oh, we're totally out of work for this ASIC!
 
-		if(opt_drillbit_autotune && info->protocol_version >= 4)
-			drillbit_check_autotune(thr, chip);
+		if(opt_drillbit_auto && info->protocol_version >= 4)
+			drillbit_check_auto(thr, chip);
 	}
 
 cleanup:
