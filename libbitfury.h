@@ -15,6 +15,7 @@
 void ms3steps(uint32_t *p);
 uint32_t decnonce(uint32_t in);
 void bitfury_work_to_payload(struct bitfury_payload *p, struct work *work);
+void spi_config_reg(struct bitfury_info *info, int cfgreg, int ena);
 void spi_set_freq(struct bitfury_info *info);
 void spi_send_conf(struct bitfury_info *info);
 void spi_send_init(struct bitfury_info *info);

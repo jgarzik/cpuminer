@@ -511,13 +511,28 @@ static uint16_t calc_divisor(uint32_t system_clock, uint32_t freq)
 	return divisor;
 }
 
-static void bxm_close(struct cgpu_info *bitfury)
+static void bxm_shutdown(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	int chip_n;
+
+	for (chip_n = 0; chip_n < 2; chip_n++) {
+		spi_clear_buf(info);
+		spi_add_break(info);
+		spi_add_fasync(info, chip_n);
+		spi_config_reg(info, 4, 0);
+		info->spi_txrx(bitfury, info);
+	}
+}
+
+static void bxm_close(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
 	unsigned char bitmask = 0;
 	unsigned char mode = BITMODE_RESET;
 	unsigned short usb_val = bitmask;
 
-	//Need to do BITMODE_RESET before close per FTDI
+	bxm_shutdown(bitfury, info);
+
+	//Need to do BITMODE_RESET before usb close per FTDI
 	usb_val |= (mode << 8);
 	usb_transfer(bitfury, FTDI_TYPE_OUT, SIO_SET_BITMODE_REQUEST, usb_val, 1, C_BXM_SETBITMODE);
 }
@@ -716,7 +731,7 @@ static bool bxm_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	info->total_nonces = 1;
 out:
 	if (!ret)
-		bxm_close(bitfury);
+		bxm_close(bitfury, info);
 	return ret;
 }
 
@@ -1484,7 +1499,7 @@ static void bitfury_shutdown(struct thr_info *thr)
 			nf1_close(bitfury);
 			break;
 		case IDENT_BXM:
-			bxm_close(bitfury);
+			bxm_close(bitfury, info);
 			break;
 		default:
 			break;
