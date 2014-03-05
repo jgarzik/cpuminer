@@ -1414,9 +1414,11 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 		queuednum = bitmain->queued;
 		applog(LOG_DEBUG, "BTM: Work task queued(%d) fifo space(%d) needsend(%d)",
 				  queuednum, info->fifo_space, neednum);
-		if (queuednum < neednum) {
+		while (queuednum < neednum) {
 			work = get_queued(bitmain);
-			if (work) {
+			if (!work)
+				break;
+			else {
 				roll_limit = work->drv_rolllimit;
 				roll = 0;
 				while (queuednum < neednum && roll <= roll_limit) {
@@ -1471,11 +1473,11 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 		info->send_full_space += sendnum;
 		if (bitmain->queued < 0)
 			bitmain->queued = 0;
-		if (bitmain->work_array + sendnum > BITMAIN_ARRAY_SIZE) {
+		if (bitmain->work_array + sendnum > BITMAIN_ARRAY_SIZE)
 			bitmain->work_array = bitmain->work_array + sendnum-BITMAIN_ARRAY_SIZE;
-		} else {
+		else
 			bitmain->work_array += sendnum;
-		}
+
 		applog(LOG_DEBUG, "BTM: Send work array %d", bitmain->work_array);
 		if (sendlen > 0) {
 			info->fifo_space -= sendcount;
