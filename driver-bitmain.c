@@ -1386,9 +1386,10 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 {
 	struct bitmain_info *info = bitmain->device_data;
 	int subid, slot;
-	struct work *work;
+	struct work *work, *usework;
 	bool ret = true;
 	int sendret = 0, sendcount = 0, neednum = 0, queuednum = 0, sendnum = 0, sendlen = 0;
+	int roll, roll_limit;
 	uint8_t sendbuf[BITMAIN_SENDBUF_SIZE];
 	cgtimer_t ts_start;
 	int senderror = 0;
@@ -1402,26 +1403,38 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 		ret = true;
 		goto out_unlock;
 	}
-	if (bitmain->queued >= BITMAIN_MAX_WORK_QUEUE_NUM) {
+
+	if (bitmain->queued >= BITMAIN_MAX_WORK_QUEUE_NUM)
 		ret = true;
-	} else {
+	else
 		ret = false;
-	}
+
 	while (info->fifo_space > 0) {
 		neednum = info->fifo_space<8?info->fifo_space:8;
 		queuednum = bitmain->queued;
 		applog(LOG_DEBUG, "BTM: Work task queued(%d) fifo space(%d) needsend(%d)",
 				  queuednum, info->fifo_space, neednum);
 		if (queuednum < neednum) {
-			while (true) {
-				work = get_queued(bitmain);
-				if (unlikely(!work)) {
-					break;
-				} else {
-					applog(LOG_DEBUG, "BTM get work queued number:%d neednum:%d",
+			work = get_queued(bitmain);
+			if (work) {
+				roll_limit = work->drv_rolllimit;
+				roll = 0;
+				while (queuednum < neednum && roll <= roll_limit) {
+					applog(LOG_DEBUG, "BTM get work queued number:%d"
+							  " neednum:%d",
 							  queuednum, neednum);
+
+					// Using devflag to say if it was rolled
+					if (roll == 0) {
+						usework = work;
+						usework->devflag = false;
+					} else {
+						usework = copy_work_noffset(work, roll);
+						usework->devflag = true;
+					}
+
 					subid = bitmain->queued++;
-					work->subid = subid;
+					usework->subid = subid;
 					slot = bitmain->work_array + subid;
 					if (slot > BITMAIN_ARRAY_SIZE) {
 						applog(LOG_DEBUG, "bitmain_fill array cyc %d",
@@ -1431,13 +1444,15 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 					if (likely(bitmain->works[slot])) {
 						applog(LOG_DEBUG, "bitmain_fill work_completed %d",
 								  slot);
-						work_completed(bitmain, bitmain->works[slot]);
+						// Was it rolled?
+						if (bitmain->works[slot]->devflag)
+							free_work(bitmain->works[slot]);
+						else
+							work_completed(bitmain, bitmain->works[slot]);
 					}
-					bitmain->works[slot] = work;
+					bitmain->works[slot] = usework;
 					queuednum++;
-					if (queuednum >= neednum) {
-						break;
-					}
+					roll++;
 				}
 			}
 		}
