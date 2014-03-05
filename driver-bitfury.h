@@ -96,12 +96,12 @@ struct bitfury_info {
 	char spibuf[SPIBUF_SIZE];
 	unsigned int spibufsz;
 	int osc6_bits;
-	struct bitfury_payload payload;
-	unsigned oldbuf[17];
-	bool job_switched;
-	bool second_run;
-	struct work *work;
-	struct work *owork;
+	struct bitfury_payload payload[2];
+	unsigned oldbuf[17 * 2];
+	bool job_switched[2];
+	bool second_run[2];
+	struct work *work[2];
+	struct work *owork[2];
 
 	bool (*spi_txrx)(struct cgpu_info *, struct bitfury_info *info);
 };

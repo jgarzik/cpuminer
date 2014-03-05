@@ -28,6 +28,6 @@ bool mcp_spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info);
 bool ftdi_spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info);
 bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32_t nonce);
 bool libbitfury_sendHashData(struct thr_info *thr, struct cgpu_info *bitfury,
-			     struct bitfury_info *info);
+			     struct bitfury_info *info, int chip_n);
 
 #endif /* LIBBITFURY_H */

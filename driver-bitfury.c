@@ -658,12 +658,21 @@ static bool bxm_reset_bitfury(struct cgpu_info *bitfury)
 
 static bool bxm_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
-	spi_clear_buf(info);
-	spi_add_break(info);
-	spi_set_freq(info);
-	spi_send_conf(info);
-	spi_send_init(info);
-	return info->spi_txrx(bitfury, info);
+	bool ret;
+	int i;
+
+	for (i = 0; i < 2; i++) {
+		spi_clear_buf(info);
+		spi_add_break(info);
+		spi_add_fasync(info, i);
+		spi_set_freq(info);
+		spi_send_conf(info);
+		spi_send_init(info);
+		ret = info->spi_txrx(bitfury, info);
+		if (!ret)
+			break;
+	}
+	return ret;
 }
 
 static bool bxm_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
@@ -1180,29 +1189,40 @@ static int64_t bxf_scan(struct cgpu_info *bitfury, struct bitfury_info *info)
 	return ret;
 }
 
+static void bitfury_check_work(struct thr_info *thr, struct cgpu_info *bitfury,
+			       struct bitfury_info *info, int chip_n)
+{
+	if (!info->work[chip_n]) {
+		info->work[chip_n] = get_work(thr, thr->id);
+		if (unlikely(thr->work_restart)) {
+			free_work(info->work[chip_n]);
+			info->work[chip_n] = NULL;
+			return;
+		}
+		bitfury_work_to_payload(&info->payload[chip_n], info->work[chip_n]);
+	}
+
+	if (unlikely(bitfury->usbinfo.nodev))
+		return;
+
+	if (!libbitfury_sendHashData(thr, bitfury, info, chip_n))
+		usb_nodev(bitfury);
+
+	if (info->job_switched[chip_n]) {
+		if (likely(info->owork[chip_n]))
+			free_work(info->owork[chip_n]);
+		info->owork[chip_n] = info->work[chip_n];
+		info->work[chip_n] = NULL;
+	}
+
+}
+
 static int64_t nf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 			struct bitfury_info *info)
 {
 	int64_t ret = 0;
 
-	if (!info->work) {
-		info->work = get_work(thr, thr->id);
-		if (unlikely(thr->work_restart)) {
-			free_work(info->work);
-			info->work = NULL;
-			return 0;
-		}
-		bitfury_work_to_payload(&info->payload, info->work);
-	}
-	if (!libbitfury_sendHashData(thr, bitfury, info))
-		return -1;
-
-	if (info->job_switched) {
-		if (likely(info->owork))
-			free_work(info->owork);
-		info->owork = info->work;
-		info->work = NULL;
-	}
+	bitfury_check_work(thr, bitfury, info, 0);
 
 	ret = bitfury_rate(info);
 
@@ -1219,25 +1239,10 @@ static int64_t bxm_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 			struct bitfury_info *info)
 {
 	int64_t ret = 0;
+	int chip_n;
 
-	if (!info->work) {
-		info->work = get_work(thr, thr->id);
-		if (unlikely(thr->work_restart)) {
-			free_work(info->work);
-			info->work = NULL;
-			return 0;
-		}
-		bitfury_work_to_payload(&info->payload, info->work);
-	}
-	if (!libbitfury_sendHashData(thr, bitfury, info))
-		return -1;
-
-	if (info->job_switched) {
-		if (likely(info->owork))
-			free_work(info->owork);
-		info->owork = info->work;
-		info->work = NULL;
-	}
+	for (chip_n = 0; chip_n < 2; chip_n++)
+		bitfury_check_work(thr, bitfury, info, chip_n);
 
 	ret = bitfury_rate(info);
 
