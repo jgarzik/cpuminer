@@ -802,10 +802,10 @@ static int check_for_results(struct thr_info *thr)
 			goto cleanup;
 		}
 
+		found = false;
 		for(i = 0; i < response->num_nonces; i++) {
 			if (unlikely(thr->work_restart))
 				goto cleanup;
-			found = false;
 			for(k = 0; k < WORK_HISTORY_LEN; k++) {
 				/* NB we deliberately check all results against all work because sometimes ASICs seem to give multiple "valid" nonces,
 				   and this seems to avoid some result that would otherwise be rejected by the pool.
