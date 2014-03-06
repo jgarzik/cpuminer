@@ -1526,6 +1526,8 @@ dies_only:
 
 static void hfa_running_shutdown(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
+	int iruntime = cgpu_runtime(hashfast);
+
 	info->resets++;
 
 	/* If the device has already disapperaed, don't drop the clock in case
@@ -1533,7 +1535,10 @@ static void hfa_running_shutdown(struct cgpu_info *hashfast, struct hashfast_inf
 	if (hashfast->usbinfo.nodev)
 		return;
 
-	if (info->hash_clock_rate > HFA_CLOCK_DEFAULT && opt_hfa_fail_drop) {
+	/* Only decrease the clock speed if the device has run at this speed
+	 * for less than an hour before failing, otherwise the hashrate gains
+	 * are worth the occasional restart which takes at most a minute. */
+	if (iruntime < 3600 && info->hash_clock_rate > HFA_CLOCK_DEFAULT && opt_hfa_fail_drop) {
 		info->hash_clock_rate -= opt_hfa_fail_drop;
 		if (info->hash_clock_rate < HFA_CLOCK_DEFAULT)
 			info->hash_clock_rate = HFA_CLOCK_DEFAULT;
