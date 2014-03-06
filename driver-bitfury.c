@@ -17,6 +17,7 @@
 
 int opt_bxf_temp_target = BXF_TEMP_TARGET / 10;
 int opt_nf1_bits = 50;
+int opt_bxm_bits = 50;
 
 /* Wait longer 1/3 longer than it would take for a full nonce range */
 #define BF1WAIT 1600
@@ -714,8 +715,7 @@ static bool bxm_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	ret = info->spi_txrx(bitfury, info);
 	if (!ret)
 		goto out;
-	/* FIXME make configurable and use a faster default. */
-	info->osc6_bits = 50;
+	info->osc6_bits = opt_bxm_bits;
 	ret = bxm_reinit(bitfury, info);
 	if (!ret)
 		goto out;
