@@ -641,12 +641,20 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 
 	/* Try sending and receiving an OP_NAME */
 	ret = hfa_send_frame(hashfast, HF_USB_CMD(OP_NAME), 0, (uint8_t *)NULL, 0);
+	if (hashfast->usbinfo.nodev) {
+		ret = false;
+		goto out;
+	}
 	if (!ret) {
 		applog(LOG_WARNING, "%s %d: Failed to send OP_NAME!", hashfast->drv->name,
 		       hashfast->device_id);
 		goto out;
 	}
 	ret = hfa_get_header(hashfast, h, &hcrc);
+	if (hashfast->usbinfo.nodev) {
+		ret = false;
+		goto out;
+	}
 	if (!ret) {
 		/* We should receive a valid header even if OP_NAME isn't
 		 * supported by the firmware. */
