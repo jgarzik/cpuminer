@@ -109,6 +109,8 @@ struct hashfast_info {
 	struct hf_long_statistics *die_statistics;  // Array of per-die error counters
 	struct hf_long_usb_stats1 stats1;
 	struct hf_die_data *die_data;
+	double firmware_version;
+	double hardware_version;
 	int hash_clock_rate;                        // Hash clock rate to use, in Mhz
 	int base_clock;                             // Clock rate we actually got
 	struct hf_usb_init_base usb_init_base;      // USB Base information from USB_INIT

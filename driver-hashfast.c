@@ -482,10 +482,12 @@ tryagain:
 		goto out;
 	}
 	db = &info->usb_init_base;
-	applog(LOG_INFO, "%s %d:      firmware_rev:    %d.%d", hashfast->drv->name, hashfast->device_id,
-	       (db->firmware_rev >> 8) & 0xff, db->firmware_rev & 0xff);
-	applog(LOG_INFO, "%s %d:      hardware_rev:    %d.%d", hashfast->drv->name, hashfast->device_id,
-	       (db->hardware_rev >> 8) & 0xff, db->hardware_rev & 0xff);
+	info->firmware_version = ((db->firmware_rev >> 8) & 0xff) + (double)(db->firmware_rev & 0xff) / 10.0;
+	info->hardware_version = ((db->hardware_rev >> 8) & 0xff) + (double)(db->hardware_rev & 0xff) / 10.0;
+	applog(LOG_INFO, "%s %d:      firmware_rev:    %.1f", hashfast->drv->name, hashfast->device_id,
+	       info->firmware_version);
+	applog(LOG_INFO, "%s %d:      hardware_rev:    %.1f", hashfast->drv->name, hashfast->device_id,
+	       info->hardware_version);
 	applog(LOG_INFO, "%s %d:      serial number:   %08x", hashfast->drv->name, hashfast->device_id,
 	       db->serial_number);
 	applog(LOG_INFO, "%s %d:      hash clockrate:  %d Mhz", hashfast->drv->name, hashfast->device_id,
@@ -1694,11 +1696,9 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "asic count", &info->asic_count, false);
 	root = api_add_int(root, "core count", &info->core_count, false);
 
+	root = api_add_double(root, "firmware rev", &info->firmware_version, false);
+	root = api_add_double(root, "hardware rev", &info->hardware_version, false);
 	db = &info->usb_init_base;
-	sprintf(buf, "%d.%d", (db->firmware_rev >> 8) & 0xff, db->firmware_rev & 0xff);
-	root = api_add_string(root, "firmware rev", buf, true);
-	sprintf(buf, "%d.%d", (db->hardware_rev >> 8) & 0xff, db->hardware_rev & 0xff);
-	root = api_add_string(root, "hardware rev", buf, true);
 	root = api_add_hex32(root, "serial number", &db->serial_number, true);
 	varint = db->hash_clockrate;
 	root = api_add_int(root, "base clockrate", &varint, true);
