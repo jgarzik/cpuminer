@@ -658,7 +658,7 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 	if (!ret) {
 		/* We should receive a valid header even if OP_NAME isn't
 		 * supported by the firmware. */
-		applog(LOG_NOTICE, "%s %d: Firmware upgrade required to support module Naming.",
+		applog(LOG_NOTICE, "%s %d: No response to name query - failed init or firmware upgrade required.",
 			hashfast->drv->name, hashfast->device_id);
 		ret = true;
 	} else {
