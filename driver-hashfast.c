@@ -1358,7 +1358,7 @@ static void hfa_increase_clock(struct cgpu_info *hashfast, struct hashfast_info 
 			if (info->die_data[i].hash_clock < low_clock)
 				low_clock = info->die_data[i].hash_clock;
 		}
-		if (low_clock + HFA_CLOCK_MAXDIFF > high_clock) {
+		if (info->firmware_version < 0.5 && low_clock + HFA_CLOCK_MAXDIFF > high_clock) {
 			/* We can increase all clocks again */
 			for (i = 0; i < info->asic_count; i++) {
 				if (i == die) /* We've already added to this die */
@@ -1393,7 +1393,7 @@ static void hfa_decrease_clock(struct cgpu_info *hashfast, struct hashfast_info 
 	if (hdd->hash_clock - decrease < HFA_CLOCK_MIN)
 		decrease = hdd->hash_clock - HFA_CLOCK_MIN;
 	hdata = (WR_MHZ_DECREASE << 12) | decrease;
-	if (high_clock >= hdd->hash_clock + HFA_CLOCK_MAXDIFF) {
+	if (info->firmware_version < 0.5 && high_clock >= hdd->hash_clock + HFA_CLOCK_MAXDIFF) {
 		/* We can't have huge differences in clocks as it will lead to
 		 * starvation of the faster cores so we have no choice but to
 		 * slow down all dies to tame this one. */
