@@ -141,7 +141,8 @@ bool opt_loginput;
 bool opt_compact;
 const int opt_cutofftemp = 95;
 int opt_log_interval = 5;
-int opt_queue = 1;
+int opt_queue = 9999;
+static int max_queue = 1;
 int opt_scantime = -1;
 int opt_expiry = 120;
 static const bool opt_time = true;
@@ -1441,7 +1442,7 @@ static struct opt_table opt_config_table[] = {
 			"Verbose dump of protocol-level activities"),
 	OPT_WITH_ARG("--queue|-Q",
 		     set_int_0_to_9999, opt_show_intval, &opt_queue,
-		     "Minimum number of work items to have queued (0+)"),
+		     "Maximum number of work items to have queued"),
 	OPT_WITHOUT_ARG("--quiet|-q",
 			opt_set_bool, &opt_quiet,
 			"Disable logging output, display status and errors"),
@@ -5174,6 +5175,8 @@ retry:
 			goto retry;
 		}
 		opt_queue = selected;
+		if (opt_queue < max_queue)
+			max_queue = opt_queue;
 		goto retry;
 	} else if  (!strncasecmp(&input, "s", 1)) {
 		selected = curses_int("Set scantime in seconds");
@@ -6330,8 +6333,8 @@ static struct work *hash_pop(bool blocking)
 	if (!HASH_COUNT(staged_work)) {
 		/* Increase the queue if we reach zero and we know we can reach
 		 * the maximum we're asking for. */
-		if (work_filled) {
-			opt_queue++;
+		if (work_filled && max_queue < opt_queue) {
+			max_queue++;
 			work_filled = false;
 		}
 		work_emptied = true;
@@ -9042,7 +9045,7 @@ begin_bench:
 
 	/* Once everything is set up, main() becomes the getwork scheduler */
 	while (42) {
-		int ts, max_staged = opt_queue;
+		int ts, max_staged = max_queue;
 		struct pool *pool, *cp;
 		bool lagging = false;
 		struct work *work;
@@ -9065,8 +9068,8 @@ begin_bench:
 
 		/* Wait until hash_pop tells us we need to create more work */
 		if (ts > max_staged) {
-			if (work_emptied) {
-				opt_queue++;
+			if (work_emptied && max_queue < opt_queue) {
+				max_queue++;
 				work_emptied = false;
 			}
 			work_filled = true;
@@ -9079,8 +9082,8 @@ begin_bench:
 			/* Keeps slowly generating work even if it's not being
 			 * used to keep last_getwork incrementing and to see
 			 * if pools are still alive. */
-			if (work_emptied) {
-				opt_queue++;
+			if (work_emptied && max_queue < opt_queue) {
+				max_queue++;
 				work_emptied = false;
 			}
 			work_filled = true;
@@ -9096,8 +9099,8 @@ begin_bench:
 			applog(LOG_WARNING, "Pool %d not providing work fast enough", cp->pool_no);
 			cp->getfail_occasions++;
 			total_go++;
-			if (!pool_localgen(cp))
-				applog(LOG_INFO, "Increasing queue to %d", ++opt_queue);
+			if (!pool_localgen(cp) && max_queue < opt_queue)
+				applog(LOG_INFO, "Increasing queue to %d", ++max_queue);
 		}
 		pool = select_pool(lagging);
 retry:
