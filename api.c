@@ -132,7 +132,7 @@ static const char SEPARATOR = '|';
 #define JOIN_CMD "CMD="
 #define BETWEEN_JOIN SEPSTR
 
-static const char *APIVERSION = "3.1";
+static const char *APIVERSION = "3.2";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
