@@ -1640,7 +1640,7 @@ restart:
 		/* Older firmwares actually had ntime rolling disabled so we
 		 * can roll the work ourselves here to minimise the amount of
 		 * work we need to generate. */
-		if (info->firmware_version < 0.5 && base_work->drv_rolllimit >= jobs) {
+		if (info->firmware_version < 0.5 && base_work->drv_rolllimit > jobs) {
 			base_work->drv_rolllimit--;
 			roll_work(base_work);
 			work = make_clone(base_work);
