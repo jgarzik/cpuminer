@@ -692,7 +692,7 @@ extern void _quit(int status);
  * So, e.g. use it to track down a deadlock - after a reproducable deadlock occurs
  * ... Of course if the API code itself deadlocks, it wont help :)
  */
-#define LOCK_TRACKING 1
+#define LOCK_TRACKING 0
 
 #if LOCK_TRACKING
 enum cglock_typ {
