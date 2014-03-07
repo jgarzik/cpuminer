@@ -1669,6 +1669,9 @@ restart:
 			sequence = 0;
 		ret = hfa_send_frame(hashfast, OP_HASH, sequence, (uint8_t *)&op_hash_data, sizeof(op_hash_data));
 		if (unlikely(!ret)) {
+			free_work(work);
+			if (base_work)
+				free_work(base_work);
 			hfa_running_shutdown(hashfast, info);
 			return -1;
 		}
