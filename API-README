@@ -485,7 +485,10 @@ Feature Changelog for external applications using the API:
 
 API V3.2 (cgminer v4.0.2)
 
-HEX32 data type in json
+Fix for:
+HEX32 data type in the API version v3.1 JSON - since cgminer v3.12.1 -
+returns an incorrect formatted json data element for the API stats command
+for HashFast hardware
 
 ---------
 
