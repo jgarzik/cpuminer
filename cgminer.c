@@ -3764,7 +3764,7 @@ static void *submit_work_thread(void *userdata)
 	return NULL;
 }
 
-static struct work *make_clone(struct work *work)
+struct work *make_clone(struct work *work)
 {
 	struct work *work_clone = copy_work(work);
 

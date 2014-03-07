@@ -1571,6 +1571,7 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
+	struct work *base_work = NULL;
 	int jobs, ret, cycles = 0;
 	double fail_time;
 	int64_t hashes;
@@ -1633,7 +1634,20 @@ restart:
 		uint32_t *p;
 
 		/* This is a blocking function if there's no work */
-		work = get_work(thr, thr->id);
+		if (!base_work)
+			base_work = get_work(thr, thr->id);
+
+		/* Older firmwares actually had ntime rolling disabled so we
+		 * can roll the work ourselves here to minimise the amount of
+		 * work we need to generate. */
+		if (info->firmware_version < 0.5 && base_work->drv_rolllimit >= jobs) {
+			base_work->drv_rolllimit--;
+			roll_work(base_work);
+			work = make_clone(base_work);
+		} else {
+			work = base_work;
+			base_work = NULL;
+		}
 
 		/* Assemble the data frame and send the OP_HASH packet */
 		memcpy(op_hash_data.midstate, work->midstate, sizeof(op_hash_data.midstate));
@@ -1668,6 +1682,9 @@ restart:
 		       hashfast->drv->name, hashfast->device_id, info->hash_sequence_head,
 		       op_hash_data.search_difficulty, work->work_difficulty);
 	}
+
+	if (base_work)
+		free_work(base_work);
 
 	/* Only count 2/3 of the hashes to smooth out the hashrate for cycles
 	 * that have no hashes added. */
