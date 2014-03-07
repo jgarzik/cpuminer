@@ -1190,7 +1190,13 @@ static struct api_data *print_data(struct io_data *io_data, struct api_data *roo
 				snprintf(buf, sizeof(buf), "%"PRIu32, *((uint32_t *)(root->data)));
 				break;
 			case API_HEX32:
+				if (isjson)
+					add_item_buf(item, JSON1);
 				snprintf(buf, sizeof(buf), "0x%08x", *((uint32_t *)(root->data)));
+				add_item_buf(item, buf);
+				if (isjson)
+					add_item_buf(item, JSON1);
+				done = true;
 				break;
 			case API_UINT64:
 				snprintf(buf, sizeof(buf), "%"PRIu64, *((uint64_t *)(root->data)));
