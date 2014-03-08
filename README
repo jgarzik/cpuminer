@@ -189,6 +189,7 @@ Options for both config file and command line:
 --bitmain-options   Set bitmain options baud:miners:asic:timeout:freq
 --bitmain-temp      Set bitmain target temperature
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
+--bxm-bits <arg>    Set BXM bits for overclocking (default: 50)
 --compact           Use compact display without per device statistics
 --debug|-D          Enable debug output
 --device|-d <arg>   Select device to use, one value, range and/or comma separated (e.g. 0-2,4) default: all
