@@ -1114,6 +1114,15 @@ static char *set_bitburner_fury_options(const char *arg)
 }
 #endif
 
+#ifdef USE_HASHFAST
+static char *set_hfa_options(const char *arg)
+{
+	opt_set_charp(arg, &opt_hfa_options);
+
+	return NULL;
+}
+#endif
+
 #ifdef USE_KLONDIKE
 static char *set_klondike_options(const char *arg)
 {
@@ -1365,6 +1374,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--hfa-ntime-roll",
 		     opt_set_intval, NULL, &opt_hfa_ntime_roll,
 		     opt_hidden),
+	OPT_WITH_ARG("--hfa-options",
+		     set_hfa_options, NULL, NULL,
+		     "Set hashfast options name:clock (comma separated)"),
 	OPT_WITHOUT_ARG("--hfa-pll-bypass",
 			opt_set_bool, &opt_hfa_pll_bypass,
 			opt_hidden),

@@ -31,6 +31,7 @@ int opt_hfa_fail_drop = 10;
 bool opt_hfa_noshed;
 
 char *opt_hfa_name;
+char *opt_hfa_options;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Support for the CRC's used in header (CRC-8) and packet body (CRC-32)
@@ -627,6 +628,60 @@ static void hfa_set_clock(struct cgpu_info *hashfast, struct hashfast_info *info
 		info->die_data[i].hash_clock = info->base_clock;
 }
 
+/* Look for an op name match and apply any options to its first attempted
+ * init sequence. This function allows any arbitrary number of extra parameters
+ * to be added in the future. */
+static void hfa_check_options(struct hashfast_info *info)
+{
+	char *p, *options, *found = NULL;
+	int maxlen, option = 0;
+
+	if (!opt_hfa_options)
+		return;
+
+	if (!info->op_name)
+		return;
+
+	maxlen = strlen(info->op_name);
+
+	options = strdup(opt_hfa_options);
+	for (p = strtok(options, ","); p; p = strtok(NULL, ",")) {
+		int cmplen = strlen(p);
+
+		if (maxlen < cmplen)
+			cmplen = maxlen;
+		if (cmplen < maxlen)
+			continue;
+		if (!strncmp(info->op_name, p, cmplen)) {
+			found = strdup(p);
+			break;
+		}
+	}
+	free(options);
+	if (!found)
+		return;
+
+	for (p = strtok(found, ":"); p; p = strtok(NULL, ":")) {
+		long lval;
+
+		/* Parse each option in order, leaving room to add more */
+		switch(option++) {
+			default:
+				break;
+			case 1:
+				lval = strtol(p, NULL, 10);
+				if (lval < HFA_CLOCK_MIN || lval > HFA_CLOCK_MAX) {
+					applog(LOG_ERR, "Invalid clock speed %ld set with hashfast option for %s",
+					       lval, info->op_name);
+					break;
+				}
+				info->hash_clock_rate = lval;
+				break;
+		}
+	}
+	free(found);
+}
+
 static bool hfa_detect_common(struct cgpu_info *hashfast)
 {
 	struct hashfast_info *info;
@@ -700,6 +755,7 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 		} else {
 			applog(LOG_NOTICE, "%s: Found device with name %s", hashfast->drv->name,
 			       info->op_name);
+			hfa_check_options(info);
 		}
 	}
 

@@ -30,10 +30,12 @@ bool opt_hfa_noshed;
 
 char *set_hfa_fan(char *arg);
 char *opt_hfa_name;
+char *opt_hfa_options;
 
 #define HASHFAST_MINER_THREADS 1
 #define HFA_CLOCK_DEFAULT 550
 #define HFA_CLOCK_MIN 125
+#define HFA_CLOCK_MAX 1000
 #define HFA_CLOCK_MAXDIFF 100
 #define HFA_TEMP_OVERHEAT 95
 #define HFA_TEMP_TARGET 88
