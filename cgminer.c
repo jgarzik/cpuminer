@@ -2324,7 +2324,7 @@ double cgpu_runtime(struct cgpu_info *cgpu)
 	struct timeval now;
 	double dev_runtime;
 
-	if (cgpu->dev_start_tv.tv_sec < total_tv_start.tv_sec)
+	if (cgpu->dev_start_tv.tv_sec == 0)
 		dev_runtime = total_secs;
 	else {
 		cgtime(&now);
@@ -4844,6 +4844,8 @@ void zero_stats(void)
 
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = get_devices(i);
+
+		memcpy(&cgpu->dev_start_tv, &total_tv_start, sizeof(struct timeval));
 
 		mutex_lock(&hash_lock);
 		cgpu->total_mhashes = 0;
