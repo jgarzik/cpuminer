@@ -1,3 +1,75 @@
+Version 4.1.0 - 8th March 2014
+
+- Correct fix for dev start time being adjusted for stat zeroing.
+- Make per device stats work for average after a stat zeroing.
+- Add an hfa-options command line that allows the clockspeed to be chosen per
+device by name comma separated, with a function that can be expanded with more
+options in the future.
+- Off by one drv_rolllimit check against jobs
+- Free the work that may be lost, leaking memory, in a failed hfa_send_frame
+- Roll the ntime for work within the hfa driver for firmware we know doesn't do
+it internally as an optimisation.
+- Export the roll_work function to be usable by driver code and make it
+compatible with rolling stratum work.
+- Make opt_queue be respected as a maximum value for staged items.
+- Disable mistakenly enabled lock tracking.
+- api version update for HEX32
+- api.c - HEX32 type needs quotes
+- Disable the MAX_CLOCK_DIFF check for newer hashfast firmwares since it's not
+required.
+- Store the hardware and firmware revision in the info struct for easy use in
+the hfa driver.
+- Only decrease the hfa clock rate if the device has been running for less than
+an hour before dying.
+- Change lack of op name response message in hfa driver
+- Check for lost devices at every write/read in hfa_detect_common
+- Make bxm bits configurable.
+- Move avalon2 options to ~alphabetic position in help.
+- Do a shutdown routine on bxm close.
+- Provide support for 2 chips in libbitfury sendhashdata and enable the 2nd chip
+on BXM devices.
+- Remove unnecessary opayload and newbuf members of bitfury info struct.
+- Add an spi add fasync command.
+- Cope with older hfa firmware not even responding to op_name.
+- Forcibly kill everything silently with an exit code of 1 should we fail to
+cleanly shut down and use a completion timeout for the __kill_work in
+app_restart.
+- Make __kill_work itself also be a completion timeout.
+- Generalise more of libbitfury for more reuse in both nf1 and bxm drivers.
+- Remove redundant init components of bxm driver.
+- Set default osc6 bits on bxm to 50
+- Enable the transaction translator emulator for bxm devices and use a dummy spi
+tx the size of a normal payload.
+- Store usb11 and tt flags as booleans in cgusbdev allowing them to be
+discretely enabled as well as detected by the device data.
+- Add bxm scan function and check spi txrx returns only as much as sent.
+- Add init sequence to bxm detect one.
+- Add a bxm specific txrx function for spi transfers.
+- Add bxm close to bitfury shutdown switch.
+- Add reset/purge/cshigh/low sequence to bxm init
+- Add bitmode init to bxm open sequence.
+- Add initial bxm opening sequence for detect one.
+- Add identifiers for bxm bitfury devices.
+- Clean up parse_method
+- More gracefully break out of parse_notify on a corrupted hex string error,
+checking the return value of all hex2bin conversions and being consistent with
+using stack memory. Fix an unlocking error in cases of failure.
+- AntS1 - add detection information to usbutils
+- Enable Bitmain Ant S1 code and make it conform to cgminer requirements
+- Make the cointerra displayed hashrate based on valid share generation.
+- Convert and update values shown in the cointerra api output.
+- Export the api_add_int16 function.
+- Use a custom mystrstr function in cointerra driver.
+- Add api_add_int16 to API functions.
+- Add support for Bitmain Multi Chain and Single Chain and optimize the
+efficiency
+- Add support for bitmain devices
+- Perfect function of BitMain Multi Chain
+- Add support for Bitmain Multi Chain and Single Chain and optimize the
+efficiency
+- Add support for bitmain devices
+
+
 Version 4.0.1 - 28th February 2014
 
 - Refresh the log window on pool failure message at startup.
