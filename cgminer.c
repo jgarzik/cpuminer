@@ -2324,7 +2324,7 @@ double cgpu_runtime(struct cgpu_info *cgpu)
 	struct timeval now;
 	double dev_runtime;
 
-	if (cgpu->dev_start_tv.tv_sec == 0)
+	if (cgpu->dev_start_tv.tv_sec < total_tv_start.tv_sec)
 		dev_runtime = total_secs;
 	else {
 		cgtime(&now);
