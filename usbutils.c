@@ -664,8 +664,12 @@ static struct driver_count {
 static struct usb_busdev {
 	int bus_number;
 	int device_address;
+#ifdef WIN32
 	void *resource1;
 	void *resource2;
+#else
+	int fd;
+#endif
 } *busdev;
 
 static int busdev_count = 0;
@@ -1204,6 +1208,7 @@ void usb_applog(struct cgpu_info *cgpu, enum usb_cmds cmd, char *msg, int amount
                         err, amount);
 }
 
+#ifdef WIN32
 static void in_use_store_ress(uint8_t bus_number, uint8_t device_address, void *resource1, void *resource2)
 {
 	struct usb_in_use_list *in_use_tmp;
@@ -1275,6 +1280,58 @@ static void in_use_get_ress(uint8_t bus_number, uint8_t device_address, void **r
 		applog(LOG_ERR, "FAIL: USB get_lock empty (%d:%d)",
 				(int)bus_number, (int)device_address);
 }
+#else
+
+static void in_use_store_fd(uint8_t bus_number, uint8_t device_address, int fd)
+{
+	struct usb_in_use_list *in_use_tmp;
+	bool found = false;
+
+	mutex_lock(&cgusb_lock);
+	in_use_tmp = in_use_head;
+	while (in_use_tmp) {
+		if (in_use_tmp->in_use.bus_number == (int)bus_number &&
+			in_use_tmp->in_use.device_address == (int)device_address) {
+			found = true;
+			in_use_tmp->in_use.fd = fd;
+			break;
+		}
+		in_use_tmp = in_use_tmp->next;
+	}
+	mutex_unlock(&cgusb_lock);
+
+	if (found == false) {
+		applog(LOG_ERR, "FAIL: USB store_fd not found (%d:%d)",
+				(int)bus_number, (int)device_address);
+	}
+}
+
+static int in_use_get_fd(uint8_t bus_number, uint8_t device_address)
+{
+	struct usb_in_use_list *in_use_tmp;
+	bool found = false;
+	int fd = -1;
+
+	mutex_lock(&cgusb_lock);
+	in_use_tmp = in_use_head;
+	while (in_use_tmp) {
+		if (in_use_tmp->in_use.bus_number == (int)bus_number &&
+		    in_use_tmp->in_use.device_address == (int)device_address) {
+			found = true;
+			fd = in_use_tmp->in_use.fd;
+			break;
+		}
+		in_use_tmp = in_use_tmp->next;
+	}
+	mutex_unlock(&cgusb_lock);
+
+	if (found == false) {
+		applog(LOG_ERR, "FAIL: USB get_lock not found (%d:%d)",
+				(int)bus_number, (int)device_address);
+	}
+	return fd;
+}
+#endif
 
 static bool _in_use(struct usb_in_use_list *head, uint8_t bus_number,
 		    uint8_t device_address)
@@ -3554,10 +3611,8 @@ void usb_initialise(void)
 #ifndef WIN32
 #include <errno.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/ipc.h>
-#include <sys/sem.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <fcntl.h>
 
 #ifndef __APPLE__
@@ -3643,7 +3698,6 @@ static LPSECURITY_ATTRIBUTES mksec(const char *dname, uint8_t bus_number, uint8_
 static bool resource_lock(const char *dname, uint8_t bus_number, uint8_t device_address)
 {
 	applog(LOG_DEBUG, "USB res lock %s %d-%d", dname, (int)bus_number, (int)device_address);
-
 #ifdef WIN32
 	struct cgpu_info *cgpu;
 	LPSECURITY_ATTRIBUTES sec;
@@ -3721,12 +3775,8 @@ fail:
 	sec = unsec(sec);
 	return false;
 #else
-	struct semid_ds seminfo;
-	union semun opt;
 	char name[64];
-	key_t *key;
-	int *sem;
-	int fd, count;
+	int fd;
 
 	if (is_in_use_bd(bus_number, device_address))
 		return false;
@@ -3734,89 +3784,20 @@ fail:
 	snprintf(name, sizeof(name), "/tmp/cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
 	fd = open(name, O_CREAT|O_RDONLY, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
 	if (fd == -1) {
-		applog(LOG_ERR,
-			"SEM: %s USB open failed '%s' err (%d) %s",
-			dname, name, errno, strerror(errno));
-		goto _out;
+		applog(LOG_ERR, "%s USB open failed '%s' err (%d) %s",
+		       dname, name, errno, strerror(errno));
+		return false;
 	}
-	close(fd);
-
-	key = malloc(sizeof(*key));
-	if (unlikely(!key))
-		quit(1, "SEM: Failed to malloc key");
-
-	sem = malloc(sizeof(*sem));
-	if (unlikely(!sem))
-		quit(1, "SEM: Failed to malloc sem");
-
-	*key = ftok(name, 'K');
-	*sem = semget(*key, 1, IPC_CREAT | IPC_EXCL | 438);
-	if (*sem < 0) {
-		if (errno != EEXIST) {
-			applog(LOG_ERR,
-				"SEM: %s USB failed to get '%s' err (%d) %s",
-				dname, name, errno, strerror(errno));
-			goto free_out;
-		}
-
-		*sem = semget(*key, 1, 0);
-		if (*sem < 0) {
-			applog(LOG_ERR,
-				"SEM: %s USB failed to access '%s' err (%d) %s",
-				dname, name, errno, strerror(errno));
-			goto free_out;
-		}
-
-		opt.buf = &seminfo;
-		count = 0;
-		while (++count) {
-			// Should NEVER take 100ms
-			if (count > 99) {
-				applog(LOG_ERR,
-					"SEM: %s USB timeout waiting for (%d) '%s'",
-					dname, *sem, name);
-				goto free_out;
-			}
-			if (semctl(*sem, 0, IPC_STAT, opt) == -1) {
-				applog(LOG_ERR,
-					"SEM: %s USB failed to wait for (%d) '%s' count %d err (%d) %s",
-					dname, *sem, name, count, errno, strerror(errno));
-				goto free_out;
-			}
-			if (opt.buf->sem_otime != 0)
-				break;
-			cgsleep_ms(1);
-		}
-	}
-
-	struct sembuf sops[] = {
-		{ 0, 0, IPC_NOWAIT | SEM_UNDO },
-		{ 0, 1, IPC_NOWAIT | SEM_UNDO }
-	};
-
-	if (semop(*sem, sops, 2)) {
-		if (errno == EAGAIN) {
-			if (!hotplug_mode)
-				applog(LOG_WARNING,
-					"SEM: %s USB failed to get (%d) '%s' - device in use",
-					dname, *sem, name);
-		} else {
-			applog(LOG_DEBUG,
-				"SEM: %s USB failed to get (%d) '%s' err (%d) %s",
-				dname, *sem, name, errno, strerror(errno));
-		}
-		goto free_out;
+	if (flock(fd, LOCK_EX | LOCK_NB)) {
+		applog(LOG_INFO, "%s USB failed to get '%s' - device in use",
+		       dname, name);
+		close(fd);
+		return false;
 	}
 
 	add_in_use(bus_number, device_address, false);
-	in_use_store_ress(bus_number, device_address, (void *)key, (void *)sem);
+	in_use_store_fd(bus_number, device_address, fd);
 	return true;
-
-free_out:
-	free(sem);
-	free(key);
-_out:
-	return false;
 #endif
 }
 
@@ -3853,41 +3834,15 @@ fila:
 	return;
 #else
 	char name[64];
-	key_t *key = NULL;
-	int *sem = NULL;
+	int fd;
 
 	snprintf(name, sizeof(name), "/tmp/cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
 
-	in_use_get_ress(bus_number, device_address, (void **)(&key), (void **)(&sem));
-
-	if (!key || !sem)
-		goto fila;
-
-	struct sembuf sops[] = {
-		{ 0, -1, SEM_UNDO }
-	};
-
-	// Allow a 10ms timeout
-	// exceeding this timeout means it would probably never succeed anyway
-	struct timespec timeout = { 0, 10000000 };
-
-	if (semtimedop(*sem, sops, 1, &timeout)) {
-		applog(LOG_ERR,
-			"SEM: %s USB failed to release '%s' err (%d) %s",
-			dname, name, errno, strerror(errno));
-	}
-
-	if (semctl(*sem, 0, IPC_RMID)) {
-		applog(LOG_WARNING,
-			"SEM: %s USB failed to remove SEM '%s' err (%d) %s",
-			dname, name, errno, strerror(errno));
-	}
-
-fila:
-
-	free(sem);
-	free(key);
+	fd = in_use_get_fd(bus_number, device_address);
+	if (fd < 0)
+		return;
 	remove_in_use(bus_number, device_address);
+	close(fd);
 	unlink(name);
 	return;
 #endif
