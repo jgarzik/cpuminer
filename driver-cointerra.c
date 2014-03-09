@@ -1106,15 +1106,15 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 	root = api_add_string(root, "Asic1Core2", bitmaphex, true);
 	__bin2hex(bitmaphex, &info->pipe_bitmap[112], 16);
 	root = api_add_string(root, "Asic1Core3", bitmaphex, true);
-	root = api_add_uint8(root,"AV",&info->autovoltage, false);
-	root = api_add_uint8(root,"Power Supply Percent",&info->current_ps_percent, false);
-	root = api_add_uint16(root,"Power Used",&info->power_used, false);
-	root = api_add_uint16(root,"IOUT",&info->power_used, false);
-	root = api_add_uint16(root,"VOUT",&info->power_voltage, false);
-	root = api_add_uint16(root,"IIN",&info->ipower_used, false);
-	root = api_add_uint16(root,"VIN",&info->ipower_voltage, false);
-	root = api_add_uint16(root,"PSTemp1",&info->power_temps[0], false);
-	root = api_add_uint16(root,"PSTemp2",&info->power_temps[1], false);
+	root = api_add_uint8(root, "AV", &info->autovoltage, false);
+	root = api_add_uint8(root, "Power Supply Percent", &info->current_ps_percent, false);
+	root = api_add_uint16(root, "Power Used", &info->power_used, false);
+	root = api_add_uint16(root, "IOUT", &info->power_used, false);
+	root = api_add_uint16(root, "VOUT", &info->power_voltage, false);
+	root = api_add_uint16(root, "IIN", &info->ipower_used, false);
+	root = api_add_uint16(root, "VIN", &info->ipower_voltage, false);
+	root = api_add_uint16(root, "PSTemp1", &info->power_temps[0], false);
+	root = api_add_uint16(root, "PSTemp2", &info->power_temps[1], false);
 
 	return root;
 }
