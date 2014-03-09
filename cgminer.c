@@ -834,11 +834,11 @@ static void setup_url(struct pool *pool, char *arg)
 	    strncmp(arg, "https://", 8)) {
 		char *httpinput;
 
-		httpinput = malloc(255);
+		httpinput = malloc(256);
 		if (!httpinput)
 			quit(1, "Failed to malloc httpinput");
-		strcpy(httpinput, "http://");
-		strncat(httpinput, arg, 248);
+		strcpy(httpinput, "stratum+tcp://");
+		strncat(httpinput, arg, 242);
 		pool->rpc_url = httpinput;
 	}
 }
