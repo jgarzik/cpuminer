@@ -191,7 +191,6 @@ struct bitmain_info {
 	int temp_history_count;
 	int temp_history_index;
 	int temp_sum;
-	int temp_old;
 	int fan_pwm;
 
 	int frequency;

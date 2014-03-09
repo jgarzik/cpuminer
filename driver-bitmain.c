@@ -754,16 +754,16 @@ static void bitmain_update_temps(struct cgpu_info *bitmain, struct bitmain_info 
 	applog(LOG_INFO, msg);
 	info->temp_history_index++;
 	info->temp_sum += bitmain->temp;
-	applog(LOG_DEBUG, "BitMain: temp_index: %d, temp_count: %d, temp_old: %d",
-		info->temp_history_index, info->temp_history_count, info->temp_old);
+	applog(LOG_DEBUG, "BitMain: temp_index: %d, temp_count: %d, temp_max: %d",
+		info->temp_history_index, info->temp_history_count, info->temp_max);
 	if (info->temp_history_index == info->temp_history_count) {
 		info->temp_history_index = 0;
 		info->temp_sum = 0;
 	}
-	if (unlikely(info->temp_old >= opt_bitmain_overheat)) {
+	if (unlikely(info->temp_max >= opt_bitmain_overheat)) {
 		applog(LOG_WARNING, "BTM%d overheat! Idling", bitmain->device_id);
 		info->overheat = true;
-	} else if (info->overheat && info->temp_old <= opt_bitmain_temp) {
+	} else if (info->overheat && info->temp_max <= opt_bitmain_temp) {
 		applog(LOG_WARNING, "BTM%d cooled, restarting", bitmain->device_id);
 		info->overheat = false;
 	}
@@ -1315,7 +1315,6 @@ static struct cgpu_info *bitmain_detect_one(libusb_device *dev, struct usb_find_
 
 	info->temp_history_index = 0;
 	info->temp_sum = 0;
-	info->temp_old = 0;
 
 	if (!add_cgpu(bitmain))
 		goto unshin;
