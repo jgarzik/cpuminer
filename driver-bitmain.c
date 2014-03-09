@@ -298,14 +298,15 @@ static int bitmain_set_txconfig(struct bitmain_txconfig_token *bm,
 	int datalen = 0;
 	uint8_t *sendbuf = (uint8_t *)bm;
 	if (unlikely(!bm)) {
-		applog(LOG_WARNING, "bitmain_set_txconfig bitmain_txconfig_token is null");
+		applog(LOG_WARNING, "%s: %s() bm is null", ants1_drv.dname, __func__);
 		return -1;
 	}
 
 	if (unlikely(timeout_data <= 0 || asic_num <= 0 || chain_num <= 0)) {
-		applog(LOG_WARNING, "bitmain_set_txconfig parameter invalid"
+		applog(LOG_WARNING, "%s: %s() parameter invalid"
 				    " timeout_data(%d) asic_num(%d) chain_num(%d)",
-				    timeout_data, asic_num, chain_num);
+				    ants1_drv.dname, __func__,
+				    (int)timeout_data, (int)asic_num, (int)chain_num);
 		return -1;
 	}
 
@@ -341,16 +342,18 @@ static int bitmain_set_txconfig(struct bitmain_txconfig_token *bm,
 	crc = CRC16((uint8_t *)bm, datalen-2);
 	bm->crc = htole16(crc);
 
-	applog(LOG_DEBUG, "BTM TxConfigToken:reset(%d) faneft(%d) touteft(%d) freqeft(%d)"
+	applog(LOG_DEBUG, "%s: %s() reset(%d) faneft(%d) touteft(%d) freqeft(%d)"
 			" volteft(%d) chainceft(%d) chipceft(%d) hweft(%d) mnum(%d)"
 			" anum(%d) fanpwmdata(%d) toutdata(%d) freq(%d) volt(%d)"
 			" chainctime(%d) regdata(%02x%02x%02x%02x) chipaddr(%02x)"
 			" regaddr(%02x) crc(%04x)",
-			reset, fan_eft, timeout_eft, frequency_eft, voltage_eft,
-			chain_check_time_eft, chip_config_eft, hw_error_eft,
-			chain_num, asic_num, fan_pwm_data, timeout_data, frequency,
-			voltage, chain_check_time, reg_data[0], reg_data[1],
-			reg_data[2], reg_data[3], chip_address, reg_address, crc);
+			ants1_drv.dname, __func__,
+			(int)reset, (int)fan_eft, (int)timeout_eft, (int)frequency_eft,
+			(int)voltage_eft, (int)chain_check_time_eft, (int)chip_config_eft,
+			(int)hw_error_eft, (int)chain_num, (int)asic_num, (int)fan_pwm_data,
+			(int)timeout_data, (int)frequency, (int)voltage, (int)chain_check_time,
+			(int)reg_data[0], (int)reg_data[1], (int)reg_data[2], (int)reg_data[3],
+			(int)chip_address, (int)reg_address, (int)crc);
 
 	return datalen;
 }
@@ -370,7 +373,7 @@ static int bitmain_set_txtask(struct bitmain_info *info, uint8_t *sendbuf,
 	*sentcount = 0;
 
 	if (unlikely(!bm)) {
-		applog(LOG_WARNING, "bitmain_set_txtask bitmain_txtask_token is null");
+		applog(LOG_WARNING, "%s: %s() bm is null", ants1_drv.dname, __func__);
 		return -1;
 	}
 	memset(bm, 0, sizeof(struct bitmain_txtask_token));
@@ -378,38 +381,46 @@ static int bitmain_set_txtask(struct bitmain_info *info, uint8_t *sendbuf,
 	bm->token_type = BITMAIN_TOKEN_TYPE_TXTASK;
 
 	datalen = 10;
-	applog(LOG_DEBUG, "BTM send work count %d -----", info->work_ready->count);
+	applog(LOG_DEBUG, "%s: send work count %d", ants1_drv.dname, info->work_ready->count);
 	while (info->work_ready->count) {
 		witem = k_unlink_head(info->work_ready);
 		if (DATAW(witem)->work->work_block > *last_work_block) {
-			applog(LOG_ERR, "BTM send task new block %d old(%d)",
+			applog(LOG_ERR, "%s: send task new block %d old(%d)",
+					ants1_drv.dname,
 					DATAW(witem)->work->work_block, *last_work_block);
 			new_block = 1;
 			*last_work_block = DATAW(witem)->work->work_block;
 		}
 #ifdef BITMAIN_TEST
-		if (!hex2bin(DATAW(witem)->work->data, btm_work_test_data, 128))
-			applog(LOG_DEBUG, "BTM send task set test data error");
+		if (!hex2bin(DATAW(witem)->work->data, btm_work_test_data, 128)) {
+			applog(LOG_DEBUG, "%s: send task set test data error",
+					  ants1_drv.dname);
+		}
 
-		if (!hex2bin(DATAW(witem)->work->midstate, btm_work_test_midstate, 32))
-			applog(LOG_DEBUG, "BTM send task set test midstate error");
+		if (!hex2bin(DATAW(witem)->work->midstate, btm_work_test_midstate, 32)) {
+			applog(LOG_DEBUG, "%s: send task set test midstate error",
+					  ants1_drv.dname);
+		}
 #endif
 		work_id = DATAW(witem)->work->id;
 		bm->works[cursentcount].work_id = htole32(work_id);
-		applog(LOG_DEBUG, "BTM send task work id:%"PRIu32" %"PRIu32,
+		applog(LOG_DEBUG, "%s: send task work id:%"PRIu32" %"PRIu32,
+				  ants1_drv.dname,
 				  bm->works[cursentcount].work_id, work_id);
 		memcpy(bm->works[cursentcount].midstate, DATAW(witem)->work->midstate, 32);
 		memcpy(bm->works[cursentcount].data2, DATAW(witem)->work->data + 64, 12);
 
 		/*ob_hex = bin2hex(DATAW(witem)->work->data, 76);
-		applog(LOG_ERR, "work %d data: %s", DATAW(witem)->work->id, ob_hex);
+		applog(LOG_ERR, "%s: work %d data: %s",
+				ants1_drv.dname,
+				DATAW(witem)->work->id, ob_hex);
 		free(ob_hex);*/
 
 		cursentcount++;
 		k_add_head(info->work_list, witem);
 	}
 	if (cursentcount <= 0) {
-		applog(LOG_ERR, "BTM send work count %d", cursentcount);
+		applog(LOG_ERR, "%s: send work count %d", ants1_drv.dname, cursentcount);
 		return 0;
 	}
 	datalen += 48*cursentcount;
@@ -423,7 +434,8 @@ static int bitmain_set_txtask(struct bitmain_info *info, uint8_t *sendbuf,
 
 	sendbuf[4] = bitswap(sendbuf[4]);
 
-	applog(LOG_DEBUG, "BitMain TxTask Token: %d %d %02x%02x%02x%02x%02x%02x",
+	applog(LOG_DEBUG, "%s: TxTask Token: %d %d %02x%02x%02x%02x%02x%02x",
+			  ants1_drv.dname,
 			  datalen, bm->length,
 			  sendbuf[0], sendbuf[1], sendbuf[2],
 			  sendbuf[3], sendbuf[4], sendbuf[5]);
@@ -434,9 +446,11 @@ static int bitmain_set_txtask(struct bitmain_info *info, uint8_t *sendbuf,
 	crc = htole16(crc);
 	memcpy(sendbuf+datalen-2, &crc, 2);
 
-	applog(LOG_DEBUG, "BitMain TxTask Token: new_block(%d) work_num(%d) crc(%04x)",
+	applog(LOG_DEBUG, "%s: TxTask Token: new_block(%d) work_num(%d) crc(%04x)",
+			  ants1_drv.dname,
 			  new_block, cursentcount, crc);
-	applog(LOG_DEBUG, "BitMain TxTask Token: %d %d %02x%02x%02x%02x%02x%02x",
+	applog(LOG_DEBUG, "%s: TxTask Token: %d %d %02x%02x%02x%02x%02x%02x",
+			  ants1_drv.dname,
 			  datalen, bm->length,
 			  sendbuf[0], sendbuf[1], sendbuf[2],
 			  sendbuf[3], sendbuf[4], sendbuf[5]);
@@ -452,7 +466,7 @@ static int bitmain_set_rxstatus(struct bitmain_rxstatus_token *bm,
 	uint8_t *sendbuf = (uint8_t *)bm;
 
 	if (unlikely(!bm)) {
-		applog(LOG_WARNING, "bitmain_set_rxstatus bitmain_rxstatus_token is null");
+		applog(LOG_WARNING, "%s: %s() bm is null", ants1_drv.dname, __func__);
 		return -1;
 	}
 
@@ -473,8 +487,9 @@ static int bitmain_set_rxstatus(struct bitmain_rxstatus_token *bm,
 	crc = CRC16((uint8_t *)bm, datalen-2);
 	bm->crc = htole16(crc);
 
-	applog(LOG_DEBUG, "BitMain RxStatus Token: chip_status_eft(%d) detect_get(%d)"
+	applog(LOG_DEBUG, "%s: RxStatus Token: chip_status_eft(%d) detect_get(%d)"
 			  " chip_address(%02x) reg_address(%02x) crc(%04x)",
+			  ants1_drv.dname,
 			  chip_status_eft, detect_get, chip_address, reg_address, crc);
 
 	return datalen;
@@ -485,43 +500,51 @@ static int bitmain_parse_rxstatus(const uint8_t * data, int datalen, struct bitm
 	uint16_t crc = 0;
 	int i = 0;
 	if (unlikely(!bm)) {
-		applog(LOG_WARNING, "bitmain_parse_rxstatus bitmain_rxstatus_data is null");
+		applog(LOG_ERR, "%s: %s() bm is null", ants1_drv.dname, __func__);
 		return -1;
 	}
 	if (unlikely(!data || datalen <= 0)) {
-		applog(LOG_WARNING, "bitmain_parse_rxstatus parameter invalid data is null"
-				    " or datalen(%d) error",
-				    datalen);
+		applog(LOG_ERR, "%s: %s() parameter invalid data is null"
+				" or datalen(%d) error",
+				ants1_drv.dname, __func__, datalen);
 		return -1;
 	}
 	memcpy(bm, data, sizeof(struct bitmain_rxstatus_data));
 	if (bm->data_type != BITMAIN_DATA_TYPE_RXSTATUS) {
-		applog(LOG_ERR, "bitmain_parse_rxstatus datatype(%02x) error", bm->data_type);
+		applog(LOG_ERR, "%s: %s() datatype(%02x) error",
+				ants1_drv.dname, __func__,
+				bm->data_type);
 		return -1;
 	}
 	if (bm->length+2 != datalen) {
-		applog(LOG_ERR, "bitmain_parse_rxstatus length(%d) error", bm->length);
+		applog(LOG_ERR, "%s: %s() length(%d) error",
+				ants1_drv.dname, __func__,
+				bm->length);
 		return -1;
 	}
 	crc = CRC16(data, datalen-2);
 	memcpy(&(bm->crc), data+datalen-2, 2);
 	bm->crc = htole16(bm->crc);
 	if (crc != bm->crc) {
-		applog(LOG_ERR, "bitmain_parse_rxstatus check crc(%d)"
+		applog(LOG_ERR, "%s: %s() check crc(%d)"
 				" != bm crc(%d) datalen(%d)",
+				ants1_drv.dname, __func__,
 				crc, bm->crc, datalen);
 		return -1;
 	}
 	bm->fifo_space = htole32(bm->fifo_space);
 	bm->nonce_error = htole32(bm->nonce_error);
 	if (bm->chain_num*5 + bm->temp_num + bm->fan_num + 22 != datalen) {
-		applog(LOG_ERR, "bitmain_parse_rxstatus chain_num(%d) temp_num(%d)"
+		applog(LOG_ERR, "%s: %s() chain_num(%d) temp_num(%d)"
 				" fan_num(%d) not match datalen(%d)",
+				ants1_drv.dname, __func__,
 				bm->chain_num, bm->temp_num, bm->fan_num, datalen);
 		return -1;
 	}
 	if (bm->chain_num > BITMAIN_MAX_CHAIN_NUM) {
-		applog(LOG_ERR, "bitmain_parse_rxstatus chain_num=%d error", bm->chain_num);
+		applog(LOG_ERR, "%s: %s() chain_num=%d error",
+				ants1_drv.dname, __func__,
+				bm->chain_num);
 		return -1;
 	}
 	if (bm->chain_num > 0) {
@@ -538,22 +561,28 @@ static int bitmain_parse_rxstatus(const uint8_t * data, int datalen, struct bitm
 	if (bm->fan_num > 0) {
 		memcpy(bm->fan, data+20+bm->chain_num*5+bm->temp_num, bm->fan_num);
 	}
-	applog(LOG_DEBUG, "BitMain RxStatusData: chipvalueeft(%d) version(%d) fifospace(%d)"
+	applog(LOG_DEBUG, "%s: RxStatus Data chipvalueeft(%d) version(%d) fifospace(%d)"
 			  " regvalue(%d) chainnum(%d) tempnum(%d) fannum(%d) crc(%04x)",
+			  ants1_drv.dname,
 			  bm->chip_value_eft, bm->version, bm->fifo_space, bm->reg_value,
 			  bm->chain_num, bm->temp_num, bm->fan_num, bm->crc);
-	applog(LOG_DEBUG, "BitMain RxStatus Data chain info:");
+	applog(LOG_DEBUG, "%s: RxStatus Data chain info:", ants1_drv.dname);
 	for (i = 0; i < bm->chain_num; i++) {
-		applog(LOG_DEBUG, "BitMain RxStatus Data chain(%d) asic num=%d asic_status=%08x",
+		applog(LOG_DEBUG, "%s: RxStatus Data chain(%d) asic num=%d asic_status=%08x",
+				  ants1_drv.dname,
 				  i+1, bm->chain_asic_num[i], bm->chain_asic_status[i]);
 	}
-	applog(LOG_DEBUG, "BitMain RxStatus Data temp info:");
+	applog(LOG_DEBUG, "%s: RxStatus Data temp info:", ants1_drv.dname);
 	for (i = 0; i < bm->temp_num; i++) {
-		applog(LOG_DEBUG, "BitMain RxStatus Data temp(%d) temp=%d", i+1, bm->temp[i]);
+		applog(LOG_DEBUG, "%s: RxStatus Data temp(%d) temp=%d",
+				  ants1_drv.dname,
+				  i+1, bm->temp[i]);
 	}
-	applog(LOG_DEBUG, "BitMain RxStatus Data fan info:");
+	applog(LOG_DEBUG, "%s: RxStatus Data fan info:", ants1_drv.dname);
 	for (i = 0; i < bm->fan_num; i++) {
-		applog(LOG_DEBUG, "BitMain RxStatus Data fan(%d) fan=%d", i+1, bm->fan[i]);
+		applog(LOG_DEBUG, "%s: RxStatus Data fan(%d) fan=%d",
+				  ants1_drv.dname,
+				  i+1, bm->fan[i]);
 	}
 	return 0;
 }
@@ -564,40 +593,49 @@ static int bitmain_parse_rxnonce(const uint8_t * data, int datalen, struct bitma
 	uint16_t crc = 0;
 	int curnoncenum = 0;
 	if (unlikely(!bm)) {
-		applog(LOG_ERR, "bitmain_parse_rxnonce bitmain_rxstatus_data null");
+		applog(LOG_ERR, "%s: %s() bm is null", ants1_drv.dname, __func__);
 		return -1;
 	}
 	if (unlikely(!data || datalen <= 0)) {
-		applog(LOG_ERR, "bitmain_parse_rxnonce data null or datalen(%d) error", datalen);
+		applog(LOG_ERR, "%s: %s() parameter invalid data is null"
+				" or datalen(%d) error",
+				ants1_drv.dname, __func__, datalen);
 		return -1;
 	}
 	memcpy(bm, data, sizeof(struct bitmain_rxnonce_data));
 
 	if (bm->data_type != BITMAIN_DATA_TYPE_RXNONCE) {
-		applog(LOG_ERR, "bitmain_parse_rxnonce datatype(%02x) error", bm->data_type);
+		applog(LOG_ERR, "%s: %s() datatype(%02x) error",
+				ants1_drv.dname, __func__,
+				bm->data_type);
 		return -1;
 	}
 	if (bm->length+2 != datalen) {
-		applog(LOG_ERR, "bitmain_parse_rxnonce length(%d) error", bm->length);
+		applog(LOG_ERR, "%s: %s() length(%d) error",
+				ants1_drv.dname, __func__,
+				bm->length);
 		return -1;
 	}
 	crc = CRC16(data, datalen-2);
 	memcpy(&(bm->crc), data+datalen-2, 2);
 	bm->crc = htole16(bm->crc);
 	if (crc != bm->crc) {
-		applog(LOG_ERR, "bitmain_parse_rxnonce check crc(%d)"
+		applog(LOG_ERR, "%s: %s() check crc(%d)"
 				" != bm crc(%d) datalen(%d)",
+				ants1_drv.dname, __func__,
 				crc, bm->crc, datalen);
 		return -1;
 	}
 	curnoncenum = (datalen-4)/8;
-	applog(LOG_DEBUG, "BitMain RxNonce Data: nonce_num(%d-%d) fifo_space(%d)",
+	applog(LOG_DEBUG, "%s: RxNonce Data: nonce_num(%d-%d) fifo_space(%d)",
+			  ants1_drv.dname,
 			  curnoncenum, bm->nonce_num, bm->fifo_space);
 	for (i = 0; i < curnoncenum; i++) {
 		bm->nonces[i].work_id = htole32(bm->nonces[i].work_id);
 		bm->nonces[i].nonce = htole32(bm->nonces[i].nonce);
 
-		applog(LOG_DEBUG, "BitMain RxNonce Data %d: work_id(%"PRIu32") nonce(%08x)(%d)",
+		applog(LOG_DEBUG, "%s: RxNonce Data %d: work_id(%"PRIu32") nonce(%08x)(%d)",
+				  ants1_drv.dname,
 				  i, bm->nonces[i].work_id,
 				  bm->nonces[i].nonce, bm->nonces[i].nonce);
 	}
@@ -611,14 +649,16 @@ static int bitmain_read(struct cgpu_info *bitmain, unsigned char *buf,
 	int readlen = 0, err = 0;
 
 	if (bitmain == NULL || buf == NULL || bufsize <= 0) {
-		applog(LOG_WARNING, "bitmain_read parameter error bufsize(%d)",
-				    (int)bufsize);
+		applog(LOG_WARNING, "%s%d: %s() parameter error bufsize(%d)",
+				    bitmain->drv->name, bitmain->device_id,
+				    __func__, (int)bufsize);
 		return -1;
 	}
 
 	err = usb_read_once_timeout(bitmain, (char *)buf, bufsize, &readlen, timeout, ep);
-	applog(LOG_DEBUG, "%s%i: Get bitmain read got readlen %d err %d",
-			  bitmain->drv->name, bitmain->device_id, readlen, err);
+	applog(LOG_DEBUG, "%s%i: Get %s() got readlen %d err %d",
+			  bitmain->drv->name, bitmain->device_id,
+			  __func__, readlen, err);
 
 	return readlen;
 }
@@ -628,16 +668,18 @@ static int bitmain_write(struct cgpu_info *bitmain, char *buf, ssize_t len, int 
 	int err, amount;
 
 	err = usb_write(bitmain, buf, len, &amount, ep);
-	applog(LOG_DEBUG, "%s%i: usb_write got err %d",
+	applog(LOG_DEBUG, "%s%d: usb_write got err %d",
 			  bitmain->drv->name, bitmain->device_id, err);
 
 	if (unlikely(err != 0)) {
-		applog(LOG_ERR, "usb_write error on bitmain_write err=%d", err);
+		applog(LOG_ERR, "%s%d: usb_write error on %s() err=%d",
+				bitmain->drv->name, bitmain->device_id, __func__, err);
 		return BTM_SEND_ERROR;
 	}
 	if (amount != len) {
-		applog(LOG_ERR, "usb_write length mismatch on bitmain_write "
+		applog(LOG_ERR, "%s%d: usb_write length mismatch on %s() "
 				"amount=%d len=%d",
+				bitmain->drv->name, bitmain->device_id, __func__,
 				amount, (int)len);
 		return BTM_SEND_ERROR;
 	}
@@ -670,14 +712,15 @@ static int bitmain_send_data(const uint8_t *data, int datalen, __maybe_unused st
 	//delay += 4000;
 
 	if (opt_debug) {
-		applog(LOG_DEBUG, "BitMain: Sent(%d):", datalen);
+		applog(LOG_DEBUG, "%s: Sent(%d):", ants1_drv.dname, datalen);
 		hexdump(data, datalen);
 	}
 
 	//cgsleep_prepare_r(&ts_start);
-	applog(LOG_DEBUG, "----bitmain_send_data  start");
+	applog(LOG_DEBUG, "%s: %s() start", ants1_drv.dname, __func__);
 	ret = bitmain_write(bitmain, (char *)data, datalen, ep);
-	applog(LOG_DEBUG, "----bitmain_send_data  stop ret=%d datalen=%d", ret, datalen);
+	applog(LOG_DEBUG, "%s: %s() stop ret=%d datalen=%d",
+			  ants1_drv.dname, __func__, ret, datalen);
 	//cgsleep_us_r(&ts_start, delay);
 
 	//applog(LOG_DEBUG, "BitMain: Sent: Buffer delay: %dus", delay);
@@ -688,7 +731,7 @@ static int bitmain_send_data(const uint8_t *data, int datalen, __maybe_unused st
 static void bitmain_inc_nvw(struct bitmain_info *info, struct thr_info *thr)
 {
 	applog(LOG_INFO, "%s%d: No matching work - HW error",
-	       thr->cgpu->drv->name, thr->cgpu->device_id);
+			 thr->cgpu->drv->name, thr->cgpu->device_id);
 
 	inc_hw_errors(thr);
 	info->no_matching_work++;
@@ -733,7 +776,7 @@ static void bitmain_update_temps(struct cgpu_info *bitmain, struct bitmain_info 
 	int i = 0;
 	record_temp_fan(info, bm, &(bitmain->temp));
 
-	strcpy(msg, "BitMain: ");
+	sprintf(msg, "%s%d: ", bitmain->drv->name, bitmain->device_id);
 	for (i = 0; i < bm->fan_num; i++) {
 		if (i != 0) {
 			strcat(msg, ", ");
@@ -741,7 +784,7 @@ static void bitmain_update_temps(struct cgpu_info *bitmain, struct bitmain_info 
 		sprintf(tmp, "Fan%d: %d/m", i+1, info->fan[i]);
 		strcat(msg, tmp);
 	}
-	strcat(msg, "\t");
+	strcat(msg, "  ");
 	for (i = 0; i < bm->temp_num; i++) {
 		if (i != 0) {
 			strcat(msg, ", ");
@@ -754,17 +797,20 @@ static void bitmain_update_temps(struct cgpu_info *bitmain, struct bitmain_info 
 	applog(LOG_INFO, msg);
 	info->temp_history_index++;
 	info->temp_sum += bitmain->temp;
-	applog(LOG_DEBUG, "BitMain: temp_index: %d, temp_count: %d, temp_max: %d",
-		info->temp_history_index, info->temp_history_count, info->temp_max);
+	applog(LOG_DEBUG, "%s%d: temp_index: %d, temp_count: %d, temp_max: %d",
+			  bitmain->drv->name, bitmain->device_id,
+			  info->temp_history_index, info->temp_history_count, info->temp_max);
 	if (info->temp_history_index == info->temp_history_count) {
 		info->temp_history_index = 0;
 		info->temp_sum = 0;
 	}
 	if (unlikely(info->temp_max >= opt_bitmain_overheat)) {
-		applog(LOG_WARNING, "BTM%d overheat! Idling", bitmain->device_id);
+		applog(LOG_WARNING, "%s%d: overheat! Idling",
+				    bitmain->drv->name, bitmain->device_id);
 		info->overheat = true;
 	} else if (info->overheat && info->temp_max <= opt_bitmain_temp) {
-		applog(LOG_WARNING, "BTM%d cooled, restarting", bitmain->device_id);
+		applog(LOG_WARNING, "%s%d: cooled, restarting",
+				    bitmain->drv->name, bitmain->device_id);
 		info->overheat = false;
 	}
 }
@@ -783,32 +829,35 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 	for (i = 0; i <= spare; i++) {
 		if (buf[i] == 0xa1) {
 			struct bitmain_rxstatus_data rxstatusdata;
-			applog(LOG_DEBUG, "bitmain_parse_results RxStatus Data");
+			applog(LOG_DEBUG, "%s%d: %s() RxStatus Data",
+					  bitmain->drv->name, bitmain->device_id,
+					  __func__);
 			if (*offset < 2) {
 				return;
 			}
 			if (buf[i+1] > 124) {
-				applog(LOG_ERR, "bitmain_parse_results bitmain_parse_rxstatus"
-						" datalen=%d error",
-						buf[i+1]+2);
+				applog(LOG_ERR, "%s%d: %s() RxStatus Data datalen=%d error",
+						bitmain->drv->name, bitmain->device_id,
+						__func__, buf[i+1]+2);
 				continue;
 			}
 			if (*offset < buf[i+1] + 2) {
 				return;
 			}
 			if (bitmain_parse_rxstatus(buf+i, buf[i+1]+2, &rxstatusdata) != 0) {
-				applog(LOG_ERR, "bitmain_parse_results bitmain_parse_rxstatus"
-						" error len=%d",
-						buf[i+1]+2);
+				applog(LOG_ERR, "%s%d: %s() RxStatus Data error len=%d",
+						bitmain->drv->name, bitmain->device_id,
+						__func__, buf[i+1]+2);
 			} else {
 				mutex_lock(&info->qlock);
 				info->chain_num = rxstatusdata.chain_num;
 				info->fifo_space = rxstatusdata.fifo_space;
 				info->nonce_error = rxstatusdata.nonce_error;
 				errordiff = info->nonce_error-info->last_nonce_error;
-				applog(LOG_DEBUG, "bitmain_parse_results bitmain_parse_rxstatus"
+				applog(LOG_DEBUG, "%s%d: %s() RxStatus Data"
 						" version=%d chainnum=%d fifospace=%d"
 						" nonceerror=%d-%d freq=%d chain info:",
+						bitmain->drv->name, bitmain->device_id, __func__,
 						rxstatusdata.version, info->chain_num,
 						info->fifo_space, info->last_nonce_error,
 						info->nonce_error, info->frequency);
@@ -830,8 +879,10 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 
 						j++;
 					}
-					applog(LOG_DEBUG, "bitmain_parse_rxstatus chain(%d)"
+					applog(LOG_DEBUG, "%s%d: %s() RxStatus Data chain(%d)"
 							" asic_num=%d asic_status=%08x-%s",
+							bitmain->drv->name, bitmain->device_id,
+							__func__,
 							n, info->chain_asic_num[n],
 							info->chain_asic_status[n],
 							info->chain_asic_status_t[n]);
@@ -852,31 +903,34 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 			found = true;
 			spare = buf[i+1] + 2 + i;
 			if (spare > *offset) {
-				applog(LOG_ERR, "bitmain_parse_rxresults space(%d) > offset(%d)",
-						spare, *offset);
+				applog(LOG_ERR, "%s%d: %s() spare(%d) > offset(%d)",
+						bitmain->drv->name, bitmain->device_id,
+						__func__, spare, *offset);
 				spare = *offset;
 			}
 			break;
 		} else if (buf[i] == 0xa2) {
 			struct bitmain_rxnonce_data rxnoncedata;
 			int nonce_num = 0;
-			applog(LOG_DEBUG, "bitmain_parse_results RxNonce Data");
+			applog(LOG_DEBUG, "%s%d: %s() RxNonce Data",
+					  bitmain->drv->name, bitmain->device_id,
+					  __func__);
 			if (*offset < 2) {
 				return;
 			}
 			if (buf[i+1] > 70) {
-				applog(LOG_ERR, "bitmain_parse_results bitmain_parse_rxnonce "
-						"datalen=%d error",
-						buf[i+1]+2);
+				applog(LOG_ERR, "%s%d: %s() RxNonce Data datalen=%d error",
+						bitmain->drv->name, bitmain->device_id,
+						__func__, buf[i+1]+2);
 				continue;
 			}
 			if (*offset < buf[i+1] + 2) {
 				return;
 			}
 			if (bitmain_parse_rxnonce(buf+i, buf[i+1]+2, &rxnoncedata, &nonce_num) != 0) {
-				applog(LOG_ERR, "bitmain_parse_results bitmain_parse_rxnonce "
-						"error len=%d",
-						buf[i+1]+2);
+				applog(LOG_ERR, "%s%d: %s() RxNonce Data error len=%d",
+						bitmain->drv->name, bitmain->device_id,
+						__func__, buf[i+1]+2);
 			} else {
 				for (j = 0; j < nonce_num; j++) {
 					searches = 0;
@@ -903,33 +957,45 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 						info->tot_search += searches;
 
 						work = DATAW(witem)->work;
-						applog(LOG_DEBUG, "bitmain_parse_results nonce find "
+						applog(LOG_DEBUG, "%s%d: %s() RxNonce Data find "
 								  "work(%"PRIu32"-%"PRIu32")(%08x)",
-								  work->id,
+								  bitmain->drv->name, bitmain->device_id,
+								  __func__, work->id,
 								  rxnoncedata.nonces[j].work_id,
 								  rxnoncedata.nonces[j].nonce);
 
 						/*ob_hex = bin2hex(work->midstate, 32);
-						applog(LOG_ERR, "work %d midstate: %s", work->id, ob_hex);
+						applog(LOG_ERR, "%s%d: work %d midstate: %s",
+								bitmain->drv->name, bitmain->device_id,
+								work->id, ob_hex);
 						free(ob_hex);
 
 						ob_hex = bin2hex(work->data+64, 12);
-						applog(LOG_ERR, "work %d data2: %s", work->id, ob_hex);
+						applog(LOG_ERR, "%s%d: work %d data2: %s",i
+								bitmain->drv->name, bitmain->device_id,
+								work->id, ob_hex);
 						free(ob_hex);*/
 
 						//info->matching_work[work->subid]++;
-						applog(LOG_DEBUG, "BitMain: nonce = %08x",
-								  rxnoncedata.nonces[j].nonce);
+						applog(LOG_DEBUG, "%s%d: %s() nonce = %08x",
+								  bitmain->drv->name, bitmain->device_id,
+								  __func__, rxnoncedata.nonces[j].nonce);
 						if (submit_nonce(thr, work, rxnoncedata.nonces[j].nonce)) {
-					 		applog(LOG_DEBUG, "bitmain_decode_nonce ok");
+					 		applog(LOG_DEBUG, "%s%d: %s() RxNonce Data ok",
+									  bitmain->drv->name,
+									  bitmain->device_id,
+									  __func__);
 					 		mutex_lock(&info->qlock);
 					 		info->nonces++;
 							info->auto_nonces++;
 							mutex_unlock(&info->qlock);
 					 	} else {
 					 		//bitmain_inc_nvw(info, thr);
-					 		applog(LOG_ERR, "BitMain: bitmain_decode_nonce "
+					 		applog(LOG_ERR, "%s%d: %s() RxNonce Data "
 									"error work(%"PRIu32")",
+									bitmain->drv->name,
+									bitmain->device_id,
+									__func__,
 									rxnoncedata.nonces[j].work_id);
 					 	}
 					} else {
@@ -946,27 +1012,32 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 						info->tot_failed += searches;
 
 						//bitmain_inc_nvw(info, thr);
-						applog(LOG_ERR, "BitMain: Work not found for id (%"PRIu32")",
-								rxnoncedata.nonces[j].work_id);
+						applog(LOG_ERR, "%s%d: %s() Work not found for id (%"PRIu32")",
+								bitmain->drv->name, bitmain->device_id,
+								__func__, rxnoncedata.nonces[j].work_id);
 					}
 				}
 				mutex_lock(&info->qlock);
 				info->fifo_space = rxnoncedata.fifo_space;
-				applog(LOG_DEBUG, "bitmain_parse_rxnonce fifo space=%d",
-						  info->fifo_space);
+				applog(LOG_DEBUG, "%s%d: %s() RxNonce Data fifo space=%d",
+						  bitmain->drv->name, bitmain->device_id,
+						  __func__, info->fifo_space);
 				mutex_unlock(&info->qlock);
 			}
 
  			found = true;
  			spare = buf[i+1] + 2 + i;
  			if (spare > *offset) {
- 				applog(LOG_ERR, "bitmain_parse_rxnonce space(%d) > offset(%d)",
+ 				applog(LOG_ERR, "%s%d: %s() RxNonce Data space(%d) > offset(%d)",
+						bitmain->drv->name, bitmain->device_id, __func__, 
 						spare, *offset);
  				spare = *offset;
  			}
  			break;
 		} else {
-			applog(LOG_ERR, "bitmain_parse_results data type error=%02x", buf[i]);
+			applog(LOG_ERR, "%s%d: %s() data type error=%02x",
+					bitmain->drv->name, bitmain->device_id,
+					__func__, buf[i]);
 		}
 	}
 	if (!found) {
@@ -1005,17 +1076,21 @@ static void *bitmain_get_results(void *userdata)
 	while (likely(!bitmain->shutdown)) {
 		unsigned char buf[rsize];
 
-		applog(LOG_DEBUG, "+++++++bitmain_get_results offset=%d", offset);
+		applog(LOG_DEBUG, "%s%d: %s() offset=%d",
+				  bitmain->drv->name, bitmain->device_id, __func__, offset);
 
 		if (offset >= (int)BITMAIN_READ_SIZE) {
-			applog(LOG_DEBUG, "======start bitmain_get_results ");
+			applog(LOG_DEBUG, "%s%d: %s() start",
+					  bitmain->drv->name, bitmain->device_id, __func__);
 			bitmain_parse_results(bitmain, info, thr, (uint8_t *)readbuf, &offset);
-			applog(LOG_DEBUG, "======stop bitmain_get_results ");
+			applog(LOG_DEBUG, "%s%d: %s() stop",
+					  bitmain->drv->name, bitmain->device_id, __func__);
 		}
 
 		if (unlikely(offset + rsize >= BITMAIN_READBUF_SIZE)) {
 			/* This should never happen */
-			applog(LOG_DEBUG, "BitMain readbuf overflow, resetting buffer");
+			applog(LOG_DEBUG, "%s%d: readbuf overflow, resetting buffer",
+					  bitmain->drv->name, bitmain->device_id);
 			offset = 0;
 		}
 
@@ -1028,19 +1103,21 @@ static void *bitmain_get_results(void *userdata)
 		/* As the usb read returns after just 1ms, sleep long enough
 		 * to leave the interface idle for writes to occur, but do not
 		 * sleep if we have been receiving data as more may be coming. */
-		//if (offset == 0) {
+		//if (offset == 0)
 		//	cgsleep_ms_r(&ts_start, BITMAIN_READ_TIMEOUT);
-		//}
 
 		//cgsleep_prepare_r(&ts_start);
-		applog(LOG_DEBUG, "======start bitmain_get_results bitmain_read");
+		applog(LOG_DEBUG, "%s%d: %s() read",
+				  bitmain->drv->name, bitmain->device_id, __func__);
 		ret = bitmain_read(bitmain, buf, rsize, BITMAIN_READ_TIMEOUT, C_BITMAIN_READ);
-		applog(LOG_DEBUG, "======stop bitmain_get_results bitmain_read=%d", ret);
+		applog(LOG_DEBUG, "%s%d: %s() read=%d",
+				  bitmain->drv->name, bitmain->device_id, __func__, ret);
 
 		if (ret < 1) {
 			errorcount++;
 			if (errorcount > 100) {
-				applog(LOG_ERR, "bitmain_read errorcount ret=%d", ret);
+				applog(LOG_ERR, "%s%d: read errorcount>100 ret=%d",
+						bitmain->drv->name, bitmain->device_id, ret);
 				cgsleep_ms(20);
 				errorcount = 0;
 			}
@@ -1048,7 +1125,8 @@ static void *bitmain_get_results(void *userdata)
 		}
 
 		if (opt_debug) {
-			applog(LOG_DEBUG, "BitMain: get:");
+			applog(LOG_DEBUG, "%s%d: get:",
+					  bitmain->drv->name, bitmain->device_id);
 			hexdump((uint8_t *)buf, ret);
 		}
 
@@ -1067,7 +1145,9 @@ static void bitmain_set_timeout(struct bitmain_info *info)
 
 static void bitmain_init(struct cgpu_info *bitmain)
 {
-	applog(LOG_INFO, "BitMain: Opened on %s", bitmain->device_path);
+	applog(LOG_INFO, "%s%d: opened on %s",
+			 bitmain->drv->name, bitmain->device_id,
+			 bitmain->device_path);
 }
 
 static bool bitmain_prepare(struct thr_info *thr)
@@ -1107,7 +1187,8 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 
 	/* Send reset, then check for result */
 	if (!bitmain) {
-		applog(LOG_WARNING, "bitmain_initialize cgpu_info is null");
+		applog(LOG_WARNING, "%s%d: %s() cgpu_info is null",
+				    bitmain->drv->name, bitmain->device_id, __func__);
 		return -1;
 	}
 	info = bitmain->device_data;
@@ -1117,20 +1198,23 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 				  BITMAIN_RESET_TIMEOUT, C_BITMAIN_READ);
 	if (ret > 0) {
 		if (opt_debug) {
-			applog(LOG_DEBUG, "BTM%d Clear Read(%d):", bitmain->device_id, ret);
+			applog(LOG_DEBUG, "%s%d: clear read(%d):",
+				          bitmain->drv->name, bitmain->device_id, ret);
 			hexdump(data, ret);
 		}
 	}
 
 	sendlen = bitmain_set_rxstatus((struct bitmain_rxstatus_token *)sendbuf, 0, 1, 0, 0);
 	if (sendlen <= 0) {
-		applog(LOG_ERR, "bitmain_initialize bitmain_set_rxstatus error(%d)", sendlen);
+		applog(LOG_ERR, "%s%d: %s() set_rx error(%d)",
+				bitmain->drv->name, bitmain->device_id, __func__, sendlen);
 		return -1;
 	}
 
 	ret = bitmain_send_data(sendbuf, sendlen, bitmain);
 	if (unlikely(ret == BTM_SEND_ERROR)) {
-		applog(LOG_ERR, "bitmain_initialize bitmain_send_data error");
+		applog(LOG_ERR, "%s%d: %s() send_data error",
+				bitmain->drv->name, bitmain->device_id, __func__);
 		return -1;
 	}
 	while (trycount >= 0) {
@@ -1142,35 +1226,38 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 				for (i = 0; i < readlen; i++) {
 					if (data[i] == 0xa1) {
 						if (opt_debug) {
-							applog(LOG_DEBUG, "%s%d initset: get:",
+							applog(LOG_DEBUG, "%s%d: initset get:",
 									  bitmain->drv->name,
 									  bitmain->device_id);
 							hexdump(data, readlen);
 						}
 						if (data[i+1] > 124) {
-							applog(LOG_ERR, "bitmain_initialize rxstatus "
-									"datalen=%d error",
-									data[i+1]+2);
+							applog(LOG_ERR, "%s%d: %s() rxstatus datalen=%d error",
+									bitmain->drv->name, bitmain->device_id,
+									__func__, data[i+1]+2);
 							continue;
 						}
 						if (readlen-i < data[i+1]+2) {
-							applog(LOG_ERR, "bitmain_initialize rxstatus "
-									"datalen=%d low",
-									data[i+1]+2);
+							applog(LOG_ERR, "%s%d: %s() rxstatus datalen=%d low",
+									bitmain->drv->name, bitmain->device_id,
+									__func__, data[i+1]+2);
 							continue;
 						}
 						if (bitmain_parse_rxstatus(data+i, data[i+1]+2, &rxstatusdata) != 0) {
-							applog(LOG_ERR, "bitmain_initialize "
-									"bitmain_parse_rxstatus error");
+							applog(LOG_ERR, "%s%d: %s() parse_rxstatus error",
+									bitmain->drv->name, bitmain->device_id,
+									__func__);
 							continue;
 						}
 						info->chain_num = rxstatusdata.chain_num;
 						info->fifo_space = rxstatusdata.fifo_space;
 						info->nonce_error = 0;
 						info->last_nonce_error = 0;
-						applog(LOG_ERR, "bitmain_initialize bitmain_parse_rxstatus "
+						applog(LOG_ERR, "%s%d: %s() parse_rxstatus "
 								"version(%d) chain_num(%d) fifo_space(%d) "
 								"nonce_error(%d) freq=%d",
+								bitmain->drv->name, bitmain->device_id,
+								__func__,
 								rxstatusdata.version,
 								info->chain_num,
 								info->fifo_space,
@@ -1194,10 +1281,10 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 
 								j++;
 							}
-							applog(LOG_ERR, "bitmain_initialize "
-									"bitmain_parse_rxstatus chain(%d) "
+							applog(LOG_ERR, "%s%d: %s() parse_rxstatus chain(%d) "
 									"asic_num=%d asic_status=%08x-%s",
-									i, info->chain_asic_num[i],
+									bitmain->drv->name, bitmain->device_id,
+									__func__, i, info->chain_asic_num[i],
 									info->chain_asic_status[i],
 									info->chain_asic_status_t[i]);
 						}
@@ -1223,7 +1310,8 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 	cgtime(&info->last_status_time);
 
 	if (statusok) {
-		applog(LOG_ERR, "bitmain_initialize start send txconfig");
+		applog(LOG_ERR, "%s%d: %s() set_txconfig",
+				bitmain->drv->name, bitmain->device_id, __func__);
 		if (opt_bitmain_hwerror)
 			eft = 1;
 		else
@@ -1236,18 +1324,22 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 						info->frequency, BITMAIN_DEFAULT_VOLTAGE,
 						0, 0, 0x04, info->reg_data);
 		if (sendlen <= 0) {
-			applog(LOG_ERR, "bitmain_initialize bitmain_set_txconfig error(%d)", sendlen);
+			applog(LOG_ERR, "%s%d: %s() set_txconfig error(%d)",
+					bitmain->drv->name, bitmain->device_id, __func__, sendlen);
 			return -1;
 		}
 
 		ret = bitmain_send_data(sendbuf, sendlen, bitmain);
 		if (unlikely(ret == BTM_SEND_ERROR)) {
-			applog(LOG_ERR, "bitmain_initialize bitmain_send_data error");
+			applog(LOG_ERR, "%s%d: %s() send_data error",
+					bitmain->drv->name, bitmain->device_id, __func__);
 			return -1;
 		}
-		applog(LOG_WARNING, "BMM%d: InitSet succeeded", bitmain->device_id);
+		applog(LOG_WARNING, "%s%d: %s() succeeded",
+				    bitmain->drv->name, bitmain->device_id, __func__);
 	} else {
-		applog(LOG_WARNING, "BMS%d: InitSet error", bitmain->device_id);
+		applog(LOG_WARNING, "%s%d: %s() failed",
+				    bitmain->drv->name, bitmain->device_id, __func__);
 		return -1;
 	}
 	return 0;
@@ -1319,7 +1411,8 @@ static struct cgpu_info *bitmain_detect_one(libusb_device *dev, struct usb_find_
 	if (!add_cgpu(bitmain))
 		goto unshin;
 
-	applog(LOG_ERR, "------bitmain usb detect one------");
+	applog(LOG_ERR, "%s: detected %s%d",
+			ants1_drv.dname, bitmain->drv->name, bitmain->device_id);
 	ret = bitmain_initialize(bitmain);
 	if (ret && !configured)
 		goto unshin;
@@ -1331,10 +1424,11 @@ static struct cgpu_info *bitmain_detect_one(libusb_device *dev, struct usb_find_
 	info->work_list = k_new_list("Work", sizeof(WITEM), ALLOC_WITEMS, LIMIT_WITEMS, true);
 	info->work_ready = k_new_store(info->work_list);
 
-	applog(LOG_DEBUG, "BitMain Detected: %s "
-	       "(chain_num=%d asic_num=%d timeout=%d frequency=%d)",
-	       bitmain->device_path, info->chain_num, info->asic_num, info->timeout,
-	       info->frequency);
+	applog(LOG_DEBUG, "%s%d: detected %s "
+			  "chain_num=%d asic_num=%d timeout=%d frequency=%d",
+			  bitmain->drv->name, bitmain->device_id, bitmain->device_path,
+			  info->chain_num, info->asic_num, info->timeout,
+			  info->frequency);
 
 	return bitmain;
 
@@ -1402,10 +1496,14 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 	int timediff = 0;
 	K_ITEM *witem;
 
-	applog(LOG_DEBUG, "BTM bitmain_fill start--------");
+	applog(LOG_DEBUG, "%s%d: %s() start",
+			  bitmain->drv->name, bitmain->device_id,
+			  __func__);
 	mutex_lock(&info->qlock);
 	if (info->fifo_space <= 0) {
-		applog(LOG_DEBUG, "BTM bitmain_fill fifo space empty--------");
+		applog(LOG_DEBUG, "%s%d: %s() fifo space empty",
+				  bitmain->drv->name, bitmain->device_id,
+				  __func__);
 		ret = true;
 		goto out_unlock;
 	}
@@ -1418,7 +1516,8 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 	while (info->fifo_space > 0) {
 		neednum = info->fifo_space<8?info->fifo_space:8;
 		queuednum = info->queued;
-		applog(LOG_DEBUG, "BTM: Work task queued(%d) fifo space(%d) needsend(%d)",
+		applog(LOG_DEBUG, "%s%d: Work task queued(%d) fifo space(%d) needsend(%d)",
+				  bitmain->drv->name, bitmain->device_id,
 				  queuednum, info->fifo_space, neednum);
 		while (queuednum < neednum) {
 			work = get_queued(bitmain);
@@ -1428,8 +1527,10 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 				roll_limit = work->drv_rolllimit;
 				roll = 0;
 				while (queuednum < neednum && roll <= roll_limit) {
-					applog(LOG_DEBUG, "BTM get work queued number:%d"
+					applog(LOG_DEBUG, "%s%d: get work queued number:%d"
 							  " neednum:%d",
+							  bitmain->drv->name,
+							  bitmain->device_id,
 							  queuednum, neednum);
 
 					// Using devflag to say if it was rolled
@@ -1460,7 +1561,8 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 		}
 		if (queuednum < BITMAIN_MAX_DEAL_QUEUE_NUM) {
 			if (queuednum < neednum) {
-				applog(LOG_DEBUG, "BTM: No enough work to send, queue num=%d",
+				applog(LOG_DEBUG, "%s%d: Not enough work to send, queue num=%d",
+						  bitmain->drv->name, bitmain->device_id,
 						  queuednum);
 				break;
 			}
@@ -1472,14 +1574,17 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 		if (info->queued < 0)
 			info->queued = 0;
 
-		applog(LOG_DEBUG, "BTM: Send work %d", sentcount);
+		applog(LOG_DEBUG, "%s%d: Send work %d",
+				  bitmain->drv->name, bitmain->device_id,
+				  sentcount);
 		if (sendlen > 0) {
 			info->fifo_space -= sentcount;
 			if (info->fifo_space < 0)
 				info->fifo_space = 0;
 			sendret = bitmain_send_data(sendbuf, sendlen, bitmain);
 			if (unlikely(sendret == BTM_SEND_ERROR)) {
-				applog(LOG_ERR, "BTM%i: Comms error(buffer)", bitmain->device_id);
+				applog(LOG_ERR, "%s%d: send work comms error",
+						bitmain->drv->name, bitmain->device_id);
 				//dev_error(bitmain, REASON_DEV_COMMS_ERROR);
 				info->reset = true;
 				info->errorcount++;
@@ -1493,11 +1598,15 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 				}
 				break;
 			} else {
-				applog(LOG_DEBUG, "bitmain_send_data send ret=%d", sendret);
+				applog(LOG_DEBUG, "%s%d: send_data ret=%d",
+						  bitmain->drv->name, bitmain->device_id,
+						  sendret);
 				info->errorcount = 0;
 			}
 		} else {
-			applog(LOG_DEBUG, "BTM: Send work bitmain_set_txtask error: %d", sendlen);
+			applog(LOG_DEBUG, "%s%d: Send work set_txtask error: %d",
+					  bitmain->drv->name, bitmain->device_id,
+					  sendlen);
 			break;
 		}
 	}
@@ -1508,15 +1617,17 @@ out_unlock:
 	if (timediff < 0) timediff = -timediff;
 
 	if (now.tv_sec - info->last_status_time.tv_sec > BITMAIN_SEND_STATUS_TIME) {
-		applog(LOG_DEBUG, "BTM: Send RX Status Token fifo_space(%d) timediff(%d)",
-			info->fifo_space, timediff);
+		applog(LOG_DEBUG, "%s%d: Send RX Status Token fifo_space(%d) timediff(%d)",
+				  bitmain->drv->name, bitmain->device_id,
+				  info->fifo_space, timediff);
 		copy_time(&(info->last_status_time), &now);
 
 		sendlen = bitmain_set_rxstatus((struct bitmain_rxstatus_token *) sendbuf, 0, 0, 0, 0);
 		if (sendlen > 0) {
 			sendret = bitmain_send_data(sendbuf, sendlen, bitmain);
 			if (unlikely(sendret == BTM_SEND_ERROR)) {
-				applog(LOG_ERR, "BTM%i: Comms error(buffer)", bitmain->device_id);
+				applog(LOG_ERR, "%s%d: send status comms error",
+						bitmain->drv->name, bitmain->device_id);
 				//dev_error(bitmain, REASON_DEV_COMMS_ERROR);
 				info->reset = true;
 				info->errorcount++;
@@ -1577,14 +1688,14 @@ static int64_t bitmain_scanhash(struct thr_info *thr)
 	/* Check for nothing but consecutive bad results or consistently less
 	 * results than we should be getting and reset the FPGA if necessary */
 	//if (info->results < -chain_num && !info->reset) {
-	//	applog(LOG_ERR, "BTM%d: Result return rate low, resetting!",
-	//		bitmain->device_id);
+	//	applog(LOG_ERR, "%s%d: Result return rate low, resetting!",
+	//			bitmain->drv->name, bitmain->device_id);
 	//	info->reset = true;
 	//}
 
 	if (unlikely(bitmain->usbinfo.nodev)) {
-		applog(LOG_ERR, "BTM%d: Device disappeared, shutting down thread",
-		       bitmain->device_id);
+		applog(LOG_ERR, "%s%d: Device disappeared, shutting down thread",
+				bitmain->drv->name, bitmain->device_id);
 		bitmain->shutdown = true;
 	}
 
@@ -1598,7 +1709,9 @@ static void bitmain_flush_work(struct cgpu_info *bitmain)
 	//int i = 0;
 
 	mutex_lock(&info->qlock);
-	applog(LOG_ERR, "bitmain_flush_work queued=%d", info->queued);
+	applog(LOG_ERR, "%s%d: %s() queued=%d",
+			bitmain->drv->name, bitmain->device_id,
+			__func__, info->queued);
 	/* Will overwrite any work queued */
 	info->queued = 0;
 	//pthread_cond_signal(&info->qcond);
@@ -1648,7 +1761,6 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "chain_acn3", &(info->chain_asic_num[2]), false);
 	root = api_add_int(root, "chain_acn4", &(info->chain_asic_num[3]), false);
 
-	//applog(LOG_ERR, "chain asic status:%s", info->chain_asic_status_t[0]);
 	root = api_add_string(root, "chain_acs1", info->chain_asic_status_t[0], false);
 	root = api_add_string(root, "chain_acs2", info->chain_asic_status_t[1], false);
 	root = api_add_string(root, "chain_acs3", info->chain_asic_status_t[2], false);
