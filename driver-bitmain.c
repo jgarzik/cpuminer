@@ -18,23 +18,6 @@ static void ants1_detect(__maybe_unused bool hotplug)
 }
 #else
 
-/*
-#include <limits.h>
-#include <pthread.h>
-#include <stdio.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <dirent.h>
-#include <unistd.h>
-#include <sys/select.h>
-#include <termios.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#ifndef O_CLOEXEC
-#define O_CLOEXEC 0
-#endif
-*/
-
 #include "elist.h"
 #include "usbutils.h"
 #include "driver-bitmain.h"
@@ -358,7 +341,7 @@ static int bitmain_set_txconfig(struct bitmain_txconfig_token *bm,
 	crc = CRC16((uint8_t *)bm, datalen-2);
 	bm->crc = htole16(crc);
 
-	applog(LOG_ERR, "BTM TxConfigToken:reset(%d) faneft(%d) touteft(%d) freqeft(%d)"
+	applog(LOG_DEBUG, "BTM TxConfigToken:reset(%d) faneft(%d) touteft(%d) freqeft(%d)"
 			" volteft(%d) chainceft(%d) chipceft(%d) hweft(%d) mnum(%d)"
 			" anum(%d) fanpwmdata(%d) toutdata(%d) freq(%d) volt(%d)"
 			" chainctime(%d) regdata(%02x%02x%02x%02x) chipaddr(%02x)"
@@ -372,28 +355,22 @@ static int bitmain_set_txconfig(struct bitmain_txconfig_token *bm,
 	return datalen;
 }
 
-static int bitmain_set_txtask(uint8_t *sendbuf, unsigned int *last_work_block,
-			      struct work **works, int work_array_size, int work_array,
-			      int sendworkcount, int *sendcount)
+static int bitmain_set_txtask(struct bitmain_info *info, uint8_t *sendbuf,
+			      unsigned int *last_work_block, int *sentcount)
 {
 	uint16_t crc = 0;
 	uint32_t work_id = 0;
 	int datalen = 0;
-	int i = 0;
-	int index = work_array;
 	uint8_t new_block = 0;
 	//char *ob_hex = NULL;
 	struct bitmain_txtask_token *bm = (struct bitmain_txtask_token *)sendbuf;
-	int cursendcount = 0;
+	int cursentcount = 0;
+	K_ITEM *witem;
 
-	*sendcount = 0;
+	*sentcount = 0;
 
 	if (unlikely(!bm)) {
 		applog(LOG_WARNING, "bitmain_set_txtask bitmain_txtask_token is null");
-		return -1;
-	}
-	if (unlikely(!works)) {
-		applog(LOG_WARNING, "bitmain_set_txtask work is null");
 		return -1;
 	}
 	memset(bm, 0, sizeof(struct bitmain_txtask_token));
@@ -401,45 +378,41 @@ static int bitmain_set_txtask(uint8_t *sendbuf, unsigned int *last_work_block,
 	bm->token_type = BITMAIN_TOKEN_TYPE_TXTASK;
 
 	datalen = 10;
-	applog(LOG_DEBUG, "BTM send work count %d -----", sendworkcount);
-	for (i = 0; i < sendworkcount; i++) {
-		if (index > work_array_size)
-			index = 0;
-
-		if (works[index]) {
-			if (works[index]->work_block > *last_work_block) {
-				applog(LOG_ERR, "BTM send task new block %d old(%d)",
-						works[index]->work_block, *last_work_block);
-				new_block = 1;
-				*last_work_block = works[index]->work_block;
-			}
-#ifdef BITMAIN_TEST
-			if (!hex2bin(works[index]->data, btm_work_test_data, 128))
-				applog(LOG_DEBUG, "BTM send task set test data error");
-
-			if (!hex2bin(works[index]->midstate, btm_work_test_midstate, 32))
-				applog(LOG_DEBUG, "BTM send task set test midstate error");
-#endif
-			work_id = works[index]->id;
-			bm->works[cursendcount].work_id = htole32(work_id);
-			applog(LOG_DEBUG, "BTM send task work id:%"PRIu32" %"PRIu32,
-					  bm->works[cursendcount].work_id, work_id);
-			memcpy(bm->works[cursendcount].midstate, works[index]->midstate, 32);
-			memcpy(bm->works[cursendcount].data2, works[index]->data + 64, 12);
-
-			/*ob_hex = bin2hex(works[index]->data, 76);
-			applog(LOG_ERR, "work %d data: %s", works[index]->id, ob_hex);
-			free(ob_hex);*/
-
-			cursendcount++;
+	applog(LOG_DEBUG, "BTM send work count %d -----", info->work_ready->count);
+	while (info->work_ready->count) {
+		witem = k_unlink_head(info->work_ready);
+		if (DATAW(witem)->work->work_block > *last_work_block) {
+			applog(LOG_ERR, "BTM send task new block %d old(%d)",
+					DATAW(witem)->work->work_block, *last_work_block);
+			new_block = 1;
+			*last_work_block = DATAW(witem)->work->work_block;
 		}
-		index++;
+#ifdef BITMAIN_TEST
+		if (!hex2bin(DATAW(witem)->work->data, btm_work_test_data, 128))
+			applog(LOG_DEBUG, "BTM send task set test data error");
+
+		if (!hex2bin(DATAW(witem)->work->midstate, btm_work_test_midstate, 32))
+			applog(LOG_DEBUG, "BTM send task set test midstate error");
+#endif
+		work_id = DATAW(witem)->work->id;
+		bm->works[cursentcount].work_id = htole32(work_id);
+		applog(LOG_DEBUG, "BTM send task work id:%"PRIu32" %"PRIu32,
+				  bm->works[cursentcount].work_id, work_id);
+		memcpy(bm->works[cursentcount].midstate, DATAW(witem)->work->midstate, 32);
+		memcpy(bm->works[cursentcount].data2, DATAW(witem)->work->data + 64, 12);
+
+		/*ob_hex = bin2hex(DATAW(witem)->work->data, 76);
+		applog(LOG_ERR, "work %d data: %s", DATAW(witem)->work->id, ob_hex);
+		free(ob_hex);*/
+
+		cursentcount++;
+		k_add_head(info->work_list, witem);
 	}
-	if (cursendcount <= 0) {
-		applog(LOG_ERR, "BTM send work count %d", cursendcount);
+	if (cursentcount <= 0) {
+		applog(LOG_ERR, "BTM send work count %d", cursentcount);
 		return 0;
 	}
-	datalen += 48*cursendcount;
+	datalen += 48*cursentcount;
 
 	bm->length = datalen-4;
 	bm->length = htole16(bm->length);
@@ -455,14 +428,14 @@ static int bitmain_set_txtask(uint8_t *sendbuf, unsigned int *last_work_block,
 			  sendbuf[0], sendbuf[1], sendbuf[2],
 			  sendbuf[3], sendbuf[4], sendbuf[5]);
 
-	*sendcount = cursendcount;
+	*sentcount = cursentcount;
 
 	crc = CRC16(sendbuf, datalen-2);
 	crc = htole16(crc);
 	memcpy(sendbuf+datalen-2, &crc, 2);
 
 	applog(LOG_DEBUG, "BitMain TxTask Token: new_block(%d) work_num(%d) crc(%04x)",
-			  new_block, cursendcount, crc);
+			  new_block, cursentcount, crc);
 	applog(LOG_DEBUG, "BitMain TxTask Token: %d %d %02x%02x%02x%02x%02x%02x",
 			  datalen, bm->length,
 			  sendbuf[0], sendbuf[1], sendbuf[2],
@@ -804,6 +777,8 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 	bool found = false;
 	struct work *work = NULL;
 	//char *ob_hex = NULL;
+	uint64_t searches;
+	K_ITEM *witem;
 
 	for (i = 0; i <= spare; i++) {
 		if (buf[i] == 0xa1) {
@@ -831,7 +806,7 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 				info->fifo_space = rxstatusdata.fifo_space;
 				info->nonce_error = rxstatusdata.nonce_error;
 				errordiff = info->nonce_error-info->last_nonce_error;
-				applog(LOG_ERR, "bitmain_parse_results bitmain_parse_rxstatus"
+				applog(LOG_DEBUG, "bitmain_parse_results bitmain_parse_rxstatus"
 						" version=%d chainnum=%d fifospace=%d"
 						" nonceerror=%d-%d freq=%d chain info:",
 						rxstatusdata.version, info->chain_num,
@@ -855,7 +830,7 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 
 						j++;
 					}
-					applog(LOG_ERR, "bitmain_parse_rxstatus chain(%d)"
+					applog(LOG_DEBUG, "bitmain_parse_rxstatus chain(%d)"
 							" asic_num=%d asic_status=%08x-%s",
 							n, info->chain_asic_num[n],
 							info->chain_asic_status[n],
@@ -904,8 +879,30 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 						buf[i+1]+2);
 			} else {
 				for (j = 0; j < nonce_num; j++) {
-					work = find_queued_work_byid(bitmain, rxnoncedata.nonces[j].work_id);
-					if (work) {
+					searches = 0;
+					mutex_lock(&info->qlock);
+					witem = info->work_list->head;
+					while (witem) {
+						searches++;
+						if (DATAW(witem)->work->id == rxnoncedata.nonces[j].work_id)
+							break;
+						witem = witem->next;
+					}
+					mutex_unlock(&info->qlock);
+					if (witem) {
+						if (info->work_search == 0) {
+							info->min_search = searches;
+							info->max_search = searches;
+						} else {
+							if (info->min_search > searches)
+								info->min_search = searches;
+							if (info->max_search < searches)
+								info->max_search = searches;
+						}
+						info->work_search++;
+						info->tot_search += searches;
+
+						work = DATAW(witem)->work;
 						applog(LOG_DEBUG, "bitmain_parse_results nonce find "
 								  "work(%"PRIu32"-%"PRIu32")(%08x)",
 								  work->id,
@@ -936,6 +933,18 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 									rxnoncedata.nonces[j].work_id);
 					 	}
 					} else {
+						if (info->failed_search == 0) {
+							info->min_failed = searches;
+							info->max_failed = searches;
+						} else {
+							if (info->min_failed > searches)
+								info->min_failed = searches;
+							if (info->max_failed < searches)
+								info->max_failed = searches;
+						}
+						info->failed_search++;
+						info->tot_failed += searches;
+
 						//bitmain_inc_nvw(info, thr);
 						applog(LOG_ERR, "BitMain: Work not found for id (%"PRIu32")",
 								rxnoncedata.nonces[j].work_id);
@@ -1326,6 +1335,9 @@ static struct cgpu_info *bitmain_detect_one(libusb_device *dev, struct usb_find_
 
 	info->errorcount = 0;
 
+	info->work_list = k_new_list("Work", sizeof(WITEM), ALLOC_WITEMS, LIMIT_WITEMS, true);
+	info->work_ready = k_new_store(info->work_list);
+
 	applog(LOG_DEBUG, "BitMain Detected: %s "
 	       "(chain_num=%d asic_num=%d timeout=%d frequency=%d)",
 	       bitmain->device_path, info->chain_num, info->asic_num, info->timeout,
@@ -1385,16 +1397,17 @@ static void get_bitmain_statline_before(char *buf, size_t bufsiz, struct cgpu_in
 static bool bitmain_fill(struct cgpu_info *bitmain)
 {
 	struct bitmain_info *info = bitmain->device_data;
-	int subid, slot;
+	int subid;
 	struct work *work, *usework;
 	bool ret = true;
-	int sendret = 0, sendcount = 0, neednum = 0, queuednum = 0, sendnum = 0, sendlen = 0;
+	int sendret = 0, sentcount = 0, neednum = 0, queuednum = 0, sendnum = 0, sendlen = 0;
 	int roll, roll_limit;
 	uint8_t sendbuf[BITMAIN_SENDBUF_SIZE];
 	cgtimer_t ts_start;
 	int senderror = 0;
 	struct timeval now;
 	int timediff = 0;
+	K_ITEM *witem;
 
 	applog(LOG_DEBUG, "BTM bitmain_fill start--------");
 	mutex_lock(&info->qlock);
@@ -1437,22 +1450,16 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 
 					subid = bitmain->queued++;
 					usework->subid = subid;
-					slot = bitmain->work_array + subid;
-					if (slot > BITMAIN_ARRAY_SIZE) {
-						applog(LOG_DEBUG, "bitmain_fill array cyc %d",
-								  BITMAIN_ARRAY_SIZE);
-						slot = 0;
-					}
-					if (likely(bitmain->works[slot])) {
-						applog(LOG_DEBUG, "bitmain_fill work_completed %d",
-								  slot);
+					witem = k_unlink_tail(info->work_list);
+					if (DATAW(witem)->work) {
 						// Was it rolled?
-						if (bitmain->works[slot]->devflag)
-							free_work(bitmain->works[slot]);
+						if (DATAW(witem)->work->devflag)
+							free_work(DATAW(witem)->work);
 						else
-							work_completed(bitmain, bitmain->works[slot]);
+							work_completed(bitmain, DATAW(witem)->work);
 					}
-					bitmain->works[slot] = usework;
+					DATAW(witem)->work = usework;
+					k_add_tail(info->work_ready, witem);
 					queuednum++;
 					roll++;
 				}
@@ -1466,21 +1473,15 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 			}
 		}
 		sendnum = queuednum < neednum ? queuednum : neednum;
-		sendlen = bitmain_set_txtask(sendbuf, &(info->last_work_block), bitmain->works,
-					     BITMAIN_ARRAY_SIZE, bitmain->work_array, sendnum,
-					     &sendcount);
+		sendlen = bitmain_set_txtask(info, sendbuf, &(info->last_work_block), &sentcount);
 		bitmain->queued -= sendnum;
 		info->send_full_space += sendnum;
 		if (bitmain->queued < 0)
 			bitmain->queued = 0;
-		if (bitmain->work_array + sendnum > BITMAIN_ARRAY_SIZE)
-			bitmain->work_array = bitmain->work_array + sendnum-BITMAIN_ARRAY_SIZE;
-		else
-			bitmain->work_array += sendnum;
 
-		applog(LOG_DEBUG, "BTM: Send work array %d", bitmain->work_array);
+		applog(LOG_DEBUG, "BTM: Send work %d", sentcount);
 		if (sendlen > 0) {
-			info->fifo_space -= sendcount;
+			info->fifo_space -= sentcount;
 			if (info->fifo_space < 0)
 				info->fifo_space = 0;
 			sendret = bitmain_send_data(sendbuf, sendlen, bitmain);
@@ -1604,20 +1605,9 @@ static void bitmain_flush_work(struct cgpu_info *bitmain)
 	//int i = 0;
 
 	mutex_lock(&info->qlock);
+	applog(LOG_ERR, "bitmain_flush_work queued=%d", bitmain->queued);
 	/* Will overwrite any work queued */
-	applog(LOG_ERR, "bitmain_flush_work queued=%d array=%d", bitmain->queued, bitmain->work_array);
-	if (bitmain->queued > 0) {
-		if (bitmain->work_array + bitmain->queued > BITMAIN_ARRAY_SIZE) {
-			bitmain->work_array = bitmain->work_array + bitmain->queued-BITMAIN_ARRAY_SIZE;
-		} else {
-			bitmain->work_array += bitmain->queued;
-		}
-	}
 	bitmain->queued = 0;
-	//bitmain->work_array = 0;
-	//for (i = 0; i < BITMAIN_ARRAY_SIZE; i++) {
-	//	bitmain->works[i] = NULL;
-	//}
 	//pthread_cond_signal(&info->qcond);
 	mutex_unlock(&info->qlock);
 }
@@ -1675,6 +1665,22 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 	//root = api_add_int(root, "chain_acs2", &(info->chain_asic_status[1]), false);
 	//root = api_add_int(root, "chain_acs3", &(info->chain_asic_status[2]), false);
 	//root = api_add_int(root, "chain_acs4", &(info->chain_asic_status[3]), false);
+
+	root = api_add_int(root, "work_list_total", &(info->work_list->total), true);
+	root = api_add_int(root, "work_list_count", &(info->work_list->count), true);
+	root = api_add_int(root, "work_ready_count", &(info->work_ready->count), true);
+	root = api_add_uint64(root, "work_search", &(info->work_search), true);
+	root = api_add_uint64(root, "min_search", &(info->min_search), true);
+	root = api_add_uint64(root, "max_search", &(info->max_search), true);
+	float avg = info->work_search ? (float)(info->tot_search) /
+						(float)(info->work_search) : 0;
+	root = api_add_avg(root, "avg_search", &avg, true);
+	root = api_add_uint64(root, "failed_search", &(info->failed_search), true);
+	root = api_add_uint64(root, "min_failed", &(info->min_failed), true);
+	root = api_add_uint64(root, "max_failed", &(info->max_failed), true);
+	avg = info->failed_search ? (float)(info->tot_failed) /
+					(float)(info->failed_search) : 0;
+	root = api_add_avg(root, "avg_failed", &avg, true);
 
 	return root;
 }
