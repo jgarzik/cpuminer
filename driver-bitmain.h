@@ -166,6 +166,9 @@ struct bitmain_rxnonce_data {
 } __attribute__((packed, aligned(4)));
 
 struct bitmain_info {
+	int queued;
+	int results;
+
 	int baud;
 	int chain_num;
 	int asic_num;
@@ -249,7 +252,6 @@ typedef struct witem {
 #define DATAW(_item) ((WITEM *)(_item->data))
 
 #define BITMAIN_READ_SIZE 12
-#define BITMAIN_ARRAY_SIZE 2048
 
 #define BTM_GETS_ERROR -1
 #define BTM_GETS_OK 0

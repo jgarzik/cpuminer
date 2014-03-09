@@ -982,9 +982,9 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 	memmove(buf, buf + spare, *offset);
 }
 
-static void bitmain_running_reset(struct cgpu_info *bitmain, struct bitmain_info *info)
+static void bitmain_running_reset(struct bitmain_info *info)
 {
-	bitmain->results = 0;
+	info->results = 0;
 	info->reset = false;
 }
 
@@ -1020,7 +1020,7 @@ static void *bitmain_get_results(void *userdata)
 		}
 
 		if (unlikely(info->reset)) {
-			bitmain_running_reset(bitmain, info);
+			bitmain_running_reset(info);
 			/* Discard anything in the buffer */
 			offset = 0;
 		}
@@ -1074,12 +1074,6 @@ static bool bitmain_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *bitmain = thr->cgpu;
 	struct bitmain_info *info = bitmain->device_data;
-
-	free(bitmain->works);
-	bitmain->works = calloc(BITMAIN_MAX_WORK_NUM * sizeof(struct work *),
-			       BITMAIN_ARRAY_SIZE);
-	if (!bitmain->works)
-		quit(1, "Failed to calloc bitmain works in bitmain_prepare");
 
 	info->thr = thr;
 	mutex_init(&info->lock);
@@ -1370,7 +1364,7 @@ static void do_bitmain_close(struct thr_info *thr)
 	struct bitmain_info *info = bitmain->device_data;
 
 	pthread_join(info->read_thr, NULL);
-	bitmain_running_reset(bitmain, info);
+	bitmain_running_reset(info);
 
 	info->no_matching_work = 0;
 
@@ -1417,14 +1411,14 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 		goto out_unlock;
 	}
 
-	if (bitmain->queued >= BITMAIN_MAX_WORK_QUEUE_NUM)
+	if (info->queued >= BITMAIN_MAX_WORK_QUEUE_NUM)
 		ret = true;
 	else
 		ret = false;
 
 	while (info->fifo_space > 0) {
 		neednum = info->fifo_space<8?info->fifo_space:8;
-		queuednum = bitmain->queued;
+		queuednum = info->queued;
 		applog(LOG_DEBUG, "BTM: Work task queued(%d) fifo space(%d) needsend(%d)",
 				  queuednum, info->fifo_space, neednum);
 		while (queuednum < neednum) {
@@ -1448,7 +1442,7 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 						usework->devflag = true;
 					}
 
-					subid = bitmain->queued++;
+					subid = info->queued++;
 					usework->subid = subid;
 					witem = k_unlink_tail(info->work_list);
 					if (DATAW(witem)->work) {
@@ -1474,10 +1468,10 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 		}
 		sendnum = queuednum < neednum ? queuednum : neednum;
 		sendlen = bitmain_set_txtask(info, sendbuf, &(info->last_work_block), &sentcount);
-		bitmain->queued -= sendnum;
+		info->queued -= sendnum;
 		info->send_full_space += sendnum;
-		if (bitmain->queued < 0)
-			bitmain->queued = 0;
+		if (info->queued < 0)
+			info->queued = 0;
 
 		applog(LOG_DEBUG, "BTM: Send work %d", sentcount);
 		if (sendlen > 0) {
@@ -1573,17 +1567,17 @@ static int64_t bitmain_scanhash(struct thr_info *thr)
 
 	mutex_lock(&info->qlock);
 	hash_count = 0xffffffffull * (uint64_t)info->nonces;
-	bitmain->results += info->nonces + info->idle;
-	if (bitmain->results > chain_num)
-		bitmain->results = chain_num;
+	info->results += info->nonces + info->idle;
+	if (info->results > chain_num)
+		info->results = chain_num;
 	if (!info->reset)
-		bitmain->results--;
+		info->results--;
 	info->nonces = info->idle = 0;
 	mutex_unlock(&info->qlock);
 
 	/* Check for nothing but consecutive bad results or consistently less
 	 * results than we should be getting and reset the FPGA if necessary */
-	//if (bitmain->results < -chain_num && !info->reset) {
+	//if (info->results < -chain_num && !info->reset) {
 	//	applog(LOG_ERR, "BTM%d: Result return rate low, resetting!",
 	//		bitmain->device_id);
 	//	info->reset = true;
@@ -1605,9 +1599,9 @@ static void bitmain_flush_work(struct cgpu_info *bitmain)
 	//int i = 0;
 
 	mutex_lock(&info->qlock);
-	applog(LOG_ERR, "bitmain_flush_work queued=%d", bitmain->queued);
+	applog(LOG_ERR, "bitmain_flush_work queued=%d", info->queued);
 	/* Will overwrite any work queued */
-	bitmain->queued = 0;
+	info->queued = 0;
 	//pthread_cond_signal(&info->qcond);
 	mutex_unlock(&info->qlock);
 }
