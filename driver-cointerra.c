@@ -937,10 +937,10 @@ static int64_t cta_scanwork(struct thr_info *thr)
 		age_queued_work(cointerra, 300.0);
 
 		/* Use this opportunity to unset the bits in any pipes that
-		 * have not returned a valid nonce for over an hour. */
+		 * have not returned a valid nonce for over 2 hours. */
 		now_t = time(NULL);
 		for (i = 0; i < 1024; i++) {
-			if (unlikely(now_t > info->last_pipe_nonce[i] + 3600)) {
+			if (unlikely(now_t > info->last_pipe_nonce[i] + 7200)) {
 				int bitchar = i / 8, bitbit = i % 8;
 
 				info->pipe_bitmap[bitchar] &= ~(0x80 >> bitbit);
