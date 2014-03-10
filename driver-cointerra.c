@@ -368,8 +368,7 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 			ret = submit_tested_work(thr, work);
 
 			mutex_lock(&info->lock);
-			if (ret)
-				info->share_hashes = (uint64_t)work->work_difficulty * 0x100000000ull;
+			info->share_hashes += (uint64_t)wdiff * 0x100000000ull;
 			info->hashes += nonce;
 			mutex_unlock(&info->lock);
 		} else {
