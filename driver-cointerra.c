@@ -1082,8 +1082,6 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 	root = api_add_uint64(root, "Calc hashrate", &ghs, true);
 	ghs = (info->tot_hashes - info->tot_reset_hashes) / dev_runtime;
 	root = api_add_uint64(root, "Hashrate", &ghs, true);
-	ghs = info->tot_hashes / dev_runtime;
-	root = api_add_uint64(root, "Raw hashrate", &ghs, true);
 	ghs = info->tot_share_hashes / dev_runtime;
 	root = api_add_uint64(root, "Share hashrate", &ghs, true);
 	root = api_add_uint64(root, "Total calc hashes", &info->tot_calc_hashes, false);
