@@ -431,7 +431,7 @@ struct cgpu_info {
 	struct cg_usb_info usbinfo;
 	bool blacklisted;
 #endif
-#if defined(USE_AVALON) || defined(USE_AVALON2) || defined(USE_ANT_S1)
+#if defined(USE_AVALON) || defined(USE_AVALON2)
 	struct work **works;
 	int work_array;
 	int queued;

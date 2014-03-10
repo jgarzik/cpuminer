@@ -15,6 +15,7 @@
 #ifdef USE_ANT_S1
 
 #include "util.h"
+#include "klist.h"
 
 #define BITMAIN_RESET_FAULT_DECISECONDS 1
 #define BITMAIN_MINER_THREADS 1
@@ -165,6 +166,9 @@ struct bitmain_rxnonce_data {
 } __attribute__((packed, aligned(4)));
 
 struct bitmain_info {
+	int queued;
+	int results;
+
 	int baud;
 	int chain_num;
 	int asic_num;
@@ -187,7 +191,6 @@ struct bitmain_info {
 	int temp_history_count;
 	int temp_history_index;
 	int temp_sum;
-	int temp_old;
 	int fan_pwm;
 
 	int frequency;
@@ -216,10 +219,38 @@ struct bitmain_info {
 	bool reset;
 	bool overheat;
 	bool optimal;
+
+	// Work
+	K_LIST *work_list;
+	K_STORE *work_ready;
+
+	uint64_t work_search;
+	uint64_t tot_search;
+	uint64_t min_search;
+	uint64_t max_search;
+
+	uint64_t failed_search;
+	uint64_t tot_failed;
+	uint64_t min_failed;
+	uint64_t max_failed;
 };
 
+// Work
+typedef struct witem {
+	struct work *work;
+	bool clone;
+} WITEM;
+
+#define ALLOC_WITEMS 1024
+/*
+ * The limit doesn't matter since we simply take the tail item
+ * every time, optionally free it, and then put it on the head
+ */
+#define LIMIT_WITEMS 1024
+
+#define DATAW(_item) ((WITEM *)(_item->data))
+
 #define BITMAIN_READ_SIZE 12
-#define BITMAIN_ARRAY_SIZE 2048
 
 #define BTM_GETS_ERROR -1
 #define BTM_GETS_OK 0
