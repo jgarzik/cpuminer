@@ -40,6 +40,17 @@ static uint8_t diff_to_bits(double diff)
 	return i;
 }
 
+static double bits_to_diff(uint8_t bits)
+{
+	double ret = 1.0;
+
+	if (likely(bits > 32))
+		ret *= 1ull << (bits - 32);
+	else if (unlikely(bits < 32))
+		ret /= 1ull << (32 - bits);
+	return ret;
+}
+
 static bool cta_reset_init(char *buf)
 {
 	return ((buf[CTA_MSG_TYPE] == CTA_RECV_RDONE) && ((buf[CTA_RESET_TYPE]&0x3) == CTA_RESET_INIT));
@@ -320,10 +331,11 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 
 	work = clone_work_by_id(cointerra, retwork);
 	if (likely(work)) {
-		uint32_t wdiff = hu32_from_msg(buf, CTA_WORK_DIFFBITS);
+		uint8_t wdiffbits = u8_from_msg(buf, CTA_WORK_DIFFBITS);
 		uint32_t nonce = hu32_from_msg(buf, CTA_MATCH_NONCE);
 		unsigned char rhash[32];
 		char outhash[16];
+		double wdiff;
 		bool ret;
 
 		timestamp_offset = hu32_from_msg(buf, CTA_MATCH_NOFFSET);
@@ -335,6 +347,7 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 		}
 
 		/* Test against the difficulty we asked for along with the work */
+		wdiff = bits_to_diff(wdiffbits);
 		ret = test_nonce_diff(work, nonce, wdiff);
 
 		if (opt_debug) {
@@ -389,7 +402,7 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 				__bin2hex(hexwdata, wdata, 12);
 				applog(LOG_DEBUG, "False match sent: work id %u midstate %s  blkhdr %s",
 				       wid, hexmidstate, hexwdata);
-				applog(LOG_DEBUG, "False match reports: work id 0x%04x MCU id 0x%08x work diff %u",
+				applog(LOG_DEBUG, "False match reports: work id 0x%04x MCU id 0x%08x work diff %.1f",
 				       retwork, mcu_tag, wdiff);
 				applog(LOG_DEBUG, "False match tested: nonce 0x%08x noffset %d %s",
 				       nonce, timestamp_offset, outhash);
