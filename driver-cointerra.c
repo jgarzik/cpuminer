@@ -555,6 +555,8 @@ static void cta_parse_rdone(struct cgpu_info *cointerra, struct cointerra_info *
 	}
 }
 
+static void cta_zero_stats(struct cgpu_info *cointerra);
+
 static void cta_parse_debug(struct cointerra_info *info, char *buf)
 {
 	mutex_lock(&info->lock);
@@ -573,6 +575,15 @@ static void cta_parse_debug(struct cointerra_info *info, char *buf)
 	info->power_temps[1] = hu16_from_msg(buf,CTA_STAT_PS_TEMP2);
 
 	mutex_unlock(&info->lock);
+
+	/* Autovoltage is positive only once at startup and eventually drops
+	 * to zero. After that time we reset the stats since they're unreliable
+	 * till then. */
+	if (unlikely(!info->autovoltage_complete && !info->autovoltage)) {
+		info->autovoltage_complete = true;
+		cgtime(&info->thr->cgpu->dev_start_tv);
+		cta_zero_stats(info->thr->cgpu);
+	}
 }
 
 static void cta_parse_msg(struct thr_info *thr, struct cgpu_info *cointerra,

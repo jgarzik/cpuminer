@@ -194,6 +194,7 @@ struct cointerra_info {
 	uint16_t ipower_voltage;
 	uint16_t power_temps[2];
 
+	bool autovoltage_complete;
 
 	/* Calculated totals based on work done and nonces found */
 	uint64_t hashes;
