@@ -592,9 +592,21 @@ static void cta_parse_debug(struct cointerra_info *info, char *buf)
 	 * to zero. After that time we reset the stats since they're unreliable
 	 * till then. */
 	if (unlikely(!info->autovoltage_complete && !info->autovoltage)) {
+		struct cgpu_info *cointerra = info->thr->cgpu;
+
 		info->autovoltage_complete = true;
-		cgtime(&info->thr->cgpu->dev_start_tv);
-		cta_zero_stats(info->thr->cgpu);
+		cgtime(&cointerra->dev_start_tv);
+		cta_zero_stats(cointerra);
+		cointerra->total_mhashes = 0;
+		cointerra->accepted = 0;
+		cointerra->rejected = 0;
+		cointerra->hw_errors = 0;
+		cointerra->utility = 0.0;
+		cointerra->last_share_pool_time = 0;
+		cointerra->diff1 = 0;
+		cointerra->diff_accepted = 0;
+		cointerra->diff_rejected = 0;
+		cointerra->last_share_diff = 0;
 	}
 }
 
