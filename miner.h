@@ -1256,6 +1256,9 @@ struct pool {
 	int gbt_txns;
 	int coinbase_len;
 
+	bool gbt_solo;
+	char *transactions;
+
 	/* Shared by both stratum & GBT */
 	unsigned char *coinbase;
 	int nonce2_offset;

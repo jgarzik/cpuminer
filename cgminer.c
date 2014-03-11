@@ -552,6 +552,8 @@ static char *getwork_req = "{\"method\": \"getwork\", \"params\": [], \"id\":0}\
 
 static char *gbt_req = "{\"id\": 0, \"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": [\"coinbasetxn\", \"workid\", \"coinbase/append\"]}]}\n";
 
+static char *gbt_solo_req = "{\"id\": 0, \"method\": \"getblocktemplate\"}\n";
+
 /* Adjust all the pools' quota to the greatest common denominator after a pool
  * has been added or the quotas changed. */
 void adjust_quota_gcd(void)
@@ -2169,6 +2171,84 @@ static bool pool_localgen(struct pool *pool)
 	return (pool->has_stratum || pool->has_gbt);
 }
 
+static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
+{
+	json_t *value, *transaction_arr;
+	const char *previousblockhash;
+	const char *target;
+	char *hashbin = NULL, hashhex[68];
+	int version;
+	int curtime;
+	const char *bits;
+	int height;
+	size_t index;
+	int transactions, i, j;
+
+	previousblockhash = json_string_value(json_object_get(res_val, "previousblockhash"));
+	target = json_string_value(json_object_get(res_val, "target"));
+	transaction_arr = json_object_get(res_val, "transactions");
+	transactions = json_array_size(transaction_arr);
+	if (transactions) {
+		unsigned char binswap[32], merklebin[1024];
+		int binleft, binlen = transactions * 32 + 32, merkleoff = 0;
+
+		hashbin = calloc(binlen + 32, 1);
+		if (unlikely(!hashbin))
+			quit(1, "Failed to malloc hashbin in gbt_solo_decode");
+		json_array_foreach(transaction_arr, index, value) {
+			const char *hash = json_string_value(json_object_get(value, "hash"));
+
+			if (!hex2bin(binswap, hash, 32))
+				quit(1, "Failed to hex2bin hash in gbt_solo_decode");
+			swab256(hashbin + 32 + (32 * index), binswap);
+		}
+		binleft = binlen / 32;
+		if (binleft > 1) {
+			while (42) {
+				if (binleft == 1)
+					break;
+				memcpy(merklebin + merkleoff, hashbin + 32, 32);
+				merkleoff += 32;
+				applog(LOG_ERR, "Len %d left %d", binlen, binleft);
+				if (binleft % 2) {
+					memcpy(hashbin + binlen, hashbin + binlen - 32, 32);
+					binlen += 32;
+					binleft++;
+				}
+				for (i = 32, j = 64; j < binlen; i += 32, j += 64) {
+					gen_hash(hashbin + j, hashbin + i, 64);
+				}
+				binleft /= 2;
+				binlen = binleft * 32;
+			}
+		}
+		for (i = 0; i < merkleoff; i += 32) {
+			__bin2hex(hashhex, merklebin + i, 32);
+			applog(LOG_WARNING, "MH%d %s",i, hashhex);
+		}
+		exit(0);
+	}
+	version = json_integer_value(json_object_get(res_val, "version"));
+	curtime = json_integer_value(json_object_get(res_val, "curtime"));
+	bits = json_string_value(json_object_get(res_val, "bits"));
+	height = json_integer_value(json_object_get(res_val, "height"));
+
+	if (!previousblockhash || !target || !version || !curtime || !bits || !height) {
+		applog(LOG_ERR, "Pool %d JSON failed to decode GBT", pool->pool_no);
+		return false;
+	}
+
+	applog(LOG_DEBUG, "previousblockhash: %s", previousblockhash);
+	applog(LOG_DEBUG, "target: %s", target);
+	applog(LOG_DEBUG, "version: %d", version);
+	applog(LOG_DEBUG, "curtime: %d", curtime);
+	applog(LOG_DEBUG, "bits: %s", bits);
+	applog(LOG_DEBUG, "height: %d", height);
+
+	exit(0);
+	return true;
+}
+
 static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 {
 	json_t *res_val = json_object_get(val, "result");
@@ -2185,6 +2265,12 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			goto out;
 		work->gbt = true;
 		ret = true;
+		goto out;
+	} else if (pool->gbt_solo) {
+		if (unlikely(!gbt_solo_decode(pool, res_val)))
+			goto out;
+		ret = true;
+		exit(0);
 		goto out;
 	} else if (unlikely(!getwork_decode(res_val, work)))
 		goto out;
@@ -6234,7 +6320,7 @@ retry_stratum:
 		val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
 				    gbt_req, true, false, &rolltime, pool, false);
 		if (val) {
-			bool append = false, submit = false;
+			bool append = false, submit = false, transactions = false;
 			json_t *res_val, *mutables;
 			int i, mutsize = 0;
 
@@ -6254,6 +6340,8 @@ retry_stratum:
 						append = true;
 					else if (!strncasecmp(mutable, "submit/coinbase", 15))
 						submit = true;
+					else if (!strncasecmp(mutable, "transactions", 12))
+						transactions = true;
 				}
 			}
 			json_decref(val);
@@ -6263,6 +6351,9 @@ retry_stratum:
 			if (append && submit) {
 				pool->has_gbt = true;
 				pool->rpc_req = gbt_req;
+			} else if (transactions) {
+				pool->gbt_solo = true;
+				pool->rpc_req = gbt_solo_req;
 			}
 		}
 		/* Reset this so we can probe fully just after this. It will be
@@ -6271,6 +6362,8 @@ retry_stratum:
 
 		if (pool->has_gbt)
 			applog(LOG_DEBUG, "GBT coinbase + append support found, switching to GBT protocol");
+		else if (pool->gbt_solo)
+			applog(LOG_DEBUG, "GBT coinbase without append found, switching to GBT solo protocol");
 		else
 			applog(LOG_DEBUG, "No GBT coinbase + append support found, using getwork protocol");
 	}

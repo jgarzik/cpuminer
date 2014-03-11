@@ -1566,6 +1566,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 			pool->swork.merkle_bin[i] = malloc(32);
 			if (unlikely(!pool->swork.merkle_bin[i]))
 				quit(1, "Failed to malloc pool swork merkle_bin");
+			if (opt_protocol)
+				applog(LOG_DEBUG, "merkle %d: %s", i, merkle);
 			ret = hex2bin(pool->swork.merkle_bin[i], merkle, 32);
 			free(merkle);
 			if (unlikely(!ret)) {
