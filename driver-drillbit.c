@@ -104,7 +104,7 @@ typedef struct {
 #define CAP_TEMP (1<<0)
 #define CAP_EXT_CLOCK (1<<1)
 #define CAP_IS_AVALON (1<<2)
-#define CAP_WARRANTY_VOID (1<<3)
+#define CAP_LIMITER_REMOVED (1<<3)
 
 #define SZ_SERIALISED_IDENTITY 16
 static void deserialise_identity(Identity *identity, const char *buf);
@@ -600,8 +600,8 @@ static struct cgpu_info *drillbit_detect_one(struct libusb_device *dev, struct u
 
 	update_usb_stats(drillbit);
 
-	if(info->capabilities & CAP_WARRANTY_VOID) {
-		drvlog(LOG_WARNING, "This board's warranty is void due to overclocking past limits.");
+	if(info->capabilities & CAP_LIMITER_REMOVED) {
+		drvlog(LOG_WARNING, "Recommended limits have been disabled on this board, take care when changing settings.");
 	}
 
 	drillbit_send_config(drillbit);
