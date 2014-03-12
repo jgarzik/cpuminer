@@ -483,7 +483,7 @@ static void drillbit_get_statline_before(char *buf, size_t bufsiz, struct cgpu_i
 }
 
 
-static bool drillbit_parse_options(struct cgpu_info *drillbit)
+static bool drillbit_parse_options(__maybe_unused struct cgpu_info *drillbit)
 {
 	/* Read configuration options (currently global not per-ASIC or per-board) */
 	if (settings != NULL)
@@ -681,7 +681,6 @@ static void drillbit_check_auto(struct thr_info *thr, struct drillbit_chip_info 
 	AutoTuneRequest request;
 	char buf[SZ_SERIALISED_AUTOTUNEREQUEST+1];
 	int amount;
-	float ratio;
 	bool tune_up, tune_down;
 
 	/*
