@@ -2171,45 +2171,52 @@ static bool pool_localgen(struct pool *pool)
 	return (pool->has_stratum || pool->has_gbt);
 }
 
-static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
+static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 {
-	json_t *value, *transaction_arr;
-	const char *previousblockhash;
-	const char *target;
-	char *hashbin = NULL, hashhex[68];
-	int version;
-	int curtime;
-	const char *bits;
-	int height;
-	size_t index;
+	json_t *value, *arr_val;
 	int transactions, i, j;
 
-	previousblockhash = json_string_value(json_object_get(res_val, "previousblockhash"));
-	target = json_string_value(json_object_get(res_val, "target"));
-	transaction_arr = json_object_get(res_val, "transactions");
+	pool->merkles = 0;
 	transactions = json_array_size(transaction_arr);
 	if (transactions) {
-		unsigned char binswap[32], merklebin[1024];
-		int binleft, binlen = transactions * 32 + 32, merkleoff = 0;
+		unsigned char *hashbin;
+		char hashhex[68];
+		unsigned char binswap[32];
+		int binleft, binlen = transactions * 32 + 32;
 
-		hashbin = calloc(binlen + 32, 1);
-		if (unlikely(!hashbin))
-			quit(1, "Failed to malloc hashbin in gbt_solo_decode");
-		json_array_foreach(transaction_arr, index, value) {
-			const char *hash = json_string_value(json_object_get(value, "hash"));
+		hashbin = alloca(binlen + 32);
+		memset(hashbin, 0, 32);
+		for (i = 0; i < transactions; i++) {
+			const char *hash;
 
-			if (!hex2bin(binswap, hash, 32))
-				quit(1, "Failed to hex2bin hash in gbt_solo_decode");
-			swab256(hashbin + 32 + (32 * index), binswap);
+			arr_val = json_array_get(transaction_arr, i);
+			if (!arr_val) {
+				applog(LOG_ERR, "json_array_get fail of arr_val");
+				continue;
+			}
+			value = json_object_get(arr_val, "hash");
+			if (!value) {
+				applog(LOG_ERR, "json_object_get fail of value");
+				continue;
+			}
+			hash = json_string_value(value);
+			if (!hash) {
+				applog(LOG_ERR, "json_string_value fail of hash");
+				continue;
+			}
+			if (!hex2bin(binswap, hash, 32)) {
+				applog(LOG_ERR, "Failed to hex2bin hash in gbt_merkle_bins");
+				continue;
+			}
+			swab256(hashbin + 32 + 32 * i, binswap);
 		}
 		binleft = binlen / 32;
 		if (binleft > 1) {
 			while (42) {
 				if (binleft == 1)
 					break;
-				memcpy(merklebin + merkleoff, hashbin + 32, 32);
-				merkleoff += 32;
-				applog(LOG_ERR, "Len %d left %d", binlen, binleft);
+				memcpy(pool->merklebin + (pool->merkles * 32), hashbin + 32, 32);
+				pool->merkles++;
 				if (binleft % 2) {
 					memcpy(hashbin + binlen, hashbin + binlen - 32, 32);
 					binlen += 32;
@@ -2222,12 +2229,29 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 				binlen = binleft * 32;
 			}
 		}
-		for (i = 0; i < merkleoff; i += 32) {
-			__bin2hex(hashhex, merklebin + i, 32);
+		for (i = 0; i < pool->merkles; i++) {
+			__bin2hex(hashhex, pool->merklebin + i * 32, 32);
 			applog(LOG_WARNING, "MH%d %s",i, hashhex);
 		}
 		exit(0);
 	}
+}
+
+
+static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
+{
+	json_t *transaction_arr;
+	const char *previousblockhash;
+	const char *target;
+	int version;
+	int curtime;
+	const char *bits;
+	int height;
+
+	previousblockhash = json_string_value(json_object_get(res_val, "previousblockhash"));
+	target = json_string_value(json_object_get(res_val, "target"));
+	transaction_arr = json_object_get(res_val, "transactions");
+	gbt_merkle_bins(pool, transaction_arr);
 	version = json_integer_value(json_object_get(res_val, "version"));
 	curtime = json_integer_value(json_object_get(res_val, "curtime"));
 	bits = json_string_value(json_object_get(res_val, "bits"));
