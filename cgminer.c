@@ -1873,80 +1873,28 @@ char *workpadding = "00000080000000000000000000000000000000000000000000000000000
  * transaction, and the hashes of the remaining transactions since these
  * remain constant with an altered coinbase when generating work. Must be
  * entered under gbt_lock */
-static bool __build_gbt_txns(struct pool *pool, json_t *res_val)
+static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr);
+
+static void __build_gbt_txns(struct pool *pool, json_t *res_val)
 {
 	json_t *txn_array;
-	bool ret = false;
-	size_t cal_len;
-	int i;
-
-	free(pool->txn_hashes);
-	pool->txn_hashes = NULL;
-	pool->gbt_txns = 0;
 
 	txn_array = json_object_get(res_val, "transactions");
-	if (!json_is_array(txn_array))
-		goto out;
-
-	ret = true;
-	pool->gbt_txns = json_array_size(txn_array);
-	if (!pool->gbt_txns)
-		goto out;
-
-	pool->txn_hashes = calloc(32 * (pool->gbt_txns + 1), 1);
-	if (unlikely(!pool->txn_hashes))
-		quit(1, "Failed to calloc txn_hashes in __build_gbt_txns");
-
-	for (i = 0; i < pool->gbt_txns; i++) {
-		json_t *txn_val = json_object_get(json_array_get(txn_array, i), "data");
-		const char *txn = json_string_value(txn_val);
-		int txn_len = strlen(txn);
-		unsigned char *txn_bin;
-
-		cal_len = txn_len;
-		align_len(&cal_len);
-		txn_bin = calloc(cal_len, 1);
-		if (unlikely(!txn_bin))
-			quit(1, "Failed to calloc txn_bin in __build_gbt_txns");
-		if (unlikely(!hex2bin(txn_bin, txn, txn_len / 2)))
-			quit(1, "Failed to hex2bin txn_bin");
-
-		gen_hash(txn_bin, pool->txn_hashes + (32 * i), txn_len / 2);
-		free(txn_bin);
-	}
-out:
-	return ret;
+	gbt_merkle_bins(pool, txn_array);
 }
 
-static unsigned char *__gbt_merkleroot(struct pool *pool)
+static void __gbt_merkleroot(struct pool *pool, unsigned char *merkle_root)
 {
-	unsigned char *merkle_hash;
-	int i, txns;
+	unsigned char merkle_sha[64];
+	int i;
 
-	merkle_hash = calloc(32 * (pool->gbt_txns + 2), 1);
-	if (unlikely(!merkle_hash))
-		quit(1, "Failed to calloc merkle_hash in __gbt_merkleroot");
-
-	gen_hash(pool->coinbase, merkle_hash, pool->coinbase_len);
-
-	if (pool->gbt_txns)
-		memcpy(merkle_hash + 32, pool->txn_hashes, pool->gbt_txns * 32);
-
-	txns = pool->gbt_txns + 1;
-	while (txns > 1) {
-		if (txns % 2) {
-			memcpy(&merkle_hash[txns * 32], &merkle_hash[(txns - 1) * 32], 32);
-			txns++;
-		}
-		for (i = 0; i < txns; i += 2){
-			unsigned char hashout[32];
-
-			gen_hash(merkle_hash + (i * 32), hashout, 64);
-			memcpy(merkle_hash + (i / 2 * 32), hashout, 32);
-		}
-		txns /= 2;
+	gen_hash(pool->coinbase, merkle_root, pool->coinbase_len);
+	memcpy(merkle_sha, merkle_root, 32);
+	for (i = 0; i < pool->merkles; i++) {
+		memcpy(merkle_sha + 32, pool->merklebin + i * 32, 32);
+		gen_hash(merkle_sha, merkle_root, 64);
+		memcpy(merkle_sha, merkle_root, 32);
 	}
-	return merkle_hash;
 }
 
 static bool work_decode(struct pool *pool, struct work *work, json_t *val);
@@ -1991,7 +1939,7 @@ static void update_gbt(struct pool *pool)
 
 static void gen_gbt_work(struct pool *pool, struct work *work)
 {
-	unsigned char *merkleroot;
+	unsigned char merkleroot[32];
 	struct timeval now;
 	uint64_t nonce2le;
 
@@ -2004,7 +1952,7 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	memcpy(pool->coinbase + pool->nonce2_offset, &nonce2le, pool->n2size);
 	pool->nonce2++;
 	cg_dwlock(&pool->gbt_lock);
-	merkleroot = __gbt_merkleroot(pool);
+	__gbt_merkleroot(pool, merkleroot);
 
 	memcpy(work->data, &pool->gbt_version, 4);
 	memcpy(work->data + 4, pool->previousblockhash, 32);
@@ -2023,7 +1971,6 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	cg_runlock(&pool->gbt_lock);
 
 	flip32(work->data + 4 + 32, merkleroot);
-	free(merkleroot);
 	memset(work->data + 4 + 32 + 32 + 4 + 4, 0, 4); /* nonce */
 
 	hex2bin(work->data + 4 + 32 + 32 + 4 + 4 + 4, workpadding, 48);
@@ -2173,7 +2120,7 @@ static bool pool_localgen(struct pool *pool)
 
 static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 {
-	json_t *value, *arr_val;
+	json_t *arr_val;
 	int transactions, i, j;
 
 	pool->merkles = 0;
@@ -2190,23 +2137,31 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 			const char *hash;
 
 			arr_val = json_array_get(transaction_arr, i);
-			if (!arr_val) {
-				applog(LOG_ERR, "json_array_get fail of arr_val");
-				continue;
-			}
-			value = json_object_get(arr_val, "hash");
-			if (!value) {
-				applog(LOG_ERR, "json_object_get fail of value");
-				continue;
-			}
-			hash = json_string_value(value);
+			hash = json_string_value(json_object_get(arr_val, "hash"));
 			if (!hash) {
-				applog(LOG_ERR, "json_string_value fail of hash");
+				/* This is needed for pooled mining since only
+				 * transaction data and not hashes are sent */
+				const char *txn = json_string_value(json_object_get(arr_val, "data"));
+				unsigned char *txn_bin;
+				int txn_len;
+
+				if (!txn) {
+					applog(LOG_ERR, "Pool %d json_string_value fail - cannot find transaction hash nor data",
+					       pool->pool_no);
+					return;
+				}
+				txn_len = strlen(txn) / 2;
+				txn_bin = malloc(txn_len);
+				if (!txn_bin)
+					quit(1, "Failed to malloc txn_bin in gbt_merkle_bins");
+				hex2bin(txn_bin, txn, txn_len);
+				gen_hash(txn_bin, hashbin + 32 + 32 * i, txn_len);
+				free(txn_bin);
 				continue;
 			}
 			if (!hex2bin(binswap, hash, 32)) {
 				applog(LOG_ERR, "Failed to hex2bin hash in gbt_merkle_bins");
-				continue;
+				return;
 			}
 			swab256(hashbin + 32 + 32 * i, binswap);
 		}
@@ -2233,7 +2188,6 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 			__bin2hex(hashhex, pool->merklebin + i * 32, 32);
 			applog(LOG_WARNING, "MH%d %s",i, hashhex);
 		}
-		exit(0);
 	}
 }
 
