@@ -178,6 +178,16 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               Will not report PGAs if PGA mining is disabled
                               Will not report ASCs if ASC mining is disabled
 
+ edevs[|old]   DEVS           The same as devs, except it ignores blacklisted
+                              devices and zombie devices
+                              If you specify the optional 'old' parameter, then
+                              the output will include zombie devices that became
+                              zombies less than 'old' seconds ago
+                              A value of zero for 'old', which is the default,
+                              means ignore all zombies
+                              It will return an empty list of devices if all
+                              devices are blacklisted or zombies
+
  pga|N         PGA            The details of a single PGA number N in the same
                               format and details as for DEVS
                               This is only available if PGA mining is enabled
@@ -292,6 +302,16 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               versions thus would not normally be displayed
                               Device drivers are also able to add stats to the
                               end of the details returned
+
+ estats[|old]  STATS          The same as stats, except it ignores blacklisted
+                              devices, zombie devices and pools
+                              If you specify the optional 'old' parameter, then
+                              the output will include zombie devices that became
+                              zombies less than 'old' seconds ago
+                              A value of zero for 'old', which is the default,
+                              means ignore all zombies
+                              It will return an empty list of devices if all
+                              devices are blacklisted or zombies
 
  check|cmd     COMMAND        Exists=Y/N, <- 'cmd' exists in this version
                               Access=Y/N| <- you have access to use 'cmd'
@@ -482,6 +502,14 @@ miner.php - an example web page to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V3.3 (cgminer v4.1.1)
+
+Added API commands:
+ 'edevs' - Only enabled devices, for 'devs'
+ 'estats' - Only enabled devices, for 'stats'
+
+---------
 
 API V3.2 (cgminer v4.1.0)
 
