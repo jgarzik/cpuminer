@@ -129,6 +129,7 @@ static uint32_t auto_max = 10;
 /* Return a pointer to the chip_info structure for a given chip id, or NULL otherwise */
 static struct drillbit_chip_info *find_chip(struct drillbit_info *info, uint16_t chip_id) {
 	int i;
+
 	for (i = 0; i < info->num_chips; i++) {
 		if (info->chips[i].chip_id == chip_id)
 			return &info->chips[i];
@@ -171,6 +172,7 @@ static bool usb_read_simple_response(struct cgpu_info *drillbit, char command, e
 */
 static bool usb_send_simple_command(struct cgpu_info *drillbit, char command, enum usb_cmds command_name) {
 	int amount;
+
 	usb_write_timeout(drillbit, &command, 1, &amount, TIMEOUT, C_BF_REQWORK);
 	if (amount != 1) {
 		drvlog(LOG_ERR, "Failed to write command %c", command);
@@ -330,7 +332,7 @@ static config_setting *find_settings(struct cgpu_info *drillbit)
 	config_setting *setting;
 	char search_key[9];
 
-	if(!settings) {
+	if (!settings) {
 		drvlog(LOG_INFO, "Keeping onboard defaults for device %s (serial %08x)",
 			info->product, info->serial);
 		return NULL;
@@ -391,7 +393,7 @@ static void drillbit_send_config(struct cgpu_info *drillbit)
 
 	// Find the relevant board config
 	setting = find_settings(drillbit);
-	if(!setting)
+	if (!setting)
 		return; // Don't update board config from defaults
 	drvlog(LOG_NOTICE, "Config: %s:%d:%d:%d Serial: %08x",
 	       setting->config.use_ext_clock ? "ext" : "int",
@@ -404,9 +406,9 @@ static void drillbit_send_config(struct cgpu_info *drillbit)
 		drvlog(LOG_WARNING, "Chosen configuration specifies external clock but this device (serial %08x) has no external clock!", info->serial);
 	}
 
-	if(info->protocol_version <= 3) {
+	if (info->protocol_version <= 3) {
 		/* Make up a backwards compatible V3 config structure to send to the miner */
-		if(setting->config.core_voltage >= 950)
+		if (setting->config.core_voltage >= 950)
 			v3_config.core_voltage = CONFIG_CORE_095V;
 		else if (setting->config.core_voltage >= 850)
 			v3_config.core_voltage = CONFIG_CORE_085V;
@@ -414,7 +416,7 @@ static void drillbit_send_config(struct cgpu_info *drillbit)
 			v3_config.core_voltage = CONFIG_CORE_075V;
 		else
 			v3_config.core_voltage = CONFIG_CORE_065V;
-		if(setting->config.clock_freq > 64)
+		if (setting->config.clock_freq > 64)
 			v3_config.int_clock_level = setting->config.clock_freq / 5;
 		else
 			v3_config.int_clock_level = setting->config.clock_freq;
@@ -536,13 +538,13 @@ static bool drillbit_parse_options(struct cgpu_info *drillbit)
 			next_opt++;
 	}
 
-	if(opt_drillbit_auto) {
+	if (opt_drillbit_auto) {
 		sscanf(opt_drillbit_auto, "%d:%d:%d:%d",
 			&auto_every, &auto_good, &auto_bad, &auto_max);
-		if(auto_max < auto_bad) {
+		if (auto_max < auto_bad) {
 			quithere(1, "Bad drillbit-auto: MAX limit must be greater than BAD limit");
 		}
-		if(auto_bad < auto_good) {
+		if (auto_bad < auto_good) {
 			quithere(1, "Bad drillbit-auto: GOOD limit must be greater than BAD limit");
 		}
 	}
@@ -600,7 +602,7 @@ static struct cgpu_info *drillbit_detect_one(struct libusb_device *dev, struct u
 
 	update_usb_stats(drillbit);
 
-	if(info->capabilities & CAP_LIMITER_REMOVED) {
+	if (info->capabilities & CAP_LIMITER_REMOVED) {
 		drvlog(LOG_WARNING, "Recommended limits have been disabled on this board, take care when changing settings.");
 	}
 
@@ -654,7 +656,7 @@ static bool drillbit_checkresults(struct thr_info *thr, struct work *work, uint3
 	struct drillbit_info *info = drillbit->device_data;
 	int i;
 
-	if(info->capabilities & CAP_IS_AVALON) {
+	if (info->capabilities & CAP_IS_AVALON) {
 		if (test_nonce(work, nonce)) {
 			submit_tested_work(thr, work);
 			return true;
@@ -686,8 +688,8 @@ static void drillbit_check_auto(struct thr_info *thr, struct drillbit_chip_info 
 	  Only check automatic tuning every "auto_every" work units,
 	  or if the error count exceeds the 'max' count
 	*/
-	if(chip->success_auto + chip->error_auto < auto_every &&
-		(chip->error_auto < auto_max))
+	if (chip->success_auto + chip->error_auto < auto_every &&
+	    (chip->error_auto < auto_max))
 		return;
 
 	tune_up = chip->error_auto < auto_good && chip->auto_delta < chip->auto_max;
@@ -699,7 +701,7 @@ static void drillbit_check_auto(struct thr_info *thr, struct drillbit_chip_info 
 		chip->error_auto + chip->success_auto,
 		tune_up ? " - tuning up" : tune_down ? " - tuning down" : " - no change");
 
-	if(tune_up || tune_down) {
+	if (tune_up || tune_down) {
 		/* Value should be tweaked */
 		buf[0] = 'A';
 		request.chip_id = chip->chip_id;
@@ -707,11 +709,11 @@ static void drillbit_check_auto(struct thr_info *thr, struct drillbit_chip_info 
 		serialise_autotune_request(&buf[1], &request);
 		usb_write_timeout(drillbit, buf, sizeof(buf), &amount, TIMEOUT, C_BF_AUTOTUNE);
 		usb_read_simple_response(drillbit, 'A', C_BF_AUTOTUNE);
-		if(tune_up) {
+		if (tune_up) {
 			chip->auto_delta++;
 		} else {
 			chip->auto_delta--;
-			if(chip->error_auto >= auto_max
+			if (chip->error_auto >= auto_max
 				&& chip->success_count + chip->error_count > auto_every) {
 				drvlog(LOG_ERR, "Chip id %d capping auto delta at max %d",chip->chip_id,
 					chip->auto_delta);
@@ -803,10 +805,10 @@ static int check_for_results(struct thr_info *thr)
 		}
 
 		found = false;
-		for(i = 0; i < response->num_nonces; i++) {
+		for (i = 0; i < response->num_nonces; i++) {
 			if (unlikely(thr->work_restart))
 				goto cleanup;
-			for(k = 0; k < WORK_HISTORY_LEN; k++) {
+			for (k = 0; k < WORK_HISTORY_LEN; k++) {
 				/* NB we deliberately check all results against all work because sometimes ASICs seem to give multiple "valid" nonces,
 				   and this seems to avoid some result that would otherwise be rejected by the pool.
 				*/
@@ -821,18 +823,18 @@ static int check_for_results(struct thr_info *thr)
 			}
 		}
 		drvlog(LOG_DEBUG, "%s nonce %08x", (found ? "Good":"Bad"), response->num_nonces ? response->nonce[0] : 0);
-		if(!found && chip->state != IDLE && response->num_nonces > 0) {
+		if (!found && chip->state != IDLE && response->num_nonces > 0) {
 			/* all nonces we got back from this chip were invalid */
 			inc_hw_errors(thr);
 			chip->error_count++;
 			chip->error_auto++;
 		}
-		if(chip->state == WORKING_QUEUED && !response->is_idle)
+		if (chip->state == WORKING_QUEUED && !response->is_idle)
 			chip->state = WORKING_NOQUEUED; // Time to queue up another piece of "next work"
 		else
 			chip->state = IDLE; // Uh-oh, we're totally out of work for this ASIC!
 
-		if(opt_drillbit_auto && info->protocol_version >= 4)
+		if (opt_drillbit_auto && info->protocol_version >= 4)
 			drillbit_check_auto(thr, chip);
 	}
 
@@ -911,8 +913,8 @@ static int64_t drillbit_scanwork(struct thr_info *thr)
 		if (info->chips[i].state == IDLE)
 			continue;
 		ms_diff = ms_tdiff(&tv_now, &info->chips[i].tv_start);
-		if(ms_diff > RESULT_TIMEOUT) {
-			if(info->chips[i].work_sent_count > 4) {
+		if (ms_diff > RESULT_TIMEOUT) {
+			if (info->chips[i].work_sent_count > 4) {
 				/* Only count ASIC timeouts after the pool has started to send work in earnest,
 				   some pools can create unusual delays early on */
 				drvlog(LOG_ERR, "Timing out unresponsive ASIC %d", info->chips[i].chip_id);
