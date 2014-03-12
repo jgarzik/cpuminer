@@ -2168,40 +2168,6 @@ static void devstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 		io_close(io_data);
 }
 
-#ifdef HAVE_AN_FPGA
-static void pgadev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
-{
-	bool io_open = false;
-	int numpga = numpgas();
-	int id;
-
-	if (numpga == 0) {
-		message(io_data, MSG_PGANON, 0, NULL, isjson);
-		return;
-	}
-
-	if (param == NULL || *param == '\0') {
-		message(io_data, MSG_MISID, 0, NULL, isjson);
-		return;
-	}
-
-	id = atoi(param);
-	if (id < 0 || id >= numpga) {
-		message(io_data, MSG_INVPGA, id, NULL, isjson);
-		return;
-	}
-
-	message(io_data, MSG_PGADEV, id, NULL, isjson);
-
-	if (isjson)
-		io_open = io_add(io_data, COMSTR JSON_PGA);
-
-	pgastatus(io_data, id, isjson, false);
-
-	if (isjson && io_open)
-		io_close(io_data);
-}
-
 static void edevstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	bool io_open = false;
@@ -2286,6 +2252,40 @@ static void edevstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		}
 	}
 #endif
+
+	if (isjson && io_open)
+		io_close(io_data);
+}
+
+#ifdef HAVE_AN_FPGA
+static void pgadev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	bool io_open = false;
+	int numpga = numpgas();
+	int id;
+
+	if (numpga == 0) {
+		message(io_data, MSG_PGANON, 0, NULL, isjson);
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISID, 0, NULL, isjson);
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= numpga) {
+		message(io_data, MSG_INVPGA, id, NULL, isjson);
+		return;
+	}
+
+	message(io_data, MSG_PGADEV, id, NULL, isjson);
+
+	if (isjson)
+		io_open = io_add(io_data, COMSTR JSON_PGA);
+
+	pgastatus(io_data, id, isjson, false);
 
 	if (isjson && io_open)
 		io_close(io_data);
