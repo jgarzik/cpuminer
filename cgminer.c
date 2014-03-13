@@ -280,6 +280,7 @@ pthread_cond_t gws_cond;
 double total_rolling;
 double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
+static struct timeval restart_tv_start, update_tv_start;
 
 cglock_t control_lock;
 pthread_mutex_t stats_lock;
@@ -2336,6 +2337,22 @@ double cgpu_runtime(struct cgpu_info *cgpu)
 	return dev_runtime;
 }
 
+double tsince_restart(void)
+{
+	struct timeval now;
+
+	cgtime(&now);
+	return tdiff(&now, &restart_tv_start);
+}
+
+double tsince_update(void)
+{
+	struct timeval now;
+
+	cgtime(&now);
+	return tdiff(&now, &update_tv_start);
+}
+
 static void get_statline(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
 {
 	char displayed_hashes[16], displayed_rolling[16];
@@ -4305,6 +4322,7 @@ static void restart_threads(void)
 {
 	pthread_t rthread;
 
+	cgtime(&restart_tv_start);
 	if (unlikely(pthread_create(&rthread, NULL, restart_thread, NULL)))
 		quit(1, "Failed to create restart thread");
 }
@@ -4315,6 +4333,7 @@ static void signal_work_update(void)
 
 	applog(LOG_INFO, "Work update message received");
 
+	cgtime(&update_tv_start);
 	rd_lock(&mining_thr_lock);
 	for (i = 0; i < mining_threads; i++)
 		mining_thr[i]->work_update = true;
