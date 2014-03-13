@@ -966,11 +966,13 @@ static int64_t cta_scanwork(struct thr_info *thr)
 		 * return a work done message for some work items. */
 		age_queued_work(cointerra, 300.0);
 
-		/* Use this opportunity to unset the bits in any pipes that
-		 * have not returned a valid nonce for over 2 hours. */
+		/* Each core should be 1.7MH so at max diff of 32 should
+		 * average a share every ~80 seconds.Use this opportunity to
+		 * unset the bits in any pipes that have not returned a valid
+		 * nonce for over 30 full nonce ranges or 2400s. */
 		now_t = time(NULL);
 		for (i = 0; i < 1024; i++) {
-			if (unlikely(now_t > info->last_pipe_nonce[i] + 7200)) {
+			if (unlikely(now_t > info->last_pipe_nonce[i] + 2400)) {
 				int bitchar = i / 8, bitbit = i % 8;
 
 				info->pipe_bitmap[bitchar] &= ~(0x80 >> bitbit);
