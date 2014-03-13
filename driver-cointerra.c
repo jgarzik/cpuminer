@@ -1197,5 +1197,5 @@ struct device_drv cointerra_drv = {
 	.get_statline_before = cta_statline_before,
 	.thread_shutdown = cta_shutdown,
 	.zero_stats = cta_zero_stats,
-	.max_diff = 256, // Set it below the actual limit to check nonces
+	.max_diff = 32, // Set it below the actual limit to check nonces
 };
