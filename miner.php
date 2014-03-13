@@ -828,6 +828,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'PGA.Last Share Time':
 	case 'ASC.Last Share Time':
 	case 'DEVS.Last Share Time':
+	case 'EDEVS.Last Share Time':
 		if ($value == 0
 		||  (isset($alldata['Last Share Pool']) && $alldata['Last Share Pool'] == -1))
 		{
@@ -844,6 +845,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'PGA.Last Valid Work':
 	case 'ASC.Last Valid Work':
 	case 'DEVS.Last Valid Work':
+	case 'EDEVS.Last Valid Work':
 		if ($value == 0)
 			$ret = 'Never';
 		else
@@ -859,6 +861,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'PGA.Last Share Pool':
 	case 'ASC.Last Share Pool':
 	case 'DEVS.Last Share Pool':
+	case 'EDEVS.Last Share Pool':
 		if ($value == -1)
 		{
 			$ret = 'None';
@@ -867,6 +870,11 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'SUMMARY.Elapsed':
 	case 'STATS.Elapsed':
+	case 'ESTATS.Elapsed':
+	case 'PGA.Device Elapsed':
+	case 'ASC.Device Elapsed':
+	case 'DEVS.Device Elapsed':
+	case 'EDEVS.Device Elapsed':
 		$s = $value % 60;
 		$value -= $s;
 		$value /= 60;
@@ -924,6 +932,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'PGA.Utility':
 	case 'ASC.Utility':
 	case 'DEVS.Utility':
+	case 'EDEVS.Utility':
 	case 'SUMMARY.Utility':
 	case 'total.Utility':
 		$ret = $value.'/m';
@@ -960,6 +969,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'PGA.Temperature':
 	case 'ASC.Temperature':
 	case 'DEVS.Temperature':
+	case 'EDEVS.Temperature':
 		$ret = $value.'&deg;C';
 		if (!isset($alldata['GPU']))
 		{
@@ -969,17 +979,22 @@ function fmt($section, $name, $value, $when, $alldata)
 		}
 	case 'GPU.GPU Clock':
 	case 'DEVS.GPU Clock':
+	case 'EDEVS.GPU Clock':
 	case 'GPU.Memory Clock':
 	case 'DEVS.Memory Clock':
+	case 'EDEVS.Memory Clock':
 	case 'GPU.GPU Voltage':
 	case 'DEVS.GPU Voltage':
+	case 'EDEVS.GPU Voltage':
 	case 'GPU.GPU Activity':
 	case 'DEVS.GPU Activity':
+	case 'EDEVS.GPU Activity':
 		if ($value == 0)
 			$class = $warnclass;
 		break;
 	case 'GPU.Fan Percent':
 	case 'DEVS.Fan Percent':
+	case 'EDEVS.Fan Percent':
 		if ($value == 0)
 			$class = $warnclass;
 		else
@@ -993,6 +1008,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.Fan Speed':
 	case 'DEVS.Fan Speed':
+	case 'EDEVS.Fan Speed':
 		if ($value == 0)
 			$class = $warnclass;
 		else
@@ -1010,6 +1026,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'PGA.MHS av':
 	case 'ASC.MHS av':
 	case 'DEVS.MHS av':
+	case 'EDEVS.MHS av':
 	case 'SUMMARY.MHS av':
 	case 'total.MHS av':
 		$parts = explode('.', $value, 2);
@@ -1048,6 +1065,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'PGA.Total MH':
 	case 'ASC.Total MH':
 	case 'DEVS.Total MH':
+	case 'EDEVS.Total MH':
 	case 'SUMMARY.Total MH':
 	case 'total.Total MH':
 	case 'SUMMARY.Getworks':
@@ -1057,6 +1075,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'PGA.Accepted':
 	case 'ASC.Accepted':
 	case 'DEVS.Accepted':
+	case 'EDEVS.Accepted':
 	case 'SUMMARY.Accepted':
 	case 'POOL.Accepted':
 	case 'total.Accepted':
@@ -1064,6 +1083,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'PGA.Rejected':
 	case 'ASC.Rejected':
 	case 'DEVS.Rejected':
+	case 'EDEVS.Rejected':
 	case 'SUMMARY.Rejected':
 	case 'POOL.Rejected':
 	case 'total.Rejected':
@@ -1084,6 +1104,12 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'STATS.Times Recv':
 	case 'STATS.Bytes Recv':
 	case 'STATS.Net Bytes Recv':
+	case 'ESTATS.Times Sent':
+	case 'ESTATS.Bytes Sent':
+	case 'ESTATS.Net Bytes Sent':
+	case 'ESTATS.Times Recv':
+	case 'ESTATS.Bytes Recv':
+	case 'ESTATS.Net Bytes Recv':
 	case 'total.Times Sent':
 	case 'total.Bytes Sent':
 	case 'total.Net Bytes Sent':
@@ -1107,6 +1133,16 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'STATS.Min Diff':
 	case 'STATS.Max Diff':
 	case 'STATS.Work Diff':
+	case 'ESTATS.Hs':
+	case 'ESTATS.W':
+	case 'ESTATS.history_time':
+	case 'ESTATS.Pool Wait':
+	case 'ESTATS.Pool Max':
+	case 'ESTATS.Pool Min':
+	case 'ESTATS.Pool Av':
+	case 'ESTATS.Min Diff':
+	case 'ESTATS.Max Diff':
+	case 'ESTATS.Work Diff':
 		$parts = explode('.', $value, 2);
 		if (count($parts) == 1)
 			$dec = '';
@@ -1118,6 +1154,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'PGA.Status':
 	case 'ASC.Status':
 	case 'DEVS.Status':
+	case 'EDEVS.Status':
 	case 'POOL.Status':
 		if ($value != 'Alive')
 			$class = $errorclass;
@@ -1127,6 +1164,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'ASC.Enabled':
 	case 'ASC.Enabled':
 	case 'DEVS.Enabled':
+	case 'EDEVS.Enabled':
 		if ($value != 'Y')
 			$class = $warnclass;
 		break;
@@ -1144,6 +1182,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'PGA.Difficulty Accepted':
 	case 'ASC.Difficulty Accepted':
 	case 'DEVS.Difficulty Accepted':
+	case 'EDEVS.Difficulty Accepted':
 	case 'POOL.Difficulty Accepted':
 	case 'total.Difficulty Accepted':
 	case 'SUMMARY.Difficulty Rejected':
@@ -1151,6 +1190,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'PGA.Difficulty Rejected':
 	case 'ASC.Difficulty Rejected':
 	case 'DEVS.Difficulty Rejected':
+	case 'EDEVS.Difficulty Rejected':
 	case 'POOL.Difficulty Rejected':
 	case 'total.Difficulty Rejected':
 	case 'SUMMARY.Difficulty Stale':
@@ -1160,12 +1200,15 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'PGA.Last Share Difficulty':
 	case 'ASC.Last Share Difficulty':
 	case 'DEVS.Last Share Difficulty':
+	case 'EDEVS.Last Share Difficulty':
 	case 'POOL.Last Share Difficulty':
 		if ($value != '')
 			$ret = number_format((float)$value, 2);
 		break;
 	case 'DEVS.Device Hardware%':
 	case 'DEVS.Device Rejected%':
+	case 'EDEVS.Device Hardware%':
+	case 'EDEVS.Device Rejected%':
 	case 'ASC.Device Hardware%':
 	case 'ASC.Device Rejected%':
 	case 'PGA.Device Hardware%':
@@ -1963,12 +2006,14 @@ $sectionmap = array(
 	'SUMMARY' => 'summary',
 	'POOL' => 'pools',
 	'DEVS' => 'devs',
+	'EDEVS' => 'edevs',
 	'GPU' => 'devs',	// You would normally use DEVS
 	'PGA' => 'devs',	// You would normally use DEVS
 	'ASC' => 'devs',	// You would normally use DEVS
 	'NOTIFY' => 'notify',
 	'DEVDETAILS' => 'devdetails',
 	'STATS' => 'stats',
+	'ESTATS' => 'estats',
 	'CONFIG' => 'config',
 	'COIN' => 'coin',
 	'USBSTATS' => 'usbstats');
@@ -2176,6 +2221,7 @@ function joinsections($sections, $results, $errors)
 				{
 				case 'POOL':
 				case 'DEVS':
+				case 'EDEVS':
 				case 'CONFIG':
 				case 'COIN':
 					$sectionmap[$section] = $section;
@@ -2187,6 +2233,7 @@ function joinsections($sections, $results, $errors)
 				}
 				break;
 			case 'DEVS':
+			case 'EDEVS':
 				switch($both[1])
 				{
 				case 'NOTIFY':
@@ -2197,6 +2244,7 @@ function joinsections($sections, $results, $errors)
 					$results[$section] = joinfields($both[0], $both[1], $join, $results);
 					break;
 				case 'STATS':
+				case 'ESTATS':
 					$join = array('L' => array('Name','ID'), 'R' => array('ID'));
 					$sectionmap[$section] = $section;
 					$results[$section] = joinlr($both[0], $both[1], $join, $results);
@@ -2236,7 +2284,7 @@ function secmatch($section, $field)
  if ($section == $field)
 	return true;
 
- if ($section == 'DEVS'
+ if (($section == 'DEVS' || $section == 'EDEVS')
  &&  ($field == 'GPU' || $field == 'PGA' || $field == 'ASC'))
 	return true;
 

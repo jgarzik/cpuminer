@@ -132,7 +132,7 @@ static const char SEPARATOR = '|';
 #define JOIN_CMD "CMD="
 #define BETWEEN_JOIN SEPSTR
 
-static const char *APIVERSION = "3.2";
+static const char *APIVERSION = "3.3";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -2168,6 +2168,95 @@ static void devstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 		io_close(io_data);
 }
 
+static void edevstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	bool io_open = false;
+	int devcount = 0;
+	int numasc = 0;
+	int numpga = 0;
+	int i;
+	time_t howoldsec = 0;
+
+#ifdef HAVE_AN_ASIC
+	numasc = numascs();
+#endif
+
+#ifdef HAVE_AN_FPGA
+	numpga = numpgas();
+#endif
+
+	if (numpga == 0 && numasc == 0) {
+		message(io_data, MSG_NODEVS, 0, NULL, isjson);
+		return;
+	}
+
+	if (param && *param)
+		howoldsec = (time_t)atoi(param);
+
+	message(io_data, MSG_DEVS, 0, NULL, isjson);
+	if (isjson)
+		io_open = io_add(io_data, COMSTR JSON_DEVS);
+
+#ifdef HAVE_AN_ASIC
+	if (numasc > 0) {
+		for (i = 0; i < numasc; i++) {
+#ifdef USE_USBUTILS
+			int dev = ascdevice(i);
+			if (dev < 0) // Should never happen
+				continue;
+
+			struct cgpu_info *cgpu = get_devices(dev);
+			if (!cgpu)
+				continue;
+			if (cgpu->blacklisted)
+				continue;
+			if (cgpu->usbinfo.nodev) {
+				if (howoldsec <= 0)
+					continue;
+				if ((when - cgpu->usbinfo.last_nodev.tv_sec) >= howoldsec)
+					continue;
+			}
+#endif
+
+			ascstatus(io_data, i, isjson, isjson && devcount > 0);
+
+			devcount++;
+		}
+	}
+#endif
+
+#ifdef HAVE_AN_FPGA
+	if (numpga > 0) {
+		for (i = 0; i < numpga; i++) {
+#ifdef USE_USBUTILS
+			int dev = pgadevice(i);
+			if (dev < 0) // Should never happen
+				continue;
+
+			struct cgpu_info *cgpu = get_devices(dev);
+			if (!cgpu)
+				continue;
+			if (cgpu->blacklisted)
+				continue;
+			if (cgpu->usbinfo.nodev) {
+				if (howoldsec <= 0)
+					continue;
+				if ((when - cgpu->usbinfo.last_nodev.tv_sec) >= howoldsec)
+					continue;
+			}
+#endif
+
+			pgastatus(io_data, i, isjson, isjson && devcount > 0);
+
+			devcount++;
+		}
+	}
+#endif
+
+	if (isjson && io_open)
+		io_close(io_data);
+}
+
 #ifdef HAVE_AN_FPGA
 static void pgadev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
@@ -3201,6 +3290,52 @@ static void minerstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		io_close(io_data);
 }
 
+static void minerestats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	struct cgpu_info *cgpu;
+	bool io_open = false;
+	struct api_data *extra;
+	char id[20];
+	int i, j;
+	time_t howoldsec = 0;
+
+	if (param && *param)
+		howoldsec = (time_t)atoi(param);
+
+	message(io_data, MSG_MINESTATS, 0, NULL, isjson);
+	if (isjson)
+		io_open = io_add(io_data, COMSTR JSON_MINESTATS);
+
+	i = 0;
+	for (j = 0; j < total_devices; j++) {
+		cgpu = get_devices(j);
+		if (!cgpu)
+			continue;
+#ifdef USE_USBUTILS
+		if (cgpu->blacklisted)
+			continue;
+		if (cgpu->usbinfo.nodev) {
+			if (howoldsec <= 0)
+				continue;
+			if ((when - cgpu->usbinfo.last_nodev.tv_sec) >= howoldsec)
+				continue;
+		}
+#endif
+		if (cgpu->drv) {
+			if (cgpu->drv->get_api_stats)
+				extra = cgpu->drv->get_api_stats(cgpu);
+			else
+				extra = NULL;
+
+			sprintf(id, "%s%d", cgpu->drv->name, cgpu->device_id);
+			i = itemstats(io_data, i, id, &(cgpu->cgminer_stats), NULL, extra, cgpu, isjson);
+		}
+	}
+
+	if (isjson && io_open)
+		io_close(io_data);
+}
+
 static void failoveronly(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	if (param == NULL || *param == '\0') {
@@ -3809,6 +3944,7 @@ struct CMDS {
 	{ "version",		apiversion,	false,	true },
 	{ "config",		minerconfig,	false,	true },
 	{ "devs",		devstatus,	false,	true },
+	{ "edevs",		edevstatus,	false,	true },
 	{ "pools",		poolstatus,	false,	true },
 	{ "summary",		summary,	false,	true },
 #ifdef HAVE_AN_FPGA
@@ -3832,6 +3968,7 @@ struct CMDS {
 	{ "devdetails",		devdetails,	false,	true },
 	{ "restart",		dorestart,	true,	false },
 	{ "stats",		minerstats,	false,	true },
+	{ "estats",		minerestats,	false,	true },
 	{ "check",		checkcommand,	false,	false },
 	{ "failover-only",	failoveronly,	true,	false },
 	{ "coin",		minecoin,	false,	true },

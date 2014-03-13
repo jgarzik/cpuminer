@@ -1880,7 +1880,8 @@ static void hfa_statline_before(char *buf, size_t bufsiz, struct cgpu_info *hash
  * again. */
 static void hfa_reinit(struct cgpu_info *hashfast)
 {
-	hfa_running_shutdown(hashfast, hashfast->device_data);
+	if (hashfast && hashfast->device_data)
+		hfa_running_shutdown(hashfast, hashfast->device_data);
 }
 
 static void hfa_free_all_work(struct hashfast_info *info)
