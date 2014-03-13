@@ -812,12 +812,10 @@ static int check_for_results(struct thr_info *thr)
 				   and this seems to avoid some result that would otherwise be rejected by the pool.
 				*/
 				if (chip->current_work[k] && drillbit_checkresults(thr, chip->current_work[k], response->nonce[i])) {
-					if (!found) {
-						chip->success_count++;
-						chip->success_auto++;
-						successful_results++;
-						found = true;
-					}
+					chip->success_count++;
+					chip->success_auto++;
+					successful_results++;
+					found = true;
 				}
 			}
 		}
