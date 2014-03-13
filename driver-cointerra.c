@@ -359,16 +359,19 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 		}
 
 		if (likely(ret)) {
-			uint8_t asic, core, pipe;
+			uint8_t asic, core, pipe, coreno;
 			int pipeno, bitchar, bitbit;
+			uint64_t hashes;
 
 			asic = u8_from_msg(buf, CTA_MCU_ASIC);
 			core = u8_from_msg(buf, CTA_MCU_CORE);
 			pipe = u8_from_msg(buf, CTA_MCU_PIPE);
 			pipeno = asic * 512 + core * 128 + pipe;
+			coreno = asic * 4 + core;
 			if (unlikely(asic > 1 || core > 3 || pipe > 127 || pipeno > 1023)) {
 				applog(LOG_WARNING, "%s %d: MCU invalid pipe asic %d core %d pipe %d",
 				       cointerra->drv->name, cointerra->device_id, asic, core, pipe);
+				coreno = 0;
 			} else {
 				info->last_pipe_nonce[pipeno] = time(NULL);
 				bitchar = pipeno / 8;
@@ -380,8 +383,10 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 			       cointerra->drv->name, cointerra->device_id, work->job_id, work->subid);
 			ret = submit_tested_work(thr, work);
 
+			hashes = (uint64_t)wdiff * 0x100000000ull;
 			mutex_lock(&info->lock);
-			info->share_hashes += (uint64_t)wdiff * 0x100000000ull;
+			info->share_hashes += hashes;
+			info->tot_core_hashes[coreno] += hashes;
 			info->hashes += nonce;
 			mutex_unlock(&info->lock);
 		} else {
@@ -1020,10 +1025,13 @@ static void cta_shutdown(struct thr_info *thr)
 static void cta_zero_stats(struct cgpu_info *cointerra)
 {
 	struct cointerra_info *info = cointerra->device_data;
+	int i;
 
 	info->tot_calc_hashes = 0;
 	info->tot_reset_hashes = info->tot_hashes;
 	info->tot_share_hashes = 0;
+	for (i = 0; i < CTA_CORES; i++)
+		info->tot_core_hashes[i] = 0;
 }
 
 static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
@@ -1122,6 +1130,11 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 	root = api_add_uint64(root, "Rejected hashes", &val, true);
 	ghs = val / dev_runtime;
 	root = api_add_uint64(root, "Rejected hashrate", &ghs, true);
+	for (i = 0; i < CTA_CORES; i++) {
+		sprintf(buf, "Core%d hashrate", i);
+		ghs = info->tot_core_hashes[i] / dev_runtime;
+		root = api_add_uint64(root, buf, &ghs, true);
+	}
 	root = api_add_uint32(root, "Uptime",&info->uptime,false);
 	__bin2hex(bitmaphex, info->pipe_bitmap, 16);
 	root = api_add_string(root, "Asic0Core0", bitmaphex, true);

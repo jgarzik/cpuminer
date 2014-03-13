@@ -202,6 +202,7 @@ struct cointerra_info {
 
 	/* Calculated totals based on shares returned */
 	uint64_t share_hashes;
+	uint64_t tot_core_hashes[CTA_CORES];
 	uint64_t tot_share_hashes;
 	int requested;
 	uint16_t work_id;
