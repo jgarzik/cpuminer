@@ -4637,7 +4637,7 @@ void api(int api_thr_id)
 	struct sockaddr_in cli;
 	socklen_t clisiz;
 	char cmdbuf[100];
-	char *cmd = NULL, *cmdptr, *cmdsbuf;
+	char *cmd = NULL;
 	char *param;
 	bool addrok;
 	char group;
@@ -4848,6 +4848,8 @@ void api(int api_thr_id)
 				}
 
 				if (!did) {
+					char *cmdptr, *cmdsbuf = NULL;
+
 					if (strchr(cmd, CMDJOIN)) {
 						firstjoin = isjoin = true;
 						// cmd + leading+tailing '|' + '\0'
