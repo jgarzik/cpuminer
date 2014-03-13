@@ -918,12 +918,16 @@ resend:
 static void cta_flush_work(struct cgpu_info *cointerra)
 {
 	struct cointerra_info *info = cointerra->device_data;
+	int i;
 
 	applog(LOG_INFO, "%s %d: cta_flush_work %d", cointerra->drv->name, cointerra->device_id,
 	       __LINE__);
 	cta_send_reset(cointerra, info, CTA_RESET_NEW, 0);
-	/* TODO revisit */
 	info->thr->work_restart = false;
+	/* Reset the core hash count with each restart as we are interested in
+	 * the hashrate per core over each block change. */
+	for (i = 0; i < CTA_CORES; i++)
+		info->tot_core_hashes[i] = 0;
 }
 
 static void cta_update_work(struct cgpu_info *cointerra)
@@ -1132,6 +1136,8 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 	root = api_add_uint64(root, "Rejected hashes", &val, true);
 	ghs = val / dev_runtime;
 	root = api_add_uint64(root, "Rejected hashrate", &ghs, true);
+	/* The per core hashrate is reset along with each work restart. */
+	dev_runtime = tsince_restart();
 	for (i = 0; i < CTA_CORES; i++) {
 		sprintf(buf, "Core%d hashrate", i);
 		ghs = info->tot_core_hashes[i] / dev_runtime;
