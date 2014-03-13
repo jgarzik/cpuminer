@@ -1816,27 +1816,39 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 	for (i = 0; i < info->asic_count; i++) {
 		struct hf_long_statistics *l = &info->die_statistics[i];
 		struct hf_g1_die_data *d = &info->die_status[i];
+		char which[16];
 		double val;
 		int j;
 
-		root = api_add_int(root, "Core", &i, true);
-		root = api_add_int(root, "hash clockrate", &(info->die_data[i].hash_clock), false);
+		snprintf(which, sizeof(which), "Asic%d", i);
+
+		snprintf(buf, sizeof(buf), "%s hash clockrate", which);
+		root = api_add_int(root, buf, &(info->die_data[i].hash_clock), false);
+		snprintf(buf, sizeof(buf), "%s die temperature", which);
 		val = GN_DIE_TEMPERATURE(d->die.die_temperature);
-		root = api_add_double(root, "die temperature", &val, true);
+		root = api_add_double(root, buf, &val, true);
+		snprintf(buf, sizeof(buf), "%s board temperature", which);
 		val = board_temperature(d->temperature);
-		root = api_add_double(root, "board temperature", &val, true);
+		root = api_add_double(root, buf, &val, true);
 		for (j = 0; j < 6; j++) {
+			snprintf(buf, sizeof(buf), "%s voltage %d", which, j);
 			val = GN_CORE_VOLTAGE(d->die.core_voltage[j]);
-			sprintf(buf, "%d: %.2f", j, val);
-			root = api_add_string(root, "core voltage", buf, true);
+			root = api_add_utility(root, buf, &val, true);
 		}
-		root = api_add_uint64(root, "rx header crc", &l->rx_header_crc, false);
-		root = api_add_uint64(root, "rx body crc", &l->rx_body_crc, false);
-		root = api_add_uint64(root, "rx header to", &l->rx_header_timeouts, false);
-		root = api_add_uint64(root, "rx body to", &l->rx_body_timeouts, false);
-		root = api_add_uint64(root, "cn fifo full", &l->core_nonce_fifo_full, false);
-		root = api_add_uint64(root, "an fifo full", &l->array_nonce_fifo_full, false);
-		root = api_add_uint64(root, "stats overrun", &l->stats_overrun, false);
+		snprintf(buf, sizeof(buf), "%s rx header crc", which);
+		root = api_add_uint64(root, buf, &l->rx_header_crc, false);
+		snprintf(buf, sizeof(buf), "%s rx body crc", which);
+		root = api_add_uint64(root, buf, &l->rx_body_crc, false);
+		snprintf(buf, sizeof(buf), "%s rx header to", which);
+		root = api_add_uint64(root, buf, &l->rx_header_timeouts, false);
+		snprintf(buf, sizeof(buf), "%s rx body to", which);
+		root = api_add_uint64(root, buf, &l->rx_body_timeouts, false);
+		snprintf(buf, sizeof(buf), "%s cn fifo full", which);
+		root = api_add_uint64(root, buf, &l->core_nonce_fifo_full, false);
+		snprintf(buf, sizeof(buf), "%s an fifo full", which);
+		root = api_add_uint64(root, buf, &l->array_nonce_fifo_full, false);
+		snprintf(buf, sizeof(buf), "%s stats overrun", which);
+		root = api_add_uint64(root, buf, &l->stats_overrun, false);
 	}
 
 	root = api_add_uint64(root, "raw hashcount", &info->raw_hashes, false);
