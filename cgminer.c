@@ -126,6 +126,7 @@ enum benchwork {
 	BENCHWORK_NONCETIME,
 	BENCHWORK_COUNT
 };
+static char *opt_btc_address = "15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ";
 static char *opt_benchfile;
 static bool opt_benchfile_display;
 static FILE *benchfile_in;
@@ -1328,6 +1329,9 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_100, opt_show_intval, &opt_bxm_bits,
 		     "Set BXM bits for overclocking"),
 #endif
+	OPT_WITH_ARG("--btc-address",
+		     opt_set_charp, NULL, &opt_btc_address,
+		     "Set bitcoin target address when solo mining to bitcoind"),
 #ifdef HAVE_CURSES
 	OPT_WITHOUT_ARG("--compact",
 			opt_set_bool, &opt_compact,
@@ -2223,7 +2227,6 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	applog(LOG_DEBUG, "bits: %s", bits);
 	applog(LOG_DEBUG, "height: %d", height);
 
-	exit(0);
 	return true;
 }
 
@@ -2248,7 +2251,6 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		if (unlikely(!gbt_solo_decode(pool, res_val)))
 			goto out;
 		ret = true;
-		exit(0);
 		goto out;
 	} else if (unlikely(!getwork_decode(res_val, work)))
 		goto out;
@@ -6252,6 +6254,35 @@ static bool stratum_works(struct pool *pool)
 	return true;
 }
 
+static bool setup_gbt_solo(CURL *curl, struct pool *pool)
+{
+	char s[256];
+	int uninitialised_var(rolltime);
+	bool ret = false;
+	json_t *val, *res_val, *valid_val;
+
+	snprintf(s, 256, "{\"method\": \"validateaddress\", \"params\": [\"%s\"]}\n", opt_btc_address);
+	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, true,
+			    false, &rolltime, pool, false);
+	if (!val)
+		goto out;
+	res_val = json_object_get(val, "result");
+	if (!res_val)
+		goto out;
+	valid_val = json_object_get(res_val, "isvalid");
+	if (!valid_val)
+		goto out;
+	if (!json_is_true(valid_val)) {
+		applog(LOG_ERR, "Bitcoin address %s is NOT valid", opt_btc_address);
+		goto out;
+	}
+	applog(LOG_DEBUG, "Bitcoin address %s is valid", opt_btc_address);
+	ret = true;
+
+out:
+	return ret;
+}
+
 static bool pool_active(struct pool *pool, bool pinging)
 {
 	struct timeval tv_getwork, tv_getwork_reply;
@@ -6369,6 +6400,10 @@ retry_stratum:
 
 		rc = work_decode(pool, work, val);
 		if (rc) {
+			if (pool->gbt_solo) {
+				ret = setup_gbt_solo(curl, pool);
+				goto out;
+			}
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
 			work->pool = pool;
