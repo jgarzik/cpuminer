@@ -1160,7 +1160,7 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 
 			sprintf(asiccore, "Asic%dCore%d", asic, core);
 			__bin2hex(bitmaphex, &info->pipe_bitmap[coreno], 16);
-			for (i = 0; i < 16; i++)
+			for (i = coreno; i < coreno + 16; i++)
 				count += bits_set(info->pipe_bitmap[i]);
 			snprintf(bitmapcount, 40, "%d:%s", count, bitmaphex);
 			root = api_add_string(root, asiccore, bitmapcount, true);
