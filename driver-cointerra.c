@@ -1040,15 +1040,24 @@ static void cta_zero_stats(struct cgpu_info *cointerra)
 		info->tot_core_hashes[i] = 0;
 }
 
+static int bits_set(char v)
+{
+	int c;
+
+	for (c = 0; v; c++)
+		v &= v - 1;
+	return c;
+}
+
 static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct cointerra_info *info = cgpu->device_data;
 	double dev_runtime = cgpu_runtime(cgpu);
+	int i, asic, core, coreno = 0;
 	char bitmaphex[36];
 	uint64_t ghs, val;
 	char buf[64];
-	int i;
 
 	/* Info data */
 	root = api_add_uint16(root, "HW Revision", &info->hwrev, false);
@@ -1144,22 +1153,20 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 		root = api_add_uint64(root, buf, &ghs, true);
 	}
 	root = api_add_uint32(root, "Uptime",&info->uptime,false);
-	__bin2hex(bitmaphex, info->pipe_bitmap, 16);
-	root = api_add_string(root, "Asic0Core0", bitmaphex, true);
-	__bin2hex(bitmaphex, &info->pipe_bitmap[16], 16);
-	root = api_add_string(root, "Asic0Core1", bitmaphex, true);
-	__bin2hex(bitmaphex, &info->pipe_bitmap[32], 16);
-	root = api_add_string(root, "Asic0Core2", bitmaphex, true);
-	__bin2hex(bitmaphex, &info->pipe_bitmap[48], 16);
-	root = api_add_string(root, "Asic0Core3", bitmaphex, true);
-	__bin2hex(bitmaphex, &info->pipe_bitmap[64], 16);
-	root = api_add_string(root, "Asic1Core0", bitmaphex, true);
-	__bin2hex(bitmaphex, &info->pipe_bitmap[80], 16);
-	root = api_add_string(root, "Asic1Core1", bitmaphex, true);
-	__bin2hex(bitmaphex, &info->pipe_bitmap[96], 16);
-	root = api_add_string(root, "Asic1Core2", bitmaphex, true);
-	__bin2hex(bitmaphex, &info->pipe_bitmap[112], 16);
-	root = api_add_string(root, "Asic1Core3", bitmaphex, true);
+	for (asic = 0; asic < 2; asic++) {
+		for (core = 0; core < 4; core++) {
+			char bitmapcount[40], asiccore[12];
+			int count = 0;
+
+			sprintf(asiccore, "Asic%dCore%d", asic, core);
+			__bin2hex(bitmaphex, &info->pipe_bitmap[coreno], 16);
+			for (i = 0; i < 16; i++)
+				count += bits_set(info->pipe_bitmap[i]);
+			snprintf(bitmapcount, 40, "%d:%s", count, bitmaphex);
+			root = api_add_string(root, asiccore, bitmapcount, true);
+			coreno += 16;
+		}
+	}
 	root = api_add_uint8(root, "AV", &info->autovoltage, false);
 	root = api_add_uint8(root, "Power Supply Percent", &info->current_ps_percent, false);
 	root = api_add_uint16(root, "Power Used", &info->power_used, false);
