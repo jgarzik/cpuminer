@@ -48,6 +48,7 @@
 #define CTA_WORK_NROLL		53
 #define CTA_WORK_DIFFBITS	55
 #define CTA_REQWORK_REQUESTS	3
+#define CTA_CORE_HASHRATES	3
 
 /* Received message types */
 #define CTA_RECV_UNUSED		0
@@ -69,6 +70,7 @@
 #define CTA_SEND_REQUEST	4
 #define CTA_SEND_FMATCH		5
 #define CTA_SEND_IDENTIFY	6
+#define CTA_SEND_COREHASHRATE	7
 
 /* Types of reset in CTA_RESET_TYPE */
 #define CTA_RESET_NONE		0

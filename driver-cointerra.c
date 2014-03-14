@@ -11,6 +11,7 @@
 
 #include "miner.h"
 #include "driver-cointerra.h"
+#include <math.h>
 
 static const char *cointerra_hdr = "ZZ";
 
@@ -935,6 +936,31 @@ static void cta_zero_corehashes(struct cointerra_info *info)
 	cgtime(&info->core_hash_start);
 }
 
+/* Send per core hashrate calculations at regular intervals ~every 5 minutes */
+static void cta_send_corehashes(struct cgpu_info *cointerra, struct cointerra_info *info,
+				double corehash_time)
+{
+	uint16_t core_ghs[CTA_CORES];
+	double k[CTA_CORES];
+	char buf[CTA_MSG_SIZE];
+	int i, offset;
+
+	for (i = 0; i < CTA_CORES; i++) {
+		k[i] = (double)info->tot_core_hashes[i] / ((double)32 * (double)0x100000000ull);
+		k[i] = sqrt(k[i]) + 1;
+		k[i] *= k[i];
+		k[i] = k[i] * 32 * ((double)0x100000000ull / (double)1000000000) / corehash_time;
+		core_ghs[i] = k[i];
+	}
+	cta_gen_message(buf, CTA_SEND_COREHASHRATE);
+	offset = CTA_CORE_HASHRATES;
+	for (i = 0; i < CTA_CORES; i++) {
+		msg_from_hu16(buf, offset, core_ghs[i]);
+		offset += 2; // uint16_t
+	}
+	cta_send_msg(cointerra, buf);
+}
+
 static int64_t cta_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *cointerra = thr->cgpu;
@@ -997,6 +1023,7 @@ static int64_t cta_scanwork(struct thr_info *thr)
 
 	corehash_time = tdiff(&now, &info->core_hash_start);
 	if (corehash_time > 300) {
+		cta_send_corehashes(cointerra, info, corehash_time);
 		cta_zero_corehashes(info);
 	}
 
