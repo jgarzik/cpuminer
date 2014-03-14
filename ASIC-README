@@ -453,17 +453,37 @@ is still within USB2 spec. This value allows you to alter the clockspeed, with
 ~54 being the optimal but requiring a higher power or USB3 port.
 
 
-BITFURY Devices
+Drillbit Systems Devices
 
 --drillbit-options <arg> Set drillbit options <int|ext>:clock[:clock_divider][:voltage]
 
-int/ext defines the clock source - default int
-clock_divider must be 1 or 2 with a default of 1
-int allows a clock of 0 to 63 with recommended 48-58 for div 2 and 30-48 for div 1
- with a default of 40 with div 1
-ext recommends a clock of 80 to 230, with a default of 200
+* int/ext defines the clock source - default int. Not all boards support ext.
+* clock_divider must be 1 or 2 with a default of 1. Bitfury only,
+  ignored on Avalon.
+* clock is in MHz, on Drillbit range 80-250 with a default of 200,
+  recommended maximum 230. On Avalon range 500-1000 with a
+  recommended maximum of 800.
+* voltage is ASIC core voltage in millivolts, available values vary per board but
+  default is 850 and the recommended maximum is 950 (Bitfury) and 1000 (Avalon.)
 
-voltage must be one of 650, 750, 850 or 950 with a default of 850
+--drillbit-auto <every>:[<gooderr>:<baderr>:<maxerr>]
+
+If supported by firmware and device, this feature allows cgminer to
+automatically tweak each ASIC's clock rate up and down in to achieve
+optimal performance.
+
+* every - only required param, check each ASIC after each block of
+  this many work units. Recommended value 100.
+* gooderr - the "Good" threshold is when less hardware errors than
+  this per "every" work units, the clock rate will be increased.
+  Default value 1.
+* baderr - the "Bad" threshold is when more hardware errors than
+  this per "every" work units, the clock rate will be decreased.
+  Default value 3.
+* maxerr - the "Max" threshold is when more hardware errors than
+  this per "every" work units (including pre-empting before
+  "every" work units is up), the clock rate will be decreased and
+  will not be increased again past this point. Default value 10.
 
 
 BlackArrow Bitfury devices

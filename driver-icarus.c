@@ -87,6 +87,11 @@ ASSERT1(sizeof(uint32_t) == 4);
 // In timing mode: Default starting value until an estimate can be obtained
 // 5000 ms allows for up to a ~840MH/s device
 #define ICARUS_READ_COUNT_TIMING	5000
+
+// Antminer USB is > 1GH/s so use a shorter limit
+// 1000 ms allows for up to ~4GH/s device
+#define ANTUSB_READ_COUNT_TIMING	1000
+
 #define ICARUS_READ_COUNT_MIN		ICARUS_WAIT_TIMEOUT
 #define SECTOMS(s)	((int)((s) * 1000))
 // How many ms below the expected completion time to abort work
@@ -533,6 +538,7 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 	char buf[BUFSIZ+1];
 	char *ptr, *comma, *eq;
 	size_t max;
+	int read_count_timing;
 	int i;
 
 	if (opt_icarus_timing == NULL)
@@ -562,22 +568,28 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 	switch (ident) {
 		case IDENT_ICA:
 			info->Hs = ICARUS_REV3_HASH_TIME;
+			read_count_timing = ICARUS_READ_COUNT_TIMING;
 			break;
 		case IDENT_BLT:
 		case IDENT_LLT:
 			info->Hs = LANCELOT_HASH_TIME;
+			read_count_timing = ICARUS_READ_COUNT_TIMING;
 			break;
 		case IDENT_AMU:
 			info->Hs = ASICMINERUSB_HASH_TIME;
+			read_count_timing = ICARUS_READ_COUNT_TIMING;
 			break;
 		case IDENT_CMR1:
 			info->Hs = CAIRNSMORE1_HASH_TIME;
+			read_count_timing = ICARUS_READ_COUNT_TIMING;
 			break;
 		case IDENT_CMR2:
 			info->Hs = CAIRNSMORE2_HASH_TIME;
+			read_count_timing = ICARUS_READ_COUNT_TIMING;
 			break;
 		case IDENT_ANU:
 			info->Hs = ANTMINERUSB_HASH_TIME;
+			read_count_timing = ANTUSB_READ_COUNT_TIMING;
 			break;
 		default:
 			quit(1, "Icarus get_options() called with invalid %s ident=%d",
@@ -589,13 +601,13 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 
 	if (strcasecmp(buf, MODE_SHORT_STR) == 0) {
 		// short
-		info->read_time = ICARUS_READ_COUNT_TIMING;
+		info->read_time = read_count_timing;
 
 		info->timing_mode = MODE_SHORT;
 		info->do_icarus_timing = true;
 	} else if (strncasecmp(buf, MODE_SHORT_STREQ, strlen(MODE_SHORT_STREQ)) == 0) {
 		// short=limit
-		info->read_time = ICARUS_READ_COUNT_TIMING;
+		info->read_time = read_count_timing;
 
 		info->timing_mode = MODE_SHORT;
 		info->do_icarus_timing = true;
@@ -607,13 +619,13 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 			info->read_time_limit = ICARUS_READ_TIME_LIMIT_MAX;
 	} else if (strcasecmp(buf, MODE_LONG_STR) == 0) {
 		// long
-		info->read_time = ICARUS_READ_COUNT_TIMING;
+		info->read_time = read_count_timing;
 
 		info->timing_mode = MODE_LONG;
 		info->do_icarus_timing = true;
 	} else if (strncasecmp(buf, MODE_LONG_STREQ, strlen(MODE_LONG_STREQ)) == 0) {
 		// long=limit
-		info->read_time = ICARUS_READ_COUNT_TIMING;
+		info->read_time = read_count_timing;
 
 		info->timing_mode = MODE_LONG;
 		info->do_icarus_timing = true;

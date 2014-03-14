@@ -20,7 +20,7 @@ struct drillbit_chip_info;
 /* drillbit_info structure applies to entire device */
 struct drillbit_info {
   struct cgpu_info *base_cgpu;
-  uint8_t version;
+  uint8_t protocol_version;
   uint8_t num_chips;
   uint16_t capabilities;
   char product[8];
@@ -47,6 +47,10 @@ struct drillbit_chip_info {
   uint32_t error_count;
   uint32_t timeout_count;
   uint32_t work_sent_count;
+  uint32_t success_auto;
+  uint32_t error_auto;
+  int auto_delta;
+  int auto_max;
 };
 
 #endif /* BITFURY_H */
