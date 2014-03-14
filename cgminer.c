@@ -2216,7 +2216,6 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	previousblockhash = json_string_value(json_object_get(res_val, "previousblockhash"));
 	target = json_string_value(json_object_get(res_val, "target"));
 	transaction_arr = json_object_get(res_val, "transactions");
-	gbt_merkle_bins(pool, transaction_arr);
 	version = json_integer_value(json_object_get(res_val, "version"));
 	curtime = json_integer_value(json_object_get(res_val, "curtime"));
 	bits = json_string_value(json_object_get(res_val, "bits"));
@@ -2234,6 +2233,7 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	applog(LOG_DEBUG, "bits: %s", bits);
 	applog(LOG_DEBUG, "height: %d", height);
 
+	cg_wlock(&pool->gbt_lock);
 	hex2bin(hash_swap, previousblockhash, 32);
 	swap256(pool->previousblockhash, hash_swap);
 
@@ -2243,6 +2243,8 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	pool->gbt_version = htobe32(version);
 	pool->curtime = htobe32(curtime);
 	hex2bin((unsigned char *)&pool->gbt_bits, bits, 4);
+	gbt_merkle_bins(pool, transaction_arr);
+	cg_wunlock(&pool->gbt_lock);
 
 	return true;
 }
