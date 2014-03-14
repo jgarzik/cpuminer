@@ -1259,6 +1259,8 @@ struct pool {
 	bool gbt_solo;
 	int merkles;
 	unsigned char merklebin[16 * 32];
+	int transactions;
+	unsigned char **txn_data;
 
 	/* Shared by both stratum & GBT */
 	unsigned char *coinbase;

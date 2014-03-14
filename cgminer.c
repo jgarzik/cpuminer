@@ -2125,42 +2125,45 @@ static bool pool_localgen(struct pool *pool)
 static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 {
 	json_t *arr_val;
-	int transactions, i, j;
+	int i, j;
 
+	for (i = 0; i < pool->transactions; i++)
+		free(pool->txn_data[i]);
+	pool->transactions = 0;
 	pool->merkles = 0;
-	transactions = json_array_size(transaction_arr);
-	if (transactions) {
+	pool->transactions = json_array_size(transaction_arr);
+	pool->txn_data = realloc(pool->txn_data, sizeof(unsigned char *) * (pool->transactions + 1));
+	if (pool->transactions) {
 		unsigned char *hashbin;
 		char hashhex[68];
 		unsigned char binswap[32];
-		int binleft, binlen = transactions * 32 + 32;
+		int binleft, binlen = pool->transactions * 32 + 32;
 
 		hashbin = alloca(binlen + 32);
 		memset(hashbin, 0, 32);
-		for (i = 0; i < transactions; i++) {
-			const char *hash;
+		for (i = 0; i < pool->transactions; i++) {
+			const char *hash, *txn;
+			unsigned char *txn_bin;
+			int txn_len;
 
 			arr_val = json_array_get(transaction_arr, i);
 			hash = json_string_value(json_object_get(arr_val, "hash"));
+			txn = json_string_value(json_object_get(arr_val, "data"));
+			if (!txn) {
+				applog(LOG_ERR, "Pool %d json_string_value fail - cannot find transaction data",
+					pool->pool_no);
+				return;
+			}
+			txn_len = strlen(txn) / 2;
+			txn_bin = malloc(txn_len);
+			if (!txn_bin)
+				quit(1, "Failed to malloc txn_bin in gbt_merkle_bins");
+			hex2bin(txn_bin, txn, txn_len);
+			pool->txn_data[i] = txn_bin;
 			if (!hash) {
 				/* This is needed for pooled mining since only
 				 * transaction data and not hashes are sent */
-				const char *txn = json_string_value(json_object_get(arr_val, "data"));
-				unsigned char *txn_bin;
-				int txn_len;
-
-				if (!txn) {
-					applog(LOG_ERR, "Pool %d json_string_value fail - cannot find transaction hash nor data",
-					       pool->pool_no);
-					return;
-				}
-				txn_len = strlen(txn) / 2;
-				txn_bin = malloc(txn_len);
-				if (!txn_bin)
-					quit(1, "Failed to malloc txn_bin in gbt_merkle_bins");
-				hex2bin(txn_bin, txn, txn_len);
 				gen_hash(txn_bin, hashbin + 32 + 32 * i, txn_len);
-				free(txn_bin);
 				continue;
 			}
 			if (!hex2bin(binswap, hash, 32)) {
@@ -2192,7 +2195,10 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 			__bin2hex(hashhex, pool->merklebin + i * 32, 32);
 			applog(LOG_WARNING, "MH%d %s",i, hashhex);
 		}
-	}
+		applog(LOG_INFO, "Stored %d transactions from pool %d", pool->transactions,
+		       pool->pool_no);
+	} else
+		pool->txn_data[0] = NULL;
 }
 
 
