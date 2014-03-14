@@ -757,8 +757,6 @@ static bool cta_prepare(struct thr_info *thr)
 	struct cgpu_info *cointerra = thr->cgpu;
 	struct cointerra_info *info = calloc(sizeof(struct cointerra_info), 1);
 	char buf[CTA_MSG_SIZE];
-	time_t now_t;
-	int i;
 
 	if (unlikely(cointerra->usbinfo.nodev))
 		return false;
@@ -793,12 +791,7 @@ static bool cta_prepare(struct thr_info *thr)
 	if (!cta_send_msg(cointerra, buf))
 		return false;
 
-	/* Start with a full bitmap of valid nonce flags for every pipe */
-	now_t = time(NULL);
-	for (i = 0; i < 1024; i++)
-		info->last_pipe_nonce[i] = now_t;
-	for (i = 0; i < 128; i++)
-		info->pipe_bitmap[i] = 0x00u;
+	cgtime(&info->core_hash_start);
 
 	return true;
 }
@@ -918,16 +911,11 @@ resend:
 static void cta_flush_work(struct cgpu_info *cointerra)
 {
 	struct cointerra_info *info = cointerra->device_data;
-	int i;
 
 	applog(LOG_INFO, "%s %d: cta_flush_work %d", cointerra->drv->name, cointerra->device_id,
 	       __LINE__);
 	cta_send_reset(cointerra, info, CTA_RESET_NEW, 0);
 	info->thr->work_restart = false;
-	/* Reset the core hash count with each restart as we are interested in
-	 * the hashrate per core over each block change. */
-	for (i = 0; i < CTA_CORES; i++)
-		info->tot_core_hashes[i] = 0;
 }
 
 static void cta_update_work(struct cgpu_info *cointerra)
@@ -938,10 +926,21 @@ static void cta_update_work(struct cgpu_info *cointerra)
 	cta_send_reset(cointerra, info, CTA_RESET_UPDATE, 0);
 }
 
+static void cta_zero_corehashes(struct cointerra_info *info)
+{
+	int i;
+
+	for (i = 0; i < CTA_CORES; i++)
+		info->tot_core_hashes[i] = 0;
+	cgtime(&info->core_hash_start);
+}
+
 static int64_t cta_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *cointerra = thr->cgpu;
 	struct cointerra_info *info = cointerra->device_data;
+	double corehash_time;
+	struct timeval now;
 	int64_t hashes;
 
 	applog(LOG_DEBUG, "%s %d: cta_scanwork %d", cointerra->drv->name, cointerra->device_id,__LINE__);
@@ -951,17 +950,17 @@ static int64_t cta_scanwork(struct thr_info *thr)
 		goto out;
 	}
 
+	cgtime(&now);
+
 	if (unlikely(thr->work_restart)) {
 		applog(LOG_INFO, "%s %d: Flush work line %d",
 		     cointerra->drv->name, cointerra->device_id,__LINE__);
 		cta_flush_work(cointerra);
 	} else {
 		struct timespec abstime, tsdiff = {0, 500000000};
-		struct timeval now;
 		time_t now_t;
 		int i;
 
-		cgtime(&now);
 		timeval_to_spec(&abstime, &now);
 		timeraddspec(&abstime, &tsdiff);
 
@@ -994,6 +993,11 @@ static int64_t cta_scanwork(struct thr_info *thr)
 			       cointerra->drv->name, cointerra->device_id,__LINE__);
 			cta_flush_work(cointerra);
 		}
+	}
+
+	corehash_time = tdiff(&now, &info->core_hash_start);
+	if (corehash_time > 300) {
+		cta_zero_corehashes(info);
 	}
 
 	mutex_lock(&info->lock);
@@ -1031,13 +1035,11 @@ static void cta_shutdown(struct thr_info *thr)
 static void cta_zero_stats(struct cgpu_info *cointerra)
 {
 	struct cointerra_info *info = cointerra->device_data;
-	int i;
 
 	info->tot_calc_hashes = 0;
 	info->tot_reset_hashes = info->tot_hashes;
 	info->tot_share_hashes = 0;
-	for (i = 0; i < CTA_CORES; i++)
-		info->tot_core_hashes[i] = 0;
+	cta_zero_corehashes(info);
 }
 
 static int bits_set(char v)
@@ -1055,6 +1057,7 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 	struct cointerra_info *info = cgpu->device_data;
 	double dev_runtime = cgpu_runtime(cgpu);
 	int i, asic, core, coreno = 0;
+	struct timeval now;
 	char bitmaphex[36];
 	uint64_t ghs, val;
 	char buf[64];
@@ -1145,8 +1148,11 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 	root = api_add_uint64(root, "Rejected hashes", &val, true);
 	ghs = val / dev_runtime;
 	root = api_add_uint64(root, "Rejected hashrate", &ghs, true);
-	/* The per core hashrate is reset along with each work restart. */
-	dev_runtime = tsince_restart();
+
+	cgtime(&now);
+	dev_runtime = tdiff(&now, &info->core_hash_start);
+	if (dev_runtime < 1)
+		dev_runtime = 1;
 	for (i = 0; i < CTA_CORES; i++) {
 		sprintf(buf, "Core%d hashrate", i);
 		ghs = info->tot_core_hashes[i] / dev_runtime;

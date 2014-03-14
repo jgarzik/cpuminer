@@ -204,6 +204,7 @@ struct cointerra_info {
 	uint64_t share_hashes;
 	uint64_t tot_core_hashes[CTA_CORES];
 	uint64_t tot_share_hashes;
+	struct timeval core_hash_start;
 	int requested;
 	uint16_t work_id;
 	int no_matching_work;
