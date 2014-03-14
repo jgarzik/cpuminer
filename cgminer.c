@@ -2204,12 +2204,13 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 
 static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 {
-	json_t *transaction_arr;
 	const char *previousblockhash;
+	unsigned char hash_swap[32];
+	json_t *transaction_arr;
 	const char *target;
+	const char *bits;
 	int version;
 	int curtime;
-	const char *bits;
 	int height;
 
 	previousblockhash = json_string_value(json_object_get(res_val, "previousblockhash"));
@@ -2232,6 +2233,16 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	applog(LOG_DEBUG, "curtime: %d", curtime);
 	applog(LOG_DEBUG, "bits: %s", bits);
 	applog(LOG_DEBUG, "height: %d", height);
+
+	hex2bin(hash_swap, previousblockhash, 32);
+	swap256(pool->previousblockhash, hash_swap);
+
+	hex2bin(hash_swap, target, 32);
+	swab256(pool->gbt_target, hash_swap);
+
+	pool->gbt_version = htobe32(version);
+	pool->curtime = htobe32(curtime);
+	hex2bin((unsigned char *)&pool->gbt_bits, bits, 4);
 
 	return true;
 }
