@@ -984,6 +984,7 @@ extern char *opt_klondike_options;
 #endif
 #ifdef USE_DRILLBIT
 extern char *opt_drillbit_options;
+extern char *opt_drillbit_auto;
 #endif
 #ifdef USE_BAB
 extern char *opt_bab_options;
