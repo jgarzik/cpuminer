@@ -2204,11 +2204,14 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 
 static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 {
+	json_t *transaction_arr, *coinbase_aux;
 	const char *previousblockhash;
 	unsigned char hash_swap[32];
-	json_t *transaction_arr;
 	const char *target;
+	int coinbasevalue;
+	const char *flags;
 	const char *bits;
+	int ofs = 0, len;
 	int version;
 	int curtime;
 	int height;
@@ -2220,8 +2223,11 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	curtime = json_integer_value(json_object_get(res_val, "curtime"));
 	bits = json_string_value(json_object_get(res_val, "bits"));
 	height = json_integer_value(json_object_get(res_val, "height"));
+	coinbasevalue = json_integer_value(json_object_get(res_val, "coinbasevalue"));
+	coinbase_aux = json_object_get(res_val, "coinbaseaux");
+	flags = json_string_value(json_object_get(coinbase_aux, "flags"));
 
-	if (!previousblockhash || !target || !version || !curtime || !bits || !height) {
+	if (!previousblockhash || !target || !version || !curtime || !bits || !coinbase_aux || !flags) {
 		applog(LOG_ERR, "Pool %d JSON failed to decode GBT", pool->pool_no);
 		return false;
 	}
@@ -2232,6 +2238,7 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	applog(LOG_DEBUG, "curtime: %d", curtime);
 	applog(LOG_DEBUG, "bits: %s", bits);
 	applog(LOG_DEBUG, "height: %d", height);
+	applog(LOG_DEBUG, "flags: %s", flags);
 
 	cg_wlock(&pool->gbt_lock);
 	hex2bin(hash_swap, previousblockhash, 32);
@@ -2242,8 +2249,20 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 
 	pool->gbt_version = htobe32(version);
 	pool->curtime = htobe32(curtime);
+	pool->nValue = coinbasevalue;
 	hex2bin((unsigned char *)&pool->gbt_bits, bits, 4);
 	gbt_merkle_bins(pool, transaction_arr);
+
+	/* Put block height at start of template */
+	ofs = ser_number(pool->scriptsig_template, height);
+	/* Followed by flags */
+	len = strlen(flags) / 2;
+	hex2bin(pool->scriptsig_template + ofs, flags, len);
+	ofs += len;
+	/* Followed by timestamp */
+	ofs += ser_number(pool->scriptsig_template + ofs, time(NULL));
+	/* Followed by extranonce size, fixed at 16 */
+	pool->scriptsig_template[ofs++] = 16;
 	cg_wunlock(&pool->gbt_lock);
 
 	return true;
@@ -6273,6 +6292,8 @@ static bool stratum_works(struct pool *pool)
 	return true;
 }
 
+static const char scriptsig_suffix[] = { 0x07, 0x63, 0x67, 0x6d, 0x69, 0x6e, 0x65, 0x72 };
+
 static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 {
 	char s[256];
@@ -6297,6 +6318,7 @@ static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 	}
 	applog(LOG_DEBUG, "Bitcoin address %s is valid", opt_btc_address);
 	ret = true;
+	address_to_pubkeyhash(pool->script_pubkey, opt_btc_address);
 
 out:
 	return ret;
