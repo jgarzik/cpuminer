@@ -222,7 +222,7 @@ static uint8_t *exec_cmd(struct A1_chain *a1,
 	if (data != NULL)
 		memcpy(a1->spi_tx + 2, data, len);
 
-	bool retval = spi_transfer(a1->spi_ctx, a1->spi_tx, a1->spi_rx, tx_len);
+	assert(spi_transfer(a1->spi_ctx, a1->spi_tx, a1->spi_rx, tx_len));
 	hexdump("send: TX", a1->spi_tx, tx_len);
 	hexdump("send: RX", a1->spi_rx, tx_len);
 
@@ -279,20 +279,19 @@ static uint8_t *cmd_READ_RESULT_BCAST(struct A1_chain *a1)
 	memset(a1->spi_tx, 0, tx_len);
 	a1->spi_tx[0] = A1_READ_RESULT;
 
-	bool retval = spi_transfer(a1->spi_ctx, a1->spi_tx, a1->spi_rx, tx_len);
+	assert(spi_transfer(a1->spi_ctx, a1->spi_tx, a1->spi_rx, tx_len));
 	hexdump("send: TX", a1->spi_tx, tx_len);
 	hexdump("send: RX", a1->spi_rx, tx_len);
 
 	int poll_len = tx_len + 4 * a1->num_chips;
-	retval = spi_transfer(a1->spi_ctx, NULL, a1->spi_rx + tx_len, poll_len);
+	assert(spi_transfer(a1->spi_ctx, NULL, a1->spi_rx + tx_len, poll_len));
 	hexdump("poll: RX", a1->spi_rx + tx_len, poll_len);
 
 	uint8_t *scan = a1->spi_rx;
 	int i;
 	for (i = 0; i < poll_len; i += 2) {
-		if ((scan[i] & 0x0f) == A1_READ_RESULT) {
+		if ((scan[i] & 0x0f) == A1_READ_RESULT)
 			return scan + i;
-		}
 	}
 	applog(LOG_ERR, "%d: cmd_READ_RESULT_BCAST failed", a1->board_id);
 	return NULL;
@@ -323,20 +322,18 @@ static uint8_t *cmd_READ_REG(struct A1_chain *a1, uint8_t chip)
 static uint8_t *cmd_WRITE_JOB(struct A1_chain *a1, uint8_t chip_id,
 			      uint8_t *job)
 {
-
-	uint8_t cmd = (a1->spi_tx[0] << 8) | a1->spi_tx[1];
 	/* ensure we push the SPI command to the last chip in chain */
 	int tx_len = WRITE_JOB_LENGTH + 2;
 	memcpy(a1->spi_tx, job, WRITE_JOB_LENGTH);
 	memset(a1->spi_tx + WRITE_JOB_LENGTH, 0, tx_len - WRITE_JOB_LENGTH);
 
-	bool retval = spi_transfer(a1->spi_ctx, a1->spi_tx, a1->spi_rx, tx_len);
+	assert(spi_transfer(a1->spi_ctx, a1->spi_tx, a1->spi_rx, tx_len));
 	hexdump("send: TX", a1->spi_tx, tx_len);
 	hexdump("send: RX", a1->spi_rx, tx_len);
 
 	int poll_len = 4 * chip_id - 2;
 
-	retval = spi_transfer(a1->spi_ctx, NULL, a1->spi_rx + tx_len, poll_len);
+	assert(spi_transfer(a1->spi_ctx, NULL, a1->spi_rx + tx_len, poll_len));
 	hexdump("poll: RX", a1->spi_rx + tx_len, poll_len);
 
 	int ack_len = tx_len;
@@ -845,7 +842,6 @@ void A1_detect(bool hotplug)
 {
 	int bus;
 	int cs_line;
-	int board_id;
 
 	/* no hotplug support for now */
 	if (hotplug)
@@ -1017,7 +1013,6 @@ static bool A1_queue_full(struct cgpu_info *cgpu)
 {
 	struct A1_chain *a1 = cgpu->device_data;
 	int queue_full = false;
-	struct work *work;
 
 	mutex_lock(&a1->lock);
 	applog(LOG_DEBUG, "%d, A1 running queue_full: %d/%d",
