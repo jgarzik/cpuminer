@@ -2201,6 +2201,8 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 		pool->txn_data[0] = NULL;
 }
 
+static double diff_from_target(void *target);
+
 static const char scriptsig_header[] = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff";
 static unsigned char scriptsig_header_bin[41];
 
@@ -2253,6 +2255,7 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 
 	hex2bin(hash_swap, target, 32);
 	swab256(pool->gbt_target, hash_swap);
+	pool->sdiff = diff_from_target(pool->gbt_target);
 
 	pool->gbt_version = htobe32(version);
 	pool->curtime = htobe32(curtime);
@@ -3428,6 +3431,17 @@ static double le256todouble(const void *target)
 	return dcut64;
 }
 
+static double diff_from_target(void *target)
+{
+	double d64, dcut64;
+
+	d64 = truediffone;
+	dcut64 = le256todouble(target);
+	if (unlikely(!dcut64))
+		dcut64 = 1;
+	return d64 / dcut64;
+}
+
 /*
  * Calculate the work->work_difficulty based on the work->target
  */
@@ -3439,15 +3453,9 @@ static void calc_diff(struct work *work, double known)
 
 	if (known)
 		work->work_difficulty = known;
-	else {
-		double d64, dcut64;
+	else
+		work->work_difficulty = diff_from_target(work->target);
 
-		d64 = truediffone;
-		dcut64 = le256todouble(work->target);
-		if (unlikely(!dcut64))
-			dcut64 = 1;
-		work->work_difficulty = d64 / dcut64;
-	}
 	difficulty = work->work_difficulty;
 
 	pool_stats->last_diff = difficulty;
