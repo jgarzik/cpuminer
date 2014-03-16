@@ -6408,8 +6408,6 @@ static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 		free(cb);
 	}
 
-	exit(0);
-
 out:
 	return ret;
 }
@@ -6805,7 +6803,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	/* Copy the data template from header_bin */
 	memcpy(work->data, pool->header_bin, 112);
-	memcpy(work->data + pool->merkle_offset, merkle_root, 32);
+	memcpy(work->data + 36, merkle_root, 32);
 
 	/* Store the stratum work diff to check it still matches the pool's
 	 * stratum diff when submitting shares */
@@ -6840,6 +6838,81 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	work->id = total_work++;
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
+	work->work_block = work_block;
+	/* Nominally allow a driver to ntime roll 60 seconds */
+	work->drv_rolllimit = 60;
+	calc_diff(work, work->sdiff);
+
+	cgtime(&work->tv_staged);
+}
+
+static void gen_solo_work(struct pool *pool, struct work *work)
+{
+	unsigned char merkle_root[32], merkle_sha[64];
+	uint32_t *data32, *swap32;
+	uint64_t nonce2le;
+	int i;
+
+	cg_wlock(&pool->gbt_lock);
+
+	/* Update coinbase. Always use an LE encoded nonce2 to fill in values
+	 * from left to right and prevent overflow errors with small n2sizes */
+	nonce2le = htole64(pool->nonce2);
+	memcpy(pool->coinbase + pool->nonce2_offset, &nonce2le, pool->n2size);
+	work->nonce2 = pool->nonce2++;
+	work->nonce2_len = pool->n2size;
+
+	/* Downgrade to a read lock to read off the pool variables */
+	cg_dwlock(&pool->gbt_lock);
+
+	/* Generate merkle root */
+	gen_hash(pool->coinbase, merkle_root, pool->coinbase_len);
+	memcpy(merkle_sha, merkle_root, 32);
+	for (i = 0; i < pool->merkles; i++) {
+		unsigned char *merkle_bin;
+
+		merkle_bin = pool->merklebin + (i * 32);
+		memcpy(merkle_sha + 32, merkle_bin, 32);
+		gen_hash(merkle_sha, merkle_root, 64);
+		memcpy(merkle_sha, merkle_root, 32);
+	}
+	data32 = (uint32_t *)merkle_sha;
+	swap32 = (uint32_t *)merkle_root;
+	flip32(swap32, data32);
+
+	/* Copy the data template from header_bin */
+	memcpy(work->data, pool->header_bin, 112);
+	memcpy(work->data + 36, merkle_root, 32);
+
+	work->sdiff = pool->sdiff;
+
+	/* Copy parameters required for share submission */
+	work->ntime = strdup(pool->ntime);
+	memcpy(work->target, pool->gbt_target, 32);
+	cg_runlock(&pool->gbt_lock);
+
+	if (opt_debug) {
+		char *header, *merkle_hash;
+
+		header = bin2hex(work->data, 112);
+		merkle_hash = bin2hex((const unsigned char *)merkle_root, 32);
+		applog(LOG_DEBUG, "Generated GBT solo merkle %s", merkle_hash);
+		applog(LOG_DEBUG, "Generated GBT solo header %s", header);
+		applog(LOG_DEBUG, "Work nonce2 %"PRIu64" ntime %s", work->nonce2,
+		       work->ntime);
+		free(header);
+		free(merkle_hash);
+	}
+
+	calc_midstate(work);
+
+	local_work++;
+	work->pool = pool;
+	work->stratum = true;
+	work->nonce = 0;
+	work->id = total_work++;
+	work->longpoll = false;
+	work->getwork_mode = GETWORK_MODE_SOLO;
 	work->work_block = work_block;
 	/* Nominally allow a driver to ntime roll 60 seconds */
 	work->drv_rolllimit = 60;
@@ -9433,6 +9506,22 @@ retry:
 
 #ifdef HAVE_LIBCURL
 		struct curl_ent *ce;
+
+		if (pool->gbt_solo) {
+			while (pool->idle) {
+				struct pool *altpool = select_pool(true);
+
+				cgsleep_ms(5000);
+				if (altpool != pool) {
+					pool = altpool;
+					goto retry;
+				}
+			}
+			gen_solo_work(pool, work);
+			applog(LOG_DEBUG, "Generated GBT SOLO work!");
+			stage_work(work);
+			continue;
+		}
 
 		if (pool->has_gbt) {
 			while (pool->idle) {

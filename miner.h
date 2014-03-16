@@ -1262,7 +1262,6 @@ struct pool {
 	int nonce2_offset;
 	unsigned char header_bin[128];
 	int merkles;
-	int merkle_offset;
 	char prev_hash[68];
 	char bbversion[12];
 	char nbit[12];
@@ -1278,6 +1277,7 @@ struct pool {
 #define GETWORK_MODE_BENCHMARK 'B'
 #define GETWORK_MODE_STRATUM 'S'
 #define GETWORK_MODE_GBT 'G'
+#define GETWORK_MODE_SOLO 'C'
 
 struct work {
 	unsigned char	data[128];

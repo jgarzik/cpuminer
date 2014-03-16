@@ -1670,7 +1670,6 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->merkles = merkles;
 	if (clean)
 		pool->nonce2 = 0;
-	pool->merkle_offset = 36;
 #if 0
 	header_len = 		 strlen(pool->bbversion) +
 				 strlen(pool->prev_hash);
