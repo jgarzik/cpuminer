@@ -2315,6 +2315,10 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	pool->coinbase[41 + ofs + 4] = 1;
 	u64 = (uint64_t *)&(pool->coinbase[41 + ofs + 4 + 1]);
 	*u64 = htole64(coinbasevalue);
+
+	pool->nonce2 = 0;
+	pool->n2size = 4;
+	pool->coinbase_len = 41 + 50 + 4 + 1 + 8 + 25 + 4; // Fixed size
 	cg_wunlock(&pool->gbt_lock);
 
 	return true;
@@ -6374,7 +6378,7 @@ static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 	memcpy(pool->coinbase + 41 + 50 + 4 + 1 + 8, pool->script_pubkey, 25);
 
 	if (opt_debug) {
-		char *cb = bin2hex(pool->coinbase, 41 + 50 + 4 + 1 + 8 + 25 + 4);
+		char *cb = bin2hex(pool->coinbase, pool->coinbase_len);
 
 		applog(LOG_DEBUG, "Pool %d coinbase %s", pool->pool_no, cb);
 		free(cb);
@@ -6764,7 +6768,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	cg_dwlock(&pool->data_lock);
 
 	/* Generate merkle root */
-	gen_hash(pool->coinbase, merkle_root, pool->swork.cb_len);
+	gen_hash(pool->coinbase, merkle_root, pool->coinbase_len);
 	memcpy(merkle_sha, merkle_root, 32);
 	for (i = 0; i < pool->swork.merkles; i++) {
 		memcpy(merkle_sha + 32, pool->swork.merkle_bin[i], 32);

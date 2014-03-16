@@ -1132,7 +1132,6 @@ struct stratum_work {
 	char *ntime;
 	bool clean;
 
-	size_t cb_len;
 	size_t header_len;
 	int merkles;
 	double diff;
@@ -1254,7 +1253,6 @@ struct pool {
 	uint32_t gbt_bits;
 	unsigned char *txn_hashes;
 	int gbt_txns;
-	int coinbase_len;
 
 	bool gbt_solo;
 	int merkles;
@@ -1267,6 +1265,7 @@ struct pool {
 
 	/* Shared by both stratum & GBT */
 	unsigned char *coinbase;
+	int coinbase_len;
 	int nonce2_offset;
 	unsigned char header_bin[128];
 	int merkle_offset;

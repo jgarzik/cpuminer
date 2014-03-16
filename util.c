@@ -1655,7 +1655,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->swork.nbit = nbit;
 	pool->swork.ntime = ntime;
 	pool->swork.clean = clean;
-	alloc_len = pool->swork.cb_len = cb1_len + pool->n1_len + pool->n2size + cb2_len;
+	alloc_len = pool->coinbase_len = cb1_len + pool->n1_len + pool->n2size + cb2_len;
 	pool->nonce2_offset = cb1_len + pool->n1_len;
 
 	for (i = 0; i < pool->swork.merkles; i++)
@@ -1729,8 +1729,12 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	memcpy(pool->coinbase, cb1, cb1_len);
 	memcpy(pool->coinbase + cb1_len, pool->nonce1bin, pool->n1_len);
 	memcpy(pool->coinbase + cb1_len + pool->n1_len + pool->n2size, cb2, cb2_len);
-	char *shit = bin2hex(pool->coinbase, cb1_len + pool->n1_len + pool->n2size + cb2_len);
-	applog(LOG_ERR, "SHIT is %s", shit);
+	if (opt_debug) {
+		char *cb = bin2hex(pool->coinbase, pool->coinbase_len);
+
+		applog(LOG_DEBUG, "Pool %d coinbase %s", pool->pool_no, cb);
+		free(cb);
+	}
 out_unlock:
 	cg_wunlock(&pool->data_lock);
 
@@ -1753,7 +1757,6 @@ out_unlock:
 	if (pool == current_pool())
 		opt_work_update = true;
 out:
-	exit(0);
 	return ret;
 }
 
