@@ -844,7 +844,7 @@ static void setup_url(struct pool *pool, char *arg)
 			quit(1, "Failed to malloc httpinput");
 		strcpy(httpinput, "stratum+tcp://");
 		strncat(httpinput, arg, 242);
-		pool->rpc_url = httpinput;
+		detect_stratum(pool, httpinput);
 	}
 }
 
