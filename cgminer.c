@@ -5932,7 +5932,7 @@ static bool parse_stratum_response(struct pool *pool, char *s)
 		/* Since the share is untracked, we can only guess at what the
 		 * work difficulty is based on the current pool diff. */
 		cg_rlock(&pool->data_lock);
-		pool_diff = pool->swork.diff;
+		pool_diff = pool->sdiff;
 		cg_runlock(&pool->data_lock);
 
 		if (json_is_true(res_val)) {
@@ -6801,7 +6801,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	/* Store the stratum work diff to check it still matches the pool's
 	 * stratum diff when submitting shares */
-	work->sdiff = pool->swork.diff;
+	work->sdiff = pool->sdiff;
 
 	/* Copy parameters required for share submission */
 	work->job_id = strdup(pool->swork.job_id);
