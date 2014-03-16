@@ -1128,7 +1128,6 @@ struct stratum_work {
 	unsigned char **merkle_bin;
 	bool clean;
 
-	size_t header_len;
 	double diff;
 };
 

@@ -1600,7 +1600,7 @@ static char *blank_merkle = "000000000000000000000000000000000000000000000000000
 static bool parse_notify(struct pool *pool, json_t *val)
 {
 	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit,
-	     *ntime, *header;
+	     *ntime, header[228];
 	unsigned char *cb1 = NULL, *cb2 = NULL;
 	size_t cb1_len, cb2_len, alloc_len;
 	bool clean, ret = false;
@@ -1682,19 +1682,17 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->merkles = merkles;
 	if (clean)
 		pool->nonce2 = 0;
-	pool->merkle_offset = strlen(pool->bbversion) +
-			      strlen(pool->prev_hash);
-	pool->swork.header_len = pool->merkle_offset +
+	pool->merkle_offset = 36;
+#if 0
+	header_len = 		 strlen(pool->bbversion) +
+				 strlen(pool->prev_hash);
 	/* merkle_hash */	 32 +
 				 strlen(pool->ntime) +
 				 strlen(pool->nbit) +
 	/* nonce */		 8 +
 	/* workpadding */	 96;
-	pool->merkle_offset /= 2;
-	pool->swork.header_len = pool->swork.header_len * 2 + 1;
-	align_len(&pool->swork.header_len);
-	header = alloca(pool->swork.header_len);
-	snprintf(header, pool->swork.header_len,
+#endif
+	snprintf(header, 225,
 		"%s%s%s%s%s%s%s",
 		pool->bbversion,
 		pool->prev_hash,
@@ -1703,7 +1701,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		pool->nbit,
 		"00000000", /* nonce */
 		workpadding);
-	ret = hex2bin(pool->header_bin, header, 128);
+	ret = hex2bin(pool->header_bin, header, 112);
 	if (unlikely(!ret)) {
 		applog(LOG_ERR, "Failed to convert header to header_bin in parse_notify");
 		goto out_unlock;
