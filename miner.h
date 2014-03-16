@@ -1263,10 +1263,10 @@ struct pool {
 	unsigned char header_bin[128];
 	int merkles;
 	int merkle_offset;
-	char *prev_hash;
-	char *bbversion;
-	char *nbit;
-	char *ntime;
+	char prev_hash[68];
+	char bbversion[12];
+	char nbit[12];
+	char ntime[12];
 
 	struct timeval tv_lastwork;
 };

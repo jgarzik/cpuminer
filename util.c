@@ -1614,46 +1614,34 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	merkles = json_array_size(arr);
 
 	job_id = json_array_string(val, 0);
-	prev_hash = json_array_string(val, 1);
+	prev_hash = __json_array_string(val, 1);
 	coinbase1 = json_array_string(val, 2);
 	coinbase2 = json_array_string(val, 3);
-	bbversion = json_array_string(val, 5);
-	nbit = json_array_string(val, 6);
-	ntime = json_array_string(val, 7);
+	bbversion = __json_array_string(val, 5);
+	nbit = __json_array_string(val, 6);
+	ntime = __json_array_string(val, 7);
 	clean = json_is_true(json_array_get(val, 8));
 
 	if (!job_id || !prev_hash || !coinbase1 || !coinbase2 || !bbversion || !nbit || !ntime) {
 		/* Annoying but we must not leak memory */
 		if (job_id)
 			free(job_id);
-		if (prev_hash)
-			free(prev_hash);
 		if (coinbase1)
 			free(coinbase1);
 		if (coinbase2)
 			free(coinbase2);
-		if (bbversion)
-			free(bbversion);
-		if (nbit)
-			free(nbit);
-		if (ntime)
-			free(ntime);
 		goto out;
 	}
 
 	cg_wlock(&pool->data_lock);
 	free(pool->swork.job_id);
-	free(pool->prev_hash);
-	free(pool->bbversion);
-	free(pool->nbit);
-	free(pool->ntime);
 	pool->swork.job_id = job_id;
-	pool->prev_hash = prev_hash;
+	snprintf(pool->prev_hash, 65, "%s", prev_hash);
 	cb1_len = strlen(coinbase1) / 2;
 	cb2_len = strlen(coinbase2) / 2;
-	pool->bbversion = bbversion;
-	pool->nbit = nbit;
-	pool->ntime = ntime;
+	snprintf(pool->bbversion, 9, "%s", bbversion);
+	snprintf(pool->nbit, 9, "%s", nbit);
+	snprintf(pool->ntime, 9, "%s", ntime);
 	pool->swork.clean = clean;
 	alloc_len = pool->coinbase_len = cb1_len + pool->n1_len + pool->n2size + cb2_len;
 	pool->nonce2_offset = cb1_len + pool->n1_len;
