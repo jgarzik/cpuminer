@@ -2248,12 +2248,16 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	cg_wlock(&pool->gbt_lock);
 	hex2bin(hash_swap, previousblockhash, 32);
 	swap256(pool->previousblockhash, hash_swap);
+	__bin2hex(pool->prev_hash, pool->previousblockhash, 32);
 
 	hex2bin(hash_swap, target, 32);
 	swab256(pool->gbt_target, hash_swap);
 
 	pool->gbt_version = htobe32(version);
 	pool->curtime = htobe32(curtime);
+	snprintf(pool->ntime, 9, "%08x", curtime);
+	snprintf(pool->bbversion, 9, "%08x", version);
+	snprintf(pool->nbit, 9, "%s", bits);
 	pool->nValue = coinbasevalue;
 	hex2bin((unsigned char *)&pool->gbt_bits, bits, 4);
 	gbt_merkle_bins(pool, transaction_arr);
