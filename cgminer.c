@@ -2135,7 +2135,6 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 	pool->txn_data = realloc(pool->txn_data, sizeof(unsigned char *) * (pool->transactions + 1));
 	if (pool->transactions) {
 		unsigned char *hashbin;
-		char hashhex[68];
 		unsigned char binswap[32];
 		int binleft, binlen = pool->transactions * 32 + 32;
 
@@ -2191,9 +2190,13 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 				binlen = binleft * 32;
 			}
 		}
-		for (i = 0; i < pool->merkles; i++) {
-			__bin2hex(hashhex, pool->merklebin + i * 32, 32);
-			applog(LOG_WARNING, "MH%d %s",i, hashhex);
+		if (opt_debug) {
+			char hashhex[68];
+
+			for (i = 0; i < pool->merkles; i++) {
+				__bin2hex(hashhex, pool->merklebin + i * 32, 32);
+				applog(LOG_DEBUG, "MH%d %s",i, hashhex);
+			}
 		}
 		applog(LOG_INFO, "Stored %d transactions from pool %d", pool->transactions,
 		       pool->pool_no);
