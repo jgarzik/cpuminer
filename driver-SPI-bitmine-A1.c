@@ -391,12 +391,7 @@ static uint8_t *get_pll_reg(struct A1_chain *a1, int ref_clock_khz,
 			    int sys_clock_khz)
 {
 	/*
-	 * TODO: this is only an initial approach with binary adjusted
-	 * dividers and thus not exploiting the whole divider range.
-	 *
-	 * If required, the algorithm can be adapted to find the PLL
-	 * parameters after:
-	 *
+	 * PLL parameters after:
 	 * sys_clk = (ref_clk * pll_fbdiv) / (pll_prediv * 2^(pll_postdiv - 1))
 	 *
 	 * with a higher pll_postdiv being desired over a higher pll_prediv
@@ -405,27 +400,49 @@ static uint8_t *get_pll_reg(struct A1_chain *a1, int ref_clock_khz,
 	static uint8_t writereg[6] = { 0x00, 0x00, 0x21, 0x84, };
 	uint8_t pre_div = 1;
 	uint8_t post_div = 1;
-	uint32_t fb_div = sys_clock_khz / ref_clock_khz;
+	uint32_t fb_div;
+
 	int bid = a1->board_id;
 
 	applog(LOG_WARNING, "%d: Setting PLL: CLK_REF=%dMHz, SYS_CLK=%dMHz",
 	       bid, ref_clock_khz / 1000, sys_clock_khz / 1000);
 
-	while (fb_div > 511) {
-		if (post_div < 4)
-			post_div++;
-		else
-			pre_div <<= 1;
-		fb_div >>= 1;
+	/* Euclidean search for GCD */
+	int a = ref_clock_khz;
+	int b = sys_clock_khz;
+	while (b != 0) {
+		int h = a % b;
+		a = b;
+		b = h;
 	}
+	fb_div = sys_clock_khz / a;
+	int n = ref_clock_khz / a;
+	/* approximate multiplier if not exactly matchable */
+	if (fb_div > 511) {
+		int f = fb_div / n;
+		int m = (f < 32) ? 16 : (f < 64) ? 8 :
+			(f < 128) ? 4 : (256 < 2) ? 2 : 1;
+		fb_div = m * fb_div / n;
+		n =  m;
+	}
+	/* try to maximize post divider */
+	if ((n & 3) == 0)
+		post_div = 3;
+	else if ((n & 1) == 0)
+		post_div = 2;
+	else
+		post_div = 1;
+	/* remainder goes to pre_div */
+	pre_div = n / (1 << (post_div - 1));
+	/* correct pre_div overflow */
 	if (pre_div > 31) {
-		applog(LOG_WARNING, "%d: can't set PLL parameters", bid);
-		return NULL;
+		fb_div = 31 * fb_div / pre_div;
+		pre_div = 31;
 	}
 	writereg[0] = (post_div << 6) | (pre_div << 1) | (fb_div >> 8);
 	writereg[1] = fb_div & 0xff;
-	applog(LOG_WARNING, "%d: setting PLL: pre_div=%d, post_div=%d, fb_div=%d"
-	       ": 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x", bid,
+	applog(LOG_WARNING, "%d: setting PLL: pre_div=%d, post_div=%d, "
+	       "fb_div=%d: 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x", bid,
 	       pre_div, post_div, fb_div,
 	       writereg[0], writereg[1], writereg[2],
 	       writereg[3], writereg[4], writereg[5]);
@@ -1070,7 +1087,8 @@ static void A1_flush_work(struct cgpu_info *cgpu)
 	unlock_board_selector();
 }
 
-static void A1_get_statline_before(char *buf, size_t len, struct cgpu_info *cgpu)
+static void A1_get_statline_before(char *buf, size_t len,
+				   struct cgpu_info *cgpu)
 {
 	struct A1_chain *a1 = cgpu->device_data;
 	tailsprintf(buf, len, " %2d:%2d/%3d ",
