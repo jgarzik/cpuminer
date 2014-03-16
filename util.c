@@ -1729,6 +1729,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	memcpy(pool->coinbase, cb1, cb1_len);
 	memcpy(pool->coinbase + cb1_len, pool->nonce1bin, pool->n1_len);
 	memcpy(pool->coinbase + cb1_len + pool->n1_len + pool->n2size, cb2, cb2_len);
+	char *shit = bin2hex(pool->coinbase, cb1_len + pool->n1_len + pool->n2size + cb2_len);
+	applog(LOG_ERR, "SHIT is %s", shit);
 out_unlock:
 	cg_wunlock(&pool->data_lock);
 
@@ -1751,6 +1753,7 @@ out_unlock:
 	if (pool == current_pool())
 		opt_work_update = true;
 out:
+	exit(0);
 	return ret;
 }
 

@@ -2203,7 +2203,6 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 
 static const char scriptsig_header[] = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff";
 static unsigned char scriptsig_header_bin[41];
-static const char scriptsig_suffix[] = { 0x07, 0x63, 0x67, 0x6d, 0x69, 0x6e, 0x65, 0x72 };
 
 static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 {
@@ -2212,7 +2211,7 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	unsigned char hash_swap[32];
 	struct timeval now;
 	const char *target;
-	int coinbasevalue;
+	uint64_t coinbasevalue;
 	const char *flags;
 	const char *bits;
 	int ofs = 0, len;
@@ -2259,8 +2258,8 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	hex2bin((unsigned char *)&pool->gbt_bits, bits, 4);
 	gbt_merkle_bins(pool, transaction_arr);
 
-	memset(pool->scriptsig_base, 0, 33);
-	pool->scriptsig_base[ofs++] = 40; // Template is 40 bytes total
+	memset(pool->scriptsig_base, 0, 42);
+	pool->scriptsig_base[ofs++] = 49; // Template is 49 bytes
 
 	/* Put block height at start of template */
 	pool->scriptsig_base[ofs++] = 0xff; // Always encode the height as u64
@@ -2289,8 +2288,33 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	*u32 = now.tv_usec;
 	ofs += 4; // sizeof uint32_t
 
+	memcpy(pool->scriptsig_base + ofs, "\x07\x63\x67\x6d\x69\x6e\x65\x72", 8);
+	ofs += 8;
+
+	pool->scriptsig_base[ofs++] = 42; // Just because
+
 	/* Followed by extranonce size, fixed at 8 */
 	pool->scriptsig_base[ofs++] = 8;
+	pool->nonce2_offset = 41 + ofs;
+	ofs += 8;
+
+	free(pool->coinbase);
+	len = 	41 // prefix
+		+ ofs // 49
+		+ 4 // txin sequence no
+		+ 1 // transactions
+		+ 8 // value
+		+ 25 // txout
+		+ 4; // lock
+	pool->coinbase = calloc(len, 1);
+	if (unlikely(!pool->coinbase))
+		quit(1, "Failed to calloc coinbase in gbt_solo_decode");
+
+	memcpy(pool->coinbase + 41, pool->scriptsig_base, ofs);
+	memcpy(pool->coinbase + 41 + ofs, "\xff\xff\xff\xff", 4);
+	pool->coinbase[41 + ofs + 4] = 1;
+	u64 = (uint64_t *)&(pool->coinbase[41 + ofs + 4 + 1]);
+	*u64 = htole64(coinbasevalue);
 	cg_wunlock(&pool->gbt_lock);
 
 	return true;
@@ -6346,6 +6370,15 @@ static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 	ret = true;
 	address_to_pubkeyhash(pool->script_pubkey, opt_btc_address);
 	hex2bin(scriptsig_header_bin, scriptsig_header, 41);
+	memcpy(pool->coinbase, scriptsig_header_bin, 41);
+	memcpy(pool->coinbase + 41 + 50 + 4 + 1 + 8, pool->script_pubkey, 25);
+
+	if (opt_debug) {
+		char *cb = bin2hex(pool->coinbase, 41 + 50 + 4 + 1 + 8 + 25 + 4);
+
+		applog(LOG_DEBUG, "Pool %d coinbase %s", pool->pool_no, cb);
+		free(cb);
+	}
 
 	exit(0);
 

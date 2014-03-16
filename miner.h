@@ -1261,8 +1261,8 @@ struct pool {
 	unsigned char merklebin[16 * 32];
 	int transactions;
 	unsigned char **txn_data;
-	unsigned char scriptsig_base[33];
-	unsigned char script_pubkey[25];
+	unsigned char scriptsig_base[42 + 2];
+	unsigned char script_pubkey[25 + 3];
 	int nValue;
 
 	/* Shared by both stratum & GBT */
