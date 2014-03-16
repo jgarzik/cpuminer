@@ -2214,6 +2214,7 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	uint64_t coinbasevalue;
 	const char *flags;
 	const char *bits;
+	char header[228];
 	int ofs = 0, len;
 	uint64_t *u64;
 	uint32_t *u32;
@@ -2324,6 +2325,17 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	pool->n2size = 4;
 	pool->coinbase_len = 41 + 50 + 4 + 1 + 8 + 25 + 4; // Fixed size
 	cg_wunlock(&pool->gbt_lock);
+
+	snprintf(header, 225, "%s%s%s%s%s%s%s",
+		 pool->bbversion,
+		 pool->prev_hash,
+		 "0000000000000000000000000000000000000000000000000000000000000000",
+		 pool->ntime,
+		 pool->nbit,
+		 "00000000", /* nonce */
+		 workpadding);
+	if (unlikely(!hex2bin(pool->header_bin, header, 112)))
+		quit(1, "Failed to hex2bin header in gbt_solo_decode");
 
 	return true;
 }
@@ -6784,7 +6796,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	flip32(swap32, data32);
 
 	/* Copy the data template from header_bin */
-	memcpy(work->data, pool->header_bin, 128);
+	memcpy(work->data, pool->header_bin, 112);
 	memcpy(work->data + pool->merkle_offset, merkle_root, 32);
 
 	/* Store the stratum work diff to check it still matches the pool's
@@ -6800,7 +6812,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	if (opt_debug) {
 		char *header, *merkle_hash;
 
-		header = bin2hex(work->data, 128);
+		header = bin2hex(work->data, 112);
 		merkle_hash = bin2hex((const unsigned char *)merkle_root, 32);
 		applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
 		applog(LOG_DEBUG, "Generated stratum header %s", header);
