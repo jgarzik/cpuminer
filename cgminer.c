@@ -6908,7 +6908,6 @@ static void gen_solo_work(struct pool *pool, struct work *work)
 
 	local_work++;
 	work->pool = pool;
-	work->stratum = true;
 	work->nonce = 0;
 	work->id = total_work++;
 	work->longpoll = false;
@@ -9518,7 +9517,7 @@ retry:
 				}
 			}
 			gen_solo_work(pool, work);
-			applog(LOG_DEBUG, "Generated GBT SOLO work!");
+			applog(LOG_DEBUG, "Generated GBT SOLO work");
 			stage_work(work);
 			continue;
 		}
