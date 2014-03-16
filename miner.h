@@ -1125,15 +1125,10 @@ enum pool_enable {
 
 struct stratum_work {
 	char *job_id;
-	char *prev_hash;
 	unsigned char **merkle_bin;
-	char *bbversion;
-	char *nbit;
-	char *ntime;
 	bool clean;
 
 	size_t header_len;
-	int merkles;
 	double diff;
 };
 
@@ -1255,7 +1250,6 @@ struct pool {
 	int gbt_txns;
 
 	bool gbt_solo;
-	int merkles;
 	unsigned char merklebin[16 * 32];
 	int transactions;
 	unsigned char **txn_data;
@@ -1268,7 +1262,12 @@ struct pool {
 	int coinbase_len;
 	int nonce2_offset;
 	unsigned char header_bin[128];
+	int merkles;
 	int merkle_offset;
+	char *prev_hash;
+	char *bbversion;
+	char *nbit;
+	char *ntime;
 
 	struct timeval tv_lastwork;
 };

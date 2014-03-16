@@ -1595,7 +1595,7 @@ static char *json_array_string(json_t *val, unsigned int entry)
 	return NULL;
 }
 
-static char *blank_merkel = "0000000000000000000000000000000000000000000000000000000000000000";
+static char *blank_merkle = "0000000000000000000000000000000000000000000000000000000000000000";
 
 static bool parse_notify(struct pool *pool, json_t *val)
 {
@@ -1643,22 +1643,22 @@ static bool parse_notify(struct pool *pool, json_t *val)
 
 	cg_wlock(&pool->data_lock);
 	free(pool->swork.job_id);
-	free(pool->swork.prev_hash);
-	free(pool->swork.bbversion);
-	free(pool->swork.nbit);
-	free(pool->swork.ntime);
+	free(pool->prev_hash);
+	free(pool->bbversion);
+	free(pool->nbit);
+	free(pool->ntime);
 	pool->swork.job_id = job_id;
-	pool->swork.prev_hash = prev_hash;
+	pool->prev_hash = prev_hash;
 	cb1_len = strlen(coinbase1) / 2;
 	cb2_len = strlen(coinbase2) / 2;
-	pool->swork.bbversion = bbversion;
-	pool->swork.nbit = nbit;
-	pool->swork.ntime = ntime;
+	pool->bbversion = bbversion;
+	pool->nbit = nbit;
+	pool->ntime = ntime;
 	pool->swork.clean = clean;
 	alloc_len = pool->coinbase_len = cb1_len + pool->n1_len + pool->n2size + cb2_len;
 	pool->nonce2_offset = cb1_len + pool->n1_len;
 
-	for (i = 0; i < pool->swork.merkles; i++)
+	for (i = 0; i < pool->merkles; i++)
 		free(pool->swork.merkle_bin[i]);
 	if (merkles) {
 		pool->swork.merkle_bin = realloc(pool->swork.merkle_bin,
@@ -1679,15 +1679,15 @@ static bool parse_notify(struct pool *pool, json_t *val)
 			}
 		}
 	}
-	pool->swork.merkles = merkles;
+	pool->merkles = merkles;
 	if (clean)
 		pool->nonce2 = 0;
-	pool->merkle_offset = strlen(pool->swork.bbversion) +
-			      strlen(pool->swork.prev_hash);
+	pool->merkle_offset = strlen(pool->bbversion) +
+			      strlen(pool->prev_hash);
 	pool->swork.header_len = pool->merkle_offset +
 	/* merkle_hash */	 32 +
-				 strlen(pool->swork.ntime) +
-				 strlen(pool->swork.nbit) +
+				 strlen(pool->ntime) +
+				 strlen(pool->nbit) +
 	/* nonce */		 8 +
 	/* workpadding */	 96;
 	pool->merkle_offset /= 2;
@@ -1696,11 +1696,11 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	header = alloca(pool->swork.header_len);
 	snprintf(header, pool->swork.header_len,
 		"%s%s%s%s%s%s%s",
-		pool->swork.bbversion,
-		pool->swork.prev_hash,
-		blank_merkel,
-		pool->swork.ntime,
-		pool->swork.nbit,
+		pool->bbversion,
+		pool->prev_hash,
+		blank_merkle,
+		pool->ntime,
+		pool->nbit,
 		"00000000", /* nonce */
 		workpadding);
 	ret = hex2bin(pool->header_bin, header, 128);

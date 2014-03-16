@@ -6770,7 +6770,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	/* Generate merkle root */
 	gen_hash(pool->coinbase, merkle_root, pool->coinbase_len);
 	memcpy(merkle_sha, merkle_root, 32);
-	for (i = 0; i < pool->swork.merkles; i++) {
+	for (i = 0; i < pool->merkles; i++) {
 		memcpy(merkle_sha + 32, pool->swork.merkle_bin[i], 32);
 		gen_hash(merkle_sha, merkle_root, 64);
 		memcpy(merkle_sha, merkle_root, 32);
@@ -6790,7 +6790,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	/* Copy parameters required for share submission */
 	work->job_id = strdup(pool->swork.job_id);
 	work->nonce1 = strdup(pool->nonce1);
-	work->ntime = strdup(pool->swork.ntime);
+	work->ntime = strdup(pool->ntime);
 	cg_runlock(&pool->data_lock);
 
 	if (opt_debug) {
