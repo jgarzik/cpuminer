@@ -2292,7 +2292,6 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	/* Followed by extranonce size, fixed at 8 */
 	pool->scriptsig_base[ofs++] = 8;
 	cg_wunlock(&pool->gbt_lock);
-	hex2bin(scriptsig_header_bin, scriptsig_header, 41);
 
 	return true;
 }
@@ -6346,6 +6345,7 @@ static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 	applog(LOG_DEBUG, "Bitcoin address %s is valid", opt_btc_address);
 	ret = true;
 	address_to_pubkeyhash(pool->script_pubkey, opt_btc_address);
+	hex2bin(scriptsig_header_bin, scriptsig_header, 41);
 
 	exit(0);
 
