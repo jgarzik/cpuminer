@@ -2201,17 +2201,23 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 		pool->txn_data[0] = NULL;
 }
 
+static const char scriptsig_header[] = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff";
+static unsigned char scriptsig_header_bin[41];
+static const char scriptsig_suffix[] = { 0x07, 0x63, 0x67, 0x6d, 0x69, 0x6e, 0x65, 0x72 };
 
 static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 {
 	json_t *transaction_arr, *coinbase_aux;
 	const char *previousblockhash;
 	unsigned char hash_swap[32];
+	struct timeval now;
 	const char *target;
 	int coinbasevalue;
 	const char *flags;
 	const char *bits;
 	int ofs = 0, len;
+	uint64_t *u64;
+	uint32_t *u32;
 	int version;
 	int curtime;
 	int height;
@@ -2253,17 +2259,40 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	hex2bin((unsigned char *)&pool->gbt_bits, bits, 4);
 	gbt_merkle_bins(pool, transaction_arr);
 
+	memset(pool->scriptsig_base, 0, 33);
+	pool->scriptsig_base[ofs++] = 40; // Template is 40 bytes total
+
 	/* Put block height at start of template */
-	ofs = ser_number(pool->scriptsig_template, height);
+	pool->scriptsig_base[ofs++] = 0xff; // Always encode the height as u64
+	u64 = (uint64_t *)&pool->scriptsig_base[ofs];
+	*u64 = htole64(height); // Encode height as LE64
+	ofs += 8; // size of uint64_t
+
 	/* Followed by flags */
+	pool->scriptsig_base[ofs++] = 7; // Flags length should be 7
 	len = strlen(flags) / 2;
-	hex2bin(pool->scriptsig_template + ofs, flags, len);
-	ofs += len;
+	if (len > 7) {
+		applog(LOG_WARNING, "Coinbaseaux flags too long at %d bytes, truncating to 7", len);
+		len = 7;
+	}
+	hex2bin(pool->scriptsig_base + ofs, flags, len);
+	ofs += 7;
+
 	/* Followed by timestamp */
-	ofs += ser_number(pool->scriptsig_template + ofs, time(NULL));
-	/* Followed by extranonce size, fixed at 16 */
-	pool->scriptsig_template[ofs++] = 16;
+	cgtime(&now);
+	pool->scriptsig_base[ofs++] = 0xff; // Encode seconds as u64
+	u64 = (uint64_t *)&pool->scriptsig_base[ofs];
+	*u64 = now.tv_sec;
+	ofs += 8; // sizeof uint64_t
+	pool->scriptsig_base[ofs++] = 0xfe; // Encode usecs as u32
+	u32 = (uint32_t *)&pool->scriptsig_base[ofs];
+	*u32 = now.tv_usec;
+	ofs += 4; // sizeof uint32_t
+
+	/* Followed by extranonce size, fixed at 8 */
+	pool->scriptsig_base[ofs++] = 8;
 	cg_wunlock(&pool->gbt_lock);
+	hex2bin(scriptsig_header_bin, scriptsig_header, 41);
 
 	return true;
 }
@@ -6292,8 +6321,6 @@ static bool stratum_works(struct pool *pool)
 	return true;
 }
 
-static const char scriptsig_suffix[] = { 0x07, 0x63, 0x67, 0x6d, 0x69, 0x6e, 0x65, 0x72 };
-
 static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 {
 	char s[256];
@@ -6319,6 +6346,8 @@ static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 	applog(LOG_DEBUG, "Bitcoin address %s is valid", opt_btc_address);
 	ret = true;
 	address_to_pubkeyhash(pool->script_pubkey, opt_btc_address);
+
+	exit(0);
 
 out:
 	return ret;
