@@ -2581,11 +2581,13 @@ void dev_error(struct cgpu_info *dev, enum dev_reason reason)
 /* Realloc an existing string to fit an extra string s, appending s to it. */
 void *realloc_strcat(char *ptr, char *s)
 {
-	size_t old = strlen(ptr), len = strlen(s);
+	size_t old = 0, len = strlen(s);
 	char *ret;
 
 	if (!len)
 		return ptr;
+	if (ptr)
+		old = strlen(ptr);
 
 	len += old + 1;
 	align_len(&len);
@@ -2594,8 +2596,11 @@ void *realloc_strcat(char *ptr, char *s)
 	if (unlikely(!ret))
 		quithere(1, "Failed to malloc");
 
-	sprintf(ret, "%s%s", ptr, s);
-	free(ptr);
+	if (ptr) {
+		sprintf(ret, "%s%s", ptr, s);
+		free(ptr);
+	} else
+		sprintf(ret, "%s", s);
 	return ret;
 }
 

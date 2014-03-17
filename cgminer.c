@@ -2124,26 +2124,24 @@ static bool pool_localgen(struct pool *pool)
 
 static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 {
+	unsigned char *hashbin;
 	json_t *arr_val;
-	int i, j;
+	int i, j, binleft, binlen;
 
-	for (i = 0; i < pool->transactions; i++)
-		free(pool->txn_data[i]);
+	free(pool->txn_data);
+	pool->txn_data = NULL;
 	pool->transactions = 0;
 	pool->merkles = 0;
 	pool->transactions = json_array_size(transaction_arr);
-	pool->txn_data = realloc(pool->txn_data, sizeof(unsigned char *) * (pool->transactions + 1));
+	binlen = pool->transactions * 32 + 32;
+	hashbin = alloca(binlen + 32);
+	memset(hashbin, 0, 32);
+	binleft = binlen / 32;
 	if (pool->transactions) {
-		unsigned char *hashbin;
 		unsigned char binswap[32];
-		int binleft, binlen = pool->transactions * 32 + 32;
 
-		hashbin = alloca(binlen + 32);
-		memset(hashbin, 0, 32);
 		for (i = 0; i < pool->transactions; i++) {
 			const char *hash, *txn;
-			unsigned char *txn_bin;
-			int txn_len;
 
 			arr_val = json_array_get(transaction_arr, i);
 			hash = json_string_value(json_object_get(arr_val, "hash"));
@@ -2153,13 +2151,16 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 					pool->pool_no);
 				return;
 			}
-			txn_len = strlen(txn) / 2;
-			txn_bin = malloc(txn_len);
-			if (!txn_bin)
-				quit(1, "Failed to malloc txn_bin in gbt_merkle_bins");
-			hex2bin(txn_bin, txn, txn_len);
-			pool->txn_data[i] = txn_bin;
+			pool->txn_data = realloc_strcat(pool->txn_data, (char *)txn);
 			if (!hash) {
+				unsigned char *txn_bin;
+				int txn_len;
+
+				txn_len = strlen(txn) / 2;
+				txn_bin = malloc(txn_len);
+				if (!txn_bin)
+					quit(1, "Failed to malloc txn_bin in gbt_merkle_bins");
+				hex2bin(txn_bin, txn, txn_len);
 				/* This is needed for pooled mining since only
 				 * transaction data and not hashes are sent */
 				gen_hash(txn_bin, hashbin + 32 + 32 * i, txn_len);
@@ -2171,37 +2172,35 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 			}
 			swab256(hashbin + 32 + 32 * i, binswap);
 		}
-		binleft = binlen / 32;
-		if (binleft > 1) {
-			while (42) {
-				if (binleft == 1)
-					break;
-				memcpy(pool->merklebin + (pool->merkles * 32), hashbin + 32, 32);
-				pool->merkles++;
-				if (binleft % 2) {
-					memcpy(hashbin + binlen, hashbin + binlen - 32, 32);
-					binlen += 32;
-					binleft++;
-				}
-				for (i = 32, j = 64; j < binlen; i += 32, j += 64) {
-					gen_hash(hashbin + j, hashbin + i, 64);
-				}
-				binleft /= 2;
-				binlen = binleft * 32;
+	}
+	if (binleft > 1) {
+		while (42) {
+			if (binleft == 1)
+				break;
+			memcpy(pool->merklebin + (pool->merkles * 32), hashbin + 32, 32);
+			pool->merkles++;
+			if (binleft % 2) {
+				memcpy(hashbin + binlen, hashbin + binlen - 32, 32);
+				binlen += 32;
+				binleft++;
 			}
+			for (i = 32, j = 64; j < binlen; i += 32, j += 64) {
+				gen_hash(hashbin + j, hashbin + i, 64);
+			}
+			binleft /= 2;
+			binlen = binleft * 32;
 		}
-		if (opt_debug) {
-			char hashhex[68];
+	}
+	if (opt_debug) {
+		char hashhex[68];
 
-			for (i = 0; i < pool->merkles; i++) {
-				__bin2hex(hashhex, pool->merklebin + i * 32, 32);
-				applog(LOG_DEBUG, "MH%d %s",i, hashhex);
-			}
+		for (i = 0; i < pool->merkles; i++) {
+			__bin2hex(hashhex, pool->merklebin + i * 32, 32);
+			applog(LOG_DEBUG, "MH%d %s",i, hashhex);
 		}
-		applog(LOG_INFO, "Stored %d transactions from pool %d", pool->transactions,
-		       pool->pool_no);
-	} else
-		pool->txn_data[0] = NULL;
+	}
+	applog(LOG_INFO, "Stored %d transactions from pool %d", pool->transactions,
+		pool->pool_no);
 }
 
 static double diff_from_target(void *target);
@@ -2329,7 +2328,7 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 
 	pool->nonce2 = 0;
 	pool->n2size = 4;
-	pool->coinbase_len = 41 + 50 + 4 + 1 + 8 + 25 + 4; // Fixed size
+	pool->coinbase_len = 41 + 50 + 4 + 1 + 8 + 1 + 25 + 4; // Fixed size
 	cg_wunlock(&pool->gbt_lock);
 
 	snprintf(header, 225, "%s%s%s%s%s%s%s",
@@ -3088,6 +3087,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	if (work->gbt) {
 		char *gbt_block, *varint;
 		unsigned char data[80];
+		struct pool *pool = work->pool;
 
 		flip80(data, work->data);
 		gbt_block = bin2hex(data, 80);
@@ -3113,12 +3113,19 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 		s = strdup("{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"");
 		s = realloc_strcat(s, gbt_block);
+		/* Has submit/coinbase support */
+		if (!pool->has_gbt) {
+			cg_rlock(&pool->gbt_lock);
+			if (pool->txn_data)
+				s = realloc_strcat(s, pool->txn_data);
+			cg_runlock(&pool->gbt_lock);
+		}
 		if (work->job_id) {
 			s = realloc_strcat(s, "\", {\"workid\": \"");
 			s = realloc_strcat(s, work->job_id);
 			s = realloc_strcat(s, "\"}]}");
 		} else
-			s = realloc_strcat(s, "\", {}]}");
+			s = realloc_strcat(s, "\"]}");
 		free(gbt_block);
 	} else {
 		s = strdup("{\"method\": \"getwork\", \"params\": [ \"");
@@ -6402,7 +6409,8 @@ static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 	address_to_pubkeyhash(pool->script_pubkey, opt_btc_address);
 	hex2bin(scriptsig_header_bin, scriptsig_header, 41);
 	memcpy(pool->coinbase, scriptsig_header_bin, 41);
-	memcpy(pool->coinbase + 41 + 50 + 4 + 1 + 8, pool->script_pubkey, 25);
+	pool->coinbase[41 + 50 + 4 + 1 + 8] = 25;
+	memcpy(pool->coinbase + 41 + 50 + 4 + 1 + 8 + 1, pool->script_pubkey, 25);
 
 	if (opt_debug) {
 		char *cb = bin2hex(pool->coinbase, pool->coinbase_len);
@@ -6853,8 +6861,27 @@ static void gen_solo_work(struct pool *pool, struct work *work)
 {
 	unsigned char merkle_root[32], merkle_sha[64];
 	uint32_t *data32, *swap32;
+	struct timeval now;
 	uint64_t nonce2le;
 	int i;
+
+	cgtime(&now);
+	if (now.tv_sec - pool->tv_lastwork.tv_sec > 5) {
+		struct curl_ent *ce;
+		int rolltime;
+		json_t *val;
+
+		ce = pop_curl_entry(pool);
+		val = json_rpc_call(ce->curl, pool->rpc_url, pool->rpc_userpass, pool->rpc_req,
+				    true, false, &rolltime, pool, false);
+
+		if (likely(val)) {
+			bool rc = work_decode(pool, work, val);
+			if (rc)
+				setup_gbt_solo(ce->curl, pool);
+		}
+		push_curl_entry(ce, pool);
+	}
 
 	cg_wlock(&pool->gbt_lock);
 
@@ -6864,10 +6891,11 @@ static void gen_solo_work(struct pool *pool, struct work *work)
 	memcpy(pool->coinbase + pool->nonce2_offset, &nonce2le, pool->n2size);
 	work->nonce2 = pool->nonce2++;
 	work->nonce2_len = pool->n2size;
+	work->gbt_txns = pool->transactions + 1;
 
 	/* Downgrade to a read lock to read off the pool variables */
 	cg_dwlock(&pool->gbt_lock);
-
+	work->coinbase = bin2hex(pool->coinbase, pool->coinbase_len);
 	/* Generate merkle root */
 	gen_hash(pool->coinbase, merkle_root, pool->coinbase_len);
 	memcpy(merkle_sha, merkle_root, 32);
@@ -6910,6 +6938,7 @@ static void gen_solo_work(struct pool *pool, struct work *work)
 	calc_midstate(work);
 
 	local_work++;
+	work->gbt = true;
 	work->pool = pool;
 	work->nonce = 0;
 	work->id = total_work++;
