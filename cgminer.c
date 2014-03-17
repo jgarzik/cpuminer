@@ -4691,7 +4691,7 @@ static bool test_work_current(struct work *work)
 			}
 		} else if (have_longpoll)
 			applog(LOG_NOTICE, "New block detected on network before pool notification");
-		else
+		else if (!pool->gbt_solo)
 			applog(LOG_NOTICE, "New block detected on network");
 		restart_threads();
 	} else {
@@ -7864,9 +7864,6 @@ retry_pool:
 		goto out;
 	}
 
-	/* Any longpoll from any pool is enough for this to be true */
-	have_longpoll = true;
-
 	if (pool->gbt_solo) {
 		applog(LOG_WARNING, "Block change for %s detection via getblockcount polling",
 		       cp->rpc_url);
@@ -7901,6 +7898,9 @@ retry_pool:
 			}
 		}
 	}
+
+	/* Any longpoll from any pool is enough for this to be true */
+	have_longpoll = true;
 
 	wait_lpcurrent(cp);
 
