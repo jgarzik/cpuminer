@@ -2166,7 +2166,6 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 			txn = json_string_value(json_object_get(arr_val, "data"));
 			len = strlen(txn);
 			memcpy(pool->txn_data + ofs, txn, len);
-			pool->txn_data = realloc_strcat(pool->txn_data, (char *)txn);
 			if (!hash) {
 				unsigned char *txn_bin;
 				int txn_len;
@@ -2282,6 +2281,7 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	pool->nValue = coinbasevalue;
 	hex2bin((unsigned char *)&pool->gbt_bits, bits, 4);
 	gbt_merkle_bins(pool, transaction_arr);
+	pool->height = height;
 
 	memset(pool->scriptsig_base, 0, 42);
 	pool->scriptsig_base[ofs++] = 49; // Template is 49 bytes
@@ -2371,15 +2371,15 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		goto out;
 	}
 
-	if (pool->has_gbt) {
+	if (pool->gbt_solo) {
+		if (unlikely(!gbt_solo_decode(pool, res_val)))
+			goto out;
+		ret = true;
+		goto out;
+	} else if (pool->has_gbt) {
 		if (unlikely(!gbt_decode(pool, res_val)))
 			goto out;
 		work->gbt = true;
-		ret = true;
-		goto out;
-	} else if (pool->gbt_solo) {
-		if (unlikely(!gbt_solo_decode(pool, res_val)))
-			goto out;
 		ret = true;
 		goto out;
 	} else if (unlikely(!getwork_decode(res_val, work)))
@@ -6556,6 +6556,9 @@ retry_stratum:
 		if (rc) {
 			if (pool->gbt_solo) {
 				ret = setup_gbt_solo(curl, pool);
+				pool->lp_started = true;
+				if (unlikely(pthread_create(&pool->longpoll_thread, NULL, longpoll_thread, (void *)pool)))
+					quit(1, "Failed to create pool longpoll thread");
 				goto out;
 			}
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
@@ -6871,6 +6874,27 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	cgtime(&work->tv_staged);
 }
 
+static void update_gbt_solo(struct pool *pool)
+{
+	struct work *work = make_work();
+	struct curl_ent *ce;
+	int rolltime;
+	json_t *val;
+
+	ce = pop_curl_entry(pool);
+	val = json_rpc_call(ce->curl, pool->rpc_url, pool->rpc_userpass, pool->rpc_req,
+			    true, false, &rolltime, pool, false);
+
+	if (likely(val)) {
+		bool rc = work_decode(pool, work, val);
+
+		if (rc)
+			setup_gbt_solo(ce->curl, pool);
+		free_work(work);
+	}
+	push_curl_entry(ce, pool);
+}
+
 static void gen_solo_work(struct pool *pool, struct work *work)
 {
 	unsigned char merkle_root[32], merkle_sha[64];
@@ -6880,22 +6904,8 @@ static void gen_solo_work(struct pool *pool, struct work *work)
 	int i;
 
 	cgtime(&now);
-	if (now.tv_sec - pool->tv_lastwork.tv_sec > 5) {
-		struct curl_ent *ce;
-		int rolltime;
-		json_t *val;
-
-		ce = pop_curl_entry(pool);
-		val = json_rpc_call(ce->curl, pool->rpc_url, pool->rpc_userpass, pool->rpc_req,
-				    true, false, &rolltime, pool, false);
-
-		if (likely(val)) {
-			bool rc = work_decode(pool, work, val);
-			if (rc)
-				setup_gbt_solo(ce->curl, pool);
-		}
-		push_curl_entry(ce, pool);
-	}
+	if (now.tv_sec - pool->tv_lastwork.tv_sec > 60)
+		update_gbt_solo(pool);
 
 	cg_wlock(&pool->gbt_lock);
 
@@ -7788,7 +7798,7 @@ static struct pool *select_longpoll_pool(struct pool *cp)
 {
 	int i;
 
-	if (cp->hdr_path || cp->has_gbt)
+	if (cp->hdr_path || cp->has_gbt || cp->gbt_solo)
 		return cp;
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
@@ -7856,6 +7866,41 @@ retry_pool:
 
 	/* Any longpoll from any pool is enough for this to be true */
 	have_longpoll = true;
+
+	if (pool->gbt_solo) {
+		applog(LOG_WARNING, "Block change for %s detection via getblockcount polling",
+		       cp->rpc_url);
+		while (42) {
+			json_t *val, *res_val = NULL;
+
+			cgtime(&start);
+			wait_lpcurrent(cp);
+			sprintf(lpreq, "{\"id\": 0, \"method\": \"getblockcount\"}\n");
+			val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, lpreq, true,
+					    false, &rolltime, pool, false);
+			if (likely(val))
+				res_val = json_object_get(val, "result");
+			if (likely(res_val)) {
+				int height = json_integer_value(res_val);
+
+				failures = 0;
+				json_decref(val);
+				if (height >= cp->height) {
+					applog(LOG_WARNING, "Block height change to %d detected on pool %d",
+					       height, cp->pool_no);
+					update_gbt_solo(pool);
+				} else
+					cgsleep_ms(500);
+			} else {
+				cgtime(&end);
+				if (end.tv_sec - start.tv_sec > 30)
+					continue;
+				if (failures == 1)
+					applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", lp_url);
+				cgsleep_ms(30000);
+			}
+		}
+	}
 
 	wait_lpcurrent(cp);
 

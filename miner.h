@@ -1247,11 +1247,12 @@ struct pool {
 	uint32_t gbt_bits;
 	unsigned char *txn_hashes;
 	int gbt_txns;
+	int height;
 
 	bool gbt_solo;
 	unsigned char merklebin[16 * 32];
 	int transactions;
-	unsigned char *txn_data;
+	char *txn_data;
 	unsigned char scriptsig_base[42 + 2];
 	unsigned char script_pubkey[25 + 3];
 	int nValue;
