@@ -2138,25 +2138,40 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 	memset(hashbin, 0, 32);
 	binleft = binlen / 32;
 	if (pool->transactions) {
-		unsigned char binswap[32];
+		int len = 1, ofs = 0;
+		const char *txn;
 
 		for (i = 0; i < pool->transactions; i++) {
-			const char *hash, *txn;
-
 			arr_val = json_array_get(transaction_arr, i);
-			hash = json_string_value(json_object_get(arr_val, "hash"));
 			txn = json_string_value(json_object_get(arr_val, "data"));
 			if (!txn) {
 				applog(LOG_ERR, "Pool %d json_string_value fail - cannot find transaction data",
 					pool->pool_no);
 				return;
 			}
+			len += strlen(txn);
+		}
+
+		pool->txn_data = malloc(len);
+		if (unlikely(!pool->txn_data))
+			quit(1, "Failed to calloc txn_data in gbt_merkle_bins");
+		pool->txn_data[len] = '\0';
+
+		for (i = 0; i < pool->transactions; i++) {
+			unsigned char binswap[32];
+			const char *hash;
+
+			arr_val = json_array_get(transaction_arr, i);
+			hash = json_string_value(json_object_get(arr_val, "hash"));
+			txn = json_string_value(json_object_get(arr_val, "data"));
+			len = strlen(txn);
+			memcpy(pool->txn_data + ofs, txn, len);
 			pool->txn_data = realloc_strcat(pool->txn_data, (char *)txn);
 			if (!hash) {
 				unsigned char *txn_bin;
 				int txn_len;
 
-				txn_len = strlen(txn) / 2;
+				txn_len = len / 2;
 				txn_bin = malloc(txn_len);
 				if (!txn_bin)
 					quit(1, "Failed to malloc txn_bin in gbt_merkle_bins");
@@ -3087,7 +3102,6 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	if (work->gbt) {
 		char *gbt_block, *varint;
 		unsigned char data[80];
-		struct pool *pool = work->pool;
 
 		flip80(data, work->data);
 		gbt_block = bin2hex(data, 80);
