@@ -533,12 +533,12 @@ static const char *timing_mode_str(enum timing_mode timing_mode)
 static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 {
 	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
+	int read_count_timing = 0;
 	enum sub_ident ident;
 	double Hs, fail_time;
 	char buf[BUFSIZ+1];
 	char *ptr, *comma, *eq;
 	size_t max;
-	int read_count_timing;
 	int i;
 
 	if (opt_icarus_timing == NULL)
