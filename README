@@ -51,6 +51,10 @@ Single pool with stratum protocol support:
 
 cgminer -o stratum+tcp://pool:port -u username -p password
 
+Solo mining to local bitcoind:
+
+cgminer -o http://localhost:8332 -u username -p password --btc-address 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
+
 The list of proxy types are:
  http:    standard http 1.1 proxy
  http0:   http 1.0 proxy
@@ -190,6 +194,7 @@ Options for both config file and command line:
 --bitmain-temp      Set bitmain target temperature
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
 --bxm-bits <arg>    Set BXM bits for overclocking (default: 50)
+--btc-address <arg> Set bitcoin target address when solo mining to bitcoind
 --compact           Use compact display without per device statistics
 --debug|-D          Enable debug output
 --device|-d <arg>   Select device to use, one value, range and/or comma separated (e.g. 0-2,4) default: all
@@ -626,6 +631,26 @@ quotas in a configuration file they would be specified thus:
                 "pass" : "passb"
         }
 ]
+
+
+---
+SOLO MINING
+
+Solo mining can be done efficiently as a single pool entry or a backup to
+any other pooled mining and it is recommended everyone have solo mining set up
+as their final backup in case all their other pools are DDoSed/down for the
+security of the network. To enable solo mining, one must be running a local
+bitcoind/bitcoin-qt or have one they have rpc access to. To do this, edit your
+bitcoind configuration file (bitcoin.conf) with the following extra lines,
+using your choice of username and password:
+
+rpcuser=username
+rpcpassword=password
+
+Restart bitcoind, then start cgminer, pointing to the bitcoind and choose a
+btc address with the following options, altering to suit their setup:
+
+cgminer -o http://localhost:8332 -u username -p password --btc-address 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
 
 
 ---
