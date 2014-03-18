@@ -2166,6 +2166,7 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 			txn = json_string_value(json_object_get(arr_val, "data"));
 			len = strlen(txn);
 			memcpy(pool->txn_data + ofs, txn, len);
+			ofs += len;
 			if (!hash) {
 				unsigned char *txn_bin;
 				int txn_len;
@@ -6445,8 +6446,8 @@ out:
 static bool pool_active(struct pool *pool, bool pinging)
 {
 	struct timeval tv_getwork, tv_getwork_reply;
+	json_t *val = NULL;
 	bool ret = false;
-	json_t *val;
 	CURL *curl;
 	int uninitialised_var(rolltime);
 
@@ -6586,7 +6587,6 @@ retry_stratum:
 			       pool->pool_no, pool->rpc_url);
 			free_work(work);
 		}
-		json_decref(val);
 
 		if (pool->lp_url)
 			goto out;
@@ -6637,6 +6637,8 @@ retry_stratum:
 			applog(LOG_WARNING, "Pool %u slow/down or URL or credentials invalid", pool->pool_no);
 	}
 out:
+	if (val)
+		json_decref(val);
 	curl_easy_cleanup(curl);
 	return ret;
 }
