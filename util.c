@@ -719,14 +719,14 @@ void address_to_pubkeyhash(unsigned char *pkh, const char *addr)
 }
 
 /*  For encoding nHeight into coinbase */
-int ser_number(unsigned char *s, uint32_t val)
+int ser_number(unsigned char *s, int64_t val)
 {
 	int i = 1;
 
 	s[0] = i;
 	while (val > 127) {
-		s[0] = ++i;
 		s[i] = val % 256;
+		s[0] = ++i;
 		val /= 256;
 	}
 	s[++i] = val;
