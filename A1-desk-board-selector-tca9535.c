@@ -59,15 +59,8 @@ static bool tca9535_write(int fdesc, uint8_t p0, uint8_t p1)
 	return err == 0;
 }
 
-void lock_board_selector(void)
-{
-//	applog(LOG_WARNING, "lock_board_selector()");
-	mutex_lock(&board_ctx.lock);
-}
-
 void unlock_board_selector(void)
 {
-//	applog(LOG_WARNING, "unlock_board_selector()");
 	mutex_unlock(&board_ctx.lock);
 }
 
@@ -78,16 +71,13 @@ bool a1_board_selector_init(void)
 
 	board_ctx.file = open("/dev/i2c-1", O_RDWR);
 	if (board_ctx.file < 0) {
-		fprintf(stderr,
-			"Error: Could not open i2c-1.%d: %s\n",
-			board_ctx.addr, strerror(errno));
+		applog(LOG_ERR, "Failed to open i2c-1: %s\n", strerror(errno));
 		return false;
 	}
 
 	if (ioctl(board_ctx.file, I2C_SLAVE, board_ctx.addr) < 0) {
-		fprintf(stderr,
-			"Error: Could not set address to 0x%02x: %s\n",
-			board_ctx.addr, strerror(errno));
+		applog(LOG_WARNING, "Could not set address to 0x%02x: %s\n",
+		       board_ctx.addr, strerror(errno));
 		return false;
 	}
 	bool retval =	tca9535_write(board_ctx.file, 0x06, 0xe0) &&
@@ -108,8 +98,7 @@ bool a1_board_selector_select_board(uint8_t board)
 	if (board > 7)
 		return false;
 
-//	applog(LOG_WARNING, "board_selector_select_board(%d)", board);
-	lock_board_selector();
+	mutex_lock(&board_ctx.lock);
 	if (board_ctx.active_board == board)
 		return true;
 
@@ -137,10 +126,10 @@ bool a1_board_selector_reset_board(void)
 
 bool a1_board_selector_reset_all_boards(void)
 {
-	lock_board_selector();
+	mutex_lock(&board_ctx.lock);
 	board_ctx.board_mask = 0xff & ~UNUSED_BITS;
 	bool retval = __board_selector_reset();
-	unlock_board_selector();
+	mutex_unlock(&board_ctx.lock);
 	return retval;
 }
 
