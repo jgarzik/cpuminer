@@ -692,14 +692,14 @@ void b58tobin(unsigned char *b58bin, const char *b58)
 	for (i = 0; i < len; i++) {
 		c = b58[i];
 		c = b58tobin_tbl[c];
-		for (j = 7; j >= 0; j--) {
+		for (j = 6; j >= 0; j--) {
 			t = ((uint64_t)bin32[j]) * 58 + c;
 			c = (t & 0x3f00000000ull) >> 32;
 			bin32[j] = t & 0xffffffffull;
 		}
 	}
 	*(b58bin++) = bin32[0] & 0xff;
-	for (i = 2; i < 7; i++) {
+	for (i = 1; i < 7; i++) {
 		*((uint32_t *)b58bin) = htobe32(bin32[i]);
 		b58bin += sizeof(uint32_t);
 	}
@@ -709,6 +709,7 @@ void address_to_pubkeyhash(unsigned char *pkh, const char *addr)
 {
 	unsigned char b58bin[25];
 
+	memset(b58bin, 0, 25);
 	b58tobin(b58bin, addr);
 	pkh[0] = 0x76;
 	pkh[1] = 0xa9;

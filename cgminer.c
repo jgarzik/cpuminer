@@ -2327,11 +2327,11 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 
 	free(pool->coinbase);
 	len = 	41 // prefix
-		+ ofs // 49
+		+ ofs // 1 + 49
 		+ 4 // txin sequence no
 		+ 1 // transactions
 		+ 8 // value
-		+ 25 // txout
+		+ 1 + 25 // txout
 		+ 4; // lock
 	pool->coinbase = calloc(len, 1);
 	if (unlikely(!pool->coinbase))
