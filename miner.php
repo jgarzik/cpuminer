@@ -11,7 +11,7 @@ global $checklastshare, $poolinputs, $hidefields;
 global $ignorerefresh, $changerefresh, $autorefresh;
 global $allowcustompages, $customsummarypages;
 global $miner_font_family, $miner_font_size;
-global $bad_font_family, $bad_font_size;
+global $bad_font_family, $bad_font_size, $add_css_names;
 global $colouroverride, $placebuttons, $userlist;
 #
 $doctype = "<!DOCTYPE html>\n";
@@ -208,6 +208,12 @@ $miner_font_size = '13pt';
 $bad_font_family = '"Times New Roman", Times, serif';
 $bad_font_size = '18pt';
 #
+# List of css names to add to the css style object
+#	e.g. array('td.cool' => false);
+# true/false to not include the default $miner_font
+# The css name/value pairs must be defined in $colouroverride below
+$add_css_names = array();
+#
 # Edit this or redefine it in myminer.php to change the colour scheme
 # See $colourtable below for the list of names
 $colouroverride = array();
@@ -314,7 +320,7 @@ function php_pr($cmd)
 function htmlhead($mcerr, $checkapi, $rig, $pg = null, $noscript = false)
 {
  global $doctype, $title, $miner_font_family, $miner_font_size;
- global $bad_font_family, $bad_font_size;
+ global $bad_font_family, $bad_font_size, $add_css_names;
  global $error, $readonly, $poolinputs, $here;
  global $ignorerefresh, $autorefresh;
 
@@ -358,8 +364,16 @@ td.sta { $miner_font ".getcss('td.sta')."}
 td.tot { $miner_font ".getcss('td.tot')."}
 td.lst { $miner_font ".getcss('td.lst')."}
 td.hi { $miner_font ".getcss('td.hi')."}
-td.lo { $miner_font ".getcss('td.lo')."}
-</style>
+td.lo { $miner_font ".getcss('td.lo')."}\n";
+ if (isset($add_css_names))
+	foreach ($add_css_names as $css_name => $no_miner_font)
+	{
+		echo "$css_name { ";
+		if ($no_miner_font !== true)
+			echo "$miner_font ";
+		echo getcss("$css_name")."}\n";
+	}
+ echo "</style>
 </head><body".getdom('body').">\n";
 if ($noscript === false)
 {
@@ -796,32 +810,46 @@ function endzero($num)
  return $rep;
 }
 #
-function fmt($section, $name, $value, $when, $alldata)
+function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 {
  global $dfmt, $rownum;
 
  if ($alldata == null)
 	$alldata = array();
 
- $errorclass = ' class=err';
- $warnclass = ' class=warn';
- $lstclass = ' class=lst';
- $hiclass = ' class=hi';
- $loclass = ' class=lo';
- $c2class = ' class=two';
- $totclass = ' class=tot';
+ $errorclass = 'err';
+ $warnclass = 'warn';
+ $lstclass = 'lst';
+ $hiclass = 'hi';
+ $loclass = 'lo';
+ $c2class = 'two';
+ $totclass = 'tot';
  $b = '&nbsp;';
 
- $ret = $value;
  $class = '';
 
  $nams = explode('.', $name);
  if (count($nams) > 1)
 	$name = $nams[count($nams)-1];
 
+ $done = false;
  if ($value === null)
+ {
 	$ret = $b;
+	$done = true;
+ }
  else
+	if ($cf != NULL and function_exists($cf))
+	{
+		list($ret, $class) = $cf($section, $name, $value, $when, $alldata,
+					   $warnclass, $errorclass, $hiclass, $loclass, $totclass);
+		if ($ret !== '')
+			$done = true;
+	}
+
+ if ($done === false)
+ {
+	$ret = $value;
 	switch ($section.'.'.$name)
 	{
 	case 'GPU.Last Share Time':
@@ -1229,6 +1257,7 @@ function fmt($section, $name, $value, $when, $alldata)
 			$ret = number_format((float)$value);
 		break;
 	}
+ }
 
  if ($section == 'NOTIFY' && substr($name, 0, 1) == '*' && $value != '0')
 	$class = $errorclass;
@@ -1244,6 +1273,9 @@ function fmt($section, $name, $value, $when, $alldata)
 
  if ($ret === '')
 	$ret = $b;
+
+ if ($class !== '')
+	$class = " class=$class";
 
  return array($ret, $class);
 }
@@ -2291,10 +2323,11 @@ function secmatch($section, $field)
  return false;
 }
 #
-function customset($showfields, $sum, $section, $rig, $isbutton, $result, $total)
+function customset($showfields, $sum, $section, $rig, $isbutton, $result, $total, $cf = NULL)
 {
  global $rigbuttons;
 
+ $rn = 0;
  foreach ($result as $sec => $row)
  {
 	$secname = preg_replace('/\d/', '', $sec);
@@ -2314,13 +2347,22 @@ function customset($showfields, $sum, $section, $rig, $isbutton, $result, $total
 		echo rigbutton($rig, $rig, $when, $row, $rigbuttons);
 	else
 	{
-		list($ignore, $class) = fmt('total', '', '', $when, $row);
+		list($ignore, $class) = fmt('total', '', '', $when, $row, $cf);
 		echo "<td align=middle$class>$rig</td>";
 	}
 
 	foreach ($showfields as $name => $one)
 	{
-		if (isset($row[$name]))
+		if ($name === '#' and $sec != 'total')
+		{
+			$rn++;
+			$value = $rn;
+			if (isset($total[$name]))
+				$total[$name]++;
+			else
+				$total[$name] = 1;
+		}
+		elseif (isset($row[$name]))
 		{
 			$value = $row[$name];
 
@@ -2341,11 +2383,14 @@ function customset($showfields, $sum, $section, $rig, $isbutton, $result, $total
 		}
 
 		if (strpos($secname, '+') === false)
-			list($showvalue, $class) = fmt($secname, $name, $value, $when, $row);
+			list($showvalue, $class) = fmt($secname, $name, $value, $when, $row, $cf);
 		else
 		{
-			$parts = explode('.', $name, 2);
-			list($showvalue, $class) = fmt($parts[0], $parts[1], $value, $when, $row);
+			if ($name != '#')
+				$parts = explode('.', $name, 2);
+			else
+				$parts[0] = $parts[1] = '#';
+			list($showvalue, $class) = fmt($parts[0], $parts[1], $value, $when, $row, $cf);
 		}
 
 		echo "<td$class align=right>$showvalue</td>";
@@ -2710,6 +2755,11 @@ function processcustompage($pagename, $sections, $sum, $ext, $namemap)
 
 		if (isset($results[$sectionmap[$section]]))
 		{
+			if (isset($ext[$section]['fmt']))
+				$cf = $ext[$section]['fmt'];
+			else
+				$cf = NULL;
+
 			$rigresults = processext($ext, $section, $results[$sectionmap[$section]], $fields);
 
 			$showfields = array();
@@ -2732,6 +2782,11 @@ function processcustompage($pagename, $sections, $sum, $ext, $namemap)
 									else
 										$showhead[$f] = 1;
 								}
+							}
+							elseif ($field === '#')
+							{
+								$showfields[$field] = 1;
+								$showhead[$field] = 1;
 							}
 							elseif (isset($row[$field]))
 							{
@@ -2761,10 +2816,10 @@ function processcustompage($pagename, $sections, $sum, $ext, $namemap)
 				$add = array('total' => array());
 
 				foreach ($rigresults as $num => $result)
-					$total = customset($showfields, $sum, $section, $num, true, $result, $total);
+					$total = customset($showfields, $sum, $section, $num, true, $result, $total, $cf);
 
 				if (count($total) > 0)
-					customset($showfields, $sum, $section, '&Sigma;', false, $add, $total);
+					customset($showfields, $sum, $section, '&Sigma;', false, $add, $total, $cf);
 
 				$first = false;
 
