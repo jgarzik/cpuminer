@@ -108,7 +108,7 @@ enum dev_reason;
 struct cgpu_info;
 void b58tobin(unsigned char *b58bin, const char *b58);
 void address_to_pubkeyhash(unsigned char *pkh, const char *addr);
-int ser_number(unsigned char *s, int64_t val);
+void ser_number(unsigned char *s, int64_t val);
 unsigned char *ser_string(char *s, int *slen);
 int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);
 void thr_info_cancel(struct thr_info *thr);

@@ -2286,13 +2286,9 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	memset(pool->scriptsig_base, 0, 42);
 	pool->scriptsig_base[ofs++] = 49; // Template is 49 bytes
 
-	/* Put block height at start of template. Pad to 9 == size of int64_t */
-	len = ser_number(pool->scriptsig_base + ofs, height);
-	ofs += len;
-	len = 9 - len - 1;
-	if (len)
-		pool->scriptsig_base[ofs++] = len;
-	ofs += len;
+	/* Put block height at start of template. */
+	ser_number(pool->scriptsig_base + ofs, height);
+	ofs += 9;
 
 	/* Followed by flags */
 	pool->scriptsig_base[ofs++] = 7; // Flags length should be 7
