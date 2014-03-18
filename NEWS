@@ -1,5 +1,6 @@
 Version 4.2.0 - 18th March 2014
 
+- Fix missing htobe16 on windows and meaningless >u32 string warning.
 - Software ntime roll for all hashfast devices.
 - Silence harmless warning.
 - Drop a failed restart icarus device to allow it to be rehotplugged if

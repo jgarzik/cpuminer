@@ -758,20 +758,14 @@ unsigned char *ser_string(char *s, int *slen)
 		*u16 = htobe16(len);
 		memcpy(ret + 3, s, len);
 		*slen = len + 3;
-	} else if (len < 0x100000000ul) {
+	} else {
+		/* size_t is only 32 bit on many platforms anyway */
 		uint32_t *u32 = (uint32_t *)&ret[1];
 
 		ret[0] = 254;
 		*u32 = htobe32(len);
 		memcpy(ret + 5, s, len);
 		*slen = len + 5;
-	} else {
-		uint64_t *u64 = (uint64_t *)&ret[1];
-
-		ret[0] = 255;
-		*u64 = htobe64(len);
-		memcpy(ret + 9, s, len);
-		*slen = len + 9;
 	}
 	return ret;
 }
