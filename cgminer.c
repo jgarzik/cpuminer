@@ -6398,6 +6398,15 @@ static bool stratum_works(struct pool *pool)
 	return true;
 }
 
+static void __setup_gbt_solo(struct pool *pool)
+{
+	cg_wlock(&pool->gbt_lock);
+	memcpy(pool->coinbase, scriptsig_header_bin, 41);
+	pool->coinbase[41 + 50 + 4 + 1 + 8] = 25;
+	memcpy(pool->coinbase + 41 + 50 + 4 + 1 + 8 + 1, pool->script_pubkey, 25);
+	cg_wunlock(&pool->gbt_lock);
+}
+
 static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 {
 	char s[256];
@@ -6424,9 +6433,7 @@ static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 	ret = true;
 	address_to_pubkeyhash(pool->script_pubkey, opt_btc_address);
 	hex2bin(scriptsig_header_bin, scriptsig_header, 41);
-	memcpy(pool->coinbase, scriptsig_header_bin, 41);
-	pool->coinbase[41 + 50 + 4 + 1 + 8] = 25;
-	memcpy(pool->coinbase + 41 + 50 + 4 + 1 + 8 + 1, pool->script_pubkey, 25);
+	__setup_gbt_solo(pool);
 
 	if (opt_debug) {
 		char *cb = bin2hex(pool->coinbase, pool->coinbase_len);
@@ -6876,6 +6883,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	cgtime(&work->tv_staged);
 }
 
+static void gen_solo_work(struct pool *pool, struct work *work);
+
 static void update_gbt_solo(struct pool *pool)
 {
 	struct work *work = make_work();
@@ -6890,9 +6899,12 @@ static void update_gbt_solo(struct pool *pool)
 	if (likely(val)) {
 		bool rc = work_decode(pool, work, val);
 
-		if (rc)
-			setup_gbt_solo(ce->curl, pool);
-		free_work(work);
+		if (rc) {
+			__setup_gbt_solo(pool);
+			gen_solo_work(pool, work);
+			stage_work(work);
+		} else
+			free_work(work);
 	}
 	push_curl_entry(ce, pool);
 }
