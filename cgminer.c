@@ -6643,6 +6643,7 @@ out:
 
 static void pool_resus(struct pool *pool)
 {
+	pool->seq_getfails = 0;
 	if (pool_strategy == POOL_FAILOVER && pool->prio < cp_prio())
 		applog(LOG_WARNING, "Pool %d %s alive, testing stability", pool->pool_no, pool->rpc_url);
 	else
@@ -6889,6 +6890,7 @@ static void update_gbt_solo(struct pool *pool)
 	json_t *val;
 
 	ce = pop_curl_entry(pool);
+retry:
 	val = json_rpc_call(ce->curl, pool->rpc_url, pool->rpc_userpass, pool->rpc_req,
 			    true, false, &rolltime, pool, false);
 
@@ -6901,7 +6903,17 @@ static void update_gbt_solo(struct pool *pool)
 			stage_work(work);
 		} else
 			free_work(work);
+	} else {
+		applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get gbt, retrying in 5s",
+		       pool->pool_no);
+		if (++pool->seq_getfails > 5) {
+			pool_died(pool);
+			goto out;
+		}
+		cgsleep_ms(5000);
+		goto retry;
 	}
+out:
 	push_curl_entry(ce, pool);
 }
 
