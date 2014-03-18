@@ -1300,6 +1300,7 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 			if (share_work_tdiff(icarus) > info->fail_time + 60) {
 				applog(LOG_ERR, "%s %d: Device failed to respond to restart",
 				       icarus->drv->name, icarus->device_id);
+				usb_nodev(icarus);
 				return -1;
 			}
 		} else {
