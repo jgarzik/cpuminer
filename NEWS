@@ -1,3 +1,120 @@
+Version 4.2.0 - 18th March 2014
+
+- Software ntime roll for all hashfast devices.
+- Silence harmless warning.
+- Drop a failed restart icarus device to allow it to be rehotplugged if
+possible.
+- Work with more than one transaction.
+- Kill gbt solo pools that don't respond to the gbt request 5 times
+sequentially.
+- Fix ser_number for no remaining val byte.
+- Create a work item and stage it when updating the gbt solo template to allow
+new block detection and restart code to work.
+- Test block hash as well as block height when solo mining to ensure we haven't
+been mining on an orphan branch.
+- Fix transaction processing for gbt solo.
+- Encode height using integer varint format.
+- Make new block detection message not show in gbt solo from test_work_current
+- Add block detection via getblockcount polling in gbt solo and update gbt
+template every 60 seconds.
+- Iterate over transactions twice to malloc only once when copying all the
+transaction data.
+- Update solo coinbase regularly and submit as gbt work
+- Only show merkle hashes for solo mining in debug mode.
+- Set correct flag for solo work.
+- Generate gbt solo work emulating stratum work construction.
+- Set the diff as a double sdiff from gbt solo data.
+- Move swork.diff out of the stratum work section to be shared as sdiff.
+- Generate a header bin from gbt solo as per the cached stratum one.
+- Store strings similar to stratum's when decoding gbt solo
+- Avoid allocing and freeing stratum strings that should be fixed length.
+- Run parser through detect_stratum after stratum+tcp:// is force added
+- Remove unnecessary header length calculation for stratum header binary and
+only binary convert the correct length of the header.
+- Share more fields between stratum and gbt
+- Share coinbase_len variable b/w stratum and gbt and setup more gbt solo
+parameters.
+- Generate a valid coinbase and set nonce2offset for gbt solo
+- Move scriptsig header bin conversion to setup gbt solo
+- Create our own custom scriptsig base.
+- Add helper functions for creating script signature templates and beging
+building template.
+- Do gbt solo decoding under gbt lock.
+- Add more gbt variable decoding from gbt solo information.
+- Store all the transaction data in binary form when using GBT
+- When setting up solo mining, check validity of bitcoin address against
+bitcoind
+- Make pooled GBT mining use merkle bin optimisations slated for solo mining.
+- Abstract out the merkle bin calculation for gbt solo
+- Implement efficient merkle tree base from solo GBT information.
+- miner.php custom formatting and row counter '#'
+- Drillbit: Fix for underestimating hash rate from Bitfury devices
+- Send per-core hashrates at regular ~5min intervals back to cta devices.
+- Calculate the cta per core hashrate at 5 minute intervals.
+- Check the bits of the correct core in cta bit count.
+- Display the bit count along with the bitmap for each cta core in the API stats
+output.
+- Store and display the per core hashrate on cta relative to each work restart.
+- Decrease the time we wait for unsetting a core on the cta bitmap to correspond
+with the lower max diff of 32.
+- Set max diff on cointerra devices to 32 which is still only 11 shares per
+second but allows for earlier confirmation of per core hashrates.
+- Keep track of when the last restart and work updates were triggered and
+provide helper functions for knowing the time since then.
+- hashfast make api stats field names unique
+- Fix gcc longjmp warning in api.c
+- Add a per-core hashrate to the cta API stats.
+- miner.php support edevs and estats
+- API - put edevstatus where it was supposed to be
+- Icarus - allow timing mode to work with ANU and not slow it down
+- drillbit - remove warnings
+- drillbit - minor code tidy up
+- Drillbit: Change language around 'void' to warning about limiter disabled
+- Drillbit: Fix accidental over-counting of HW errors
+- Drillbit: --drillbit-auto parameter for tweakable custom tuning of ASIC speeds
+- Drillbit: Output warning if board reports void warranty
+- Drillbit: Add Avalon & drillbit-autotune notes to ASIC-README
+- Drillbit: Limit work sent out to 8 units in a single pass, was DoSing a full
+double scroll
+- Drillbit: Move drillbit_empty_buffer calls to only when errors occur, were
+limiting performance on Windows
+- Fix Windows bug with libusb_reset_device returning SUCCESS for disconnected
+device
+- Drillbit: Fix some warnings
+- Drillbit: Add --drillbit-autotune option for device to dynamically alter clock
+speed
+- Drillbit: Fix typo in previous commit
+- Drillbit: Remove default config in cgminer, rely on defaults in firmware
+- Drillbit: Combine split USB transfer for sending new work, reduce overhead
+- Drillbit: Add support for protocol V4, with device-agnostic board
+configuration data
+- Drillbit driver: Add support for Avalon-based Drillbit miners
+- API - add edevs and estats - to only show enabled devices
+- Check device data exists on a hfa instance before trying to reinit it.
+- Print off what quadrant regulator failed if known in hfa driver.
+- Reset all the stats on autovoltage complete in cta driver.
+- Use correct diff instead of diffbits in cta driver.
+- Whitelist all firmwares <= 0.5 on hfa for software rolling of ntime.
+- Avoid a memory leak by reusing the ntime field when rolling stratum work.
+- Clear the pipe bitmap on cta only when no share has occurred for 2 hours
+instead of 1.
+- Cta share_hashes should be added, and we can base it on device wdiff instead
+of pool work difficulty for more accurate hashrates.
+- Since the device runtime is now reset, the Raw hashrate entry in the cta API
+output is no longer meaningful.
+- Look for autovoltage returning to zero on cta driver and reset stats at that
+point since the hashrate is unreliable till then.
+- ants1 - cgminerise applog calls
+- Default to stratum+tcp:// on any urls that don't have a prefix instead of
+http.
+- Trivial cta style changes.
+- ants1 - fix/enable temperature checking and remove unneeded temp_old
+- ants1 - move local cgpu variables to info structure
+- ants1 use a klist to store work and copied work
+- Simplify dramatically the cross-process cgminer locking through use of flock
+instead of sysv semaphores.
+
+
 Version 4.1.0 - 8th March 2014
 
 - Correct fix for dev start time being adjusted for stat zeroing.
