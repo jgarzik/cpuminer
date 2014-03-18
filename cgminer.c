@@ -7881,6 +7881,7 @@ retry_pool:
 				res_val = json_object_get(val, "result");
 			if (likely(res_val)) {
 				int height = json_integer_value(res_val);
+				const char *prev_hash;
 
 				failures = 0;
 				json_decref(val);
@@ -7888,8 +7889,24 @@ retry_pool:
 					applog(LOG_WARNING, "Block height change to %d detected on pool %d",
 					       height, cp->pool_no);
 					update_gbt_solo(pool);
-				} else
-					cgsleep_ms(500);
+					continue;
+				}
+				sprintf(lpreq, "{\"id\": 0, \"method\": \"getblockhash\", \"params\": [%d]}\n", height);
+				val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
+						    lpreq, true, false, &rolltime, pool, false);
+				if (val) {
+					/* Do a comparison on a short stretch of
+					 * the hash to make sure it hasn't changed
+					 * due to mining on an orphan branch. */
+					prev_hash = json_string_value(json_object_get(val, "result"));
+					if (unlikely(prev_hash && strncasecmp(prev_hash + 56, pool->prev_hash, 8))) {
+						applog(LOG_WARNING, "Mining on orphan branch detected, switching!");
+						update_gbt_solo(pool);
+					}
+					json_decref(val);
+				}
+
+				cgsleep_ms(500);
 			} else {
 				cgtime(&end);
 				if (end.tv_sec - start.tv_sec > 30)
