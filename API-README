@@ -1470,20 +1470,25 @@ $autorefresh = default value, 0 means dont auto-refresh
 ---------
 
 Default:
- $placebuttons = 'top';
-
-Where to place the Refresh, Summary, Custom Pages, Quit, etc. buttons
-
-Valid values are: 'top' 'bot' 'both'
- anything else means don't show them - case sensitive
-
----------
-
-Default:
  $miner_font_family = 'verdana,arial,sans';
  $miner_font_size = '13pt';
 
 Change these to set the font and font size used on the web page
+
+---------
+
+Default:
+ $add_css_names = array();
+
+List of CSS names to add to the CSS style object
+	e.g. array('td.cool' => false);
+true/false to not include the default $miner_font
+The CSS name/value pairs must be defined in $colouroverride below
+
+This allows you to create multiple complete CSS styles, optionally
+using a different font to the default used/specified for all other
+styles, and then when using the class name in a custom formatting
+function (fmt) in a customsummarypage, it can use this style
 
 ---------
 
@@ -1504,6 +1509,20 @@ you could do the following:
 	'td.h background'	=> 'blue'
  );
 
+You can also add your own CSS styles to be used by a customsummarypage
+custom format function, if you specify the class name in $add_css_names
+and put the class styles in $colouroverride
+
+---------
+
+Default:
+ $placebuttons = 'top';
+
+Where to place the Refresh, Summary, Custom Pages, Quit, etc. buttons
+
+Valid values are: 'top' 'bot' 'both'
+ anything else means don't show them - case sensitive
+
 ---------
 
 Default:
@@ -1522,16 +1541,22 @@ The section defines what data you want in the summary table and the Fields
 define what data you want shown from that section
 
 Standard sections are:
- SUMMARY, POOL, PGA, GPU, NOTIFY, CONFIG, DEVDETAILS, DEVS, STATS, COIN
+ SUMMARY, POOL, PGA, GPU, NOTIFY, CONFIG, DEVDETAILS, DEVS, EDEVS, STATS,
+ ESTATS, COIN
 
 Fields are the names as shown on the headers on the normal pages
+
+There is a special field name '#' that will total to the number of rows
+displayed in the custom summary page
+In the actual row output it is a row counter per rig
 
 Fields can be 'name=new name' to display 'name' with a different heading
 'new name'
 
 There are also now joined sections:
- SUMMARY+POOL, SUMMARY+DEVS, SUMMARY+CONFIG, DEVS+NOTIFY, DEVS+DEVDETAILS
- SUMMARY+COIN
+ SUMMARY+POOL, SUMMARY+DEVS, SUMMARY+EDEVS, DEVS+STATS, EDEVS+ESTATS,
+ POOL+STATS plus many more
+See the miner.php function joinsections() for the full list
 
 These sections are an SQL join of the two sections and the fields in them
 are named section.field where section. is the section the field comes from
@@ -1648,10 +1673,10 @@ The example given:
 With cgminer 2.10.2 and later, miner.php includes an extension to
 the custom pages that allows you to apply SQL style commands to
 the data: where, group, and having
-cgminer 3.4.2 also includes another option 'gen'
+cgminer 3.4.2 and later also includes another option 'gen'
+cgminer 4.1.1 and later also includes another option 'fmt'
 
-As an example, miner.php includes a more complex custom page called 'Pools'
-this includes the extension:
+An example of an 'ext' section in a more complex custom summary page:
 
 $poolsext = array(
  'POOL+STATS' => array(
@@ -1665,8 +1690,30 @@ $poolsext = array(
                         'STATS.Times Recv' => 'sum',
                         'STATS.Bytes Recv' => 'sum'),
         'gen' => array('AvShr', 'POOL.Difficulty Accepted/max(POOL.Accepted,1)),
-        'having' => array(array('STATS.Bytes Recv', '>', 0)))
-);
+        'having' => array(array('STATS.Bytes Recv', '>', 0)),
+	'fmt' => 'myfmtfunc'));
+
+function myfmtfunc($section, $name, $value, $when, $alldata,
+		   $warnclass, $errorclass, $hiclass, $loclass, $totclass);
+{
+ $ret = '';
+ $class = '';
+ switch ($section.'.'.$name)
+ {
+ case 'GEN.AvShr':
+	$ret = number_format((float)$value, 2);
+	if ($value == 0)
+		$class = $errorclass;
+	break;
+ // Nonsence example :) since total would show the sum of the averages
+ case 'total.AvShr':
+	$ret = $value;
+	if ($value == 0)
+		$class = $warnclass;
+	break;
+ }
+ return array($ret, $class);
+}
 
 This allows you to group records together from one or more rigs
 In the example, you'll get each Pool (with the same URL+Stratum+GBT settings)
@@ -1716,6 +1763,34 @@ The first 4 are as expected - the numerical sum, average, minimum or maximum
  of course any valid 'DEVS.Xyz' would give the same 'count' value
 'any' is effectively random: the field value in the 1st row of the grouped data
 An unrecognised 'function' uses 'any'
+
+
+A 'fmt' allows you to specify a function to be called by miner.php to format
+data to be displayed in the output html
+If the function doesn't exist in miner.php or myminer.php, then it will be
+ignored
+If the function returns a $ret value (see the example 'myfmtfunc' above) then
+that will be displayed, however if $ret is empty, then the normal formatting
+code will process the data to be displayed
+Thus, if there is no formatting code in miner.php for the field value, then it
+will be displayed as it was received from the API
+i.e. this allows you to either supply some php code to format field values
+that are not formatted by miner.php, or you can also override the formatting
+done by miner.php itself for your chosen list of field data
+You can return an '&nbsp;' if you wish to force it to display as blank
+Use the example 'myfmtfunc' above as a template to write your own
+Note that your provided function will be called for all data being displayed,
+so you should use the 'case' layout as in the example to select the data fields
+you wish to format, but return '' for fields you don't wish to change the way
+they are formatted
+The 2nd return field is the name of a CSS class in $colourtable or created in
+your own $add_css_names and $colouroverride
+The value you return can stay in effect even if you return an empty $ret, if
+the default formatting function for the field doesn't set the $class variable
+The fields passed to your function by miner.php:
+ $warnclass, $errorclass, $hiclass, $loclass, $totclass
+contain the default class names used for formatting
+
 
 A 'gen' allows you to generate new fields from any php valid function of any
 of the other fields
