@@ -6426,7 +6426,7 @@ static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 		applog(LOG_ERR, "Bitcoin address %s is NOT valid", opt_btc_address);
 		goto out;
 	}
-	applog(LOG_DEBUG, "Bitcoin address %s is valid", opt_btc_address);
+	applog(LOG_NOTICE, "Solo mining to valid address: %s", opt_btc_address);
 	ret = true;
 	address_to_pubkeyhash(pool->script_pubkey, opt_btc_address);
 	hex2bin(scriptsig_header_bin, scriptsig_header, 41);
