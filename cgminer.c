@@ -2119,7 +2119,7 @@ static bool getwork_decode(json_t *res_val, struct work *work)
 /* Returns whether the pool supports local work generation or not. */
 static bool pool_localgen(struct pool *pool)
 {
-	return (pool->has_stratum || pool->has_gbt);
+	return (pool->has_stratum || pool->has_gbt || pool->gbt_solo);
 }
 
 static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
