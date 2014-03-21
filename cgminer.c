@@ -6892,6 +6892,8 @@ static void update_gbt_solo(struct pool *pool)
 	json_t *val;
 
 	ce = pop_curl_entry(pool);
+	/* Bitcoind doesn't like many open RPC connections. */
+	curl_easy_setopt(ce->curl, CURLOPT_FORBID_REUSE, 1);
 retry:
 	val = json_rpc_call(ce->curl, pool->rpc_url, pool->rpc_userpass, pool->rpc_req,
 			    true, false, &rolltime, pool, false);
@@ -7897,6 +7899,7 @@ retry_pool:
 			cgtime(&start);
 			wait_lpcurrent(cp);
 			sprintf(lpreq, "{\"id\": 0, \"method\": \"getblockcount\"}\n");
+			curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 0);
 			val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, lpreq, true,
 					    false, &rolltime, pool, false);
 			if (likely(val))
@@ -7914,6 +7917,11 @@ retry_pool:
 					continue;
 				}
 				sprintf(lpreq, "{\"id\": 0, \"method\": \"getblockhash\", \"params\": [%d]}\n", height);
+				/* Reuse the connection only once for the hash
+				 * query since it's done immediately after the
+				 * height query and then drop it since bitcoind
+				 * doesn't like many open connections. */
+				curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1);
 				val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
 						    lpreq, true, false, &rolltime, pool, false);
 				if (val) {
