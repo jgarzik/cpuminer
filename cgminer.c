@@ -4688,7 +4688,7 @@ static bool test_work_current(struct work *work)
 				applog(LOG_NOTICE, "%sLONGPOLL from pool %d detected new block",
 				       work->gbt ? "GBT " : "", work->pool->pool_no);
 			}
-		} else if (have_longpoll)
+		} else if (have_longpoll && !pool->gbt_solo)
 			applog(LOG_NOTICE, "New block detected on network before pool notification");
 		else if (!pool->gbt_solo)
 			applog(LOG_NOTICE, "New block detected on network");
