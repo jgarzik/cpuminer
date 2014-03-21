@@ -6895,12 +6895,13 @@ static void gen_solo_work(struct pool *pool, struct work *work);
  * avoiding holding the lock once we've set the bool. */
 static void get_gbt_curl(struct pool *pool, int poll)
 {
-	cg_wlock(&pool->gbt_lock);
+	cg_ilock(&pool->gbt_lock);
 	while (pool->gbt_curl_inuse) {
-		cg_wunlock(&pool->gbt_lock);
+		cg_uilock(&pool->gbt_lock);
 		cgsleep_ms(poll);
-		cg_wlock(&pool->gbt_lock);
+		cg_ilock(&pool->gbt_lock);
 	}
+	cg_ulock(&pool->gbt_lock);
 	pool->gbt_curl_inuse = true;
 	cg_wunlock(&pool->gbt_lock);
 }
