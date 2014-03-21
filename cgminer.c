@@ -7896,14 +7896,16 @@ retry_pool:
 	if (pool->gbt_solo) {
 		applog(LOG_WARNING, "Block change for %s detection via getblockcount polling",
 		       cp->rpc_url);
-		/* Bitcoind doesn't like many open RPC connections. */
-		curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1);
 		while (42) {
 			json_t *val, *res_val = NULL;
 
 			if (unlikely(pool->removed))
 				goto out;
 
+			curl_easy_cleanup(curl);
+			curl = curl_easy_init();
+			/* Bitcoind doesn't like many open RPC connections. */
+			curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1);
 			cgtime(&start);
 			wait_lpcurrent(cp);
 			sprintf(lpreq, "{\"id\": 0, \"method\": \"getblockcount\"}\n");
