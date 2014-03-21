@@ -6443,6 +6443,15 @@ out:
 	return ret;
 }
 
+static void pool_start_lp(struct pool *pool)
+{
+	if (!pool->lp_started) {
+		pool->lp_started = true;
+		if (unlikely(pthread_create(&pool->longpoll_thread, NULL, longpoll_thread, (void *)pool)))
+			quit(1, "Failed to create pool longpoll thread");
+	}
+}
+
 static bool pool_active(struct pool *pool, bool pinging)
 {
 	struct timeval tv_getwork, tv_getwork_reply;
@@ -6562,9 +6571,7 @@ retry_stratum:
 		if (rc) {
 			if (pool->gbt_solo) {
 				ret = setup_gbt_solo(curl, pool);
-				pool->lp_started = true;
-				if (unlikely(pthread_create(&pool->longpoll_thread, NULL, longpoll_thread, (void *)pool)))
-					quit(1, "Failed to create pool longpoll thread");
+				pool_start_lp(pool);
 				goto out;
 			}
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
@@ -6619,11 +6626,7 @@ retry_stratum:
 		} else
 			pool->lp_url = NULL;
 
-		if (!pool->lp_started) {
-			pool->lp_started = true;
-			if (unlikely(pthread_create(&pool->longpoll_thread, NULL, longpoll_thread, (void *)pool)))
-				quit(1, "Failed to create pool longpoll thread");
-		}
+		pool_start_lp(pool);
 	} else {
 		/* If we failed to parse a getwork, this could be a stratum
 		 * url without the prefix stratum+tcp:// so let's check it */
