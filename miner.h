@@ -1258,6 +1258,8 @@ struct pool {
 	unsigned char scriptsig_base[42 + 2];
 	unsigned char script_pubkey[25 + 3];
 	int nValue;
+	CURL *gbt_curl;
+	bool gbt_curl_inuse;
 
 	/* Shared by both stratum & GBT */
 	unsigned char *coinbase;

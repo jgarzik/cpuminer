@@ -6438,6 +6438,9 @@ static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 		applog(LOG_DEBUG, "Pool %d coinbase %s", pool->pool_no, cb);
 		free(cb);
 	}
+	pool->gbt_curl = curl_easy_init();
+	if (unlikely(!pool->gbt_curl))
+		quit(1, "GBT CURL initialisation failed");
 
 out:
 	return ret;
@@ -6888,18 +6891,37 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 static void gen_solo_work(struct pool *pool, struct work *work);
 
+/* Use the one instance of gbt_curl, protecting the bool with the gbt_lock but
+ * avoiding holding the lock once we've set the bool. */
+static void get_gbt_curl(struct pool *pool, int poll)
+{
+	cg_wlock(&pool->gbt_lock);
+	while (pool->gbt_curl_inuse) {
+		cg_wunlock(&pool->gbt_lock);
+		cgsleep_ms(poll);
+		cg_wlock(&pool->gbt_lock);
+	}
+	pool->gbt_curl_inuse = true;
+	cg_wunlock(&pool->gbt_lock);
+}
+
+/* No need for locking here */
+static inline void release_gbt_curl(struct pool *pool)
+{
+	pool->gbt_curl_inuse = false;
+}
+
 static void update_gbt_solo(struct pool *pool)
 {
 	struct work *work = make_work();
 	int rolltime;
 	json_t *val;
-	CURL *curl;
 
-	curl = curl_easy_init();
-	/* Bitcoind doesn't like many open RPC connections. */
-	curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1);
+	get_gbt_curl(pool, 10);
 retry:
-	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, pool->rpc_req,
+	/* Bitcoind doesn't like many open RPC connections. */
+	curl_easy_setopt(pool->gbt_curl, CURLOPT_FORBID_REUSE, 1);
+	val = json_rpc_call(pool->gbt_curl, pool->rpc_url, pool->rpc_userpass, pool->rpc_req,
 			    true, false, &rolltime, pool, false);
 
 	if (likely(val)) {
@@ -6922,7 +6944,7 @@ retry:
 		goto retry;
 	}
 out:
-	curl_easy_cleanup(curl);
+	release_gbt_curl(pool);
 }
 
 static void gen_solo_work(struct pool *pool, struct work *work)
@@ -7872,12 +7894,6 @@ static void *longpoll_thread(void *userdata)
 	snprintf(threadname, sizeof(threadname), "%d/Longpoll", cp->pool_no);
 	RenameThread(threadname);
 
-	curl = curl_easy_init();
-	if (unlikely(!curl)) {
-		applog(LOG_ERR, "CURL initialisation failed");
-		return NULL;
-	}
-
 retry_pool:
 	pool = select_longpoll_pool(cp);
 	if (!pool) {
@@ -7901,17 +7917,20 @@ retry_pool:
 			json_t *val, *res_val = NULL;
 
 			if (unlikely(pool->removed))
-				goto out;
+				return NULL;
 
-			curl_easy_cleanup(curl);
-			curl = curl_easy_init();
-			/* Bitcoind doesn't like many open RPC connections. */
-			curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1);
 			cgtime(&start);
 			wait_lpcurrent(cp);
 			sprintf(lpreq, "{\"id\": 0, \"method\": \"getblockcount\"}\n");
-			val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, lpreq, true,
+
+			/* We will be making another call immediately after this
+			 * one to get the height so allow this curl to be reused.*/
+			get_gbt_curl(pool, 500);
+			curl_easy_setopt(pool->gbt_curl, CURLOPT_FORBID_REUSE, 0);
+			val = json_rpc_call(pool->gbt_curl, pool->rpc_url, pool->rpc_userpass, lpreq, true,
 					    false, &rolltime, pool, false);
+			release_gbt_curl(pool);
+
 			if (likely(val))
 				res_val = json_object_get(val, "result");
 			if (likely(res_val)) {
@@ -7926,8 +7945,13 @@ retry_pool:
 					update_gbt_solo(pool);
 					continue;
 				}
-				val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
+
+				get_gbt_curl(pool, 500);
+				curl_easy_setopt(pool->gbt_curl, CURLOPT_FORBID_REUSE, 1);
+				val = json_rpc_call(pool->gbt_curl, pool->rpc_url, pool->rpc_userpass,
 						    lpreq, true, false, &rolltime, pool, false);
+				release_gbt_curl(pool);
+
 				if (val) {
 					/* Do a comparison on a short stretch of
 					 * the hash to make sure it hasn't changed
@@ -7951,6 +7975,10 @@ retry_pool:
 			}
 		}
 	}
+
+	curl = curl_easy_init();
+	if (unlikely(!curl))
+		quit (1, "Longpoll CURL initialisation failed");
 
 	/* Any longpoll from any pool is enough for this to be true */
 	have_longpoll = true;
