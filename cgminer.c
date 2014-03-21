@@ -6571,7 +6571,8 @@ retry_stratum:
 		if (rc) {
 			if (pool->gbt_solo) {
 				ret = setup_gbt_solo(curl, pool);
-				pool_start_lp(pool);
+				if (ret)
+					pool_start_lp(pool);
 				goto out;
 			}
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
