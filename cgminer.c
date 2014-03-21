@@ -6890,15 +6890,15 @@ static void gen_solo_work(struct pool *pool, struct work *work);
 static void update_gbt_solo(struct pool *pool)
 {
 	struct work *work = make_work();
-	struct curl_ent *ce;
 	int rolltime;
 	json_t *val;
+	CURL *curl;
 
-	ce = pop_curl_entry(pool);
+	curl = curl_easy_init();
 	/* Bitcoind doesn't like many open RPC connections. */
-	curl_easy_setopt(ce->curl, CURLOPT_FORBID_REUSE, 1);
+	curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1);
 retry:
-	val = json_rpc_call(ce->curl, pool->rpc_url, pool->rpc_userpass, pool->rpc_req,
+	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, pool->rpc_req,
 			    true, false, &rolltime, pool, false);
 
 	if (likely(val)) {
@@ -6921,7 +6921,7 @@ retry:
 		goto retry;
 	}
 out:
-	push_curl_entry(ce, pool);
+	curl_easy_cleanup(curl);
 }
 
 static void gen_solo_work(struct pool *pool, struct work *work)
@@ -7896,13 +7896,17 @@ retry_pool:
 	if (pool->gbt_solo) {
 		applog(LOG_WARNING, "Block change for %s detection via getblockcount polling",
 		       cp->rpc_url);
+		/* Bitcoind doesn't like many open RPC connections. */
+		curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1);
 		while (42) {
 			json_t *val, *res_val = NULL;
+
+			if (unlikely(pool->removed))
+				goto out;
 
 			cgtime(&start);
 			wait_lpcurrent(cp);
 			sprintf(lpreq, "{\"id\": 0, \"method\": \"getblockcount\"}\n");
-			curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 0);
 			val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, lpreq, true,
 					    false, &rolltime, pool, false);
 			if (likely(val))
@@ -7919,12 +7923,6 @@ retry_pool:
 					update_gbt_solo(pool);
 					continue;
 				}
-				sprintf(lpreq, "{\"id\": 0, \"method\": \"getblockhash\", \"params\": [%d]}\n", height);
-				/* Reuse the connection only once for the hash
-				 * query since it's done immediately after the
-				 * height query and then drop it since bitcoind
-				 * doesn't like many open connections. */
-				curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1);
 				val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
 						    lpreq, true, false, &rolltime, pool, false);
 				if (val) {
