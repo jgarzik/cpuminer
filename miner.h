@@ -744,6 +744,7 @@ extern void api_initlock(void *lock, enum cglock_typ typ, const char *file, cons
 #define cglock_init(_lock) _cglock_init(_lock, __FILE__, __func__, __LINE__)
 #define cg_rlock(_lock) _cg_rlock(_lock, __FILE__, __func__, __LINE__)
 #define cg_ilock(_lock) _cg_ilock(_lock, __FILE__, __func__, __LINE__)
+#define cg_uilock(_lock) _cg_uilock(_lock, __FILE__, __func__, __LINE__)
 #define cg_ulock(_lock) _cg_ulock(_lock, __FILE__, __func__, __LINE__)
 #define cg_wlock(_lock) _cg_wlock(_lock, __FILE__, __func__, __LINE__)
 #define cg_dwlock(_lock) _cg_dwlock(_lock, __FILE__, __func__, __LINE__)
@@ -886,6 +887,12 @@ static inline void _cg_rlock(cglock_t *lock, const char *file, const char *func,
 static inline void _cg_ilock(cglock_t *lock, const char *file, const char *func, const int line)
 {
 	_mutex_lock(&lock->mutex, file, func, line);
+}
+
+/* Unlock intermediate variant without changing to read or write version */
+static inline void _cg_uilock(cglock_t *lock, const char *file, const char *func, const int line)
+{
+	_mutex_unlock(&lock->mutex, file, func, line);
 }
 
 /* Upgrade intermediate variant to a write lock */
