@@ -126,7 +126,7 @@ enum benchwork {
 	BENCHWORK_NONCETIME,
 	BENCHWORK_COUNT
 };
-static char *opt_btc_address = "15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ";
+static char *opt_btc_address;
 static char *opt_benchfile;
 static bool opt_benchfile_display;
 static FILE *benchfile_in;
@@ -6411,6 +6411,11 @@ static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 	bool ret = false;
 	json_t *val, *res_val, *valid_val;
 
+	if (!opt_btc_address) {
+		applog(LOG_ERR, "No BTC address specified, unable to mine solo on %s",
+		       pool->rpc_url);
+		goto out;
+	}
 	snprintf(s, 256, "{\"method\": \"validateaddress\", \"params\": [\"%s\"]}\n", opt_btc_address);
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, true,
 			    false, &rolltime, pool, false);
