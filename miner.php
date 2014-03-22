@@ -2441,12 +2441,12 @@ function genfld($row, $calc)
 	return $val;
 }
 #
-function dogen($ext, $section, &$res, &$fields)
+function dogen($ext, $wg, $gname, $section, &$res, &$fields)
 {
- $gen = $ext[$section]['gen'];
+ $gen = $ext[$section][$wg];
 
  foreach ($gen as $fld => $calc)
-	$fields[] = "GEN.$fld";
+	$fields[] = "$gname.$fld";
 
  foreach ($res as $rig => $result)
 	foreach ($result as $sec => $row)
@@ -2455,7 +2455,7 @@ function dogen($ext, $section, &$res, &$fields)
 		if (secmatch($section, $secname))
 			foreach ($gen as $fld => $calc)
 			{
-				$name = "GEN.$fld";
+				$name = "$gname.$fld";
 
 				$val = genfld($row, $calc);
 
@@ -2470,9 +2470,9 @@ function processext($ext, $section, $res, &$fields)
 
  $res = processcompare('where', $ext, $section, $res);
 
- // Generated fields (functions of other fields)
- if ($allowgen === true && isset($ext[$section]['gen']))
-	dogen($ext, $section, $res, $fields);
+ // Generated fields (functions of other fields before grouping)
+ if ($allowgen === true && isset($ext[$section]['bgen']))
+	dogen($ext, 'bgen', 'BGEN', $section, $res, $fields);
 
  if (isset($ext[$section]['group']))
  {
@@ -2538,6 +2538,10 @@ function processext($ext, $section, $res, &$fields)
 		$res = array('' => $res2);
 	}
  }
+
+ // Generated fields (functions of other fields after grouping)
+ if ($allowgen === true && isset($ext[$section]['gen']))
+	dogen($ext, 'gen', 'GEN', $section, $res, $fields);
 
  return processcompare('having', $ext, $section, $res);
 }
