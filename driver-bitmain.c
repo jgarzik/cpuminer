@@ -1109,13 +1109,8 @@ static void *bitmain_get_results(void *userdata)
 			offset = 0;
 		}
 
-		/* As the usb read returns after just 1ms, sleep long enough
-		 * to leave the interface idle for writes to occur, but do not
-		 * sleep if we have been receiving data as more may be coming. */
-		//if (offset == 0)
-		//	cgsleep_ms_r(&ts_start, BITMAIN_READ_TIMEOUT);
-
-		//cgsleep_prepare_r(&ts_start);
+		// 2ms shouldn't be too much
+		cgsleep_ms(2);
 
 		applog(LOG_DEBUG, "%s%d: %s() read",
 				  bitmain->drv->name, bitmain->device_id, __func__);
