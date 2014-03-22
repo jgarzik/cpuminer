@@ -503,7 +503,7 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
-API V3.3 (cgminer v4.1.1)
+API V3.3 (cgminer v4.2.0)
 
 Added API commands:
  'edevs' - Only enabled devices, for 'devs'
@@ -1674,7 +1674,8 @@ With cgminer 2.10.2 and later, miner.php includes an extension to
 the custom pages that allows you to apply SQL style commands to
 the data: where, group, and having
 cgminer 3.4.2 and later also includes another option 'gen'
-cgminer 4.1.1 and later also includes 2 another options 'fmt' and 'bgen'
+cgminer 4.2.0 and later also includes another option 'fmt'
+cgminer 4.2.1 and later also includes another option 'bgen'
 
 An example of an 'ext' section in a more complex custom summary page:
 
