@@ -3094,29 +3094,28 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 	/* build JSON-RPC request */
 	if (work->gbt) {
-		char *gbt_block, *varint;
+		char *gbt_block, varint[12];
 		unsigned char data[80];
 
 		flip80(data, work->data);
 		gbt_block = bin2hex(data, 80);
 
 		if (work->gbt_txns < 0xfd) {
-			uint8_t val = work->gbt_txns;
+			uint8_t val8 = work->gbt_txns;
 
-			varint = bin2hex((const unsigned char *)&val, 1);
+			__bin2hex(varint, (const unsigned char *)&val8, 1);
 		} else if (work->gbt_txns <= 0xffff) {
-			uint16_t val = htole16(work->gbt_txns);
+			uint16_t val16 = htole16(work->gbt_txns);
 
 			gbt_block = realloc_strcat(gbt_block, "fd");
-			varint = bin2hex((const unsigned char *)&val, 2);
+			__bin2hex(varint, (const unsigned char *)&val16, 2);
 		} else {
-			uint32_t val = htole32(work->gbt_txns);
+			uint32_t val32 = htole32(work->gbt_txns);
 
 			gbt_block = realloc_strcat(gbt_block, "fe");
-			varint = bin2hex((const unsigned char *)&val, 4);
+			__bin2hex(varint, (const unsigned char *)&val32, 4);
 		}
 		gbt_block = realloc_strcat(gbt_block, varint);
-		free(varint);
 		gbt_block = realloc_strcat(gbt_block, work->coinbase);
 
 		s = strdup("{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"");
