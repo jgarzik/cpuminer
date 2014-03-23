@@ -3094,11 +3094,11 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 	/* build JSON-RPC request */
 	if (work->gbt) {
-		char *gbt_block, varint[12];
+		char gbt_block[512], varint[12];
 		unsigned char data[80];
 
 		flip80(data, work->data);
-		gbt_block = bin2hex(data, 80);
+		__bin2hex(gbt_block, data, 80); // 160 length
 
 		if (work->gbt_txns < 0xfd) {
 			uint8_t val8 = work->gbt_txns;
@@ -3107,19 +3107,21 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		} else if (work->gbt_txns <= 0xffff) {
 			uint16_t val16 = htole16(work->gbt_txns);
 
-			gbt_block = realloc_strcat(gbt_block, "fd");
+			strcat(gbt_block, "fd"); // +2
 			__bin2hex(varint, (const unsigned char *)&val16, 2);
 		} else {
 			uint32_t val32 = htole32(work->gbt_txns);
 
-			gbt_block = realloc_strcat(gbt_block, "fe");
+			strcat(gbt_block, "fe"); // +2
 			__bin2hex(varint, (const unsigned char *)&val32, 4);
 		}
-		gbt_block = realloc_strcat(gbt_block, varint);
-		gbt_block = realloc_strcat(gbt_block, work->coinbase);
+		strcat(gbt_block, varint); // +8 max
+		strcat(gbt_block, work->coinbase); // + 268 max
 
-		s = strdup("{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"");
-		s = realloc_strcat(s, gbt_block);
+		s = malloc(512);
+		if (unlikely(!s))
+			quit(1, "Failed to malloc s in submit_upstream_work");
+		sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s", gbt_block); // 46 + 438
 		/* Has submit/coinbase support */
 		if (!pool->has_gbt) {
 			cg_rlock(&pool->gbt_lock);
@@ -3133,7 +3135,6 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 			s = realloc_strcat(s, "\"}]}");
 		} else
 			s = realloc_strcat(s, "\"]}");
-		free(gbt_block);
 	} else {
 		unsigned char data[128];
 		char *hexstr;
