@@ -3077,7 +3077,6 @@ static void print_status(int thr_id)
 
 static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 {
-	char *hexstr = NULL;
 	json_t *val, *res, *err;
 	char *s;
 	bool rc = false;
@@ -3092,11 +3091,6 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	double dev_runtime;
 
 	cgpu = get_thr_cgpu(thr_id);
-
-	endian_flip128(work->data, work->data);
-
-	/* build hex string */
-	hexstr = bin2hex(work->data, sizeof(work->data));
 
 	/* build JSON-RPC request */
 	if (work->gbt) {
@@ -3142,9 +3136,17 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 			s = realloc_strcat(s, "\"]}");
 		free(gbt_block);
 	} else {
+		unsigned char data[128];
+		char *hexstr;
+
+		endian_flip128(data, work->data);
+
+		/* build hex string */
+		hexstr = bin2hex(data, 128);
 		s = strdup("{\"method\": \"getwork\", \"params\": [ \"");
 		s = realloc_strcat(s, hexstr);
 		s = realloc_strcat(s, "\" ], \"id\":1}");
+		free(hexstr);
 	}
 	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, s);
 	s = realloc_strcat(s, "\n");
@@ -3249,7 +3251,6 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 	rc = true;
 out:
-	free(hexstr);
 	return rc;
 }
 
