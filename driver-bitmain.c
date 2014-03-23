@@ -748,6 +748,7 @@ static inline void record_temp_fan(struct bitmain_info *info, struct bitmain_rxs
 		info->fan[i] = bm->fan[i] * BITMAIN_FAN_FACTOR;
 	}
 	info->temp_num = bm->temp_num;
+	info->temp_hi = 0;
 	for (i = 0; i < bm->temp_num; i++) {
 		info->temp[i] = bm->temp[i];
 		/*
@@ -757,9 +758,10 @@ static inline void record_temp_fan(struct bitmain_info *info, struct bitmain_rxs
 		}*/
 		*temp_avg += info->temp[i];
 
-		if (info->temp[i] > info->temp_max) {
+		if (info->temp[i] > info->temp_max)
 			info->temp_max = info->temp[i];
-		}
+		if (info->temp[i] > info->temp_hi)
+			info->temp_hi = info->temp[i];
 	}
 
 	if (bm->temp_num > 0) {
@@ -804,14 +806,21 @@ static void bitmain_update_temps(struct cgpu_info *bitmain, struct bitmain_info 
 		info->temp_history_index = 0;
 		info->temp_sum = 0;
 	}
-	if (unlikely(info->temp_max >= opt_bitmain_overheat)) {
-		applog(LOG_WARNING, "%s%d: overheat! Idling",
-				    bitmain->drv->name, bitmain->device_id);
-		info->overheat = true;
-	} else if (info->overheat && info->temp_max <= opt_bitmain_temp) {
+	if (unlikely(info->temp_hi >= opt_bitmain_overheat)) {
+		if (!info->overheat) {
+			applog(LOG_WARNING, "%s%d: overheat! hi %dC limit %dC idling",
+					    bitmain->drv->name, bitmain->device_id,
+					    info->temp_hi, opt_bitmain_overheat);
+			info->overheat = true;
+			info->overheat_temp = info->temp_hi;
+			info->overheat_count++;
+			info->overheat_slept = 0;
+		}
+	} else if (info->overheat && info->temp_hi <= opt_bitmain_temp) {
 		applog(LOG_WARNING, "%s%d: cooled, restarting",
 				    bitmain->drv->name, bitmain->device_id);
 		info->overheat = false;
+		info->overheat_recovers++;
 	}
 }
 
@@ -1100,13 +1109,9 @@ static void *bitmain_get_results(void *userdata)
 			offset = 0;
 		}
 
-		/* As the usb read returns after just 1ms, sleep long enough
-		 * to leave the interface idle for writes to occur, but do not
-		 * sleep if we have been receiving data as more may be coming. */
-		//if (offset == 0)
-		//	cgsleep_ms_r(&ts_start, BITMAIN_READ_TIMEOUT);
+		// 2ms shouldn't be too much
+		cgsleep_ms(2);
 
-		//cgsleep_prepare_r(&ts_start);
 		applog(LOG_DEBUG, "%s%d: %s() read",
 				  bitmain->drv->name, bitmain->device_id, __func__);
 		ret = bitmain_read(bitmain, buf, rsize, BITMAIN_READ_TIMEOUT, C_BITMAIN_READ);
@@ -1496,6 +1501,48 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 	int timediff = 0;
 	K_ITEM *witem;
 
+	/*
+	 * Overheat just means delay the next work
+	 * since the temperature reply is only found with a work reply,
+	 * we can only sleep and hope it will cool down
+	 * TODO: of course it may be possible to read the temperature
+	 * without sending work ...
+	 */
+	if (info->overheat == true) {
+		if (info->overheat_sleep_ms == 0)
+			info->overheat_sleep_ms = BITMAIN_OVERHEAT_SLEEP_MS_DEF;
+
+		/*
+		 * If we slept and we are still here, and the temp didn't drop,
+		 * increment the sleep time to find a sleep time that causes a
+		 * temperature drop
+		 */
+		if (info->overheat_slept) {
+			if (info->overheat_temp > info->temp_hi)
+				info->overheat_temp = info->temp_hi;
+			else {
+				if (info->overheat_sleep_ms < BITMAIN_OVERHEAT_SLEEP_MS_MAX)
+					info->overheat_sleep_ms += BITMAIN_OVERHEAT_SLEEP_MS_STEP;
+			}
+		}
+
+		applog(LOG_DEBUG, "%s%d: %s() sleeping %"PRIu32" - overheated",
+				  bitmain->drv->name, bitmain->device_id,
+				  __func__, info->overheat_sleep_ms);
+		cgsleep_ms(info->overheat_sleep_ms);
+		info->overheat_sleeps++;
+		info->overheat_slept = info->overheat_sleep_ms;
+		info->overheat_total_sleep += info->overheat_sleep_ms;
+	} else {
+		// If we slept and it cooled then try less next time
+		if (info->overheat_slept) {
+			if (info->overheat_sleep_ms > BITMAIN_OVERHEAT_SLEEP_MS_MIN)
+				info->overheat_sleep_ms -= BITMAIN_OVERHEAT_SLEEP_MS_STEP;
+			info->overheat_slept = 0;
+		}
+
+	}
+
 	applog(LOG_DEBUG, "%s%d: %s() start",
 			  bitmain->drv->name, bitmain->device_id,
 			  __func__);
@@ -1786,6 +1833,24 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 	avg = info->failed_search ? (float)(info->tot_failed) /
 					(float)(info->failed_search) : 0;
 	root = api_add_avg(root, "avg_failed", &avg, true);
+
+	root = api_add_int(root, "temp_hi", &(info->temp_hi), false);
+	root = api_add_bool(root, "overheat", &(info->overheat), true);
+	root = api_add_int(root, "overheat_temp", &(info->overheat_temp), true);
+	root = api_add_uint32(root, "overheat_count", &(info->overheat_count), true);
+	root = api_add_uint32(root, "overheat_sleep_ms", &(info->overheat_sleep_ms), true);
+	root = api_add_uint32(root, "overheat_sleeps", &(info->overheat_sleeps), true);
+	root = api_add_uint32(root, "overheat_slept", &(info->overheat_slept), true);
+	root = api_add_uint64(root, "overheat_total_sleep", &(info->overheat_total_sleep), true);
+	root = api_add_uint32(root, "overheat_recovers", &(info->overheat_recovers), true);
+
+	root = api_add_int(root, "opt_bitmain_temp", &opt_bitmain_temp, false);
+	root = api_add_int(root, "opt_bitmain_overheat", &opt_bitmain_overheat, false);
+	root = api_add_int(root, "opt_bitmain_fan_min", &opt_bitmain_fan_min, false);
+	root = api_add_int(root, "opt_bitmain_fan_max", &opt_bitmain_fan_max, false);
+	root = api_add_int(root, "opt_bitmain_freq_min", &opt_bitmain_freq_min, false);
+	root = api_add_int(root, "opt_bitmain_freq_max", &opt_bitmain_freq_max, false);
+	root = api_add_bool(root, "opt_bitmain_auto", &opt_bitmain_auto, false);
 
 	return root;
 }

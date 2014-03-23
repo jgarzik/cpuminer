@@ -503,7 +503,7 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
-API V3.3 (cgminer v4.1.1)
+API V3.3 (cgminer v4.2.0)
 
 Added API commands:
  'edevs' - Only enabled devices, for 'devs'
@@ -1380,10 +1380,10 @@ number of rigs on the network and some rigs are too slow to reply
 Default:
  $allowgen = false;
 
-Set $allowgen to true to allow customsummarypages to use 'gen' 
-false means ignore any 'gen' options
-This is disabled by default due to the possible security risk
-of using it, see the end of this document for an explanation
+Set $allowgen to true to allow customsummarypages to use 'gen' and 'bgen'
+false means ignore any 'gen' or 'bgen' options
+This is disabled by default due to the possible security risk of using it
+See the end of this document for an explanation
 
 ---------
 
@@ -1674,7 +1674,8 @@ With cgminer 2.10.2 and later, miner.php includes an extension to
 the custom pages that allows you to apply SQL style commands to
 the data: where, group, and having
 cgminer 3.4.2 and later also includes another option 'gen'
-cgminer 4.1.1 and later also includes another option 'fmt'
+cgminer 4.2.0 and later also includes another option 'fmt'
+cgminer 4.2.1 and later also includes another option 'bgen'
 
 An example of an 'ext' section in a more complex custom summary page:
 
@@ -1792,20 +1793,27 @@ The fields passed to your function by miner.php:
 contain the default class names used for formatting
 
 
-A 'gen' allows you to generate new fields from any php valid function of any
-of the other fields
+A 'gen' or 'bgen' allows you to generate new fields from any php valid function
+of any of the other fields
  e.g. 'gen' => array('AvShr', 'POOL.Difficulty Accepted/max(POOL.Accepted,1)),
 will generate a new field called GEN.AvShr that is the function shown, which
 in this case is the average difficulty of each share submitted
 
-THERE IS A SECURITY RISK WITH HOW GEN WORKS
+The difference between 'bgen' and 'gen' is that 'bgen' is done before doing
+the 'group' and 'calc', however 'gen' is done after doing 'group' and 'calc'
+This means that 'group' and 'calc' can also use 'bgen' fields
+As before, 'gen' fields act on the results of the 'group' and 'calc'
+If there is no 'group' or 'calc' then they both will produce the same results
+Note that 'gen' fields are called 'GEN.field' and 'bgen' fields, 'BGEN.field'
+
+THERE IS A SECURITY RISK WITH HOW GEN/BGEN WORKS
 It simply replaces all the variables with their values and then requests PHP
 to execute the formula - thus if a field value returned from a cgminer API
 request contained PHP code, it could be executed by your web server
 Of course cgminer doesn't do this, but if you do not control the cgminer that
 returns the data in the API calls, someone could modify cgminer to return a
-PHP string in a field you use in 'gen'
-Thus use 'gen' at your own risk
+PHP string in a field you use in 'gen' or 'bgen'
+Thus use 'gen' and 'bgen' at your own risk
 If someone feels the urge to write a mathematical interpreter in PHP to get
 around this risk, feel free to write one and submit it to the API author for
 consideration

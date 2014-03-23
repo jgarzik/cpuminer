@@ -73,6 +73,11 @@
 #define BITMAIN_SEND_STATUS_TIME   10 //s
 #define BITMAIN_SEND_FULL_SPACE    128
 
+#define BITMAIN_OVERHEAT_SLEEP_MS_MAX 10000
+#define BITMAIN_OVERHEAT_SLEEP_MS_MIN 200
+#define BITMAIN_OVERHEAT_SLEEP_MS_DEF 600
+#define BITMAIN_OVERHEAT_SLEEP_MS_STEP 200
+
 struct bitmain_txconfig_token {
 	uint8_t token_type;
 	uint8_t length;
@@ -187,6 +192,7 @@ struct bitmain_info {
 	int temp[BITMAIN_MAX_TEMP_NUM];
 
 	int temp_max;
+	int temp_hi;
 	int temp_avg;
 	int temp_history_count;
 	int temp_history_index;
@@ -219,6 +225,13 @@ struct bitmain_info {
 	bool reset;
 	bool overheat;
 	bool optimal;
+	int overheat_temp;
+	uint32_t overheat_count;
+	uint32_t overheat_sleep_ms;
+	uint32_t overheat_sleeps;
+	uint32_t overheat_slept;
+	uint64_t overheat_total_sleep;
+	uint32_t overheat_recovers;
 
 	// Work
 	K_LIST *work_list;
