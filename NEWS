@@ -1,3 +1,33 @@
+Version 4.2.1 - 24th March 2014
+
+- Fix various ava2 build issues generically
+- Minimise the amount of heap memory allocations/frees when submitting gbt
+shares.
+- Make varint in gbt submission a stack object.
+- Fix big endian problems with gbt submissions.
+- Fix 32bit overflow on relative diff shown.
+- ants1 - stop results read hard looping
+- ants1 - slow down mining if overheat occurs
+- miner.php allow gen before (bgen) and after (gen) grouping
+- Change default solo mining to failing when no btc address is specified.
+- Use upgrade cglock variants in get_gbt_curl
+- Provide a cg_uilock to unlock the intermediate variant of cglocks.
+- Use the one curl instance for all gbt solo operations, protecting its use with
+a bool set under gbt lock.
+- Only start block detection with gbt solo if setup succeeded
+- One less block detection message
+- Toss out the curl handle after each solo poll
+- Don't reuse any curl handles for solo mining and break out of the lp thread if
+the pool is removed.
+- Make sure to only start the lognpoll thread once on gbt solo.
+- Don't keep RPC connections open for solo mining since bitcoind doesn't like
+having many persistent connections.
+- GBT solo pools should be considered localgen pools.
+- miner.php - speed up formatting and allow calc on gen fields
+- Always show the address we're solo mining to to avoid confusion for when no
+address is set.
+
+
 Version 4.2.0 - 18th March 2014
 
 - Fix missing htobe16 on windows and meaningless >u32 string warning.
