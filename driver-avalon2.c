@@ -193,7 +193,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 	if (thr) {
 		avalon2 = thr->cgpu;
 		info = avalon2->device_data;
-	}
+	} else // FIXME: Should this happen at all!?
+		return 0;
 
 	memcpy((uint8_t *)ar, pkg, AVA2_READ_SIZE);
 
@@ -352,11 +353,11 @@ static int avalon2_send_pkg(int fd, const struct avalon2_pkg *pkg,
 {
 	int ret;
 	uint8_t buf[AVA2_WRITE_SIZE];
-	size_t nr_len = AVA2_WRITE_SIZE;
+	int nr_len = AVA2_WRITE_SIZE;
 
 	memcpy(buf, pkg, AVA2_WRITE_SIZE);
 	if (opt_debug) {
-		applog(LOG_DEBUG, "Avalon2: Sent(%ld):", nr_len);
+		applog(LOG_DEBUG, "Avalon2: Sent(%d):", nr_len);
 		hexdump((uint8_t *)buf, nr_len);
 	}
 
@@ -387,20 +388,21 @@ static int avalon2_send_pkg(int fd, const struct avalon2_pkg *pkg,
 
 static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 {
+	const int merkle_offset = 36;
 	struct avalon2_pkg pkg;
 	int i, a, b, tmp;
 	unsigned char target[32];
 	int job_id_len;
 
 	/* Send out the first stratum message STATIC */
-	applog(LOG_DEBUG, "Avalon2: Pool stratum message STATIC: %ld, %d, %d, %d, %d",
-	       pool->swork.cb_len,
+	applog(LOG_DEBUG, "Avalon2: Pool stratum message STATIC: %d, %d, %d, %d, %d",
+	       pool->coinbase_len,
 	       pool->nonce2_offset,
 	       pool->n2size,
-	       pool->merkle_offset,
-	       pool->swork.merkles);
+	       merkle_offset,
+	       pool->merkles);
 	memset(pkg.data, 0, AVA2_P_DATA_LEN);
-	tmp = be32toh(pool->swork.cb_len);
+	tmp = be32toh(pool->coinbase_len);
 	memcpy(pkg.data, &tmp, 4);
 
 	tmp = be32toh(pool->nonce2_offset);
@@ -409,10 +411,10 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	tmp = be32toh(pool->n2size);
 	memcpy(pkg.data + 8, &tmp, 4);
 
-	tmp = be32toh(pool->merkle_offset);
+	tmp = be32toh(merkle_offset);
 	memcpy(pkg.data + 12, &tmp, 4);
 
-	tmp = be32toh(pool->swork.merkles);
+	tmp = be32toh(pool->merkles);
 	memcpy(pkg.data + 16, &tmp, 4);
 
 	tmp = be32toh((int)pool->swork.diff);
@@ -451,8 +453,8 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 		;
 
-	a = pool->swork.cb_len / AVA2_P_DATA_LEN;
-	b = pool->swork.cb_len % AVA2_P_DATA_LEN;
+	a = pool->coinbase_len / AVA2_P_DATA_LEN;
+	b = pool->coinbase_len % AVA2_P_DATA_LEN;
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message COINBASE: %d %d", a, b);
 	for (i = 0; i < a; i++) {
 		memcpy(pkg.data, pool->coinbase + i * 32, 32);
@@ -468,7 +470,7 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 			;
 	}
 
-	b = pool->swork.merkles;
+	b = pool->merkles;
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message MERKLES: %d", b);
 	for (i = 0; i < b; i++) {
 		memset(pkg.data, 0, AVA2_P_DATA_LEN);
@@ -601,7 +603,7 @@ static bool avalon2_detect_one(const char *devpath)
 	return true;
 }
 
-static inline void avalon2_detect()
+static inline void avalon2_detect(bool __maybe_unused hotplug)
 {
 	serial_detect(&avalon2_drv, avalon2_detect_one);
 }
@@ -692,9 +694,9 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		pool = current_pool();
 		if (!pool->has_stratum)
 			quit(1, "Avalon2: Miner Manager have to use stratum pool");
-		if (pool->swork.cb_len > AVA2_P_COINBASE_SIZE)
+		if (pool->coinbase_len > AVA2_P_COINBASE_SIZE)
 			quit(1, "Avalon2: Miner Manager pool coinbase length have to less then %d", AVA2_P_COINBASE_SIZE);
-		if (pool->swork.merkles > AVA2_P_MERKLES_COUNT)
+		if (pool->merkles > AVA2_P_MERKLES_COUNT)
 			quit(1, "Avalon2: Miner Manager merkles have to less then %d", AVA2_P_MERKLES_COUNT);
 
 		info->diff = (int)pool->swork.diff - 1;
