@@ -2186,7 +2186,7 @@ static int unsupported_copy_transfer_data(struct usbi_transfer *itransfer, uint3
 }
 
 // These names must be uppercase
-const char* hub_driver_names[] = {"USBHUB", "USBHUB3", "NUSB3HUB", "FLXHCIH", "TIHUB3", "ETRONHUB3", "VIAHUB3", "ASMTHUB3"};
+const char* hub_driver_names[] = {"USBHUB", "USBHUB3", "NUSB3HUB", "RUSB3HUB", "FLXHCIH", "TIHUB3", "ETRONHUB3", "VIAHUB3", "ASMTHUB3", "IUSB3HUB", "VUSB3HUB"};
 const char* composite_driver_names[] = {"USBCCGP"};
 const char* winusb_driver_names[] = {"WINUSB"};
 const struct windows_usb_api_backend usb_api_backend[USB_API_MAX] = {
