@@ -3263,9 +3263,9 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 	bool rc = false;
 	char *url;
 
-	applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", pool->rpc_url, pool->rpc_req);
-
 	url = pool->rpc_url;
+
+	applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", url, pool->rpc_req);
 
 	cgtime(&work->tv_getwork);
 
