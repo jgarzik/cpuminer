@@ -1835,6 +1835,18 @@ static void calc_midstate(struct work *work)
 	endian_flip32(work->midstate, work->midstate);
 }
 
+/* Returns the current value of total_work and increments it */
+static int total_work_inc(void)
+{
+	int ret;
+
+	cg_wlock(&control_lock);
+	ret = total_work++;
+	cg_wunlock(&control_lock);
+
+	return ret;
+}
+
 static struct work *make_work(void)
 {
 	struct work *work = calloc(1, sizeof(struct work));
@@ -1842,9 +1854,7 @@ static struct work *make_work(void)
 	if (unlikely(!work))
 		quit(1, "Failed to calloc work in make_work");
 
-	cg_wlock(&control_lock);
-	work->id = total_work++;
-	cg_wunlock(&control_lock);
+	work->id = total_work_inc();
 
 	return work;
 }
@@ -1991,7 +2001,7 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	local_work++;
 	work->pool = pool;
 	work->gbt = true;
-	work->id = total_work++;
+	work->id = total_work_inc();
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_GBT;
 	work->work_block = work_block;
@@ -3978,7 +3988,7 @@ void roll_work(struct work *work)
 
 	/* This is now a different work item so it needs a different ID for the
 	 * hashtable */
-	work->id = total_work++;
+	work->id = total_work_inc();
 }
 
 static void *submit_work_thread(void *userdata)
@@ -6885,7 +6895,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	work->pool = pool;
 	work->stratum = true;
 	work->nonce = 0;
-	work->id = total_work++;
+	work->id = total_work_inc();
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
 	work->work_block = work_block;
@@ -7025,7 +7035,7 @@ static void gen_solo_work(struct pool *pool, struct work *work)
 	work->gbt = true;
 	work->pool = pool;
 	work->nonce = 0;
-	work->id = total_work++;
+	work->id = total_work_inc();
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_SOLO;
 	work->work_block = work_block;
