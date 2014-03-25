@@ -2424,6 +2424,8 @@ void decay_time(double *f, double fadd, double fsecs, double interval)
 {
 	double ftotal, fprop;
 
+	if (fsecs <= 0)
+		return;
 	fprop = 1.0 - 1 / (exp(fsecs / interval));
 	ftotal = 1.0 + fprop;
 	*f += (fadd / fsecs * fprop);
