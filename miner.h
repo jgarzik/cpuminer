@@ -463,6 +463,9 @@ struct cgpu_info {
 	int rejected;
 	int hw_errors;
 	double rolling;
+	double rolling1;
+	double rolling5;
+	double rolling15;
 	double total_mhashes;
 	double utility;
 	enum alive status;
@@ -541,7 +544,6 @@ struct thr_info {
 
 	bool	pause;
 	bool	getwork;
-	double	rolling;
 
 	bool	work_restart;
 	bool	work_update;

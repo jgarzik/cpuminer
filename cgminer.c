@@ -279,6 +279,7 @@ pthread_cond_t restart_cond;
 
 pthread_cond_t gws_cond;
 
+double rolling1, rolling5, rolling15;
 double total_rolling;
 double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
@@ -2419,13 +2420,13 @@ int dev_from_id(int thr_id)
 }
 
 /* Create an exponentially decaying average over the opt_log_interval */
-void decay_time(double *f, double fadd, double fsecs)
+void decay_time(double *f, double fadd, double fsecs, double interval)
 {
 	double ftotal, fprop;
 
-	fprop = 1.0 - 1 / (exp(fsecs / (double)opt_log_interval));
+	fprop = 1.0 - 1 / (exp(fsecs / interval));
 	ftotal = 1.0 + fprop;
-	*f += (fadd * fprop);
+	*f += (fadd / fsecs * fprop);
 	*f /= ftotal;
 }
 
@@ -5061,12 +5062,19 @@ void zero_bestshare(void)
 	}
 }
 
+static struct timeval tv_hashmeter;
+static time_t hashdisplay_t;
+
 void zero_stats(void)
 {
 	int i;
 
 	cgtime(&total_tv_start);
+	copy_time(&tv_hashmeter, &total_tv_start);
 	total_rolling = 0;
+	rolling1 = 0;
+	rolling5 = 0;
+	rolling15 = 0;
 	total_mhashes_done = 0;
 	total_getworks = 0;
 	total_accepted = 0;
@@ -5107,7 +5115,7 @@ void zero_stats(void)
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = get_devices(i);
 
-		memcpy(&cgpu->dev_start_tv, &total_tv_start, sizeof(struct timeval));
+		copy_time(&cgpu->dev_start_tv, &total_tv_start);
 
 		mutex_lock(&hash_lock);
 		cgpu->total_mhashes = 0;
@@ -5796,106 +5804,87 @@ static void thread_reportout(struct thr_info *thr)
 	thr->cgpu->device_last_well = time(NULL);
 }
 
-static void hashmeter(int thr_id, struct timeval *diff,
-		      uint64_t hashes_done)
+static void hashmeter(int thr_id, uint64_t hashes_done)
 {
-	struct timeval temp_tv_end, total_diff;
-	double secs;
-	double local_secs;
-	static double local_mhashes_done = 0;
-	double local_mhashes;
 	bool showlog = false;
-	char displayed_hashes[16], displayed_rolling[16];
-	uint64_t dh64, dr64;
-	struct thr_info *thr;
+	double tv_tdiff;
+	time_t now_t;
+	int diff_t;
 
-	local_mhashes = (double)hashes_done / 1000000.0;
-	/* Update the last time this thread reported in */
-	if (thr_id >= 0) {
-		thr = get_thread(thr_id);
-		cgtime(&(thr->last));
-		thr->cgpu->device_last_well = time(NULL);
+	cgtime(&total_tv_end);
+	tv_tdiff = tdiff(&total_tv_end, &tv_hashmeter);
+	copy_time(&tv_hashmeter, &total_tv_end);
+	now_t = total_tv_end.tv_sec;
+	diff_t = now_t - hashdisplay_t;
+	if (diff_t >= opt_log_interval) {
+		hashdisplay_t = now_t;
+		showlog = true;
+	} else if (thr_id < 0) {
+		/* hashmeter is called by non-mining threads in case nothing
+		 * has reported in to allow hashrate to converge to zero , but
+		 * we only update if it has been more than opt_log_interval */
+		return;
 	}
 
-	secs = (double)diff->tv_sec + ((double)diff->tv_usec / 1000000.0);
-
-	/* So we can call hashmeter from a non worker thread */
 	if (thr_id >= 0) {
+		struct thr_info *thr = get_thread(thr_id);
 		struct cgpu_info *cgpu = thr->cgpu;
-		double thread_rolling = 0.0;
-		int i;
+		double device_tdiff, thr_mhs;
 
-		applog(LOG_DEBUG, "[thread %d: %"PRIu64" hashes, %.1f khash/sec]",
-			thr_id, hashes_done, hashes_done / 1000 / secs);
-
-		/* Rolling average for each thread and each device */
-		decay_time(&thr->rolling, local_mhashes / secs, secs);
-		for (i = 0; i < cgpu->threads; i++)
-			thread_rolling += cgpu->thr[i]->rolling;
+		/* Update the last time this thread reported in */
+		copy_time(&thr->last, &total_tv_end);
+		cgpu->device_last_well = now_t;
+		device_tdiff = tdiff(&total_tv_end, &cgpu->last_message_tv);
+		copy_time(&cgpu->last_message_tv, &total_tv_end);
+		thr_mhs = (double)hashes_done / device_tdiff / 1000000;
+		applog(LOG_DEBUG, "[thread %d: %"PRIu64" hashes, %.1f mhash/sec]",
+		       thr_id, hashes_done, thr_mhs);
+		hashes_done /= 1000000;
 
 		mutex_lock(&hash_lock);
-		decay_time(&cgpu->rolling, thread_rolling, secs);
-		cgpu->total_mhashes += local_mhashes;
+		cgpu->total_mhashes += hashes_done;
+		decay_time(&cgpu->rolling, hashes_done, device_tdiff, opt_log_interval);
+		decay_time(&cgpu->rolling1, hashes_done, device_tdiff, 60.0);
+		decay_time(&cgpu->rolling5, hashes_done, device_tdiff, 300.0);
+		decay_time(&cgpu->rolling15, hashes_done, device_tdiff, 900.0);
 		mutex_unlock(&hash_lock);
 
-		// If needed, output detailed, per-device stats
-		if (want_per_device_stats) {
-			struct timeval now;
-			struct timeval elapsed;
+		if (want_per_device_stats && showlog) {
+			char logline[256];
 
-			cgtime(&now);
-			timersub(&now, &thr->cgpu->last_message_tv, &elapsed);
-			if (opt_log_interval <= elapsed.tv_sec) {
-				struct cgpu_info *cgpu = thr->cgpu;
-				char logline[255];
-
-				cgpu->last_message_tv = now;
-
-				get_statline(logline, sizeof(logline), cgpu);
-				if (!curses_active) {
-					printf("%s          \r", logline);
-					fflush(stdout);
-				} else
-					applog(LOG_INFO, "%s", logline);
-			}
+			get_statline(logline, sizeof(logline), cgpu);
+			if (!curses_active) {
+				printf("%s          \r", logline);
+				fflush(stdout);
+			} else
+				applog(LOG_INFO, "%s", logline);
 		}
 	}
 
-	/* Totals are updated by all threads so can race without locking */
 	mutex_lock(&hash_lock);
-	cgtime(&temp_tv_end);
-	timersub(&temp_tv_end, &total_tv_end, &total_diff);
-
-	total_mhashes_done += local_mhashes;
-	local_mhashes_done += local_mhashes;
-	/* Only update with opt_log_interval */
-	if (total_diff.tv_sec < opt_log_interval)
-		goto out_unlock;
-	showlog = true;
-	cgtime(&total_tv_end);
-
-	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
-	decay_time(&total_rolling, local_mhashes_done / local_secs, local_secs);
+	total_mhashes_done += hashes_done;
+	decay_time(&total_rolling, hashes_done, tv_tdiff, opt_log_interval);
+	decay_time(&rolling1, hashes_done, tv_tdiff, 60.0);
+	decay_time(&rolling5, hashes_done, tv_tdiff, 300.0);
+	decay_time(&rolling15, hashes_done, tv_tdiff, 900.0);
 	global_hashrate = llround(total_rolling) * 1000000;
+	total_secs = tdiff(&total_tv_end, &total_tv_start);
+	if (showlog) {
+		char displayed_hashes[16], displayed_rolling[16];
+		uint64_t dh64, dr64;
 
-	timersub(&total_tv_end, &total_tv_start, &total_diff);
-	total_secs = (double)total_diff.tv_sec +
-		((double)total_diff.tv_usec / 1000000.0);
+		dh64 = (double)total_mhashes_done / total_secs * 1000000ull;
+		dr64 = (double)total_rolling * 1000000ull;
+		suffix_string(dh64, displayed_hashes, sizeof(displayed_hashes), 4);
+		suffix_string(dr64, displayed_rolling, sizeof(displayed_rolling), 4);
 
-	dh64 = (double)total_mhashes_done / total_secs * 1000000ull;
-	dr64 = (double)total_rolling * 1000000ull;
-	suffix_string(dh64, displayed_hashes, sizeof(displayed_hashes), 4);
-	suffix_string(dr64, displayed_rolling, sizeof(displayed_rolling), 4);
-
-	snprintf(statusline, sizeof(statusline),
-		"%s(%ds):%s (avg):%sh/s | A:%.0f  R:%.0f  HW:%d  WU:%.1f/m",
-		want_per_device_stats ? "ALL " : "",
-		opt_log_interval, displayed_rolling, displayed_hashes,
-		total_diff_accepted, total_diff_rejected, hw_errors,
-		total_diff1 / total_secs * 60);
-
-	local_mhashes_done = 0;
-out_unlock:
+		snprintf(statusline, sizeof(statusline),
+			"%s(%ds):%s (avg):%sh/s | A:%.0f  R:%.0f  HW:%d  WU:%.1f/m",
+			want_per_device_stats ? "ALL " : "",
+			opt_log_interval, displayed_rolling, displayed_hashes,
+			total_diff_accepted, total_diff_rejected, hw_errors,
+			total_diff1 / total_secs * 60);
+	}
 	mutex_unlock(&hash_lock);
 
 	if (showlog) {
@@ -7274,7 +7263,7 @@ static void mt_disable(struct thr_info *mythr, const int thr_id,
 		       struct device_drv *drv)
 {
 	applog(LOG_WARNING, "Thread %d being disabled", thr_id);
-	mythr->rolling = mythr->cgpu->rolling = 0;
+	mythr->cgpu->rolling = 0;
 	applog(LOG_DEBUG, "Waiting on sem in miner thread");
 	cgsem_wait(&mythr->sem);
 	applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
@@ -7401,7 +7390,7 @@ static void hash_sole_work(struct thr_info *mythr)
 			/* Update the hashmeter at most 5 times per second */
 			if ((hashes_done && (diff.tv_sec > 0 || diff.tv_usec > 200000)) ||
 			    diff.tv_sec >= opt_log_interval) {
-				hashmeter(thr_id, &diff, hashes_done);
+				hashmeter(thr_id, hashes_done);
 				hashes_done = 0;
 				copy_time(&tv_lastupdate, tv_end);
 			}
@@ -7704,7 +7693,7 @@ void hash_queued_work(struct thr_info *mythr)
 		/* Update the hashmeter at most 5 times per second */
 		if ((hashes_done && (diff.tv_sec > 0 || diff.tv_usec > 200000)) ||
 		    diff.tv_sec >= opt_log_interval) {
-			hashmeter(thr_id, &diff, hashes_done);
+			hashmeter(thr_id, hashes_done);
 			hashes_done = 0;
 			copy_time(&tv_start, &tv_end);
 		}
@@ -7759,7 +7748,7 @@ void hash_driver_work(struct thr_info *mythr)
 		/* Update the hashmeter at most 5 times per second */
 		if ((hashes_done && (diff.tv_sec > 0 || diff.tv_usec > 200000)) ||
 		    diff.tv_sec >= opt_log_interval) {
-			hashmeter(thr_id, &diff, hashes_done);
+			hashmeter(thr_id, hashes_done);
 			hashes_done = 0;
 			copy_time(&tv_start, &tv_end);
 		}
@@ -8271,7 +8260,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 
 		discard_stale();
 
-		hashmeter(-1, &zero_tv, 0);
+		hashmeter(-1, 0);
 
 #ifdef HAVE_CURSES
 		if (curses_active_locked()) {
@@ -8371,7 +8360,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				cgpu->status = LIFE_WELL;
 				cgpu->device_last_well = time(NULL);
 			} else if (cgpu->status == LIFE_WELL && (now.tv_sec - thr->last.tv_sec > WATCHDOG_SICK_TIME)) {
-				thr->rolling = cgpu->rolling = 0;
+				cgpu->rolling = 0;
 				cgpu->status = LIFE_SICK;
 				applog(LOG_ERR, "%s: Idle for more than 60 seconds, declaring SICK!", dev_str);
 				cgtime(&thr->sick);
@@ -9557,6 +9546,7 @@ begin_bench:
 
 	cgtime(&total_tv_start);
 	cgtime(&total_tv_end);
+	cgtime(&tv_hashmeter);
 	get_datestamp(datestamp, sizeof(datestamp), &total_tv_start);
 
 	watchpool_thr_id = 2;
