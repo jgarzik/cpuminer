@@ -2628,8 +2628,10 @@ static void curses_print_status(void)
 	mvwhline(statuswin, 1, 0, '-', 98);
 	cg_mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	cg_mvwprintw(statuswin, 3, 0, " ST: %d  SS: %d  NB: %d  LW: %d  GF: %d  RF: %d",
-		total_staged(), total_stale, new_blocks,
+	cg_mvwprintw(statuswin, 3, 0, " A:%.0f  R:%.0f  HW:%d  WU:%.1f/m | ST: %d  SS: %d  NB: %d  LW: %d  GF: %d  RF: %d",
+			total_diff_accepted, total_diff_rejected, hw_errors,
+			total_diff1 / total_secs * 60,
+			total_staged(), total_stale, new_blocks,
 		local_work, total_go, total_ro);
 	wclrtoeol(statuswin);
 	if (shared_strategy() && total_pools > 1) {
@@ -5871,19 +5873,24 @@ static void hashmeter(int thr_id, uint64_t hashes_done)
 	total_secs = tdiff(&total_tv_end, &total_tv_start);
 	if (showlog) {
 		char displayed_hashes[16], displayed_rolling[16];
-		uint64_t dh64, dr64;
+		char displayed_r1[16], displayed_r5[16], displayed_r15[16];
+		uint64_t d64;
 
-		dh64 = (double)total_mhashes_done / total_secs * 1000000ull;
-		dr64 = (double)total_rolling * 1000000ull;
-		suffix_string(dh64, displayed_hashes, sizeof(displayed_hashes), 4);
-		suffix_string(dr64, displayed_rolling, sizeof(displayed_rolling), 4);
+		d64 = (double)total_mhashes_done / total_secs * 1000000ull;
+		suffix_string(d64, displayed_hashes, sizeof(displayed_hashes), 4);
+		d64 = (double)total_rolling * 1000000ull;
+		suffix_string(d64, displayed_rolling, sizeof(displayed_rolling), 4);
+		d64 = (double)rolling1 * 1000000ull;
+		suffix_string(d64, displayed_r1, sizeof(displayed_rolling), 4);
+		d64 = (double)rolling5 * 1000000ull;
+		suffix_string(d64, displayed_r5, sizeof(displayed_rolling), 4);
+		d64 = (double)rolling15 * 1000000ull;
+		suffix_string(d64, displayed_r15, sizeof(displayed_rolling), 4);
 
 		snprintf(statusline, sizeof(statusline),
-			"%s(%ds):%s (avg):%sh/s | A:%.0f  R:%.0f  HW:%d  WU:%.1f/m",
-			want_per_device_stats ? "ALL " : "",
-			opt_log_interval, displayed_rolling, displayed_hashes,
-			total_diff_accepted, total_diff_rejected, hw_errors,
-			total_diff1 / total_secs * 60);
+			"(%ds):%s (1m):%s (5m):%s (15m):%s (avg):%sh/s",
+			opt_log_interval, displayed_rolling, displayed_r1, displayed_r5,
+			displayed_r15, displayed_hashes);
 	}
 	mutex_unlock(&hash_lock);
 
