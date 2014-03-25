@@ -2003,6 +2003,9 @@ static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom
 		char mhsname[27];
 		sprintf(mhsname, "MHS %ds", opt_log_interval);
 		root = api_add_mhs(root, mhsname, &(cgpu->rolling), false);
+		root = api_add_mhs(root, "MHS 1m", &cgpu->rolling1, false);
+		root = api_add_mhs(root, "MHS 5m", &cgpu->rolling5, false);
+		root = api_add_mhs(root, "MHS 15m", &cgpu->rolling15, false);
 		root = api_add_int(root, "Accepted", &(cgpu->accepted), false);
 		root = api_add_int(root, "Rejected", &(cgpu->rejected), false);
 		root = api_add_int(root, "Hardware Errors", &(cgpu->hw_errors), false);
@@ -2087,6 +2090,9 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 		char mhsname[27];
 		sprintf(mhsname, "MHS %ds", opt_log_interval);
 		root = api_add_mhs(root, mhsname, &(cgpu->rolling), false);
+		root = api_add_mhs(root, "MHS 1m", &cgpu->rolling1, false);
+		root = api_add_mhs(root, "MHS 5m", &cgpu->rolling5, false);
+		root = api_add_mhs(root, "MHS 15m", &cgpu->rolling15, false);
 		root = api_add_int(root, "Accepted", &(cgpu->accepted), false);
 		root = api_add_int(root, "Rejected", &(cgpu->rejected), false);
 		root = api_add_int(root, "Hardware Errors", &(cgpu->hw_errors), false);
@@ -2560,6 +2566,9 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 	char mhsname[27];
 	sprintf(mhsname, "MHS %ds", opt_log_interval);
 	root = api_add_mhs(root, mhsname, &(total_rolling), false);
+	root = api_add_mhs(root, "MHS 1m", &rolling1, false);
+	root = api_add_mhs(root, "MHS 5m", &rolling5, false);
+	root = api_add_mhs(root, "MHS 15m", &rolling15, false);
 	root = api_add_uint(root, "Found Blocks", &(found_blocks), true);
 	root = api_add_int(root, "Getworks", &(total_getworks), true);
 	root = api_add_int(root, "Accepted", &(total_accepted), true);

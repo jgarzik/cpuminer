@@ -1102,6 +1102,7 @@ extern struct pool **pools;
 extern struct strategies strategies[];
 extern enum pool_strategy pool_strategy;
 extern int opt_rotate_period;
+extern double rolling1, rolling5, rolling15;
 extern double total_rolling;
 extern double total_mhashes_done;
 extern unsigned int new_blocks;
