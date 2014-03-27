@@ -8420,7 +8420,6 @@ void print_summary(void)
 	struct timeval diff;
 	int hours, mins, secs, i;
 	double utility, displayed_hashes, work_util;
-	bool mhash_base = true;
 
 	timersub(&total_tv_end, &total_tv_start, &diff);
 	hours = diff.tv_sec / 3600;
@@ -8436,12 +8435,8 @@ void print_summary(void)
 		applog(LOG_WARNING, "Pool: %s", pools[0]->rpc_url);
 	applog(LOG_WARNING, "Runtime: %d hrs : %d mins : %d secs", hours, mins, secs);
 	displayed_hashes = total_mhashes_done / total_secs;
-	if (displayed_hashes < 1) {
-		displayed_hashes *= 1000;
-		mhash_base = false;
-	}
 
-	applog(LOG_WARNING, "Average hashrate: %.1f %shash/s", displayed_hashes, mhash_base? "Mega" : "Kilo");
+	applog(LOG_WARNING, "Average hashrate: %.1f Mhash/s", displayed_hashes);
 	applog(LOG_WARNING, "Solved blocks: %d", found_blocks);
 	applog(LOG_WARNING, "Best share difficulty: %s", best_share);
 	applog(LOG_WARNING, "Share submissions: %d", total_accepted + total_rejected);
