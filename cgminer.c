@@ -6949,6 +6949,7 @@ retry:
 			stage_work(work);
 		} else
 			free_work(work);
+		json_decref(val);
 	} else {
 		applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get gbt, retrying in 5s",
 		       pool->pool_no);
