@@ -6593,6 +6593,7 @@ retry_stratum:
 				ret = setup_gbt_solo(curl, pool);
 				if (ret)
 					pool_start_lp(pool);
+				free_work(work);
 				goto out;
 			}
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
@@ -7987,6 +7988,8 @@ retry_pool:
 
 				cgsleep_ms(500);
 			} else {
+				if (val)
+					json_decref(val);
 				cgtime(&end);
 				if (end.tv_sec - start.tv_sec > 30)
 					continue;
