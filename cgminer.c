@@ -6419,7 +6419,7 @@ static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 	char s[256];
 	int uninitialised_var(rolltime);
 	bool ret = false;
-	json_t *val, *res_val, *valid_val;
+	json_t *val = NULL, *res_val, *valid_val;
 
 	if (!opt_btc_address) {
 		applog(LOG_ERR, "No BTC address specified, unable to mine solo on %s",
@@ -6458,6 +6458,8 @@ static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 		quit(1, "GBT CURL initialisation failed");
 
 out:
+	if (val)
+		json_decref(val);
 	return ret;
 }
 
@@ -7011,6 +7013,8 @@ static void gen_solo_work(struct pool *pool, struct work *work)
 	work->sdiff = pool->sdiff;
 
 	/* Copy parameters required for share submission */
+	if (likely(work->ntime))
+		free(work->ntime);
 	work->ntime = strdup(pool->ntime);
 	memcpy(work->target, pool->gbt_target, 32);
 	cg_runlock(&pool->gbt_lock);
