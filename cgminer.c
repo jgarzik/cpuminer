@@ -2163,7 +2163,7 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 			len += strlen(txn);
 		}
 
-		pool->txn_data = malloc(len);
+		pool->txn_data = malloc(len + 1);
 		if (unlikely(!pool->txn_data))
 			quit(1, "Failed to calloc txn_data in gbt_merkle_bins");
 		pool->txn_data[len] = '\0';
