@@ -7014,8 +7014,6 @@ static void gen_solo_work(struct pool *pool, struct work *work)
 	work->sdiff = pool->sdiff;
 
 	/* Copy parameters required for share submission */
-	if (likely(work->ntime))
-		free(work->ntime);
 	work->ntime = strdup(pool->ntime);
 	memcpy(work->target, pool->gbt_target, 32);
 	cg_runlock(&pool->gbt_lock);
