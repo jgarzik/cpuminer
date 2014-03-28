@@ -363,6 +363,7 @@ static int include_count;
 #define JSON_LOAD_ERROR_LEN strlen(JSON_LOAD_ERROR)
 #define JSON_MAX_DEPTH 10
 #define JSON_MAX_DEPTH_ERR "Too many levels of JSON includes (limit 10) or a loop"
+#define JSON_WEB_ERROR "WEB config err"
 
 #if defined(unix) || defined(__APPLE__)
 	static char *opt_stderr_cmd = NULL;
@@ -1648,12 +1649,45 @@ static char *parse_config(json_t *config, bool fileconf)
 
 char *cnfbuf = NULL;
 
+char conf_web1[] = "http://";
+char conf_web2[] = "https://";
+
+static char *load_web_config(const char *arg)
+{
+	json_t *val;
+	CURL *curl;
+
+	curl = curl_easy_init();
+	if (unlikely(!curl))
+		quithere(1, "CURL initialisation failed");
+
+	val = json_web_config(curl, arg);
+
+	curl_easy_cleanup(curl);
+
+	if (!val || !json_is_object(val))
+		return JSON_WEB_ERROR;
+
+	if (!cnfbuf)
+		cnfbuf = strdup(arg);
+
+	config_loaded = true;
+
+	return parse_config(val, true);
+}
+
 static char *load_config(const char *arg, void __maybe_unused *unused)
 {
 	json_error_t err;
 	json_t *config;
 	char *json_error;
 	size_t siz;
+
+#ifdef HAVE_LIBCURL
+	if (strncasecmp(arg, conf_web1, sizeof(conf_web1)-1) == 0 ||
+	    strncasecmp(arg, conf_web2, sizeof(conf_web2)-1) == 0)
+		return load_web_config(arg);
+#endif
 
 	if (!cnfbuf)
 		cnfbuf = strdup(arg);
