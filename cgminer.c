@@ -2753,7 +2753,7 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int devno, int count)
 		adj_fwidth(cgpu->diff_rejected, &drwidth);
 		adj_width(cgpu->hw_errors, &hwwidth);
 		adj_width(wu, &wuwidth);
-		cg_wprintw(statuswin, " A:%*.0f R:%*.0f HW:%*d WU:%*.1f/m",
+		cg_wprintw(statuswin, "A:%*.0f R:%*.0f HW:%*d WU:%*.1f/m",
 				dawidth, cgpu->diff_accepted,
 				drwidth, cgpu->diff_rejected,
 				hwwidth, cgpu->hw_errors,
