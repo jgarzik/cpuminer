@@ -2675,14 +2675,13 @@ static void adj_fwidth(float var, int *length)
 		(*length)++;
 }
 
-static int dev_width;
 #define STATBEFORELEN 23
 const char blanks[] = "                                        ";
 
 static void curses_print_devstatus(struct cgpu_info *cgpu, int devno, int count)
 {
 	static int devno_width = 1, dawidth = 1, drwidth = 1, hwwidth = 1, wuwidth = 1;
-	char logline[256];
+	char logline[256], unique_id[12];
 	struct timeval now;
 	double dev_runtime, wu;
 	unsigned int devstatlen;
@@ -2711,8 +2710,14 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int devno, int count)
 
 	wmove(statuswin,devcursor + count, 0);
 	adj_width(devno, &devno_width);
-	cg_wprintw(statuswin, " %*d: %s %*d: ", devno_width, devno, cgpu->drv->name,
-		   dev_width, cgpu->device_id);
+	if (cgpu->unique_id) {
+		unique_id[8] = '\0';
+		memcpy(unique_id, blanks, 8);
+		strncpy(unique_id, cgpu->unique_id, 8);
+	} else
+		sprintf(unique_id, "%-8d", cgpu->device_id);
+	cg_wprintw(statuswin, " %*d: %s %8s: ", devno_width, devno, cgpu->drv->name,
+		   unique_id);
 	logline[0] = '\0';
 	cgpu->drv->get_statline_before(logline, sizeof(logline), cgpu);
 	devstatlen = strlen(logline);
@@ -8959,17 +8964,11 @@ void enable_device(struct cgpu_info *cgpu)
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
 	wr_unlock(&devices_lock);
 
-	if (hotplug_mode) {
+	if (hotplug_mode)
 		new_threads += cgpu->threads;
-#ifdef HAVE_CURSES
-		adj_width(mining_threads + new_threads, &dev_width);
-#endif
-	} else {
+	else
 		mining_threads += cgpu->threads;
-#ifdef HAVE_CURSES
-		adj_width(mining_threads, &dev_width);
-#endif
-	}
+
 	rwlock_init(&cgpu->qlock);
 	cgpu->queued_work = NULL;
 }

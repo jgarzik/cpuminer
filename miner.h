@@ -428,6 +428,7 @@ struct cgpu_info {
 	char *name;
 	char *device_path;
 	void *device_data;
+	char *unique_id;
 #ifdef USE_USBUTILS
 	struct cg_usb_device *usbdev;
 	struct cg_usb_info usbinfo;
