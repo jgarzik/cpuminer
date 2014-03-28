@@ -2716,7 +2716,7 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int devno, int count)
 		strncpy(unique_id, cgpu->unique_id, 8);
 	} else
 		sprintf(unique_id, "%-8d", cgpu->device_id);
-	cg_wprintw(statuswin, " %*d: %s %8s: ", devno_width, devno, cgpu->drv->name,
+	cg_wprintw(statuswin, " %*d: %s %-8s: ", devno_width, devno, cgpu->drv->name,
 		   unique_id);
 	logline[0] = '\0';
 	cgpu->drv->get_statline_before(logline, sizeof(logline), cgpu);
