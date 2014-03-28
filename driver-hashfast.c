@@ -150,14 +150,14 @@ static bool __hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, int tx_
 			     uint8_t *packet)
 {
 	struct hashfast_info *info = hashfast->device_data;
-	int ret, amount, id = hashfast->device_id;
+	int ret, amount;
 	bool retried = false;
 
 	if (unlikely(hashfast->usbinfo.nodev))
 		return false;
 
 	info->last_send = time(NULL);
-	applog(LOG_DEBUG, "%s %d: Sending %s frame", hashfast->drv->name, hashfast->device_id, hfa_cmds[opcode].cmd_name);
+	applog(LOG_DEBUG, "%s %s: Sending %s frame", hashfast->drv->name, hashfast->unique_id, hfa_cmds[opcode].cmd_name);
 retry:
 	ret = usb_write(hashfast, (char *)packet, tx_length, &amount,
 			hfa_cmds[opcode].usb_cmd);
@@ -165,18 +165,18 @@ retry:
 		if (hashfast->usbinfo.nodev)
 			return false;
 		if (!retried) {
-			applog(LOG_ERR, "%s %d: hfa_send_frame: USB Send error, ret %d amount %d vs. tx_length %d, retrying",
-			       hashfast->drv->name, id, ret, amount, tx_length);
+			applog(LOG_ERR, "%s %s: hfa_send_frame: USB Send error, ret %d amount %d vs. tx_length %d, retrying",
+			       hashfast->drv->name, hashfast->unique_id, ret, amount, tx_length);
 			retried = true;
 			goto retry;
 		}
-		applog(LOG_ERR, "%s %d: hfa_send_frame: USB Send error, ret %d amount %d vs. tx_length %d",
-		       hashfast->drv->name, id, ret, amount, tx_length);
+		applog(LOG_ERR, "%s %s: hfa_send_frame: USB Send error, ret %d amount %d vs. tx_length %d",
+		       hashfast->drv->name, hashfast->unique_id, ret, amount, tx_length);
 		return false;
 	}
 
 	if (retried)
-		applog(LOG_WARNING, "%s %d: hfa_send_frame: recovered OK", hashfast->drv->name, id);
+		applog(LOG_WARNING, "%s %s: hfa_send_frame: recovered OK", hashfast->drv->name, hashfast->unique_id);
 
 	return true;
 }
@@ -216,8 +216,8 @@ static bool hfa_send_packet(struct cgpu_info *hashfast, struct hf_header *h, int
 	len = sizeof(*h) + h->data_length * 4;
 	ret = usb_write(hashfast, (char *)h, len, &amount, hfa_cmds[cmd].usb_cmd);
 	if (ret < 0 || amount != len) {
-		applog(LOG_WARNING, "%s %d: send_packet: %s USB Send error, ret %d amount %d vs. length %d",
-		       hashfast->drv->name, hashfast->device_id, hfa_cmds[cmd].cmd_name, ret, amount, len);
+		applog(LOG_WARNING, "%s %s: send_packet: %s USB Send error, ret %d amount %d vs. length %d",
+		       hashfast->drv->name, hashfast->unique_id, hfa_cmds[cmd].cmd_name, ret, amount, len);
 		return false;
 	}
 	return true;
@@ -293,8 +293,8 @@ static bool hfa_get_data(struct cgpu_info *hashfast, char *buf, int len4)
 	if (ret)
 		return false;
 	if (amount != len) {
-		applog(LOG_WARNING, "%s %d: get_data: Strange amount returned %d vs. expected %d",
-		       hashfast->drv->name, hashfast->device_id, amount, len);
+		applog(LOG_WARNING, "%s %s: get_data: Strange amount returned %d vs. expected %d",
+		       hashfast->drv->name, hashfast->unique_id, amount, len);
 		return false;
 	}
 	return true;
@@ -408,8 +408,8 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 		hu->data_length = sizeof(*ho) / 4;
 	}
 	hu->crc8 = hfa_crc8((uint8_t *)hu);
-	applog(LOG_INFO, "%s %d: Sending OP_USB_INIT with GWQ protocol specified",
-	       hashfast->drv->name, hashfast->device_id);
+	applog(LOG_INFO, "%s %s: Sending OP_USB_INIT with GWQ protocol specified",
+	       hashfast->drv->name, hashfast->unique_id);
 resend:
 	if (unlikely(hashfast->usbinfo.nodev))
 		goto out;
@@ -434,19 +434,19 @@ tryagain:
 	if (!ret) {
 		if (retries++ < 3)
 			goto resend;
-		applog(LOG_WARNING, "%s %d: OP_USB_INIT failed!", hashfast->drv->name, hashfast->device_id);
+		applog(LOG_WARNING, "%s %s: OP_USB_INIT failed!", hashfast->drv->name, hashfast->unique_id);
 		goto out;
 	}
 	if (h->crc8 != hcrc) {
-		applog(LOG_WARNING, "%s %d: OP_USB_INIT failed! CRC mismatch", hashfast->drv->name, hashfast->device_id);
+		applog(LOG_WARNING, "%s %s: OP_USB_INIT failed! CRC mismatch", hashfast->drv->name, hashfast->unique_id);
 		ret = false;
 		goto out;
 	}
 	if (h->operation_code != OP_USB_INIT) {
 		// This can happen if valid packet(s) were in transit *before* the OP_USB_INIT arrived
 		// at the device, so we just toss the packets and keep looking for the response.
-		applog(LOG_WARNING, "%s %d: OP_USB_INIT: Tossing packet, valid but unexpected type %d",
-                       hashfast->drv->name, hashfast->device_id, h->operation_code);
+		applog(LOG_WARNING, "%s %s: OP_USB_INIT: Tossing packet, valid but unexpected type %d",
+                       hashfast->drv->name, hashfast->unique_id, h->operation_code);
 		hfa_get_data(hashfast, buf, h->data_length);
 		if (retries++ < 3)
 			goto tryagain;
@@ -454,9 +454,9 @@ tryagain:
 		goto out;
 	}
 
-	applog(LOG_DEBUG, "%s %d: Good reply to OP_USB_INIT", hashfast->drv->name, hashfast->device_id);
-	applog(LOG_DEBUG, "%s %d: OP_USB_INIT: %d die in chain, %d cores, device_type %d, refclk %d Mhz",
-	       hashfast->drv->name, hashfast->device_id, h->chip_address, h->core_address, h->hdata & 0xff, (h->hdata >> 8) & 0xff);
+	applog(LOG_DEBUG, "%s %s: Good reply to OP_USB_INIT", hashfast->drv->name, hashfast->unique_id);
+	applog(LOG_DEBUG, "%s %s: OP_USB_INIT: %d die in chain, %d cores, device_type %d, refclk %d Mhz",
+	       hashfast->drv->name, hashfast->unique_id, h->chip_address, h->core_address, h->hdata & 0xff, (h->hdata >> 8) & 0xff);
 
 	// Save device configuration
 	info->asic_count = h->chip_address;
@@ -477,31 +477,31 @@ tryagain:
 
 	// Get the usb_init_base structure
 	if (!hfa_get_data(hashfast, (char *)&info->usb_init_base, U32SIZE(info->usb_init_base))) {
-		applog(LOG_WARNING, "%s %d: OP_USB_INIT failed! Failure to get usb_init_base data",
-		       hashfast->drv->name, hashfast->device_id);
+		applog(LOG_WARNING, "%s %s: OP_USB_INIT failed! Failure to get usb_init_base data",
+		       hashfast->drv->name, hashfast->unique_id);
 		ret = false;
 		goto out;
 	}
 	db = &info->usb_init_base;
 	info->firmware_version = ((db->firmware_rev >> 8) & 0xff) + (double)(db->firmware_rev & 0xff) / 10.0;
 	info->hardware_version = ((db->hardware_rev >> 8) & 0xff) + (double)(db->hardware_rev & 0xff) / 10.0;
-	applog(LOG_INFO, "%s %d:      firmware_rev:    %.1f", hashfast->drv->name, hashfast->device_id,
+	applog(LOG_INFO, "%s %s:      firmware_rev:    %.1f", hashfast->drv->name, hashfast->unique_id,
 	       info->firmware_version);
-	applog(LOG_INFO, "%s %d:      hardware_rev:    %.1f", hashfast->drv->name, hashfast->device_id,
+	applog(LOG_INFO, "%s %s:      hardware_rev:    %.1f", hashfast->drv->name, hashfast->unique_id,
 	       info->hardware_version);
-	applog(LOG_INFO, "%s %d:      serial number:   %08x", hashfast->drv->name, hashfast->device_id,
+	applog(LOG_INFO, "%s %s:      serial number:   %08x", hashfast->drv->name, hashfast->unique_id,
 	       db->serial_number);
-	applog(LOG_INFO, "%s %d:      hash clockrate:  %d Mhz", hashfast->drv->name, hashfast->device_id,
+	applog(LOG_INFO, "%s %s:      hash clockrate:  %d Mhz", hashfast->drv->name, hashfast->unique_id,
 	       db->hash_clockrate);
-	applog(LOG_INFO, "%s %d:      inflight_target: %d", hashfast->drv->name, hashfast->device_id,
+	applog(LOG_INFO, "%s %s:      inflight_target: %d", hashfast->drv->name, hashfast->unique_id,
 	       db->inflight_target);
-	applog(LOG_INFO, "%s %d:      sequence_modulus: %d", hashfast->drv->name, hashfast->device_id,
+	applog(LOG_INFO, "%s %s:      sequence_modulus: %d", hashfast->drv->name, hashfast->unique_id,
 	       db->sequence_modulus);
 
 	// Now a copy of the config data used
 	if (!hfa_get_data(hashfast, (char *)&info->config_data, U32SIZE(info->config_data))) {
-		applog(LOG_WARNING, "%s %d: OP_USB_INIT failed! Failure to get config_data",
-		       hashfast->drv->name, hashfast->device_id);
+		applog(LOG_WARNING, "%s %s: OP_USB_INIT failed! Failure to get config_data",
+		       hashfast->drv->name, hashfast->unique_id);
 		ret = false;
 		goto out;
 	}
@@ -511,15 +511,15 @@ tryagain:
 	if (!info->core_bitmap)
 		quit(1, "Failed to malloc info core bitmap in hfa_reset");
 	if (!hfa_get_data(hashfast, (char *)info->core_bitmap, info->core_bitmap_size / 4)) {
-		applog(LOG_WARNING, "%s %d: OP_USB_INIT failed! Failure to get core_bitmap", hashfast->drv->name, hashfast->device_id);
+		applog(LOG_WARNING, "%s %s: OP_USB_INIT failed! Failure to get core_bitmap", hashfast->drv->name, hashfast->unique_id);
 		ret = false;
 		goto out;
 	}
 
 	// See if the initialization suceeded
 	if (db->operation_status) {
-		applog(LOG_ERR, "%s %d: OP_USB_INIT failed! Operation status %d (%s)",
-		       hashfast->drv->name, hashfast->device_id, db->operation_status,
+		applog(LOG_ERR, "%s %s: OP_USB_INIT failed! Operation status %d (%s)",
+		       hashfast->drv->name, hashfast->unique_id, db->operation_status,
 			(db->operation_status < sizeof(hf_usb_init_errors)/sizeof(hf_usb_init_errors[0])) ?
 			hf_usb_init_errors[db->operation_status] : "Unknown error code");
 		ret = false;
@@ -527,8 +527,8 @@ tryagain:
 			case E_CORE_POWER_FAULT:
 				for (i = 0; i < 4; i++) {
 					if (((db->extra_status_1 >> i) & 0x11) == 0x1) {
-						applog(LOG_ERR, "%s %d: OP_USB_INIT: Quadrant %d (of 4) regulator failure",
-						       hashfast->drv->name, hashfast->device_id, i + 1);
+						applog(LOG_ERR, "%s %s: OP_USB_INIT: Quadrant %d (of 4) regulator failure",
+						       hashfast->drv->name, hashfast->unique_id, i + 1);
 					}
 				}
 				break;
@@ -539,8 +539,8 @@ tryagain:
 	}
 
 	if (!db->hash_clockrate) {
-		applog(LOG_INFO, "%s %d: OP_USB_INIT failed! Clockrate reported as zero",
-		       hashfast->drv->name, hashfast->device_id);
+		applog(LOG_INFO, "%s %s: OP_USB_INIT failed! Clockrate reported as zero",
+		       hashfast->drv->name, hashfast->unique_id);
 		ret = false;
 		goto out;
 	}
@@ -805,8 +805,8 @@ static bool hfa_initialise(struct cgpu_info *hashfast)
 					7, C_ATMEL_INIT);
 	}
 	if (err < 0) {
-		applog(LOG_INFO, "%s %d: Failed to open with error %s",
-		       hashfast->drv->name, hashfast->device_id, libusb_error_name(err));
+		applog(LOG_INFO, "%s %s: Failed to open with error %s",
+		       hashfast->drv->name, hashfast->unique_id, libusb_error_name(err));
 	}
 #endif
 	/* Must have transmitted init sequence sized buffer */
@@ -821,7 +821,7 @@ static void hfa_dfu_boot(struct cgpu_info *hashfast)
 		return;
 
 	ret = hfa_send_frame(hashfast, HF_USB_CMD(OP_DFU), 0, NULL, 0);
-	applog(LOG_WARNING, "%s %d %03d:%03d DFU Boot %s", hashfast->drv->name, hashfast->device_id,
+	applog(LOG_WARNING, "%s %s: %03d:%03d DFU Boot %s", hashfast->drv->name, hashfast->unique_id,
 	       hashfast->usbinfo.bus_number, hashfast->usbinfo.device_address,
 	       ret ? "Succeeded" : "Failed");
 }
@@ -833,6 +833,7 @@ static struct cgpu_info *hfa_detect_one(libusb_device *dev, struct usb_find_devi
 	hashfast = usb_alloc_cgpu(&hashfast_drv, HASHFAST_MINER_THREADS);
 	if (!hashfast)
 		quit(1, "Failed to usb_alloc_cgpu hashfast");
+	hashfast->unique_id = "";
 
 	if (!usb_init(hashfast, dev, found)) {
 		hashfast = usb_free_cgpu(hashfast);
@@ -895,16 +896,16 @@ static bool hfa_get_packet(struct cgpu_info *hashfast, struct hf_header *h)
 	if (unlikely(!ret))
 		goto out;
 	if (unlikely(h->crc8 != hcrc)) {
-		applog(LOG_WARNING, "%s %d: Bad CRC %d vs %d, discarding packet",
-		       hashfast->drv->name, hashfast->device_id, h->crc8, hcrc);
+		applog(LOG_WARNING, "%s %s: Bad CRC %d vs %d, discarding packet",
+		       hashfast->drv->name, hashfast->unique_id, h->crc8, hcrc);
 		ret = false;
 		goto out;
 	}
 	if (h->data_length > 0)
 		ret = hfa_get_data(hashfast, (char *)(h + 1), h->data_length);
 	if (unlikely(!ret)) {
-		applog(LOG_WARNING, "%s %d: Failed to get data associated with header",
-		       hashfast->drv->name, hashfast->device_id);
+		applog(LOG_WARNING, "%s %s: Failed to get data associated with header",
+		       hashfast->drv->name, hashfast->unique_id);
 	}
 
 out:
@@ -919,14 +920,14 @@ static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_inf
 	struct hf_gwq_data *g = (struct hf_gwq_data *)(h + 1);
 	struct work *work;
 
-	applog(LOG_DEBUG, "%s %d: OP_GWQ_STATUS, device_head %4d tail %4d my tail %4d shed %3d inflight %4d",
-	       hashfast->drv->name, hashfast->device_id, g->sequence_head, g->sequence_tail, info->hash_sequence_tail,
+	applog(LOG_DEBUG, "%s %s: OP_GWQ_STATUS, device_head %4d tail %4d my tail %4d shed %3d inflight %4d",
+	       hashfast->drv->name, hashfast->unique_id, g->sequence_head, g->sequence_tail, info->hash_sequence_tail,
 	       g->shed_count, HF_SEQUENCE_DISTANCE(info->hash_sequence_head,g->sequence_tail));
 
 	/* This is a special flag that the thermal overload has been tripped */
 	if (unlikely(h->core_address & 0x80)) {
-		applog(LOG_ERR, "%s %d Thermal overload tripped! Shutting down device",
-		       hashfast->drv->name, hashfast->device_id);
+		applog(LOG_ERR, "%s %s: Thermal overload tripped! Shutting down device",
+		       hashfast->drv->name, hashfast->unique_id);
 		hfa_running_shutdown(hashfast, info);
 		usb_nodev(hashfast);
 		return;
@@ -942,16 +943,16 @@ static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_inf
 		if (++info->hash_sequence_tail >= info->num_sequence)
 			info->hash_sequence_tail = 0;
 		if (unlikely(!(work = info->works[info->hash_sequence_tail]))) {
-			applog(LOG_ERR, "%s %d: Bad work sequence tail %d head %d devhead %d devtail %d sequence %d",
-			       hashfast->drv->name, hashfast->device_id, info->hash_sequence_tail,
+			applog(LOG_ERR, "%s %s: Bad work sequence tail %d head %d devhead %d devtail %d sequence %d",
+			       hashfast->drv->name, hashfast->unique_id, info->hash_sequence_tail,
 			       info->hash_sequence_head, info->device_sequence_head,
 			       info->device_sequence_tail, info->num_sequence);
 			hashfast->shutdown = true;
 			usb_nodev(hashfast);
 			break;
 		}
-		applog(LOG_DEBUG, "%s %d: Completing work on hash_sequence_tail %d",
-		       hashfast->drv->name, hashfast->device_id, info->hash_sequence_tail);
+		applog(LOG_DEBUG, "%s %s: Completing work on hash_sequence_tail %d",
+		       hashfast->drv->name, hashfast->unique_id, info->hash_sequence_tail);
 		free_work(work);
 		info->works[info->hash_sequence_tail] = NULL;
 	}
@@ -1007,8 +1008,8 @@ static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_in
 		for (j = 0; j < 6; j++)
 			core_voltage[j] = GN_CORE_VOLTAGE(d->die.core_voltage[j]);
 
-		applog(LOG_DEBUG, "%s %d: die %2d: OP_DIE_STATUS Temps die %.1fC board %.1fC vdd's %.2f %.2f %.2f %.2f %.2f %.2f",
-			hashfast->drv->name, hashfast->device_id, die, die_temperature, board_temp,
+		applog(LOG_DEBUG, "%s %s: die %2d: OP_DIE_STATUS Temps die %.1fC board %.1fC vdd's %.2f %.2f %.2f %.2f %.2f %.2f",
+			hashfast->drv->name, hashfast->unique_id, die, die_temperature, board_temp,
 			core_voltage[0], core_voltage[1], core_voltage[2],
 			core_voltage[3], core_voltage[4], core_voltage[5]);
 		// XXX Convert board phase currents, voltage, temperature
@@ -1044,13 +1045,13 @@ static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
 	struct hf_candidate_nonce *n = (struct hf_candidate_nonce *)(h + 1);
 	int i, num_nonces = h->data_length / U32SIZE(sizeof(struct hf_candidate_nonce));
 
-	applog(LOG_DEBUG, "%s %d: OP_NONCE: %2d/%2d:, num_nonces %d hdata 0x%04x",
-	       hashfast->drv->name, hashfast->device_id, h->chip_address, h->core_address, num_nonces, h->hdata);
+	applog(LOG_DEBUG, "%s %s: OP_NONCE: %2d/%2d:, num_nonces %d hdata 0x%04x",
+	       hashfast->drv->name, hashfast->unique_id, h->chip_address, h->core_address, num_nonces, h->hdata);
 	for (i = 0; i < num_nonces; i++, n++) {
 		struct work *work = NULL;
 
-		applog(LOG_DEBUG, "%s %d: OP_NONCE: %2d: %2d: ntime %2d sequence %4d nonce 0x%08x",
-		       hashfast->drv->name, hashfast->device_id, h->chip_address, i, n->ntime & HF_NTIME_MASK, n->sequence, n->nonce);
+		applog(LOG_DEBUG, "%s %s: OP_NONCE: %2d: %2d: ntime %2d sequence %4d nonce 0x%08x",
+		       hashfast->drv->name, hashfast->unique_id, h->chip_address, i, n->ntime & HF_NTIME_MASK, n->sequence, n->nonce);
 
 		if (n->sequence < info->usb_init_base.sequence_modulus) {
 			// Find the job from the sequence number
@@ -1058,16 +1059,16 @@ static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
 			work = info->works[n->sequence];
 			mutex_unlock(&info->lock);
 		} else {
-			applog(LOG_INFO, "%s %d: OP_NONCE: Sequence out of range %4d max %4d",
-			       hashfast->drv->name, hashfast->device_id, n->sequence, info->usb_init_base.sequence_modulus);
+			applog(LOG_INFO, "%s %s: OP_NONCE: Sequence out of range %4d max %4d",
+			       hashfast->drv->name, hashfast->unique_id, n->sequence, info->usb_init_base.sequence_modulus);
 		}
 
 		if (unlikely(!work)) {
 			info->no_matching_work++;
-			applog(LOG_INFO, "%s %d: No matching work!", hashfast->drv->name, hashfast->device_id);
+			applog(LOG_INFO, "%s %s: No matching work!", hashfast->drv->name, hashfast->unique_id);
 		} else {
-			applog(LOG_DEBUG, "%s %d: OP_NONCE: sequence %d: submitting nonce 0x%08x ntime %d",
-			       hashfast->drv->name, hashfast->device_id, n->sequence, n->nonce, n->ntime & HF_NTIME_MASK);
+			applog(LOG_DEBUG, "%s %s: OP_NONCE: sequence %d: submitting nonce 0x%08x ntime %d",
+			       hashfast->drv->name, hashfast->unique_id, n->sequence, n->nonce, n->ntime & HF_NTIME_MASK);
 			if (submit_noffset_nonce(thr, work, n->nonce, n->ntime & HF_NTIME_MASK)) {
 				mutex_lock(&info->lock);
 				info->hash_count += 0xffffffffull * work->device_diff;
@@ -1077,8 +1078,8 @@ static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
 			if (unlikely(n->ntime & HF_NONCE_SEARCH)) {
 				/* This tells us there is another share in the
 				 * next 128 nonces */
-				applog(LOG_DEBUG, "%s %d: OP_NONCE: SEARCH PROXIMITY EVENT FOUND",
-				       hashfast->drv->name, hashfast->device_id);
+				applog(LOG_DEBUG, "%s %s: OP_NONCE: SEARCH PROXIMITY EVENT FOUND",
+				       hashfast->drv->name, hashfast->unique_id);
 			}
 #endif
 		}
@@ -1138,7 +1139,7 @@ static void hfa_update_stats1(struct cgpu_info *hashfast, struct hashfast_info *
 	if (sd->max_rx_buffers >  s1->max_rx_buffers)
 		s1->max_rx_buffers = sd->max_rx_buffers;
 
-	applog(LOG_DEBUG, "%s %d: OP_USB_STATS1:", hashfast->drv->name, hashfast->device_id);
+	applog(LOG_DEBUG, "%s %s: OP_USB_STATS1:", hashfast->drv->name, hashfast->unique_id);
 	applog(LOG_DEBUG, "      usb_rx_preambles:             %6d", sd->usb_rx_preambles);
 	applog(LOG_DEBUG, "      usb_rx_receive_byte_errors:   %6d", sd->usb_rx_receive_byte_errors);
 	applog(LOG_DEBUG, "      usb_rx_bad_hcrc:              %6d", sd->usb_rx_bad_hcrc);
@@ -1172,13 +1173,13 @@ static void hfa_parse_notice(struct cgpu_info *hashfast, struct hf_header *h)
 	struct hf_usb_notice_data *d;
 
 	if (h->data_length == 0) {
-		applog(LOG_DEBUG, "%s %d: Received OP_USB_NOTICE with zero data length",
-		       hashfast->drv->name, hashfast->device_id);
+		applog(LOG_DEBUG, "%s %s: Received OP_USB_NOTICE with zero data length",
+		       hashfast->drv->name, hashfast->unique_id);
 		return;
 	}
 	d = (struct hf_usb_notice_data *)(h + 1);
 	/* FIXME Do something with the notification code d->extra_data here */
-	applog(LOG_NOTICE, "%s %d NOTICE: %s", hashfast->drv->name, hashfast->device_id, d->message);
+	applog(LOG_NOTICE, "%s %s NOTICE: %s", hashfast->drv->name, hashfast->unique_id, d->message);
 }
 
 static void *hfa_read(void *arg)
@@ -1230,13 +1231,13 @@ static void *hfa_read(void *arg)
 				break;
 			default:
 				if (h->operation_code == OP_FAN) {
-					applog(LOG_NOTICE, "%s %d: Firmware upgrade required to support fan control",
-					       hashfast->drv->name, hashfast->device_id);
+					applog(LOG_NOTICE, "%s %s: Firmware upgrade required to support fan control",
+					       hashfast->drv->name, hashfast->unique_id);
 					opt_hfa_target = 0;
 					break;
 				}
-				applog(LOG_WARNING, "%s %d: Unhandled operation code %d",
-				       hashfast->drv->name, hashfast->device_id, h->operation_code);
+				applog(LOG_WARNING, "%s %s: Unhandled operation code %d",
+				       hashfast->drv->name, hashfast->unique_id, h->operation_code);
 				break;
 		}
 		/* Make sure we send something to the device at least every 5
@@ -1246,7 +1247,7 @@ static void *hfa_read(void *arg)
 		if (time(NULL) - info->last_send > 5)
 			hfa_send_frame(hashfast, HF_USB_CMD(OP_PING), 0, NULL, 0);
 	}
-	applog(LOG_DEBUG, "%s %d: Shutting down read thread", hashfast->drv->name, hashfast->device_id);
+	applog(LOG_DEBUG, "%s %s: Shutting down read thread", hashfast->drv->name, hashfast->unique_id);
 
 	return NULL;
 }
@@ -1359,8 +1360,8 @@ static int hfa_jobs(struct cgpu_info *hashfast, struct hashfast_info *info)
 	if (unlikely(info->overheat)) {
 		/* Acknowledge and notify of new condition.*/
 		if (info->overheat < 0) {
-			applog(LOG_WARNING, "%s %d: Hit overheat temp %.1f, throttling!",
-			       hashfast->drv->name, hashfast->device_id, hashfast->temp);
+			applog(LOG_WARNING, "%s %s: Hit overheat temp %.1f, throttling!",
+			       hashfast->drv->name, hashfast->unique_id, hashfast->temp);
 			/* Value of 1 means acknowledged overheat */
 			info->overheat = 1;
 		}
@@ -1436,15 +1437,15 @@ static void hfa_increase_clock(struct cgpu_info *hashfast, struct hashfast_info 
 					continue;
 				info->die_data[i].hash_clock += increase;
 			}
-			applog(LOG_INFO, "%s %d: Die %d temp below range %.1f, increasing ALL dies by %d",
-			       hashfast->drv->name, hashfast->device_id, die, info->die_data[die].temp, increase);
+			applog(LOG_INFO, "%s %s: Die %d temp below range %.1f, increasing ALL dies by %d",
+			       hashfast->drv->name, hashfast->unique_id, die, info->die_data[die].temp, increase);
 			hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), hdata, (uint8_t *)NULL, 0);
 			info->clock_offset -= increase;
 			return;
 		}
 	}
-	applog(LOG_INFO, "%s %d: Die temp below range %.1f, increasing die %d clock to %d",
-	       hashfast->drv->name, hashfast->device_id, info->die_data[die].temp, die, hdd->hash_clock);
+	applog(LOG_INFO, "%s %s: Die temp below range %.1f, increasing die %d clock to %d",
+	       hashfast->drv->name, hashfast->unique_id, info->die_data[die].temp, die, hdd->hash_clock);
 	hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), hdata, (uint8_t *)&diebit, 4);
 }
 
@@ -1470,16 +1471,16 @@ static void hfa_decrease_clock(struct cgpu_info *hashfast, struct hashfast_info 
 		 * slow down all dies to tame this one. */
 		for (i = 0; i < info->asic_count; i++)
 			info->die_data[i].hash_clock -= decrease;
-		applog(LOG_INFO, "%s %d: Die %d temp above range %.1f, decreasing ALL die clocks by %d",
-		       hashfast->drv->name, hashfast->device_id, die, info->die_data[die].temp, decrease);
+		applog(LOG_INFO, "%s %s: Die %d temp above range %.1f, decreasing ALL die clocks by %d",
+		       hashfast->drv->name, hashfast->unique_id, die, info->die_data[die].temp, decrease);
 		hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), hdata, (uint8_t *)NULL, 0);
 		info->clock_offset += decrease;
 		return;
 
 	}
 	hdd->hash_clock -= decrease;
-	applog(LOG_INFO, "%s %d: Die temp above range %.1f, decreasing die %d clock to %d",
-	       hashfast->drv->name, hashfast->device_id, info->die_data[die].temp, die, hdd->hash_clock);
+	applog(LOG_INFO, "%s %s: Die temp above range %.1f, decreasing die %d clock to %d",
+	       hashfast->drv->name, hashfast->unique_id, info->die_data[die].temp, die, hdd->hash_clock);
 	hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), hdata, (uint8_t *)&diebit, 4);
 }
 
@@ -1621,8 +1622,8 @@ static void hfa_running_shutdown(struct cgpu_info *hashfast, struct hashfast_inf
 			/* Set the master device's clock speed if this is a copy */
 			cinfo->hash_clock_rate = info->hash_clock_rate;
 		}
-		applog(LOG_WARNING, "%s %d: Decreasing clock speed to %d with reset",
-			hashfast->drv->name, hashfast->device_id, info->hash_clock_rate);
+		applog(LOG_WARNING, "%s %s: Decreasing clock speed to %d with reset",
+			hashfast->drv->name, hashfast->unique_id, info->hash_clock_rate);
 	}
 
 	if (!hfa_send_shutdown(hashfast))
@@ -1648,8 +1649,8 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 	int64_t hashes;
 
 	if (unlikely(hashfast->usbinfo.nodev)) {
-		applog(LOG_WARNING, "%s %d: device disappeared, disabling",
-		       hashfast->drv->name, hashfast->device_id);
+		applog(LOG_WARNING, "%s %s: device disappeared, disabling",
+		       hashfast->drv->name, hashfast->unique_id);
 		return -1;
 	}
 
@@ -1658,8 +1659,8 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 	fail_time = 25.0 * (double)hashfast->drv->max_diff * 0xffffffffull /
 		(double)(info->base_clock * 1000000) / hfa_basejobs(info);
 	if (unlikely(share_work_tdiff(hashfast) > fail_time)) {
-		applog(LOG_WARNING, "%s %d: No valid hashes for over %.0f seconds, shutting down thread",
-		       hashfast->drv->name, hashfast->device_id, fail_time);
+		applog(LOG_WARNING, "%s %s: No valid hashes for over %.0f seconds, shutting down thread",
+		       hashfast->drv->name, hashfast->unique_id, fail_time);
 		hfa_running_shutdown(hashfast, info);
 		return -1;
 	}
@@ -1693,7 +1694,7 @@ restart:
 	}
 
 	if (jobs) {
-		applog(LOG_DEBUG, "%s %d: Sending %d new jobs", hashfast->drv->name, hashfast->device_id,
+		applog(LOG_DEBUG, "%s %s: Sending %d new jobs", hashfast->drv->name, hashfast->unique_id,
 		       jobs);
 	}
 
@@ -1752,8 +1753,8 @@ restart:
 		info->works[info->hash_sequence_head] = work;
 		mutex_unlock(&info->lock);
 
-		applog(LOG_DEBUG, "%s %d: OP_HASH sequence %d search_difficulty %d work_difficulty %g",
-		       hashfast->drv->name, hashfast->device_id, info->hash_sequence_head,
+		applog(LOG_DEBUG, "%s %s: OP_HASH sequence %d search_difficulty %d work_difficulty %g",
+		       hashfast->drv->name, hashfast->unique_id, info->hash_sequence_head,
 		       op_hash_data.search_difficulty, work->work_difficulty);
 	}
 
