@@ -5827,7 +5827,6 @@ static void hashmeter(int thr_id, uint64_t hashes_done)
 
 	cgtime(&total_tv_end);
 	tv_tdiff = tdiff(&total_tv_end, &tv_hashmeter);
-	copy_time(&tv_hashmeter, &total_tv_end);
 	now_t = total_tv_end.tv_sec;
 	diff_t = now_t - hashdisplay_t;
 	if (diff_t >= opt_log_interval) {
@@ -5840,6 +5839,7 @@ static void hashmeter(int thr_id, uint64_t hashes_done)
 		 * we only update if it has been more than opt_log_interval */
 		return;
 	}
+	copy_time(&tv_hashmeter, &total_tv_end);
 
 	if (thr_id >= 0) {
 		struct thr_info *thr = get_thread(thr_id);
