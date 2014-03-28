@@ -161,9 +161,10 @@ static bool bf1_getinfo(struct cgpu_info *bitfury, struct bitfury_info *info)
 	info->version = buf[1];
 	memcpy(&info->product, buf + 2, 8);
 	memcpy(&info->serial, buf + 10, 4);
+	bitfury->unique_id = bin2hex((unsigned char *)buf + 10, 4);
 
-	applog(LOG_INFO, "%s %d: Getinfo returned version %d, product %s serial %08x", bitfury->drv->name,
-	       bitfury->device_id, info->version, info->product, info->serial);
+	applog(LOG_INFO, "%s %d: Getinfo returned version %d, product %s serial %s", bitfury->drv->name,
+	       bitfury->device_id, info->version, info->product, bitfury->unique_id);
 	bf1_empty_buffer(bitfury);
 	return true;
 }
