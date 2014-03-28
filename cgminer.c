@@ -174,6 +174,7 @@ bool use_curses = true;
 bool use_curses;
 #endif
 static int alt_status;
+static int switch_status = 1;
 static bool opt_submit_stale = true;
 static int opt_shares;
 bool opt_fail_only;
@@ -5349,7 +5350,9 @@ retry:
 	wlogprint("[N]ormal [C]lear [S]ilent mode (disable all output)\n");
 	wlogprint("[D]ebug:%s\n[P]er-device:%s\n[Q]uiet:%s\n[V]erbose:%s\n"
 		  "[R]PC debug:%s\n[W]orkTime details:%s\nco[M]pact: %s\n"
-		  "[L]og interval:%d\n[Z]ero statistics\n",
+		  "[T]oggle status switching:%s\n"
+		  "[Z]ero statistics\n"
+		  "[L]og interval:%d\n",
 		opt_debug ? "on" : "off",
 	        want_per_device_stats? "on" : "off",
 		opt_quiet ? "on" : "off",
@@ -5357,6 +5360,7 @@ retry:
 		opt_protocol ? "on" : "off",
 		opt_worktime ? "on" : "off",
 		opt_compact ? "on" : "off",
+		switch_status ? "enabled" : "disabled",
 		opt_log_interval);
 	wlogprint("Select an option or any other key to return\n");
 	logwin_update();
@@ -5420,6 +5424,9 @@ retry:
 	} else if (!strncasecmp(&input, "w", 1)) {
 		opt_worktime ^= true;
 		wlogprint("WorkTime details %s\n", opt_worktime ? "enabled" : "disabled");
+		goto retry;
+	} else if (!strncasecmp(&input, "t", 1)) {
+		switch_status ^= 1;
 		goto retry;
 	} else if (!strncasecmp(&input, "z", 1)) {
 		zero_stats();
@@ -5830,7 +5837,7 @@ static void hashmeter(int thr_id, uint64_t hashes_done)
 	now_t = total_tv_end.tv_sec;
 	diff_t = now_t - hashdisplay_t;
 	if (diff_t >= opt_log_interval) {
-		alt_status ^= 1;
+		alt_status ^= switch_status;
 		hashdisplay_t = now_t;
 		showlog = true;
 	} else if (thr_id < 0) {
