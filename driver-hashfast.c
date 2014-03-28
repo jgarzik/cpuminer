@@ -1274,6 +1274,9 @@ static bool hfa_prepare(struct thr_info *thr)
 	if (info->has_opname && !info->opname_valid)
 		hfa_choose_opname(hashfast, info);
 
+	/* Use the opname as the displayed unique identifier */
+	hashfast->unique_id = info->op_name;
+
 	/* Inherit the old device id */
 	if (info->old_cgpu)
 		hashfast->device_id = info->old_cgpu->device_id;
