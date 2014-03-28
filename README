@@ -279,6 +279,7 @@ ASIC only options:
 --bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
 --bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
+--bxm-bits <arg>    Set BXM bits for overclocking (default: 50)
 --hfa-hash-clock <arg> Set hashfast clock speed (default: 550)
 --hfa-fail-drop <arg> Set how many MHz to drop clockspeed each failure on an overlocked hashfast device (default: 10)
 --hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)
@@ -301,8 +302,8 @@ See FGPA-README for more information regarding this.
 Cgminer should automatically find all of your Avalon ASIC, BFL ASIC, BitForce
 FPGAs, Icarus bitstream FPGAs, Klondike ASIC, ASICMINER usb block erupters,
 KnC ASICs, BaB ASICs, Hashfast ASICs, ModMiner FPGAs, BPMC/BGMC BF1 USB ASICs,
-Bi*fury USB ASICs, Nanofury USB ASICs, Antminer U1 USB ASICs and Cointerra
-devices.
+Bi*fury USB ASICs, Nanofury USB ASICs, Antminer U1 USB ASICs, Cointerra
+devices and BFx2 USB ASICs.
 
 ---
 
