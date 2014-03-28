@@ -173,6 +173,7 @@ bool use_curses = true;
 #else
 bool use_curses;
 #endif
+static int alt_status;
 static bool opt_submit_stale = true;
 static int opt_shares;
 bool opt_fail_only;
@@ -2627,14 +2628,17 @@ static void curses_print_status(void)
 	wattron(statuswin, A_BOLD);
 	cg_mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
 	wattroff(statuswin, A_BOLD);
-	mvwhline(statuswin, 1, 0, '-', 98);
+	mvwhline(statuswin, 1, 0, '-', 80);
 	cg_mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	cg_mvwprintw(statuswin, 3, 0, " A:%.0f  R:%.0f  HW:%d  WU:%.1f/m | ST: %d  SS: %d  NB: %d  LW: %d  GF: %d  RF: %d",
-			total_diff_accepted, total_diff_rejected, hw_errors,
-			total_diff1 / total_secs * 60,
-			total_staged(), total_stale, new_blocks,
-		local_work, total_go, total_ro);
+	if (alt_status) {
+		cg_mvwprintw(statuswin, 3, 0, " ST: %d  SS: %d  NB: %d  LW: %d  GF: %d  RF: %d",
+			     total_staged(), total_stale, new_blocks, local_work, total_go, total_ro);
+	} else {
+		cg_mvwprintw(statuswin, 3, 0, " A:%.0f  R:%.0f  HW:%d  WU:%.1f/m",
+			     total_diff_accepted, total_diff_rejected, hw_errors,
+			     total_diff1 / total_secs * 60);
+	}
 	wclrtoeol(statuswin);
 	if (shared_strategy() && total_pools > 1) {
 		cg_mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s block change notify",
@@ -2650,10 +2654,10 @@ static void curses_print_status(void)
 	wclrtoeol(statuswin);
 	cg_mvwprintw(statuswin, 5, 0, " Block: %s...  Diff:%s  Started: %s  Best share: %s   ",
 		     prev_block, block_diff, blocktime, best_share);
-	mvwhline(statuswin, 6, 0, '-', 98);
-	mvwhline(statuswin, statusy - 1, 0, '-', 98);
+	mvwhline(statuswin, 6, 0, '-', 80);
+	mvwhline(statuswin, statusy - 1, 0, '-', 80);
 #ifdef USE_USBUTILS
-	cg_mvwprintw(statuswin, devcursor - 1, 1, "[U]SB device management [P]ool management [S]ettings [D]isplay options [Q]uit");
+	cg_mvwprintw(statuswin, devcursor - 1, 1, "[U]SB management [P]ool management [S]ettings [D]isplay options [Q]uit");
 #else
 	cg_mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management [S]ettings [D]isplay options [Q]uit");
 #endif
@@ -2679,8 +2683,6 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int devno, int count)
 {
 	static int devno_width = 1, dawidth = 1, drwidth = 1, hwwidth = 1, wuwidth = 1;
 	char logline[256];
-	char displayed_hashes[16], displayed_rolling[16];
-	uint64_t dh64, dr64;
 	struct timeval now;
 	double dev_runtime, wu;
 	unsigned int devstatlen;
@@ -2718,10 +2720,6 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int devno, int count)
 		strncat(logline, blanks, STATBEFORELEN - devstatlen);
 	cg_wprintw(statuswin, "%s | ", logline);
 
-	dh64 = (double)cgpu->total_mhashes / dev_runtime * 1000000ull;
-	dr64 = (double)cgpu->rolling * 1000000ull;
-	suffix_string(dh64, displayed_hashes, sizeof(displayed_hashes), 4);
-	suffix_string(dr64, displayed_rolling, sizeof(displayed_rolling), 4);
 
 #ifdef USE_USBUTILS
 	if (cgpu->usbinfo.nodev)
@@ -2736,19 +2734,26 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int devno, int count)
 		cg_wprintw(statuswin, "OFF   ");
 	else if (cgpu->deven == DEV_RECOVER)
 		cg_wprintw(statuswin, "REST  ");
-	else
-		cg_wprintw(statuswin, "%6s", displayed_rolling);
-	adj_fwidth(cgpu->diff_accepted, &dawidth);
-	adj_fwidth(cgpu->diff_rejected, &drwidth);
-	adj_width(cgpu->hw_errors, &hwwidth);
-	adj_width(wu, &wuwidth);
+	else if (!alt_status) {
+		char displayed_hashes[16], displayed_rolling[16];
+		uint64_t d64;
 
-	cg_wprintw(statuswin, "/%6sh/s | A:%*.0f R:%*.0f HW:%*d WU:%*.1f/m",
-			displayed_hashes,
-			dawidth, cgpu->diff_accepted,
-			drwidth, cgpu->diff_rejected,
-			hwwidth, cgpu->hw_errors,
-			wuwidth + 2, wu);
+		d64 = (double)cgpu->total_mhashes / dev_runtime * 1000000ull;
+		suffix_string(d64, displayed_hashes, sizeof(displayed_hashes), 4);
+		d64 = (double)cgpu->rolling * 1000000ull;
+		suffix_string(d64, displayed_rolling, sizeof(displayed_rolling), 4);
+		cg_wprintw(statuswin, "%6s / %6sh/s", displayed_rolling, displayed_hashes);
+	} else {
+		adj_fwidth(cgpu->diff_accepted, &dawidth);
+		adj_fwidth(cgpu->diff_rejected, &drwidth);
+		adj_width(cgpu->hw_errors, &hwwidth);
+		adj_width(wu, &wuwidth);
+		cg_wprintw(statuswin, " A:%*.0f R:%*.0f HW:%*d WU:%*.1f/m",
+				dawidth, cgpu->diff_accepted,
+				drwidth, cgpu->diff_rejected,
+				hwwidth, cgpu->hw_errors,
+				wuwidth + 2, wu);
+	}
 
 	logline[0] = '\0';
 	cgpu->drv->get_statline(logline, sizeof(logline), cgpu);
@@ -5821,6 +5826,7 @@ static void hashmeter(int thr_id, uint64_t hashes_done)
 	now_t = total_tv_end.tv_sec;
 	diff_t = now_t - hashdisplay_t;
 	if (diff_t >= opt_log_interval) {
+		alt_status ^= 1;
 		hashdisplay_t = now_t;
 		showlog = true;
 	} else if (thr_id < 0) {
