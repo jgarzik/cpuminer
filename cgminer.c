@@ -1650,21 +1650,13 @@ static char *parse_config(json_t *config, bool fileconf)
 
 char *cnfbuf = NULL;
 
+#ifdef HAVE_LIBCURL
 char conf_web1[] = "http://";
 char conf_web2[] = "https://";
 
 static char *load_web_config(const char *arg)
 {
-	json_t *val;
-	CURL *curl;
-
-	curl = curl_easy_init();
-	if (unlikely(!curl))
-		quithere(1, "CURL initialisation failed");
-
-	val = json_web_config(curl, arg);
-
-	curl_easy_cleanup(curl);
+	json_t *val = json_web_config(arg);
 
 	if (!val || !json_is_object(val))
 		return JSON_WEB_ERROR;
@@ -1676,6 +1668,7 @@ static char *load_web_config(const char *arg)
 
 	return parse_config(val, true);
 }
+#endif
 
 static char *load_config(const char *arg, void __maybe_unused *unused)
 {
@@ -6457,6 +6450,7 @@ static bool stratum_works(struct pool *pool)
 	return true;
 }
 
+#ifdef HAVE_LIBCURL
 static void __setup_gbt_solo(struct pool *pool)
 {
 	cg_wlock(&pool->gbt_lock);
@@ -6514,6 +6508,12 @@ out:
 		json_decref(val);
 	return ret;
 }
+#else
+static bool setup_gbt_solo(CURL __maybe_unused *curl, struct pool __maybe_unused *pool)
+{
+	return false;
+}
+#endif
 
 static void pool_start_lp(struct pool *pool)
 {
@@ -6959,6 +6959,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	cgtime(&work->tv_staged);
 }
 
+#ifdef HAVE_LIBCURL
 static void gen_solo_work(struct pool *pool, struct work *work);
 
 /* Use the one instance of gbt_curl, protecting the bool with the gbt_lock but
@@ -7099,6 +7100,7 @@ static void gen_solo_work(struct pool *pool, struct work *work)
 
 	cgtime(&work->tv_staged);
 }
+#endif
 
 /* The time difference in seconds between when this device last got work via
  * get_work() and generated a valid share. */

@@ -296,18 +296,21 @@ static int curl_debug_cb(__maybe_unused CURL *handle, curl_infotype type,
 	return 0;
 }
 
-json_t *json_web_config(CURL *curl, const char *url)
+json_t *json_web_config(const char *url)
 {
 	struct data_buffer all_data = {NULL, 0};
 	char curl_err_str[CURL_ERROR_SIZE];
-	json_error_t err;
 	long timeout = 60;
+	json_error_t err;
 	json_t *val;
+	CURL *curl;
 	int rc;
 
 	memset(&err, 0, sizeof(err));
 
-	/* it is assumed that 'curl' is freshly [re]initialized at this pt */
+	curl = curl_easy_init();
+	if (unlikely(!curl))
+		quithere(1, "CURL initialisation failed");
 
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
 
@@ -324,29 +327,25 @@ json_t *json_web_config(CURL *curl, const char *url)
 
 	val = NULL;
 	rc = curl_easy_perform(curl);
+	curl_easy_cleanup(curl);
 	if (rc) {
-		applog(LOG_ERR, "HTTP config request of '%s' failed: %s",
-				url, curl_err_str);
+		applog(LOG_ERR, "HTTP config request of '%s' failed: %s", url, curl_err_str);
 		goto c_out;
 	}
 
 	if (!all_data.buf) {
-		applog(LOG_ERR, "Empty config data received from '%s'",
-				url);
+		applog(LOG_ERR, "Empty config data received from '%s'", url);
 		goto c_out;
 	}
 
 	val = JSON_LOADS(all_data.buf, &err);
 	if (!val) {
-		applog(LOG_ERR, "JSON config decode of '%s' failed(%d): %s",
-				url, err.line, err.text);
-		goto c_out;
+		applog(LOG_ERR, "JSON config decode of '%s' failed(%d): %s", url,
+		       err.line, err.text);
 	}
 
 c_out:
 	databuf_free(&all_data);
-	curl_easy_reset(curl);
-	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
 	return val;
 }
 
