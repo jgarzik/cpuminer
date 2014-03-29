@@ -1,3 +1,38 @@
+Version 4.2.2 - 29th March 2014
+
+- Minor correctness fix for unnecessary free
+- Clean up various curl build issues
+- allow url based config files
+- Frequency only needs 3 digits for cointerra statline
+- Use the serial number as unique_id for cta display
+- Make it possible to enable/disable the status window from switching via the
+display menu
+- We should not update the tv hashmeter time unless we're updating the hashrates
+- Add cointerra devices to udev rules.
+- Use hashfast unique id instead of number since the unique id is displayed
+- Remove displayed space
+- Left align the displayed unique id
+- Use the hashfast opname as its unique identifier
+- Display BF1 serial number as its unique identifier
+- Display a unique identifier instead of a number if the device has one
+- Use an alternating status display to return to a compact width of 80
+characters, allowing more information to be displayed.
+- No need for looking for khash hashrates in summary any more
+- Fix two potential minor mem leaks
+- Fix memory leaks in setup and generate work for gbt solo.
+- Fix off by one malloc size error
+- Fix memory leak in update_gbt_solo
+- Put sanity check on decay_time to prevent updates with no time
+- Add 3 rolling average hashrates to API output for summary and devs.
+- Use the extra status screen real estate better, displaying rolling 1/5/15min
+average hashrates as well.
+- Revamp the ageing crufty hashmeter code to have proper exponential decaying
+values and store rolling 1/5/15min hashrates.
+- Increment total_work under control lock.
+- Trivial variable reuse
+- Add support for other usb3 hubs on windows
+
+
 Version 4.2.1 - 24th March 2014
 
 - Fix various ava2 build issues generically
