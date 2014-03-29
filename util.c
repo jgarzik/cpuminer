@@ -343,9 +343,9 @@ json_t *json_web_config(const char *url)
 		applog(LOG_ERR, "JSON config decode of '%s' failed(%d): %s", url,
 		       err.line, err.text);
 	}
+	databuf_free(&all_data);
 
 c_out:
-	databuf_free(&all_data);
 	return val;
 }
 
