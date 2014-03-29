@@ -2608,6 +2608,14 @@ function processcustompage($pagename, $sections, $sum, $ext, $namemap)
 		otherrow('<td class=bad>Bad "$rigs" array</td>');
  }
 
+ // Show API errors at the top
+ if (count($errors) > 0)
+ {
+	foreach ($errors as $err)
+		otherrow("<td colspan=100>$err</td>");
+	$errors = array();
+ }
+
  $shownsomething = false;
  if (count($results) > 0)
  {
