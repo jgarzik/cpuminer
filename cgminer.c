@@ -2775,17 +2775,17 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int devno, int count)
 		suffix_string(d64, displayed_hashes, sizeof(displayed_hashes), 4);
 		d64 = (double)cgpu->rolling * 1000000ull;
 		suffix_string(d64, displayed_rolling, sizeof(displayed_rolling), 4);
-		cg_wprintw(statuswin, "%6s / %6sh/s", displayed_rolling, displayed_hashes);
+		adj_width(wu, &wuwidth);
+		cg_wprintw(statuswin, "%6s / %6sh/s WU:%*.1f/m", displayed_rolling,
+			   displayed_hashes, wuwidth + 2, wu);
 	} else {
 		adj_fwidth(cgpu->diff_accepted, &dawidth);
 		adj_fwidth(cgpu->diff_rejected, &drwidth);
 		adj_width(cgpu->hw_errors, &hwwidth);
-		adj_width(wu, &wuwidth);
-		cg_wprintw(statuswin, "A:%*.0f R:%*.0f HW:%*d WU:%*.1f/m",
+		cg_wprintw(statuswin, "A:%*.0f R:%*.0f HW:%*d",
 				dawidth, cgpu->diff_accepted,
 				drwidth, cgpu->diff_rejected,
-				hwwidth, cgpu->hw_errors,
-				wuwidth + 2, wu);
+				hwwidth, cgpu->hw_errors);
 	}
 
 	logline[0] = '\0';
