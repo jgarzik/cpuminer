@@ -339,6 +339,50 @@ $kanogenext = array(
 			'Acc' => 'Difficulty Accepted / max(1,Diff1 Shares)'))
 );
 #
+$syspage = array(
+ 'DATE' => null,
+ 'RIGS' => null,
+ 'SUMMARY' => array('#', 'Elapsed', 'MHS av', 'MHS 5m', 'Found Blocks=Blks',
+			'Difficulty Accepted=DiffA',
+			'Difficulty Rejected=DiffR',
+			'Difficulty Stale=DiffS', 'Hardware Errors=HW',
+			'Work Utility', 'Network Blocks=Net Blks', 'Total MH',
+			'Best Share', 'Device Hardware%=Dev HW%',
+			'Device Rejected%=Dev Rej%',
+			'Pool Rejected%=Pool Rej%', 'Pool Stale%',
+			'Last getwork'),
+ 'DEVS' => array('#', 'ID', 'Name', 'ASC', 'Device Elapsed', 'Enabled',
+			'Status', 'No Device', 'Temperature=Temp',
+			'MHS av', 'MHS 5s', 'MHS 5m', 'Diff1 Work',
+			'Difficulty Accepted=DiffA',
+			'Difficulty Rejected=DiffR',
+			'Hardware Errors=HW', 'Work Utility',
+			'Last Valid Work', 'Last Share Pool',
+			'Last Share Time', 'Total MH',
+			'Device Hardware%=Dev HW%',
+			'Device Rejected%=Dev Rej%'),
+ 'POOL' => array('POOL', 'URL', 'Status', 'Priority', 'Quota',
+			'Getworks', 'Diff1 Shares',
+			'Difficulty Accepted=DiffA',
+			'Difficulty Rejected=DiffR',
+			'Difficulty Stale=DiffS',
+			'Last Share Difficulty',
+			'Last Share Time',
+			'Best Share', 'Pool Rejected%=Pool Rej%',
+			'Pool Stale%')
+);
+$syssum = array(
+ 'SUMMARY' => array('MHS av', 'MHS 5m', 'Found Blocks',
+			'Difficulty Accepted', 'Difficulty Rejected',
+			'Difficulty Stale', 'Hardware Errors',
+			'Work Utility', 'Total MH'),
+ 'DEVS' => array('MHS av', 'MHS 5s', 'MHS 5m', 'Diff1 Work',
+			'Difficulty Accepted', 'Difficulty Rejected',
+			'Hardware Errors', 'Total MH'),
+ 'POOL' => array('Getworks', 'Diff1 Shares', 'Difficulty Accepted',
+			'Difficulty Rejected', 'Difficulty Stale')
+);
+#
 # $customsummarypages is an array of these Custom Summary Pages
 # that you can override in myminer.php
 # It can be 'Name' => 1 with 'Name' in any of $user_pages or $sys_pages
@@ -435,7 +479,8 @@ $sys_pages = array(
  'DevNot' => array($devnotpage, $devnotsum),
  'DevDet' => array($devdetpage, $devdetsum),
  'Proto' => array($protopage, $protosum, $protoext),
- 'Kano' => array($kanogenpage, $kanogensum, $kanogenext)
+ 'Kano' => array($kanogenpage, $kanogensum, $kanogenext),
+ 'Summary' => array($syspage, $syssum)
 );
 #
 # Don't touch these 2
@@ -460,20 +505,23 @@ $rownum = 0;
 global $ses;
 $ses = 'rutroh';
 #
-function getcsp($name)
+function getcsp($name, $systempage = false)
 {
  global $customsummarypages, $user_pages, $sys_pages;
 
- if (!isset($customsummarypages[$name]))
-	return false;
-
- $csp = $customsummarypages[$name];
- if (is_array($csp))
+ if ($systempage === false)
  {
-	if (count($csp) < 2 || count($csp) > 3)
+	if (!isset($customsummarypages[$name]))
 		return false;
-	else
-		return $csp;
+
+	$csp = $customsummarypages[$name];
+	if (is_array($csp))
+	{
+		if (count($csp) < 2 || count($csp) > 3)
+			return false;
+		else
+			return $csp;
+	}
  }
 
  if (isset($user_pages[$name]))
@@ -1849,168 +1897,6 @@ function showrigs($anss, $headname, $rigname)
  }
 }
 #
-# $head is a hack but this is just a demo anyway :)
-function doforeach($cmd, $des, $sum, $head, $datetime)
-{
- global $miner, $port;
- global $error, $readonly, $notify, $rigs, $rigbuttons;
- global $warnfont, $warnoff, $dfmt;
- global $rigerror;
-
- $when = 0;
-
- $header = $head;
- $anss = array();
-
- $count = 0;
- $preverr = count($rigerror);
- foreach ($rigs as $num => $rig)
- {
-	$anss[$num] = null;
-
-	if (isset($rigerror[$rig]))
-		continue;
-
-	$parts = explode(':', $rig, 3);
-	if (count($parts) >= 1)
-	{
-		$miner = $parts[0];
-		if (count($parts) >= 2)
-			$port = $parts[1];
-		else
-			$port = '';
-
-		if (count($parts) > 2)
-			$name = $parts[2];
-		else
-			$name = $num;
-
-		$ans = api($name, $cmd);
-
-		if ($error != null)
-		{
-			$rw = "<td colspan=100>Error on rig $name getting ";
-			$rw .= "$des: $warnfont$error$warnoff</td>";
-			otherrow($rw);
-			$rigerror[$rig] = $error;
-			$error = null;
-		}
-		else
-		{
-			$anss[$num] = $ans;
-			$count++;
-		}
-	}
- }
-
- if ($count == 0)
- {
-	$rw = '<td>Failed to access any rigs successfully';
-	if ($preverr > 0)
-		$rw .= ' (or rigs had previous errors)';
-	$rw .= '</td>';
-	otherrow($rw);
-	return;
- }
-
- if ($datetime)
- {
-	showdatetime();
-	endtable();
-	newtable();
-	showrigs($anss, '', 'Rig ');
-	endtable();
-	otherrow('<td><br><br></td>');
-	newtable();
-
-	return;
- }
-
- $total = array();
-
- foreach ($anss as $rig => $ans)
- {
-	if ($ans == null)
-		continue;
-
-	foreach ($ans as $item => $row)
-	{
-		if ($item == 'STATUS')
-			continue;
-
-		if (count($row) > count($header))
-		{
-			$header = $head;
-			foreach ($row as $name => $value)
-				if (!isset($header[$name]))
-					$header[$name] = '';
-		}
-
-		if ($sum != null)
-			foreach ($sum as $name)
-			{
-				if (isset($row[$name]))
-				{
-					if (isset($total[$name]))
-						$total[$name] += $row[$name];
-					else
-						$total[$name] = $row[$name];
-				}
-			}
-	}
- }
-
- if ($sum != null)
-	$anss['total']['total'] = $total;
-
- showhead('', $header);
-
- foreach ($anss as $rig => $ans)
- {
-	if ($ans == null)
-		continue;
-
-	$when = 0;
-	if (isset($ans['STATUS']['When']))
-		$when = $ans['STATUS']['When'];
-
-	foreach ($ans as $item => $row)
-	{
-		if ($item == 'STATUS')
-			continue;
-
-		newrow();
-
-		$section = preg_replace('/\d/', '', $item);
-
-		foreach ($header as $name => $x)
-		{
-			if ($name == '')
-			{
-				if ($rig === 'total')
-				{
-					list($ignore, $class) = fmt($rig, '', '', $when, $row);
-					echo "<td align=right$class>Total:</td>";
-				}
-				else
-					echo rigbutton($rig, "Rig $rig", $when, $row, $rigbuttons);
-			}
-			else
-			{
-				if (isset($row[$name]))
-					$value = $row[$name];
-				else
-					$value = null;
-
-				list($showvalue, $class) = fmt($section, $name, $value, $when, $row);
-				echo "<td$class align=right>$showvalue</td>";
-			}
-		}
-		endrow();
-	}
- }
-}
-#
 function refreshbuttons()
 {
  global $ignorerefresh, $changerefresh, $autorefresh;
@@ -2072,7 +1958,7 @@ function pagebuttons($rig, $pg)
 	if ($next !== null)
 		echo riginput($next, 'Next', true).'&nbsp;';
 	echo '&nbsp;';
-	if (count($rigs) > 1)
+	if (count($rigs) > 1 and getcsp('Summary', true) !== false)
 		echo "<input type=button value='Summary' onclick='pr(\"\",null)'>&nbsp;";
  }
 
@@ -2968,7 +2854,7 @@ function processcustompage($pagename, $sections, $sum, $ext, $namemap)
  }
 }
 #
-function showcustompage($pagename)
+function showcustompage($pagename, $systempage = false)
 {
  global $customsummarypages;
  global $placebuttons;
@@ -2976,13 +2862,13 @@ function showcustompage($pagename)
  if ($placebuttons == 'top' || $placebuttons == 'both')
 	pagebuttons(null, $pagename);
 
- if (!isset($customsummarypages[$pagename]))
+ if ($systempage === false && !isset($customsummarypages[$pagename]))
  {
 	otherrow("<td colspan=100 class=bad>Unknown custom summary page '$pagename'</td>");
 	return;
  }
 
- $csp = getcsp($pagename);
+ $csp = getcsp($pagename, $systempage);
  if ($csp === false)
  {
 	otherrow("<td colspan=100 class=bad>Invalid custom summary page '$pagename'</td>");
@@ -3232,7 +3118,7 @@ function display()
 	if ($pg !== null && $pg !== '')
 	{
 		htmlhead($mcerr, false, null, $pg);
-		showcustompage($pg, $mcerr);
+		showcustompage($pg);
 		return;
 	}
  }
@@ -3291,28 +3177,11 @@ function display()
 
  htmlhead($mcerr, false, null);
 
- if ($placebuttons == 'top' || $placebuttons == 'both')
-	pagebuttons(null, null);
-
  if ($preprocess != null)
 	process(array($preprocess => $preprocess), $rig);
 
- newtable();
- doforeach('version', 'rig summary', array(), array(), true);
- $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH', 'Work Utility', 'Diff1 Shares', 'Diff1 Work', 'Difficulty Accepted', 'Difficulty Rejected', 'Difficulty Stale');
- doforeach('summary', 'summary information', $sum, array(), false);
- endtable();
- otherrow('<td><br><br></td>');
- newtable();
- doforeach('devs', 'device list', $sum, array(''=>'','ID'=>'','Name'=>''), false);
- endtable();
- otherrow('<td><br><br></td>');
- newtable();
- doforeach('pools', 'pool list', $sum, array(''=>''), false);
- endtable();
-
- if ($placebuttons == 'bot' || $placebuttons == 'both')
-	pagebuttons(null, null);
+ if (getcsp('Summary', true) !== false)
+	showcustompage('Summary', true);
 }
 #
 if ($mcast === true)
