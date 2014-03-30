@@ -3189,13 +3189,12 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		} else
 			s = realloc_strcat(s, "\"]}");
 	} else {
-		unsigned char data[128];
 		char *hexstr;
 
-		endian_flip128(data, work->data);
+		endian_flip128(work->data, work->data);
 
 		/* build hex string */
-		hexstr = bin2hex(data, 128);
+		hexstr = bin2hex(work->data, 118);
 		s = strdup("{\"method\": \"getwork\", \"params\": [ \"");
 		s = realloc_strcat(s, hexstr);
 		s = realloc_strcat(s, "\" ], \"id\":1}");
