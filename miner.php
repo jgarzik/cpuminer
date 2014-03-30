@@ -9,7 +9,7 @@ global $rigipsecurity, $rigtotals, $forcerigtotals;
 global $socksndtimeoutsec, $sockrcvtimeoutsec;
 global $checklastshare, $poolinputs, $hidefields;
 global $ignorerefresh, $changerefresh, $autorefresh;
-global $allowcustompages, $customsummarypages;
+global $allowcustompages, $customsummarypages, $user_pages;
 global $miner_font_family, $miner_font_size;
 global $bad_font_family, $bad_font_size, $add_css_names;
 global $colouroverride, $placebuttons, $userlist;
@@ -126,71 +126,236 @@ $allowcustompages = true;
 $mobilepage = array(
  'DATE' => null,
  'RIGS' => null,
- 'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks=Blks', 'Accepted', 'Rejected=Rej', 'Utility'),
- 'DEVS+NOTIFY' => array('DEVS.Name=Name', 'DEVS.ID=ID', 'DEVS.Status=Status', 'DEVS.Temperature=Temp',
-			'DEVS.MHS av=MHS av', 'DEVS.Accepted=Accept', 'DEVS.Rejected=Rej',
-			'DEVS.Utility=Utility', 'NOTIFY.Last Not Well=Not Well'),
- 'POOL' => array('POOL', 'Status', 'Accepted', 'Rejected=Rej', 'Last Share Time'));
+ 'SUMMARY' => array('Elapsed', 'MHS av', 'MHS 5m', 'Found Blocks=Blks',
+			'Difficulty Accepted=DiffA',
+			'Difficulty Rejected=DiffR',
+			'Hardware Errors=HW',
+			'Work Utility=WU'),
+ 'DEVS+NOTIFY' => array('DEVS.Name=Name', 'DEVS.ID=ID', 'DEVS.Status=Status',
+			'DEVS.Temperature=Temp', 'DEVS.MHS av=MHS av',
+			'DEVS.MHS 5m=MHS 5m', 'DEVS.Difficulty Accepted=DiffA',
+			'DEVS.Difficulty Rejected=DiffR',
+			'DEVS.Work Utility=WU',
+			'NOTIFY.Last Not Well=Not Well'),
+ 'POOL' => array('POOL', 'Status', 'Difficulty Accepted=DiffA',
+			'Difficulty Rejected=DiffR', 'Last Share Time=LST'));
 $mobilesum = array(
- 'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted', 'Rejected', 'Utility'),
- 'DEVS+NOTIFY' => array('DEVS.MHS av', 'DEVS.Accepted', 'DEVS.Rejected', 'DEVS.Utility'),
- 'POOL' => array('Accepted', 'Rejected'));
+ 'SUMMARY' => array('MHS av', 'MHS 5m', 'Found Blocks', 'Difficulty Accepted',
+			'Difficulty Rejected', 'Hardware Errors',
+			'Work Utility'),
+ 'DEVS+NOTIFY' => array('DEVS.MHS av', 'DEVS.Difficulty Accepted',
+			'DEVS.Difficulty Rejected'),
+ 'POOL' => array('Difficulty Accepted', 'Difficulty Rejected'));
 #
 $statspage = array(
  'DATE' => null,
  'RIGS' => null,
- 'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks=Blks',
-			'Accepted', 'Rejected=Rej', 'Utility',
-			'Hardware Errors=HW Errs', 'Network Blocks=Net Blks',
-			'Work Utility'),
+ 'SUMMARY' => array('Elapsed', 'MHS av', 'MHS 5m', 'Found Blocks=Blks',
+			'Difficulty Accepted=DiffA',
+			'Difficulty Rejected=DiffR',
+			'Work Utility=WU', 'Hardware Errors=HW Errs',
+			'Network Blocks=Net Blks'),
  'COIN' => array('*'),
  'STATS' => array('*'));
 #
 $statssum = array(
- 'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted',
-			'Rejected', 'Utility', 'Hardware Errors',
-			'Work Utility'));
+ 'SUMMARY' => array('MHS av', 'MHS 5m', 'Found Blocks',
+			'Difficulty Accepted', 'Difficulty Rejected',
+			'Work Utility', 'Hardware Errors'));
 #
 $poolspage = array(
  'DATE' => null,
  'RIGS' => null,
- 'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks=Blks', 'Accepted', 'Rejected=Rej',
-			'Utility', 'Hardware Errors=HW Errs', 'Network Blocks=Net Blks',
-			'Work Utility'),
- 'POOL+STATS' => array('STATS.ID=ID', 'POOL.URL=URL', 'POOL.Difficulty Accepted=Diff Acc',
-			'POOL.Difficulty Rejected=Diff Rej',
-			'POOL.Has Stratum=Stratum', 'POOL.Stratum Active=StrAct',
+ 'SUMMARY' => array('Elapsed', 'MHS av', 'MHS 5m', 'Found Blocks=Blks',
+			'Difficulty Accepted=DiffA',
+			'Difficulty Rejected=DiffR',
+			'Work Utility', 'Hardware Errors=HW',
+			'Network Blocks=Net Blks'),
+ 'POOL+STATS' => array('STATS.ID=ID', 'POOL.URL=URL',
+			'POOL.Difficulty Accepted=DiffA',
+			'POOL.Difficulty Rejected=DiffR',
+			'POOL.Has Stratum=Stratum',
+			'POOL.Stratum Active=StrAct',
 			'POOL.Has GBT=GBT', 'STATS.Times Sent=TSent',
 			'STATS.Bytes Sent=BSent', 'STATS.Net Bytes Sent=NSent',
 			'STATS.Times Recv=TRecv', 'STATS.Bytes Recv=BRecv',
 			'STATS.Net Bytes Recv=NRecv', 'GEN.AvShr=AvShr'));
 #
 $poolssum = array(
- 'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted',
-			'Rejected', 'Utility', 'Hardware Errors',
-			'Work Utility'),
+ 'SUMMARY' => array('MHS av', 'MHS 5m', 'Found Blocks',
+			'Difficulty Accepted', 'Difficulty Rejected',
+			'Work Utility', 'Hardware Errors'),
  'POOL+STATS' => array('POOL.Difficulty Accepted', 'POOL.Difficulty Rejected',
-			'STATS.Times Sent', 'STATS.Bytes Sent', 'STATS.Net Bytes Sent',
-			'STATS.Times Recv', 'STATS.Bytes Recv', 'STATS.Net Bytes Recv'));
+			'STATS.Times Sent', 'STATS.Bytes Sent',
+			'STATS.Net Bytes Sent', 'STATS.Times Recv',
+			'STATS.Bytes Recv', 'STATS.Net Bytes Recv'));
 #
 $poolsext = array(
  'POOL+STATS' => array(
 	'where' => null,
-	'group' => array('POOL.URL', 'POOL.Has Stratum', 'POOL.Stratum Active', 'POOL.Has GBT'),
-	'calc' => array('POOL.Difficulty Accepted' => 'sum', 'POOL.Difficulty Rejected' => 'sum',
-			'STATS.Times Sent' => 'sum', 'STATS.Bytes Sent' => 'sum',
-			'STATS.Net Bytes Sent' => 'sum', 'STATS.Times Recv' => 'sum',
-			'STATS.Bytes Recv' => 'sum', 'STATS.Net Bytes Recv' => 'sum',
+	'group' => array('POOL.URL', 'POOL.Has Stratum',
+				'POOL.Stratum Active', 'POOL.Has GBT'),
+	'calc' => array('POOL.Difficulty Accepted' => 'sum',
+			'POOL.Difficulty Rejected' => 'sum',
+			'STATS.Times Sent' => 'sum',
+			'STATS.Bytes Sent' => 'sum',
+			'STATS.Net Bytes Sent' => 'sum',
+			'STATS.Times Recv' => 'sum',
+			'STATS.Bytes Recv' => 'sum',
+			'STATS.Net Bytes Recv' => 'sum',
 			'POOL.Accepted' => 'sum'),
-	'gen' => array('AvShr' => 'round(POOL.Difficulty Accepted/max(POOL.Accepted,1)*100)/100'),
+	'gen' => array('AvShr' =>
+				'round(POOL.Difficulty Accepted/'.
+					'max(POOL.Accepted,1)*100)/100'),
 	'having' => array(array('STATS.Bytes Recv', '>', 0)))
 );
-
 #
-# customsummarypages is an array of these Custom Summary Pages
-$customsummarypages = array('Mobile' => array($mobilepage, $mobilesum),
- 'Stats' => array($statspage, $statssum),
- 'Pools' => array($poolspage, $poolssum, $poolsext));
+$devnotpage = array(
+ 'DATE' => null,
+ 'RIGS' => null,
+ 'DEVS+NOTIFY' => array('DEVS.Name=Name', 'DEVS.ID=ID',
+			'DEVS.Temperature=Temp', 'DEVS.MHS av=MHS av',
+			'DEVS.Difficulty Accepted=DiffA',
+			'DEVS.Difficulty Rejected=DiffR',
+			'NOTIFY.Last Not Well=Last Not Well'));
+$devnotsum = array(
+ 'DEVS+NOTIFY' => array('DEVS.MHS av', 'DEVS.Difficulty Accepted',
+			'DEVS.Difficulty Rejected'));
+#
+$devdetpage = array(
+ 'DATE' => null,
+ 'RIGS' => null,
+ 'DEVS+DEVDETAILS' => array('DEVS.Name=Name', 'DEVS.ID=ID',
+				'DEVS.Temperature=Temp',
+				'DEVS.MHS av=MHS av',
+				'DEVS.Difficulty Accepted=DiffA',
+				'DEVS.Difficulty Rejected=DiffR',
+				'DEVDETAILS.Device Path=Device'));
+$devdetsum = array(
+ 'DEVS+DEVDETAILS' => array('DEVS.MHS av', 'DEVS.Difficulty Accepted',
+				'DEVS.Difficulty Rejected'));
+#
+$protopage = array(
+ 'DATE' => null,
+ 'RIGS' => null,
+ 'CONFIG' => array('ASC Count=ASCs', 'PGA Count=PGAs', 'Pool Count=Pools',
+			'Strategy', 'Device Code', 'OS', 'Failover-Only'),
+ 'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks=Blks',
+			'Difficulty Accepted=Diff Acc',
+			'Difficulty Rejected=Diff Rej',
+			'Hardware Errors=HW Errs',
+			'Network Blocks=Net Blks', 'Utility', 'Work Utility'),
+ 'POOL+STATS' => array('STATS.ID=ID', 'POOL.URL=URL', 'POOL.Accepted=Acc',
+			'POOL.Difficulty Accepted=DiffA',
+			'POOL.Difficulty Rejected=DiffR', 'POOL.Has GBT=GBT',
+			'STATS.Max Diff=Max Work Diff',
+			'STATS.Times Sent=#Sent', 'STATS.Bytes Sent=Byte Sent',
+			'STATS.Net Bytes Sent=Net Sent',
+			'STATS.Times Recv=#Recv',
+			'STATS.Bytes Recv=Byte Recv',
+			'STATS.Net Bytes Recv=Net Recv'));
+$protosum = array(
+ 'SUMMARY' => array('MHS av', 'Found Blocks', 'Difficulty Accepted',
+			'Difficulty Rejected', 'Hardware Errors',
+			'Utility', 'Work Utility'),
+ 'POOL+STATS' => array('POOL.Accepted', 'POOL.Difficulty Accepted',
+			'POOL.Difficulty Rejected',
+			'STATS.Times Sent', 'STATS.Bytes Sent',
+			'STATS.Net Bytes Sent', 'STATS.Times Recv',
+			'STATS.Bytes Recv', 'STATS.Net Bytes Recv'));
+$protoext = array(
+ 'POOL+STATS' => array(
+	'where' => null,
+	'group' => array('POOL.URL', 'POOL.Has GBT'),
+	'calc' => array('POOL.Accepted' => 'sum',
+			'POOL.Difficulty Accepted' => 'sum',
+			'POOL.Difficulty Rejected' => 'sum',
+			'STATS.Max Diff' => 'max',
+			'STATS.Times Sent' => 'sum',
+			'STATS.Bytes Sent' => 'sum',
+			'STATS.Net Bytes Sent' => 'sum',
+			'STATS.Times Recv' => 'sum',
+			'STATS.Bytes Recv' => 'sum',
+			'STATS.Net Bytes Recv' => 'sum'),
+	'having' => array(array('STATS.Bytes Recv', '>', 0)))
+);
+#
+# If 'gen' isn't enabled, the 'GEN' fields won't show
+$kanogenpage = array(
+ 'DATE' => null,
+ 'RIGS' => null,
+ 'SUMMARY+COIN' => array('SUMMARY.Elapsed=Elapsed',
+			'GEN.Mined=Block%', 'GEN.GHS Acc=GH/s Acc',
+			'GEN.GHS WU=GH/s WU', 'GEN.GHS av=GH/s av',
+			'GEN.GHS 5m=GH/s 5m',
+			'SUMMARY.Found Blocks=Blks',
+			'SUMMARY.Difficulty Accepted=DiffA',
+			'SUMMARY.Difficulty Rejected=DiffR',
+			'SUMMARY.Hardware Errors=HW',
+			'SUMMARY.Difficulty Stale=DiffS',
+			'SUMMARY.Best Share=Best Share',
+			'SUMMARY.Device Hardware%=Dev HW%',
+			'SUMMARY.Device Rejected%=Dev Rej%',
+			'SUMMARY.Pool Rejected%=Pool Rej%',
+			'SUMMARY.Pool Stale%=Pool Stale%'),
+ 'POOL' => array('URL', 'Diff1 Shares=Diff Work',
+			'Difficulty Accepted=DiffA',
+			'Difficulty Rejected=DiffR',
+			'Difficulty Stale=DiffS',
+			'Best Share', 'GEN.Acc=Acc%', 'GEN.Rej=Rej%')
+);
+$kanogensum = array(
+ 'SUMMARY+COIN' => array('GEN.Mined', 'GEN.GHS Acc', 'GEN.GHS WU',
+			'GEN.GHS av', 'GEN.GHS 5m',
+			'SUMMARY.Found Blocks',
+			'SUMMARY.Difficulty Accepted',
+			'SUMMARY.Difficulty Rejected',
+			'SUMMARY.Hardware Errors',
+			'SUMMARY.Difficulty Stale'),
+ 'POOL' => array('Diff1 Shares', 'Difficulty Accepted',
+			'Difficulty Rejected', 'Difficulty Stale')
+);
+$kanogenext = array(
+ 'SUMMARY+COIN' => array(
+  'gen' => array('GHS Acc' =>
+			'round(pow(2,32) * SUMMARY.Difficulty Accepted / '.
+				'SUMMARY.Elapsed / 10000000) / 100',
+		'Mined' =>
+			'SUMMARY.Elapsed * SUMMARY.Work Utility / 60 / '.
+				'COIN.Network Difficulty',
+		'GHS av' =>
+			'SUMMARY.MHS av / 1000.0',
+		'GHS 5m' =>
+			'SUMMARY.MHS 5m / 1000.0',
+		'GHS WU' =>
+			'round(pow(2,32) * SUMMARY.Work Utility / 60 / '.
+				'10000000 ) / 100')),
+ 'POOL' => array(
+  'group' => array('URL'),
+  'calc' => array('Diff1 Shares' => 'sum', 'Difficulty Accepted' => 'sum',
+			'Difficulty Rejected' => 'sum',
+			'Difficulty Stale' => 'sum', 'Best Share' => 'max'),
+  'gen' => array('Rej' => 'Difficulty Rejected / max(1,Diff1 Shares)',
+			'Acc' => 'Difficulty Accepted / max(1,Diff1 Shares)'))
+);
+#
+# $customsummarypages is an array of these Custom Summary Pages
+# that you can override in myminer.php
+# It can be 'Name' => 1 with 'Name' in any of $user_pages or $sys_pages
+# and it can be a fully defined 'Name' => array(...) like in $sys_pages below
+$customsummarypages = array(
+ 'Kano' => 1,
+ 'Mobile' => 1,
+ 'Stats' => 1,
+ 'Pools' => 1
+);
+#
+# $user_pages are the myminer.php definable version of $sys_pages
+# It should contain a set of 'Name' => array(...) like in $sys_pages
+# that $customsummarypages can refer to by 'Name'
+# If a 'Name' is in both $user_pages and $sys_pages, then the one
+# in $user_pages will override the one in $sys_pages
+$user_pages = array();
 #
 $here = $_SERVER['PHP_SELF'];
 #
@@ -260,6 +425,19 @@ $colourtable = array(
 	'td.lo background'	=> '#deffff'
 );
 #
+# A list of system default summary pages (defined further above)
+# that you can use by 'Name' in $customsummarypages
+global $sys_pages;
+$sys_pages = array(
+ 'Mobile' => array($mobilepage, $mobilesum),
+ 'Stats' => array($statspage, $statssum),
+ 'Pools' => array($poolspage, $poolssum, $poolsext),
+ 'DevNot' => array($devnotpage, $devnotsum),
+ 'DevDet' => array($devdetpage, $devdetsum),
+ 'Proto' => array($protopage, $protosum, $protoext),
+ 'Kano' => array($kanogenpage, $kanogensum, $kanogenext)
+);
+#
 # Don't touch these 2
 $miner = null;
 $port = null;
@@ -281,6 +459,43 @@ $rownum = 0;
 // Login
 global $ses;
 $ses = 'rutroh';
+#
+function getcsp($name)
+{
+ global $customsummarypages, $user_pages, $sys_pages;
+
+ if (!isset($customsummarypages[$name]))
+	return false;
+
+ $csp = $customsummarypages[$name];
+ if (is_array($csp))
+ {
+	if (count($csp) < 2 || count($csp) > 3)
+		return false;
+	else
+		return $csp;
+ }
+
+ if (isset($user_pages[$name]))
+ {
+	$csp = $user_pages[$name];
+	if (!is_array($csp) || count($csp) < 2 || count($csp) > 3)
+		return false;
+	else
+		return $csp;
+ }
+
+ if (isset($sys_pages[$name]))
+ {
+	$csp = $sys_pages[$name];
+	if (!is_array($csp) || count($csp) < 2 || count($csp) > 3)
+		return false;
+	else
+		return $csp;
+ }
+
+ return false;
+}
 #
 function getcss($cssname, $dom = false)
 {
@@ -1025,6 +1240,9 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 		break;
 	case 'MHS av':
 	case 'MHS 5s':
+	case 'MHS 1m':
+	case 'MHS 5m':
+	case 'MHS 15m':
 		$parts = explode('.', $value, 2);
 		if (count($parts) == 1)
 			$dec = '';
@@ -1135,6 +1353,20 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 	case 'Rig':
 	case 'Pool':
 	case 'GPU':
+		break;
+	// Kano GEN fields
+	case 'Mined':
+		$ret = number_format((float)$value * 100.0, 3) . '%';
+		break;
+	case 'Acc':
+	case 'Rej':
+		$ret = number_format((float)$value * 100.0, 2) . '%';
+		break;
+	case 'GHS av':
+	case 'GHS 5m':
+	case 'GHS WU':
+	case 'GHS Acc':
+		$ret = number_format((float)$value, 2);
 		break;
 	}
  }
@@ -1857,7 +2089,8 @@ function pagebuttons($rig, $pg)
 	}
 
 	foreach ($list as $pagename => $data)
-		echo "<input type=button value='$pagename' onclick='pr(\"&pg=$pagename\",null)'>&nbsp;";
+		if (getcsp($pagename) !== false)
+			echo "<input type=button value='$pagename' onclick='pr(\"&pg=$pagename\",null)'>&nbsp;";
  }
 
  echo '</td><td width=100%>&nbsp;</td><td nowrap>';
@@ -2749,16 +2982,14 @@ function showcustompage($pagename)
 	return;
  }
 
- $c = count($customsummarypages[$pagename]);
- if ($c < 2 || $c > 3)
+ $csp = getcsp($pagename);
+ if ($csp === false)
  {
-	$rw = "<td colspan=100 class=bad>Invalid custom summary page '$pagename' (";
-	$rw .= count($customsummarypages[$pagename]).')</td>';
-	otherrow($rw);
+	otherrow("<td colspan=100 class=bad>Invalid custom summary page '$pagename'</td>");
 	return;
  }
 
- $page = $customsummarypages[$pagename][0];
+ $page = $csp[0];
  $namemap = array();
  foreach ($page as $name => $fields)
  {
@@ -2779,10 +3010,10 @@ function showcustompage($pagename)
  }
 
  $ext = null;
- if (isset($customsummarypages[$pagename][2]))
-	$ext = $customsummarypages[$pagename][2];
+ if (isset($csp[2]))
+	$ext = $csp[2];
 
- $sum = $customsummarypages[$pagename][1];
+ $sum = $csp[1];
  if ($sum === null)
 	$sum = array();
 
@@ -2842,7 +3073,7 @@ function onlylogin()
 #
 function checklogin()
 {
- global $allowcustompages, $customsummarypages;
+ global $allowcustompages;
  global $readonly, $userlist, $ses;
 
  $out = trim(getparam('logout', true));
@@ -2900,7 +3131,7 @@ function checklogin()
  {
 	// Ensure at least one exists
 	foreach ($userlist['def'] as $pg)
-		if (isset($customsummarypages[$pg]))
+		if (getcsp($pg) !== false)
 			return true;
  }
 
@@ -2914,7 +3145,7 @@ function display()
  global $mcast, $mcastexpect;
  global $readonly, $notify, $rigs;
  global $ignorerefresh, $autorefresh;
- global $allowcustompages, $customsummarypages;
+ global $allowcustompages;
  global $placebuttons;
  global $userlist, $ses;
 
@@ -2990,7 +3221,7 @@ function display()
 		{
 			if ($userlist !== null && isset($userlist['def']))
 				foreach ($userlist['def'] as $pglook)
-					if (isset($customsummarypages[$pglook]))
+					if (getcsp($pglook) !== false)
 					{
 						$pg = $pglook;
 						break;
