@@ -1404,17 +1404,20 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 		break;
 	// Kano GEN fields
 	case 'Mined':
-		$ret = number_format((float)$value * 100.0, 3) . '%';
+		if ($value != '')
+			$ret = number_format((float)$value * 100.0, 3) . '%';
 		break;
 	case 'Acc':
 	case 'Rej':
-		$ret = number_format((float)$value * 100.0, 2) . '%';
+		if ($value != '')
+			$ret = number_format((float)$value * 100.0, 2) . '%';
 		break;
 	case 'GHS av':
 	case 'GHS 5m':
 	case 'GHS WU':
 	case 'GHS Acc':
-		$ret = number_format((float)$value, 2);
+		if ($value != '')
+			$ret = number_format((float)$value, 2);
 		break;
 	}
  }
