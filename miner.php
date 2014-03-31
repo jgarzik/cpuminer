@@ -2595,6 +2595,13 @@ function ss($a, $b)
  return strcmp($a, $b);
 }
 #
+# If you are developing a customsummarypage that uses BGEN or GEN,
+# you may want to remove the '@' in front of '@eval()' to help with debugging
+# The '@' removes php comments from the web log about missing fields
+# Since there are many forks of cgminer that break the API or do not
+# keep their fork up to date with current cgminer, the addition of
+# '@' solves the problem of generating unnecessary and excessive web logs
+# about the eval()
 function genfld($row, $calc)
 {
  uksort($row, "ss");
@@ -2603,7 +2610,7 @@ function genfld($row, $calc)
 	if (strstr($calc, $name) !== FALSE)
 		$calc = str_replace($name, $value, $calc);
 
- eval("\$val = $calc;");
+ @eval("\$val = $calc;");
 
  if (!isset($val))
 	return '';
