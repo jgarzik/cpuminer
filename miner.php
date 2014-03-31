@@ -304,7 +304,7 @@ $kanogenpage = array(
 			'Difficulty Accepted=DiffA',
 			'Difficulty Rejected=DiffR',
 			'Difficulty Stale=DiffS',
-			'Best Share', 'GEN.Acc=Acc%', 'GEN.Rej=Rej%')
+			'Best Share', 'GEN.Acc=Pool Acc%', 'GEN.Rej=Pool Rej%')
 );
 # sum should list all fields seperately including GEN/BGEN || replacements
 $kanogensum = array(
@@ -342,8 +342,10 @@ $kanogenext = array(
   'calc' => array('Diff1 Shares' => 'sum', 'Difficulty Accepted' => 'sum',
 			'Difficulty Rejected' => 'sum',
 			'Difficulty Stale' => 'sum', 'Best Share' => 'max'),
-  'gen' => array('Rej' => 'Difficulty Rejected / max(1,Diff1 Shares)',
-			'Acc' => 'Difficulty Accepted / max(1,Diff1 Shares)'))
+  'gen' => array('Rej' => 'Difficulty Rejected / '.
+				'max(1,Difficulty Accepted+Difficulty Rejected)',
+		'Acc' => 'Difficulty Accepted / '.
+				'max(1,Difficulty Accepted+Difficulty Rejected)'))
 );
 #
 $syspage = array(
