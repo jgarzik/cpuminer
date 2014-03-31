@@ -280,14 +280,16 @@ $protoext = array(
 	'having' => array(array('STATS.Bytes Recv', '>', 0)))
 );
 #
-# If 'gen' isn't enabled, the 'GEN' fields won't show
+# If 'gen' isn't enabled, the 'GEN' fields won't show but
+# where present, will be replaced with the ||SUMMARY fields
 $kanogenpage = array(
  'DATE' => null,
  'RIGS' => null,
  'SUMMARY+COIN' => array('SUMMARY.Elapsed=Elapsed',
 			'GEN.Mined=Block%', 'GEN.GHS Acc=GH/s Acc',
-			'GEN.GHS WU=GH/s WU', 'GEN.GHS av=GH/s av',
-			'GEN.GHS 5m=GH/s 5m',
+			'GEN.GHS av=GH/s av||SUMMARY.MHS av=MHS av',
+			'GEN.GHS 5m=GH/s 5m||SUMMARY.MHS 5m=MHS 5m',
+			'GEN.GHS WU=GH/s WU||SUMMARY.Work Utility=WU',
 			'SUMMARY.Found Blocks=Blks',
 			'SUMMARY.Difficulty Accepted=DiffA',
 			'SUMMARY.Difficulty Rejected=DiffR',
@@ -304,9 +306,12 @@ $kanogenpage = array(
 			'Difficulty Stale=DiffS',
 			'Best Share', 'GEN.Acc=Acc%', 'GEN.Rej=Rej%')
 );
+# sum should list all fields seperately including GEN/BGEN || replacements
 $kanogensum = array(
- 'SUMMARY+COIN' => array('GEN.Mined', 'GEN.GHS Acc', 'GEN.GHS WU',
-			'GEN.GHS av', 'GEN.GHS 5m',
+ 'SUMMARY+COIN' => array('GEN.Mined', 'GEN.GHS Acc', 'GEN.GHS av',
+			'GEN.GHS 5m', 'GEN.GHS WU',
+			'SUMMARY.MHS av', 'SUMMARY.MHS 5m',
+			'SUMMARY.Work Utility',
 			'SUMMARY.Found Blocks',
 			'SUMMARY.Difficulty Accepted',
 			'SUMMARY.Difficulty Rejected',
@@ -315,6 +320,8 @@ $kanogensum = array(
  'POOL' => array('Diff1 Shares', 'Difficulty Accepted',
 			'Difficulty Rejected', 'Difficulty Stale')
 );
+# 'where', 'calc' and 'having' should list GEN/BGEN || replacements seperately
+# 'group' must use the 'name1||name2' format for GEN/BGEN fields
 $kanogenext = array(
  'SUMMARY+COIN' => array(
   'gen' => array('GHS Acc' =>
@@ -494,10 +501,6 @@ $rigips = array();
 global $showndate;
 $showndate = false;
 #
-# For summary page to stop retrying failed rigs
-global $rigerror;
-$rigerror = array();
-#
 global $rownum;
 $rownum = 0;
 #
@@ -543,6 +546,51 @@ function getcsp($name, $systempage = false)
  }
 
  return false;
+}
+#
+function degenfields(&$sec, $name, $fields)
+{
+ global $allowgen;
+
+ if (!is_array($fields))
+	return;
+
+ foreach ($fields as $num => $fld)
+	if (substr($fld, 0, 5) == 'BGEN.' || substr($fld, 0, 4) == 'GEN.')
+	{
+		$opts = explode('||', $fld, 2);
+		if ($allowgen)
+		{
+			if (count($opts) > 1)
+				$sec[$name][$num] = $opts[0];
+		}
+		else
+		{
+			if (count($opts) > 1)
+				$sec[$name][$num] = $opts[1];
+			else
+				unset($sec[$name][$num]);
+		}
+	}
+}
+#
+# Allow BGEN/GEN fields to have a '||' replacement when gen is disabled
+# N.B. if gen is disabled and all page fields are GBEN/GEN without '||' then
+# the table will disappear
+# Replacements can be in the page fields and then also the ext group fields
+# All other $csp sections should list both separately
+function degen(&$csp)
+{
+ $page = 0;
+ if (isset($csp[$page]) && is_array($csp[$page]))
+	foreach ($csp[$page] as $sec => $fields)
+		degenfields($csp[$page], $sec, $fields);
+
+ $ext = 2;
+ if (isset($csp[$ext]) && is_array($csp[$ext]))
+	foreach ($csp[$ext] as $sec => $types)
+		if (is_array($types) && isset($types['group']))
+			degenfields($types, 'group', $types['group']);
 }
 #
 function getcss($cssname, $dom = false)
@@ -2640,9 +2688,12 @@ function processext($ext, $section, $res, &$fields)
 					if ($calc !== null)
 						foreach ($calc as $field => $func)
 						{
-							if (!isset($interim[$grpkey]['cal'][$field]))
-								$interim[$grpkey]['cal'][$field] = array();
-							$interim[$grpkey]['cal'][$field][] = $row[$field];
+							if (isset($row[$field]))
+							{
+								if (!isset($interim[$grpkey]['cal'][$field]))
+									$interim[$grpkey]['cal'][$field] = array();
+								$interim[$grpkey]['cal'][$field][] = $row[$field];
+							}
 						}
 				}
 			}
@@ -2877,6 +2928,8 @@ function showcustompage($pagename, $systempage = false)
 	otherrow("<td colspan=100 class=bad>Invalid custom summary page '$pagename'</td>");
 	return;
  }
+
+ degen($csp);
 
  $page = $csp[0];
  $namemap = array();
