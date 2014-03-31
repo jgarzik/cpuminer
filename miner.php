@@ -170,7 +170,7 @@ $poolspage = array(
 			'Difficulty Accepted=DiffA',
 			'Difficulty Rejected=DiffR',
 			'Work Utility', 'Hardware Errors=HW',
-			'Network Blocks=Net Blks'),
+			'Network Blocks=Net Blks', 'Best Share'),
  'POOL+STATS' => array('STATS.ID=ID', 'POOL.URL=URL',
 			'POOL.Difficulty Accepted=DiffA',
 			'POOL.Difficulty Rejected=DiffR',
@@ -1450,7 +1450,7 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 	case 'Pool':
 	case 'GPU':
 		break;
-	// Kano GEN fields
+	// Sample GEN fields
 	case 'Mined':
 		if ($value != '')
 			$ret = number_format((float)$value * 100.0, 3) . '%';
@@ -1466,6 +1466,12 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 	case 'GHS Acc':
 		if ($value != '')
 			$ret = number_format((float)$value, 2);
+		break;
+	case 'AvShr':
+		if ($value != '')
+			$ret = number_format((float)$value, 2);
+		if ($value == 0)
+			$class = $warnclass;
 		break;
 	}
  }
