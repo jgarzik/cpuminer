@@ -127,6 +127,7 @@ enum benchwork {
 	BENCHWORK_COUNT
 };
 static char *opt_btc_address;
+static char *opt_btc_sig;
 static char *opt_benchfile;
 static bool opt_benchfile_display;
 static FILE *benchfile_in;
@@ -1333,9 +1334,14 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_100, opt_show_intval, &opt_bxm_bits,
 		     "Set BXM bits for overclocking"),
 #endif
+#ifdef HAVE_LIBCURL
 	OPT_WITH_ARG("--btc-address",
 		     opt_set_charp, NULL, &opt_btc_address,
-		     "Set bitcoin target address when solo mining to bitcoind"),
+		     "Set bitcoin target address when solo mining to bitcoind (mandatory)"),
+	OPT_WITH_ARG("--btc-sig",
+		     opt_set_charp, NULL, &opt_btc_sig,
+		     "Set signature to add to coinbase when solo mining (optional)"),
+#endif
 #ifdef HAVE_CURSES
 	OPT_WITHOUT_ARG("--compact",
 			opt_set_bool, &opt_compact,
@@ -2355,6 +2361,15 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	pool->nonce2_offset = 41 + ofs;
 	ofs += 8;
 
+	if (opt_btc_sig) {
+		len = strlen(opt_btc_sig);
+		if (len > 32)
+			len = 32;
+		pool->scriptsig_base[ofs++] = len;
+		memcpy(pool->scriptsig_base + ofs, opt_btc_sig, len);
+		ofs += len;
+	}
+
 	pool->scriptsig_base[0] = ofs++; // Template length
 	pool->n1_len = ofs;
 
@@ -3143,7 +3158,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 	/* build JSON-RPC request */
 	if (work->gbt) {
-		char gbt_block[512], varint[12];
+		char gbt_block[1024], varint[12];
 		unsigned char data[80];
 
 		flip80(data, work->data);
@@ -3165,12 +3180,12 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 			__bin2hex(varint, (const unsigned char *)&val32, 4);
 		}
 		strcat(gbt_block, varint); // +8 max
-		strcat(gbt_block, work->coinbase); // + 268 max
+		strcat(gbt_block, work->coinbase);
 
-		s = malloc(512);
+		s = malloc(1024);
 		if (unlikely(!s))
 			quit(1, "Failed to malloc s in submit_upstream_work");
-		sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s", gbt_block); // 46 + 438
+		sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s", gbt_block);
 		/* Has submit/coinbase support */
 		if (!pool->has_gbt) {
 			cg_rlock(&pool->gbt_lock);

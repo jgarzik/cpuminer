@@ -1266,7 +1266,7 @@ struct pool {
 	unsigned char merklebin[16 * 32];
 	int transactions;
 	char *txn_data;
-	unsigned char scriptsig_base[42 + 2];
+	unsigned char scriptsig_base[100];
 	unsigned char script_pubkey[25 + 3];
 	int nValue;
 	CURL *gbt_curl;
