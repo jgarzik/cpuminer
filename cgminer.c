@@ -2325,51 +2325,47 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	pool->height = height;
 
 	memset(pool->scriptsig_base, 0, 42);
-	pool->scriptsig_base[ofs++] = 49; // Template is 49 bytes
+	ofs++; // Leave room for template length
 
 	/* Put block height at start of template. */
-	ser_number(pool->scriptsig_base + ofs, height);
-	ofs += 9;
+	ofs += ser_number(pool->scriptsig_base + ofs, height); // max 5
 
 	/* Followed by flags */
-	pool->scriptsig_base[ofs++] = 7; // Flags length should be 7
 	len = strlen(flags) / 2;
-	if (len > 7) {
-		applog(LOG_WARNING, "Coinbaseaux flags too long at %d bytes, truncating to 7", len);
-		len = 7;
-	}
+	pool->scriptsig_base[ofs++] = len;
 	hex2bin(pool->scriptsig_base + ofs, flags, len);
-	ofs += 7;
+	ofs += len;
 
 	/* Followed by timestamp */
 	cgtime(&now);
-	pool->scriptsig_base[ofs++] = 0xff; // Encode seconds as u64
-	u64 = (uint64_t *)&pool->scriptsig_base[ofs];
-	*u64 = now.tv_sec;
-	ofs += 8; // sizeof uint64_t
+	pool->scriptsig_base[ofs++] = 0xfe; // Encode seconds as u32
+	u32 = (uint32_t *)&pool->scriptsig_base[ofs];
+	*u32 = htole32(now.tv_sec);
+	ofs += 4; // sizeof uint32_t
 	pool->scriptsig_base[ofs++] = 0xfe; // Encode usecs as u32
 	u32 = (uint32_t *)&pool->scriptsig_base[ofs];
-	*u32 = now.tv_usec;
+	*u32 = htole32(now.tv_usec);
 	ofs += 4; // sizeof uint32_t
 
-	memcpy(pool->scriptsig_base + ofs, "\x07\x63\x67\x6d\x69\x6e\x65\x72", 8);
-	ofs += 8;
-
-	pool->scriptsig_base[ofs++] = 42; // Just because
+	memcpy(pool->scriptsig_base + ofs, "\x09\x63\x67\x6d\x69\x6e\x65\x72\x34\x32", 10);
+	ofs += 10;
 
 	/* Followed by extranonce size, fixed at 8 */
 	pool->scriptsig_base[ofs++] = 8;
 	pool->nonce2_offset = 41 + ofs;
 	ofs += 8;
 
-	free(pool->coinbase);
+	pool->scriptsig_base[0] = ofs++; // Template length
+	pool->n1_len = ofs;
+
 	len = 	41 // prefix
-		+ ofs // 1 + 49
+		+ ofs // Template length
 		+ 4 // txin sequence no
 		+ 1 // transactions
 		+ 8 // value
 		+ 1 + 25 // txout
 		+ 4; // lock
+	free(pool->coinbase);
 	pool->coinbase = calloc(len, 1);
 	if (unlikely(!pool->coinbase))
 		quit(1, "Failed to calloc coinbase in gbt_solo_decode");
@@ -2382,7 +2378,7 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 
 	pool->nonce2 = 0;
 	pool->n2size = 4;
-	pool->coinbase_len = 41 + 50 + 4 + 1 + 8 + 1 + 25 + 4; // Fixed size
+	pool->coinbase_len = 41 + ofs + 4 + 1 + 8 + 1 + 25 + 4;
 	cg_wunlock(&pool->gbt_lock);
 
 	snprintf(header, 225, "%s%s%s%s%s%s%s",
@@ -6454,8 +6450,8 @@ static void __setup_gbt_solo(struct pool *pool)
 {
 	cg_wlock(&pool->gbt_lock);
 	memcpy(pool->coinbase, scriptsig_header_bin, 41);
-	pool->coinbase[41 + 50 + 4 + 1 + 8] = 25;
-	memcpy(pool->coinbase + 41 + 50 + 4 + 1 + 8 + 1, pool->script_pubkey, 25);
+	pool->coinbase[41 + pool->n1_len + 4 + 1 + 8] = 25;
+	memcpy(pool->coinbase + 41 + pool->n1_len + 4 + 1 + 8 + 1, pool->script_pubkey, 25);
 	cg_wunlock(&pool->gbt_lock);
 }
 

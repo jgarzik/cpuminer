@@ -1232,7 +1232,6 @@ struct pool {
 
 	char *nonce1;
 	unsigned char *nonce1bin;
-	size_t n1_len;
 	uint64_t nonce2;
 	int n2size;
 	char *sessionid;
@@ -1274,6 +1273,7 @@ struct pool {
 	bool gbt_curl_inuse;
 
 	/* Shared by both stratum & GBT */
+	size_t n1_len;
 	unsigned char *coinbase;
 	int coinbase_len;
 	int nonce2_offset;

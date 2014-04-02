@@ -772,10 +772,10 @@ void address_to_pubkeyhash(unsigned char *pkh, const char *addr)
 	pkh[24] = 0xac;
 }
 
-/*  For encoding nHeight into coinbase, pad out to 9 bytes */
-void ser_number(unsigned char *s, int64_t val)
+/*  For encoding nHeight into coinbase, return how many bytes were used */
+int ser_number(unsigned char *s, int32_t val)
 {
-	int64_t *i64 = (int64_t *)&s[1];
+	int32_t *i32 = (int32_t *)&s[1];
 	int len;
 
 	if (val < 128)
@@ -786,9 +786,9 @@ void ser_number(unsigned char *s, int64_t val)
 		len = 3;
 	else
 		len = 4;
-	*i64 = htole64(val);
+	*i32 = htole32(val);
 	s[0] = len++;
-	s[len] = 9 - len;
+	return len;
 }
 
 /* For encoding variable length strings */
