@@ -1458,10 +1458,10 @@ static char *parse_config(json_t *config, bool fileconf)
 			if (!val)
 				continue;
 
-			if ((opt->type & OPT_HASARG) && json_is_string(val)) {
+			if ((opt->type & (OPT_HASARG | OPT_PROCESSARG)) && json_is_string(val)) {
 				err = opt->cb_arg(json_string_value(val),
 						  opt->u.arg);
-			} else if ((opt->type & OPT_HASARG) && json_is_array(val)) {
+			} else if ((opt->type & (OPT_HASARG | OPT_PROCESSARG)) && json_is_array(val)) {
 				int n, size = json_array_size(val);
 
 				for (n = 0; n < size && !err; n++) {
