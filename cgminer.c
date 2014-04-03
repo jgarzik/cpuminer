@@ -4908,6 +4908,7 @@ static char *json_escape(char *str)
 
 void write_config(FILE *fcfg)
 {
+	struct opt_table *opt;
 	int i;
 
 	/* Write pool values */
@@ -4934,10 +4935,10 @@ void write_config(FILE *fcfg)
 		}
 	fputs("\n]\n", fcfg);
 
-	/* Simple bool and int options */
-	struct opt_table *opt;
+	/* Simple bool,int and char options */
 	for (opt = opt_config_table; opt->type != OPT_END; opt++) {
 		char *p, *name = strdup(opt->names);
+
 		for (p = strtok(name, "|"); p; p = strtok(NULL, "|")) {
 			if (p[1] != '-')
 				continue;
@@ -4957,7 +4958,17 @@ void write_config(FILE *fcfg)
 			   (void *)opt->cb_arg == (void *)set_int_32_to_63) &&
 			   opt->desc != opt_hidden)
 				fprintf(fcfg, ",\n\"%s\" : \"%d\"", p+2, *(int *)opt->u.arg);
+
+			if (opt->type & OPT_HASARG &&
+			    ((void *)opt->cb_arg == (void *)opt_set_charp) &&
+			    opt->desc != opt_hidden) {
+				const char *carg = *(char **)opt->u.arg;
+
+				if (carg)
+					fprintf(fcfg, ",\n\"%s\" : \"%s\"", p+2, carg);
+			}
 		}
+		free(name);
 	}
 
 	/* Special case options */
