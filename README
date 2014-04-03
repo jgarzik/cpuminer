@@ -196,6 +196,7 @@ Options for both config file and command line:
 --bxf-temp-target <arg> Set target temperature for BXF/HXF devices (default: 82)
 --bxm-bits <arg>    Set BXM bits for overclocking (default: 54)
 --btc-address <arg> Set bitcoin target address when solo mining to bitcoind
+--btc-sig <arg>     Set signature to add to coinbase when solo mining (optional)
 --compact           Use compact display without per device statistics
 --debug|-D          Enable debug output
 --disable-rejecting Automatically disable pools that continually reject shares
