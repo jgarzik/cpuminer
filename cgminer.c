@@ -204,7 +204,7 @@ bool opt_worktime;
 #ifdef USE_AVALON
 char *opt_avalon_options;
 char *opt_bitburner_fury_options;
-static char *opt_set_avalon_van;
+static char *opt_set_avalon_fan;
 static char *opt_set_avalon_freq;
 #endif
 #ifdef USE_AVALON2
@@ -1080,10 +1080,10 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalon-cutoff",
 		     set_int_0_to_100, opt_show_intval, &opt_avalon_overheat,
 		     "Set avalon overheat cut off temperature"),
-	OPT_WITH_ARG("--avalon-fan",
-		     set_avalon_fan, NULL, &opt_set_avalon_van,
+	OPT_WITH_CBARG("--avalon-fan",
+		     set_avalon_fan, NULL, &opt_set_avalon_fan,
 		     "Set fanspeed percentage for avalon, single value or range (default: 20-100)"),
-	OPT_WITH_ARG("--avalon-freq",
+	OPT_WITH_CBARG("--avalon-freq",
 		     set_avalon_freq, NULL, &opt_set_avalon_freq,
 		     "Set frequency range for avalon-auto, single value or range"),
 	OPT_WITH_ARG("--avalon-options",
@@ -1094,13 +1094,13 @@ static struct opt_table opt_config_table[] = {
 		     "Set avalon target temperature"),
 #endif
 #ifdef USE_AVALON2
-	OPT_WITH_ARG("--avalon2-freq",
+	OPT_WITH_CBARG("--avalon2-freq",
 		     set_avalon2_freq, NULL, &opt_set_avalon2_freq,
 		     "Set frequency range for Avalon2, single value or range"),
-	OPT_WITH_ARG("--avalon2-fan",
+	OPT_WITH_CBARG("--avalon2-fan",
 		     set_avalon2_fan, NULL, &opt_set_avalon2_fan,
 		     "Set Avalon2 target fan speed"),
-	OPT_WITH_ARG("--avalon2-voltage",
+	OPT_WITH_CBARG("--avalon2-voltage",
 		     set_avalon2_voltage, NULL, &opt_set_avalon2_voltage,
 		     "Set Avalon2 core voltage, in millivolts"),
 #endif
@@ -1149,10 +1149,10 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bitmain-cutoff",
 		     set_int_0_to_100, opt_show_intval, &opt_bitmain_overheat,
 		     "Set bitmain overheat cut off temperature"),
-	OPT_WITH_ARG("--bitmain-fan",
+	OPT_WITH_CBARG("--bitmain-fan",
 		     set_bitmain_fan, NULL, &opt_set_bitmain_fan,
 		     "Set fanspeed percentage for bitmain, single value or range (default: 20-100)"),
-	OPT_WITH_ARG("--bitmain-freq",
+	OPT_WITH_CBARG("--bitmain-freq",
 		     set_bitmain_freq, NULL, &opt_set_bitmain_freq,
 		     "Set frequency range for bitmain-auto, single value or range"),
 	OPT_WITHOUT_ARG("--bitmain-hwerror",
@@ -1235,7 +1235,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--hfa-fail-drop",
 		     set_int_0_to_100, opt_show_intval, &opt_hfa_fail_drop,
 		     "Set how many MHz to drop clockspeed each failure on an overlocked hashfast device"),
-	OPT_WITH_ARG("--hfa-fan",
+	OPT_WITH_CBARG("--hfa-fan",
 		     set_hfa_fan, NULL, &opt_set_hfa_fan,
 		     "Set fanspeed percentage for hashfast, single value or range (default: 10-85)"),
 	OPT_WITH_ARG("--hfa-name",
@@ -1350,20 +1350,20 @@ static struct opt_table opt_config_table[] = {
 		     set_rr, &pool_strategy,
 		     "Change multipool strategy from failover to round robin on failure"),
 #ifdef USE_FPGA_SERIAL
-	OPT_WITH_ARG("--scan-serial|-S",
+	OPT_WITH_CBARG("--scan-serial|-S",
 		     add_serial, NULL, &opt_add_serial,
 		     "Serial port to probe for Serial FPGA Mining device"),
 #endif
 	OPT_WITH_ARG("--scan-time|-s",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
 		     "Upper bound on time spent scanning current work, in seconds"),
-	OPT_WITH_ARG("--sched-start",
+	OPT_WITH_CBARG("--sched-start",
 		     set_sched_start, NULL, &opt_set_sched_start,
 		     "Set a time of day in HH:MM to start mining (a once off without a stop time)"),
-	OPT_WITH_ARG("--sched-stop",
+	OPT_WITH_CBARG("--sched-stop",
 		     set_sched_stop, NULL, &opt_set_sched_stop,
 		     "Set a time of day in HH:MM to stop mining (will quit without a start time)"),
-	OPT_WITH_ARG("--sharelog",
+	OPT_WITH_CBARG("--sharelog",
 		     set_sharelog, NULL, &opt_set_sharelog,
 		     "Append share log to file"),
 	OPT_WITH_ARG("--shares",
@@ -1378,7 +1378,7 @@ static struct opt_table opt_config_table[] = {
 			"Use system log for output messages (default: standard error)"),
 #endif
 #if defined(USE_BITFORCE) || defined(USE_MODMINER) || defined(USE_BFLSC)
-	OPT_WITH_ARG("--temp-cutoff",
+	OPT_WITH_CBARG("--temp-cutoff",
 		     set_temp_cutoff, opt_show_intval, &opt_set_temp_cutoff,
 		     "Temperature where a device will be automatically disabled, one value or comma separated list"),
 #endif
@@ -4869,7 +4869,7 @@ void write_config(FILE *fcfg)
 				continue;
 			}
 
-			if (opt->type & OPT_HASARG &&
+			if (opt->type & (OPT_HASARG | OPT_PROCESSARG) &&
 			    (opt->u.arg != &opt_set_null)) {
 				char *carg = *(char **)opt->u.arg;
 
