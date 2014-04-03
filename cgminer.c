@@ -4808,10 +4808,16 @@ void write_config(FILE *fcfg)
 		for (p = strtok(name, "|"); p; p = strtok(NULL, "|")) {
 			if (p[1] != '-')
 				continue;
+
+			if (opt->desc == opt_hidden)
+				continue;
+
 			if (opt->type & OPT_NOARG &&
 			   ((void *)opt->cb == (void *)opt_set_bool || (void *)opt->cb == (void *)opt_set_invbool) &&
-			   (*(bool *)opt->u.arg == ((void *)opt->cb == (void *)opt_set_bool)))
+			   (*(bool *)opt->u.arg == ((void *)opt->cb == (void *)opt_set_bool))) {
 				fprintf(fcfg, ",\n\"%s\" : true", p+2);
+				continue;
+			}
 
 			if (opt->type & OPT_HASARG &&
 			    ((void *)opt->cb_arg == (void *)opt_set_intval ||
@@ -4822,32 +4828,42 @@ void write_config(FILE *fcfg)
 			     (void *)opt->cb_arg == (void *)set_int_0_to_100 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_255 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_200 ||
-			     (void *)opt->cb_arg == (void *)set_int_32_to_63) &&
-			    opt->desc != opt_hidden)
+			     (void *)opt->cb_arg == (void *)set_int_32_to_63)) {
 				fprintf(fcfg, ",\n\"%s\" : \"%d\"", p+2, *(int *)opt->u.arg);
+				continue;
+			}
 
 			if (opt->type & OPT_HASARG &&
-			    ((void *)opt->cb_arg == (void *)set_float_125_to_500) &&
-			    opt->desc != opt_hidden)
+			    ((void *)opt->cb_arg == (void *)set_float_125_to_500)) {
 				fprintf(fcfg, ",\n\"%s\" : \"%.1f\"", p+2, *(float *)opt->u.arg);
+				continue;
+			}
 
 			if (opt->type & OPT_HASARG &&
-			    ((void *)opt->cb_arg == (void *)opt_set_charp) &&
-			    opt->desc != opt_hidden) {
+			    ((void *)opt->cb_arg == (void *)opt_set_charp)) {
 				char *carg = *(char **)opt->u.arg;
 
 				if (carg)
 					fprintf(fcfg, ",\n\"%s\" : \"%s\"", p+2, json_escape(carg));
+				continue;
 			}
 		}
 		free(name);
 	}
 
 	/* Special case options */
+	if (pool_strategy == POOL_BALANCE)
+		fputs(",\n\"balance\" : true", fcfg);
+	if (pool_strategy == POOL_LOADBALANCE)
+		fputs(",\n\"load-balance\" : true", fcfg);
+	if (pool_strategy == POOL_ROUNDROBIN)
+		fputs(",\n\"round-robin\" : true", fcfg);
+	if (pool_strategy == POOL_ROTATE)
+		fprintf(fcfg, ",\n\"rotate\" : \"%d\"", opt_rotate_period);
 	if (schedstart.enable)
-		fprintf(fcfg, ",\n\"sched-time\" : \"%d:%d\"", schedstart.tm.tm_hour, schedstart.tm.tm_min);
+		fprintf(fcfg, ",\n\"sched-start\" : \"%d:%d\"", schedstart.tm.tm_hour, schedstart.tm.tm_min);
 	if (schedstop.enable)
-		fprintf(fcfg, ",\n\"stop-time\" : \"%d:%d\"", schedstop.tm.tm_hour, schedstop.tm.tm_min);
+		fprintf(fcfg, ",\n\"sched-stop\" : \"%d:%d\"", schedstop.tm.tm_hour, schedstop.tm.tm_min);
 	fputs("\n}\n", fcfg);
 
 	json_escape_free();
