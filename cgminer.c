@@ -171,8 +171,9 @@ bool use_curses = true;
 #else
 bool use_curses;
 #endif
-static int alt_status;
-static int switch_status = 1;
+static bool opt_widescreen;
+static bool alt_status;
+static bool switch_status;
 static bool opt_submit_stale = true;
 static int opt_shares;
 bool opt_fail_only;
@@ -1413,6 +1414,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--verbose",
 			opt_set_bool, &opt_log_output,
 			"Log verbose output to stderr as well as status output"),
+	OPT_WITHOUT_ARG("--widescreen",
+			opt_set_bool, &opt_widescreen,
+			"Use extra wide display without toggling"),
 	OPT_WITHOUT_ARG("--worktime",
 			opt_set_bool, &opt_worktime,
 			"Display extra work time debug information"),
@@ -2504,14 +2508,21 @@ static bool shared_strategy(void)
 static void curses_print_status(void)
 {
 	struct pool *pool = current_pool();
+	int linewidth = opt_widescreen ? 100 : 80;
 
 	wattron(statuswin, A_BOLD);
 	cg_mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
 	wattroff(statuswin, A_BOLD);
-	mvwhline(statuswin, 1, 0, '-', 80);
+	mvwhline(statuswin, 1, 0, '-', linewidth);
 	cg_mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	if (alt_status) {
+	if (opt_widescreen) {
+		cg_mvwprintw(statuswin, 3, 0, " A:%.0f  R:%.0f  HW:%d  WU:%.1f/m |"
+			     " ST: %d  SS: %d  NB: %d  LW: %d  GF: %d  RF: %d",
+			     total_diff_accepted, total_diff_rejected, hw_errors,
+			     total_diff1 / total_secs * 60,
+			     total_staged(), total_stale, new_blocks, local_work, total_go, total_ro);
+	} else if (alt_status) {
 		cg_mvwprintw(statuswin, 3, 0, " ST: %d  SS: %d  NB: %d  LW: %d  GF: %d  RF: %d",
 			     total_staged(), total_stale, new_blocks, local_work, total_go, total_ro);
 	} else {
@@ -2534,8 +2545,8 @@ static void curses_print_status(void)
 	wclrtoeol(statuswin);
 	cg_mvwprintw(statuswin, 5, 0, " Block: %s...  Diff:%s  Started: %s  Best share: %s   ",
 		     prev_block, block_diff, blocktime, best_share);
-	mvwhline(statuswin, 6, 0, '-', 80);
-	mvwhline(statuswin, statusy - 1, 0, '-', 80);
+	mvwhline(statuswin, 6, 0, '-', linewidth);
+	mvwhline(statuswin, statusy - 1, 0, '-', linewidth);
 #ifdef USE_USBUTILS
 	cg_mvwprintw(statuswin, devcursor - 1, 1, "[U]SB management [P]ool management [S]ettings [D]isplay options [Q]uit");
 #else
@@ -2619,7 +2630,26 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int devno, int count)
 		cg_wprintw(statuswin, "OFF   ");
 	else if (cgpu->deven == DEV_RECOVER)
 		cg_wprintw(statuswin, "REST  ");
-	else if (!alt_status) {
+	else if (opt_widescreen) {
+		char displayed_hashes[16], displayed_rolling[16];
+		uint64_t d64;
+
+		d64 = (double)cgpu->total_mhashes / dev_runtime * 1000000ull;
+		suffix_string(d64, displayed_hashes, sizeof(displayed_hashes), 4);
+		d64 = (double)cgpu->rolling * 1000000ull;
+		suffix_string(d64, displayed_rolling, sizeof(displayed_rolling), 4);
+		adj_width(wu, &wuwidth);
+		adj_fwidth(cgpu->diff_accepted, &dawidth);
+		adj_fwidth(cgpu->diff_rejected, &drwidth);
+		adj_width(cgpu->hw_errors, &hwwidth);
+		cg_wprintw(statuswin, "%6s / %6sh/s WU:%*.1f/m "
+				"A:%*.0f R:%*.0f HW:%*d",
+				displayed_rolling,
+				displayed_hashes, wuwidth + 2, wu,
+				dawidth, cgpu->diff_accepted,
+				drwidth, cgpu->diff_rejected,
+				hwwidth, cgpu->hw_errors);
+	} else if (!alt_status) {
 		char displayed_hashes[16], displayed_rolling[16];
 		uint64_t d64;
 
@@ -5183,6 +5213,7 @@ retry:
 	wlogprint("[D]ebug:%s\n[P]er-device:%s\n[Q]uiet:%s\n[V]erbose:%s\n"
 		  "[R]PC debug:%s\n[W]orkTime details:%s\nco[M]pact: %s\n"
 		  "[T]oggle status switching:%s\n"
+		  "w[I]descreen:%s\n"
 		  "[Z]ero statistics\n"
 		  "[L]og interval:%d\n",
 		opt_debug ? "on" : "off",
@@ -5193,6 +5224,7 @@ retry:
 		opt_worktime ? "on" : "off",
 		opt_compact ? "on" : "off",
 		switch_status ? "enabled" : "disabled",
+		opt_widescreen ? "enabled" : "disabled",
 		opt_log_interval);
 	wlogprint("Select an option or any other key to return\n");
 	logwin_update();
@@ -5258,7 +5290,10 @@ retry:
 		wlogprint("WorkTime details %s\n", opt_worktime ? "enabled" : "disabled");
 		goto retry;
 	} else if (!strncasecmp(&input, "t", 1)) {
-		switch_status ^= 1;
+		switch_status ^= true;
+		goto retry;
+	} else if (!strncasecmp(&input, "i", 1)) {
+		opt_widescreen ^= true;
 		goto retry;
 	} else if (!strncasecmp(&input, "z", 1)) {
 		zero_stats();

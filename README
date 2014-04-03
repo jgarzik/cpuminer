@@ -243,6 +243,7 @@ Options for both config file and command line:
 --user|-u <arg>     Username for bitcoin JSON-RPC server
 --userpass|-O <arg> Username:Password pair for bitcoin JSON-RPC server
 --verbose           Log verbose output to stderr as well as status output
+--widescreen        Use extra wide display without toggling
 --worktime          Display extra work time debug information
 Options for command line only:
 --config|-c <arg>   Load a JSON-format configuration file
