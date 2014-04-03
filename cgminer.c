@@ -692,31 +692,25 @@ static char *set_int_0_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 10);
 }
 
-static char __maybe_unused *set_int_0_to_100(const char *arg, int *i)
+static char *set_int_0_to_100(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 0, 100);
 }
 
-#ifdef USE_COINTERRA
 static char *set_int_0_to_255(const char *arg, int *i)
 {
         return set_int_range(arg, i, 0, 255);
 }
-#endif
 
-#if defined(USE_BFLSC) || defined(USE_BITFURY) || defined(USE_HASHFAST)
 static char *set_int_0_to_200(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 0, 200);
 }
-#endif
 
-#ifdef USE_BITFURY
 static char *set_int_32_to_63(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 32, 63);
 }
-#endif
 
 static char *set_int_1_to_10(const char *arg, int *i)
 {
@@ -4956,7 +4950,12 @@ void write_config(FILE *fcfg)
 			   ((void *)opt->cb_arg == (void *)set_int_0_to_9999 ||
 			   (void *)opt->cb_arg == (void *)set_int_1_to_65535 ||
 			   (void *)opt->cb_arg == (void *)set_int_0_to_10 ||
-			   (void *)opt->cb_arg == (void *)set_int_1_to_10) && opt->desc != opt_hidden)
+			   (void *)opt->cb_arg == (void *)set_int_1_to_10 ||
+			   (void *)opt->cb_arg == (void *)set_int_0_to_100 ||
+			   (void *)opt->cb_arg == (void *)set_int_0_to_255 ||
+			   (void *)opt->cb_arg == (void *)set_int_0_to_200 ||
+			   (void *)opt->cb_arg == (void *)set_int_32_to_63) &&
+			   opt->desc != opt_hidden)
 				fprintf(fcfg, ",\n\"%s\" : \"%d\"", p+2, *(int *)opt->u.arg);
 		}
 	}
