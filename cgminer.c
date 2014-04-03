@@ -159,10 +159,7 @@ bool opt_restart = true;
 bool opt_nogpu;
 
 struct list_head scan_devices;
-static bool devices_enabled[MAX_DEVICES];
-static int opt_devs_enabled;
 static bool opt_display_devs;
-static bool opt_removedisabled;
 int total_devices;
 int zombie_devs;
 static int most_devices;
@@ -738,49 +735,6 @@ void get_intrange(char *arg, int *val1, int *val2)
 {
 	if (sscanf(arg, "%d-%d", val1, val2) == 1)
 		*val2 = *val1;
-}
-
-static char *set_devices(char *arg)
-{
-	int i, val1 = 0, val2 = 0;
-	char *nextptr;
-
-	if (*arg) {
-		if (*arg == '?') {
-			opt_display_devs = true;
-			return NULL;
-		}
-	} else
-		return "Invalid device parameters";
-
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set devices";
-	get_intrange(nextptr, &val1, &val2);
-	if (val1 < 0 || val1 > MAX_DEVICES || val2 < 0 || val2 > MAX_DEVICES ||
-	    val1 > val2) {
-		return "Invalid value passed to set devices";
-	}
-
-	for (i = val1; i <= val2; i++) {
-		devices_enabled[i] = true;
-		opt_devs_enabled++;
-	}
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		get_intrange(nextptr, &val1, &val2);
-		if (val1 < 0 || val1 > MAX_DEVICES || val2 < 0 || val2 > MAX_DEVICES ||
-		val1 > val2) {
-			return "Invalid value passed to set devices";
-		}
-
-		for (i = val1; i <= val2; i++) {
-			devices_enabled[i] = true;
-			opt_devs_enabled++;
-		}
-	}
-
-	return NULL;
 }
 
 static char *set_balance(enum pool_strategy *strategy)
@@ -1361,9 +1315,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--debug|-D",
 		     enable_debug, &opt_debug,
 		     "Enable debug output"),
-	OPT_WITH_ARG("--device|-d",
-		     set_devices, NULL, NULL,
-	             "Select device to use, one value, range and/or comma separated (e.g. 0-2,4) default: all"),
 	OPT_WITHOUT_ARG("--disable-rejecting",
 			opt_set_bool, &opt_disable_pool,
 			"Automatically disable pools that continually reject shares"),
@@ -1496,9 +1447,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--real-quiet",
 			opt_set_bool, &opt_realquiet,
 			"Disable all output"),
-	OPT_WITHOUT_ARG("--remove-disabled",
-		     opt_set_bool, &opt_removedisabled,
-	         "Remove disabled devices entirely, as if they didn't exist"),
 	OPT_WITH_ARG("--retries",
 		     set_null, NULL, NULL,
 		     opt_hidden),
@@ -5039,27 +4987,6 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"stop-time\" : \"%d:%d\"", schedstop.tm.tm_hour, schedstop.tm.tm_min);
 	if (opt_socks_proxy && *opt_socks_proxy)
 		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", json_escape(opt_socks_proxy));
-	if (opt_devs_enabled) {
-		fprintf(fcfg, ",\n\"device\" : \"");
-		bool extra_devs = false;
-
-		for (i = 0; i < MAX_DEVICES; i++) {
-			if (devices_enabled[i]) {
-				int startd = i;
-
-				if (extra_devs)
-					fprintf(fcfg, ",");
-				while (i < MAX_DEVICES && devices_enabled[i + 1])
-					++i;
-				fprintf(fcfg, "%d", startd);
-				if (i > startd)
-					fprintf(fcfg, "-%d", i);
-			}
-		}
-		fprintf(fcfg, "\"");
-	}
-	if (opt_removedisabled)
-		fprintf(fcfg, ",\n\"remove-disabled\" : true");
 	if (opt_api_allow)
 		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", json_escape(opt_api_allow));
 	if (strcmp(opt_api_mcast_addr, API_MCAST_ADDR) != 0)
@@ -9097,8 +9024,7 @@ static void hotplug_process(void)
 		int dev_no = total_devices + i;
 
 		cgpu = devices[dev_no];
-		if (!opt_devs_enabled || (opt_devs_enabled && devices_enabled[dev_no]))
-			enable_device(cgpu);
+		enable_device(cgpu);
 		cgpu->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 		cgpu->rolling = cgpu->total_mhashes = 0;
 	}
@@ -9442,23 +9368,8 @@ int main(int argc, char *argv[])
 	}
 
 	mining_threads = 0;
-	if (opt_devs_enabled) {
-		for (i = 0; i < MAX_DEVICES; i++) {
-			if (devices_enabled[i]) {
-				if (i >= total_devices)
-					quit (1, "Command line options set a device that doesn't exist");
-				enable_device(devices[i]);
-			} else if (i < total_devices) {
-				if (!opt_removedisabled)
-					enable_device(devices[i]);
-				devices[i]->deven = DEV_DISABLED;
-			}
-		}
-		total_devices = cgminer_id_count;
-	} else {
-		for (i = 0; i < total_devices; ++i)
-			enable_device(devices[i]);
-	}
+	for (i = 0; i < total_devices; ++i)
+		enable_device(devices[i]);
 
 #ifdef USE_USBUTILS
 	if (!total_devices) {

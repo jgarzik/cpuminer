@@ -198,7 +198,6 @@ Options for both config file and command line:
 --btc-address <arg> Set bitcoin target address when solo mining to bitcoind
 --compact           Use compact display without per device statistics
 --debug|-D          Enable debug output
---device|-d <arg>   Select device to use, one value, range and/or comma separated (e.g. 0-2,4) default: all
 --disable-rejecting Automatically disable pools that continually reject shares
 --drillbit-options <arg> Set drillbit options <int|ext>:clock[:clock_divider][:voltage]
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
@@ -228,7 +227,6 @@ Options for both config file and command line:
 --quiet|-q          Disable logging output, display status and errors
 --quota|-U <arg>    quota;URL combination for server with load-balance strategy quotas
 --real-quiet        Disable all output
---remove-disabled   Remove disabled devices entirely, as if they didn't exist
 --rotate <arg>      Change multipool strategy from failover to regularly rotate at N minutes (default: 0)
 --round-robin       Change multipool strategy from failover to round robin on failure
 --scan-time|-s <arg> Upper bound on time spent scanning current work, in seconds (default: -1)
@@ -437,10 +435,6 @@ If one of the 10 devices stops working, hotplug - if enabled, as is default
 - will scan normally again until it has 10 devices
 
   --usb :0 will disable all USB I/O other than to initialise libusb
-
-NOTE: The --device option will limit which devices are in use based on their
-numbering order of the total devices, so if you hotplug USB devices regularly,
-it will not reliably be the same devices.
 
 ---
 
