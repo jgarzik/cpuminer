@@ -986,20 +986,6 @@ static void load_temp_cutoffs()
 }
 
 #ifdef USE_ICARUS
-static char *set_icarus_options(const char *arg)
-{
-	opt_set_charp(arg, &opt_icarus_options);
-
-	return NULL;
-}
-
-static char *set_icarus_timing(const char *arg)
-{
-	opt_set_charp(arg, &opt_icarus_timing);
-
-	return NULL;
-}
-
 static char *set_float_125_to_500(const char *arg, float *i)
 {
 	char *err = opt_set_floatval(arg, i);
@@ -1009,82 +995,6 @@ static char *set_float_125_to_500(const char *arg, float *i)
 
 	if (*i < 125 || *i > 500)
 		return "Value out of range";
-
-	return NULL;
-}
-#endif
-
-#ifdef USE_AVALON
-static char *set_avalon_options(const char *arg)
-{
-	opt_set_charp(arg, &opt_avalon_options);
-
-	return NULL;
-}
-
-static char *set_bitburner_fury_options(const char *arg)
-{
-	opt_set_charp(arg, &opt_bitburner_fury_options);
-
-	return NULL;
-}
-#endif
-
-#ifdef USE_HASHFAST
-static char *set_hfa_options(const char *arg)
-{
-	opt_set_charp(arg, &opt_hfa_options);
-
-	return NULL;
-}
-#endif
-
-#ifdef USE_KLONDIKE
-static char *set_klondike_options(const char *arg)
-{
-	opt_set_charp(arg, &opt_klondike_options);
-
-	return NULL;
-}
-#endif
-
-#ifdef USE_DRILLBIT
-static char *set_drillbit_options(const char *arg)
-{
-	opt_set_charp(arg, &opt_drillbit_options);
-
-	return NULL;
-}
-
-static char *set_drillbit_auto(const char *arg)
-{
-	opt_set_charp(arg, &opt_drillbit_auto);
-
-	return NULL;
-}
-
-#endif
-
-#ifdef USE_BAB
-static char *set_bab_options(const char *arg)
-{
-	opt_set_charp(arg, &opt_bab_options);
-
-	return NULL;
-}
-#endif
-#ifdef USE_BITMINE_A1
-static char *set_bitmine_a1_options(const char *arg)
-{
-	opt_set_charp(arg, &opt_bitmine_a1_options);
-
-	return NULL;
-}
-#endif
-#ifdef USE_USBUTILS
-static char *set_usb_select(const char *arg)
-{
-	opt_set_charp(arg, &opt_usb_select);
 
 	return NULL;
 }
@@ -1149,7 +1059,7 @@ static struct opt_table opt_config_table[] = {
 		     set_avalon_freq, NULL, NULL,
 		     "Set frequency range for avalon-auto, single value or range"),
 	OPT_WITH_ARG("--avalon-options",
-		     set_avalon_options, NULL, NULL,
+		     opt_set_charp, NULL, &opt_avalon_options,
 		     "Set avalon options baud:miners:asic:timeout:freq:tech"),
 	OPT_WITH_ARG("--avalon-temp",
 		     set_int_0_to_100, opt_show_intval, &opt_avalon_temp,
@@ -1168,7 +1078,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 #ifdef USE_BAB
 	OPT_WITH_ARG("--bab-options",
-		     set_bab_options, NULL, NULL,
+		     opt_set_charp, NULL, &opt_bab_options,
 		     "Set bab options max:def:min:up:down:hz:delay:trf"),
 #endif
 	OPT_WITHOUT_ARG("--balance",
@@ -1201,7 +1111,7 @@ static struct opt_table opt_config_table[] = {
 		     opt_set_intval, NULL, &opt_bitburner_fury_core_voltage,
 		     "Set BitBurner Fury core voltage, in millivolts"),
 	OPT_WITH_ARG("--bitburner-fury-options",
-		     set_bitburner_fury_options, NULL, NULL,
+		     opt_set_charp, NULL, &opt_bitburner_fury_options,
 		     "Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq"),
 #endif
 #ifdef USE_ANT_S1
@@ -1229,7 +1139,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 #ifdef USE_BITMINE_A1
 	OPT_WITH_ARG("--bitmine-a1-options",
-		     set_bitmine_a1_options, NULL, NULL,
+		     opt_set_charp, NULL, &opt_bitmine_a1_options,
 		     "Bitmine A1 options ref_clk_khz:sys_clk_khz:spi_clk_khz:override_chip_num"),
 #endif
 #ifdef USE_BITFURY
@@ -1272,11 +1182,11 @@ static struct opt_table opt_config_table[] = {
 			"Automatically disable pools that continually reject shares"),
 #ifdef USE_DRILLBIT
         OPT_WITH_ARG("--drillbit-options",
-		set_drillbit_options, NULL, NULL,
-		"Set drillbit options <int|ext>:clock[:clock_divider][:voltage]"),
+		     opt_set_charp, NULL, &opt_drillbit_options,
+		     "Set drillbit options <int|ext>:clock[:clock_divider][:voltage]"),
         OPT_WITH_ARG("--drillbit-auto",
-		set_drillbit_auto, NULL, NULL,
-		"Enable drillbit automatic tuning <every>:[<gooderr>:<baderr>:<maxerr>]"),
+		     opt_set_charp, NULL, &opt_drillbit_auto,
+		     "Enable drillbit automatic tuning <every>:[<gooderr>:<baderr>:<maxerr>]"),
 #endif
 	OPT_WITH_ARG("--expiry|-E",
 		     set_int_0_to_9999, opt_show_intval, &opt_expiry,
@@ -1310,7 +1220,7 @@ static struct opt_table opt_config_table[] = {
 		     opt_set_intval, NULL, &opt_hfa_ntime_roll,
 		     opt_hidden),
 	OPT_WITH_ARG("--hfa-options",
-		     set_hfa_options, NULL, NULL,
+		     opt_set_charp, NULL, &opt_hfa_options,
 		     "Set hashfast options name:clock (comma separated)"),
 	OPT_WITHOUT_ARG("--hfa-pll-bypass",
 			opt_set_bool, &opt_hfa_pll_bypass,
@@ -1332,10 +1242,10 @@ static struct opt_table opt_config_table[] = {
 		    ),
 #ifdef USE_ICARUS
 	OPT_WITH_ARG("--icarus-options",
-		     set_icarus_options, NULL, NULL,
+		     opt_set_charp, NULL, &opt_icarus_options,
 		     opt_hidden),
 	OPT_WITH_ARG("--icarus-timing",
-		     set_icarus_timing, NULL, NULL,
+		     opt_set_charp, NULL, &opt_icarus_timing,
 		     opt_hidden),
 #endif
 #if defined(HAVE_MODMINER)
@@ -1345,7 +1255,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 #ifdef USE_KLONDIKE
 	OPT_WITH_ARG("--klondike-options",
-		     set_klondike_options, NULL, NULL,
+		     opt_set_charp, NULL, &opt_klondike_options,
 		     "Set klondike options clock:temptarget"),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
@@ -1457,7 +1367,7 @@ static struct opt_table opt_config_table[] = {
 		     "URL for bitcoin JSON-RPC server"),
 #ifdef USE_USBUTILS
 	OPT_WITH_ARG("--usb",
-		     set_usb_select, NULL, NULL,
+		     opt_set_charp, NULL, &opt_usb_select,
 		     "USB device selection"),
 	OPT_WITH_ARG("--usb-dump",
 		     set_int_0_to_10, opt_show_intval, &opt_usbdump,
@@ -4906,15 +4816,16 @@ void write_config(FILE *fcfg)
 				fprintf(fcfg, ",\n\"%s\" : true", p+2);
 
 			if (opt->type & OPT_HASARG &&
-			   ((void *)opt->cb_arg == (void *)set_int_0_to_9999 ||
-			   (void *)opt->cb_arg == (void *)set_int_1_to_65535 ||
-			   (void *)opt->cb_arg == (void *)set_int_0_to_10 ||
-			   (void *)opt->cb_arg == (void *)set_int_1_to_10 ||
-			   (void *)opt->cb_arg == (void *)set_int_0_to_100 ||
-			   (void *)opt->cb_arg == (void *)set_int_0_to_255 ||
-			   (void *)opt->cb_arg == (void *)set_int_0_to_200 ||
-			   (void *)opt->cb_arg == (void *)set_int_32_to_63) &&
-			   opt->desc != opt_hidden)
+			    ((void *)opt->cb_arg == (void *)opt_set_intval ||
+			     (void *)opt->cb_arg == (void *)set_int_0_to_9999 ||
+			     (void *)opt->cb_arg == (void *)set_int_1_to_65535 ||
+			     (void *)opt->cb_arg == (void *)set_int_0_to_10 ||
+			     (void *)opt->cb_arg == (void *)set_int_1_to_10 ||
+			     (void *)opt->cb_arg == (void *)set_int_0_to_100 ||
+			     (void *)opt->cb_arg == (void *)set_int_0_to_255 ||
+			     (void *)opt->cb_arg == (void *)set_int_0_to_200 ||
+			     (void *)opt->cb_arg == (void *)set_int_32_to_63) &&
+			    opt->desc != opt_hidden)
 				fprintf(fcfg, ",\n\"%s\" : \"%d\"", p+2, *(int *)opt->u.arg);
 
 			if (opt->type & OPT_HASARG &&
@@ -4930,57 +4841,10 @@ void write_config(FILE *fcfg)
 	}
 
 	/* Special case options */
-	fprintf(fcfg, ",\n\"shares\" : \"%d\"", opt_shares);
-	if (pool_strategy == POOL_BALANCE)
-		fputs(",\n\"balance\" : true", fcfg);
-	if (pool_strategy == POOL_LOADBALANCE)
-		fputs(",\n\"load-balance\" : true", fcfg);
-	if (pool_strategy == POOL_ROUNDROBIN)
-		fputs(",\n\"round-robin\" : true", fcfg);
-	if (pool_strategy == POOL_ROTATE)
-		fprintf(fcfg, ",\n\"rotate\" : \"%d\"", opt_rotate_period);
-#if defined(unix) || defined(__APPLE__)
-	if (opt_stderr_cmd && *opt_stderr_cmd)
-		fprintf(fcfg, ",\n\"monitor\" : \"%s\"", json_escape(opt_stderr_cmd));
-#endif // defined(unix)
-	if (opt_kernel_path && *opt_kernel_path) {
-		char *kpath = strdup(opt_kernel_path);
-		if (kpath[strlen(kpath)-1] == '/')
-			kpath[strlen(kpath)-1] = 0;
-		fprintf(fcfg, ",\n\"kernel-path\" : \"%s\"", json_escape(kpath));
-	}
 	if (schedstart.enable)
 		fprintf(fcfg, ",\n\"sched-time\" : \"%d:%d\"", schedstart.tm.tm_hour, schedstart.tm.tm_min);
 	if (schedstop.enable)
 		fprintf(fcfg, ",\n\"stop-time\" : \"%d:%d\"", schedstop.tm.tm_hour, schedstop.tm.tm_min);
-	if (opt_socks_proxy && *opt_socks_proxy)
-		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", json_escape(opt_socks_proxy));
-#ifdef USE_ICARUS
-	if (opt_icarus_options)
-		fprintf(fcfg, ",\n\"icarus-options\" : \"%s\"", json_escape(opt_icarus_options));
-	if (opt_icarus_timing)
-		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", json_escape(opt_icarus_timing));
-#endif
-#ifdef USE_KLONDIKE
-	if (opt_klondike_options)
-		fprintf(fcfg, ",\n\"klondike-options\" : \"%s\"", json_escape(opt_klondike_options));
-#endif
-#ifdef USE_DRILLBIT
-        if (opt_drillbit_options)
-                fprintf(fcfg, ",\n\"drillbit-options\" : \"%s\"", json_escape(opt_drillbit_options));
-	if (opt_drillbit_auto)
-                fprintf(fcfg, ",\n\"drillbit-auto\" : \"%s\"", json_escape(opt_drillbit_auto));
-#endif
-	if (opt_bab_options)
-		fprintf(fcfg, ",\n\"bab-options\" : \"%s\"", json_escape(opt_bab_options));
-#ifdef USE_BITMINE_A1
-	if (opt_bitmine_a1_options)
-		fprintf(fcfg, ",\n\"bitmine-a1-options\" : \"%s\"", json_escape(opt_bitmine_a1_options));
-#endif
-#ifdef USE_USBUTILS
-	if (opt_usb_select)
-		fprintf(fcfg, ",\n\"usb\" : \"%s\"", json_escape(opt_usb_select));
-#endif
 	fputs("\n}\n", fcfg);
 
 	json_escape_free();
