@@ -202,8 +202,15 @@ float opt_anu_freq = 200;
 #endif
 bool opt_worktime;
 #ifdef USE_AVALON
-char *opt_avalon_options = NULL;
-char *opt_bitburner_fury_options = NULL;
+char *opt_avalon_options;
+char *opt_bitburner_fury_options;
+static char *opt_set_avalon_van;
+static char *opt_set_avalon_freq;
+#endif
+#ifdef USE_AVALON2
+static char *opt_set_avalon2_freq;
+static char *opt_set_avalon2_fan;
+static char *opt_set_avalon2_voltage;
 #endif
 #ifdef USE_KLONDIKE
 char *opt_klondike_options = NULL;
@@ -217,8 +224,15 @@ char *opt_bab_options = NULL;
 char *opt_bitmine_a1_options = NULL;
 #endif
 #ifdef USE_ANT_S1
-char *opt_bitmain_options = NULL;
+char *opt_bitmain_options;
+static char *opt_set_bitmain_fan;
+static char *opt_set_bitmain_freq;
 #endif
+#ifdef USE_HASHFAST
+static char *opt_set_hfa_fan;
+#endif
+static char *opt_set_null;
+
 #ifdef USE_USBUTILS
 char *opt_usb_select = NULL;
 int opt_usbdump = -1;
@@ -718,6 +732,7 @@ static char *set_int_1_to_10(const char *arg, int *i)
 }
 
 #ifdef USE_FPGA_SERIAL
+static char *opt_add_serial;
 static char *add_serial(char *arg)
 {
 	string_elist_add(arg, &scan_devices);
@@ -902,6 +917,9 @@ static char *enable_debug(bool *flag)
 	return NULL;
 }
 
+static char *opt_set_sched_start;
+static char *opt_set_sched_stop;
+
 static char *set_schedtime(const char *arg, struct schedtime *st)
 {
 	if (sscanf(arg, "%d:%d", &st->tm.tm_hour, &st->tm.tm_min) != 2)
@@ -912,6 +930,17 @@ static char *set_schedtime(const char *arg, struct schedtime *st)
 	return NULL;
 }
 
+static char *set_sched_start(const char *arg)
+{
+	return set_schedtime(arg, &schedstart);
+}
+
+static char *set_sched_stop(const char *arg)
+{
+	return set_schedtime(arg, &schedstop);
+}
+
+static char *opt_set_sharelog;
 static char* set_sharelog(char *arg)
 {
 	char *r = "";
@@ -935,6 +964,7 @@ static char* set_sharelog(char *arg)
 }
 
 static char *temp_cutoff_str = NULL;
+static char *opt_set_temp_cutoff;
 
 char *set_temp_cutoff(char *arg)
 {
@@ -1051,10 +1081,10 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_100, opt_show_intval, &opt_avalon_overheat,
 		     "Set avalon overheat cut off temperature"),
 	OPT_WITH_ARG("--avalon-fan",
-		     set_avalon_fan, NULL, NULL,
+		     set_avalon_fan, NULL, &opt_set_avalon_van,
 		     "Set fanspeed percentage for avalon, single value or range (default: 20-100)"),
 	OPT_WITH_ARG("--avalon-freq",
-		     set_avalon_freq, NULL, NULL,
+		     set_avalon_freq, NULL, &opt_set_avalon_freq,
 		     "Set frequency range for avalon-auto, single value or range"),
 	OPT_WITH_ARG("--avalon-options",
 		     opt_set_charp, NULL, &opt_avalon_options,
@@ -1065,13 +1095,13 @@ static struct opt_table opt_config_table[] = {
 #endif
 #ifdef USE_AVALON2
 	OPT_WITH_ARG("--avalon2-freq",
-		     set_avalon2_freq, NULL, NULL,
+		     set_avalon2_freq, NULL, &opt_set_avalon2_freq,
 		     "Set frequency range for Avalon2, single value or range"),
 	OPT_WITH_ARG("--avalon2-fan",
-		     set_avalon2_fan, NULL, NULL,
+		     set_avalon2_fan, NULL, &opt_set_avalon2_fan,
 		     "Set Avalon2 target fan speed"),
 	OPT_WITH_ARG("--avalon2-voltage",
-		     set_avalon2_voltage, NULL, NULL,
+		     set_avalon2_voltage, NULL, &opt_set_avalon2_voltage,
 		     "Set Avalon2 core voltage, in millivolts"),
 #endif
 #ifdef USE_BAB
@@ -1120,10 +1150,10 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_100, opt_show_intval, &opt_bitmain_overheat,
 		     "Set bitmain overheat cut off temperature"),
 	OPT_WITH_ARG("--bitmain-fan",
-		     set_bitmain_fan, NULL, NULL,
+		     set_bitmain_fan, NULL, &opt_set_bitmain_fan,
 		     "Set fanspeed percentage for bitmain, single value or range (default: 20-100)"),
 	OPT_WITH_ARG("--bitmain-freq",
-		     set_bitmain_freq, NULL, NULL,
+		     set_bitmain_freq, NULL, &opt_set_bitmain_freq,
 		     "Set frequency range for bitmain-auto, single value or range"),
 	OPT_WITHOUT_ARG("--bitmain-hwerror",
 			opt_set_bool, &opt_bitmain_hwerror,
@@ -1206,7 +1236,7 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_100, opt_show_intval, &opt_hfa_fail_drop,
 		     "Set how many MHz to drop clockspeed each failure on an overlocked hashfast device"),
 	OPT_WITH_ARG("--hfa-fan",
-		     set_hfa_fan, NULL, NULL,
+		     set_hfa_fan, NULL, &opt_set_hfa_fan,
 		     "Set fanspeed percentage for hashfast, single value or range (default: 10-85)"),
 	OPT_WITH_ARG("--hfa-name",
 		     opt_set_charp, NULL, &opt_hfa_name,
@@ -1285,13 +1315,13 @@ static struct opt_table opt_config_table[] = {
 			opt_set_invbool, &opt_submit_stale,
 		        "Don't submit shares if they are detected as stale"),
 	OPT_WITH_ARG("--pass|-p",
-		     set_pass, NULL, NULL,
+		     set_pass, NULL, &opt_set_null,
 		     "Password for bitcoin JSON-RPC server"),
 	OPT_WITHOUT_ARG("--per-device-stats",
 			opt_set_bool, &want_per_device_stats,
 			"Force verbose mode and output per-device statistics"),
 	OPT_WITH_ARG("--pools",
-			opt_set_bool, NULL, NULL, opt_hidden),
+			opt_set_bool, NULL, &opt_set_null, opt_hidden),
 	OPT_WITHOUT_ARG("--protocol-dump|-P",
 			opt_set_bool, &opt_protocol,
 			"Verbose dump of protocol-level activities"),
@@ -1302,16 +1332,16 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_quiet,
 			"Disable logging output, display status and errors"),
 	OPT_WITH_ARG("--quota|-U",
-		     set_quota, NULL, NULL,
+		     set_quota, NULL, &opt_set_null,
 		     "quota;URL combination for server with load-balance strategy quotas"),
 	OPT_WITHOUT_ARG("--real-quiet",
 			opt_set_bool, &opt_realquiet,
 			"Disable all output"),
 	OPT_WITH_ARG("--retries",
-		     set_null, NULL, NULL,
+		     set_null, NULL, &opt_set_null,
 		     opt_hidden),
 	OPT_WITH_ARG("--retry-pause",
-		     set_null, NULL, NULL,
+		     set_null, NULL, &opt_set_null,
 		     opt_hidden),
 	OPT_WITH_ARG("--rotate",
 		     set_rotate, opt_show_intval, &opt_rotate_period,
@@ -1321,20 +1351,20 @@ static struct opt_table opt_config_table[] = {
 		     "Change multipool strategy from failover to round robin on failure"),
 #ifdef USE_FPGA_SERIAL
 	OPT_WITH_ARG("--scan-serial|-S",
-		     add_serial, NULL, NULL,
+		     add_serial, NULL, &opt_add_serial,
 		     "Serial port to probe for Serial FPGA Mining device"),
 #endif
 	OPT_WITH_ARG("--scan-time|-s",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
 		     "Upper bound on time spent scanning current work, in seconds"),
 	OPT_WITH_ARG("--sched-start",
-		     set_schedtime, NULL, &schedstart,
+		     set_sched_start, NULL, &opt_set_sched_start,
 		     "Set a time of day in HH:MM to start mining (a once off without a stop time)"),
 	OPT_WITH_ARG("--sched-stop",
-		     set_schedtime, NULL, &schedstop,
+		     set_sched_stop, NULL, &opt_set_sched_stop,
 		     "Set a time of day in HH:MM to stop mining (will quit without a start time)"),
 	OPT_WITH_ARG("--sharelog",
-		     set_sharelog, NULL, NULL,
+		     set_sharelog, NULL, &opt_set_sharelog,
 		     "Append share log to file"),
 	OPT_WITH_ARG("--shares",
 		     opt_set_intval, NULL, &opt_shares,
@@ -1349,7 +1379,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 #if defined(USE_BITFORCE) || defined(USE_MODMINER) || defined(USE_BFLSC)
 	OPT_WITH_ARG("--temp-cutoff",
-		     set_temp_cutoff, opt_show_intval, &opt_cutofftemp,
+		     set_temp_cutoff, opt_show_intval, &opt_set_temp_cutoff,
 		     "Temperature where a device will be automatically disabled, one value or comma separated list"),
 #endif
 	OPT_WITHOUT_ARG("--text-only|-T",
@@ -1361,7 +1391,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 	),
 	OPT_WITH_ARG("--url|-o",
-		     set_url, NULL, NULL,
+		     set_url, NULL, &opt_set_null,
 		     "URL for bitcoin JSON-RPC server"),
 #ifdef USE_USBUTILS
 	OPT_WITH_ARG("--usb",
@@ -1375,10 +1405,10 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden),
 #endif
 	OPT_WITH_ARG("--user|-u",
-		     set_user, NULL, NULL,
+		     set_user, NULL, &opt_set_null,
 		     "Username for bitcoin JSON-RPC server"),
 	OPT_WITH_ARG("--userpass|-O",
-		     set_userpass, NULL, NULL,
+		     set_userpass, NULL, &opt_set_null,
 		     "Username:Password pair for bitcoin JSON-RPC server"),
 	OPT_WITHOUT_ARG("--verbose",
 			opt_set_bool, &opt_log_output,
@@ -1623,11 +1653,11 @@ char *display_devs(int *ndevs)
 /* These options are available from commandline only */
 static struct opt_table opt_cmdline_table[] = {
 	OPT_WITH_ARG("--config|-c",
-		     load_config, NULL, NULL,
+		     load_config, NULL, &opt_set_null,
 		     "Load a JSON-format configuration file\n"
 		     "See example.conf for an example configuration."),
 	OPT_WITH_ARG("--default-config",
-		     set_default_config, NULL, NULL,
+		     set_default_config, NULL, &opt_set_null,
 		     "Specify the filename of the default config file\n"
 		     "Loaded at start and used when saving without a name."),
 	OPT_WITHOUT_ARG("--help|-h",
@@ -4840,7 +4870,7 @@ void write_config(FILE *fcfg)
 			}
 
 			if (opt->type & OPT_HASARG &&
-			    ((void *)opt->cb_arg == (void *)opt_set_charp)) {
+			    (opt->u.arg != &opt_set_null)) {
 				char *carg = *(char **)opt->u.arg;
 
 				if (carg)
@@ -4860,10 +4890,6 @@ void write_config(FILE *fcfg)
 		fputs(",\n\"round-robin\" : true", fcfg);
 	if (pool_strategy == POOL_ROTATE)
 		fprintf(fcfg, ",\n\"rotate\" : \"%d\"", opt_rotate_period);
-	if (schedstart.enable)
-		fprintf(fcfg, ",\n\"sched-start\" : \"%d:%d\"", schedstart.tm.tm_hour, schedstart.tm.tm_min);
-	if (schedstop.enable)
-		fprintf(fcfg, ",\n\"sched-stop\" : \"%d:%d\"", schedstop.tm.tm_hour, schedstop.tm.tm_min);
 	fputs("\n}\n", fcfg);
 
 	json_escape_free();
