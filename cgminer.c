@@ -5748,6 +5748,22 @@ static void hashmeter(int thr_id, uint64_t hashes_done)
 			} else
 				applog(LOG_INFO, "%s", logline);
 		}
+	} else {
+		/* No device has reported in, we have been called from the
+		 * watchdog thread so decay all the hashrates */
+		mutex_lock(&hash_lock);
+		for (thr_id = 0; thr_id < mining_threads; thr_id++) {
+			struct thr_info *thr = get_thread(thr_id);
+			struct cgpu_info *cgpu = thr->cgpu;
+			double device_tdiff  = tdiff(&total_tv_end, &cgpu->last_message_tv);
+
+			copy_time(&cgpu->last_message_tv, &total_tv_end);
+			decay_time(&cgpu->rolling, 0, device_tdiff, opt_log_interval);
+			decay_time(&cgpu->rolling1, 0, device_tdiff, 60.0);
+			decay_time(&cgpu->rolling5, 0, device_tdiff, 300.0);
+			decay_time(&cgpu->rolling15, 0, device_tdiff, 900.0);
+		}
+		mutex_unlock(&hash_lock);
 	}
 
 	mutex_lock(&hash_lock);
