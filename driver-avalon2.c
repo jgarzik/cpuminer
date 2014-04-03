@@ -233,7 +233,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 				break;
 			} else
 				info->matching_work[modular_id * AVA2_DEFAULT_MINERS + miner]++;
-			nonce2 = bswap_32(nonce2);
+			nonce2 = be32toh(nonce2);
 			nonce = be32toh(nonce);
 			nonce -= 0x180;
 
