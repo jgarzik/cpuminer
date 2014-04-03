@@ -4962,10 +4962,10 @@ void write_config(FILE *fcfg)
 			if (opt->type & OPT_HASARG &&
 			    ((void *)opt->cb_arg == (void *)opt_set_charp) &&
 			    opt->desc != opt_hidden) {
-				const char *carg = *(char **)opt->u.arg;
+				char *carg = *(char **)opt->u.arg;
 
 				if (carg)
-					fprintf(fcfg, ",\n\"%s\" : \"%s\"", p+2, carg);
+					fprintf(fcfg, ",\n\"%s\" : \"%s\"", p+2, json_escape(carg));
 			}
 		}
 		free(name);
