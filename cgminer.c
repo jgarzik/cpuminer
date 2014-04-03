@@ -965,7 +965,7 @@ static char* set_sharelog(char *arg)
 }
 
 static char *temp_cutoff_str = NULL;
-static char *opt_set_temp_cutoff;
+static char __maybe_unused *opt_set_temp_cutoff;
 
 char *set_temp_cutoff(char *arg)
 {
