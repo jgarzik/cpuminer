@@ -1,3 +1,48 @@
+Version 4.2.3 - 3rd April 2014
+
+- Decay the per device hashrates when only the watchdog is calling the hashmeter
+- Fix parsing of config files failing on custom parsing
+- Allow an arbitrary number of chips in the BXF driver, showing results from
+each chip in the API and identify the hexfury, naming it HXF
+- Disable toggling display by default and offer a --widescreen option to have
+all the information on an extra wide display.
+- Use OPT_WITH_CBARG for all custom parsing functions to allow their values to
+be written generically when writing the config file from the menu.
+- Provide a ccan variant OPT_WITH_CBARG that assigns the arguments passed as a
+string and then performs the callback function on the string.
+- Define strings to store special option parsing parameters leaving no
+OPT_WITH_ARG missing args
+- Correct the writing of special case options to the config file
+- Provide support for writing anu freq from menu write option
+- Update to diver-avalon2.c
+- Generalise a lot more of the command line options simplifying the write config
+function and making it write far more values unaided
+- Use the general opt_set_charp functions for setting api parameters
+- Json escape any strings written to the config file
+- Store standard charp options when writing config files
+- Add support for all the integer range options when writing the config file
+from the menu
+- Remove the --device and --remove-disabled options which don't work in a
+meaningful way any more
+- Make the bxf bits configurable on the command line
+- Provide a --btc-sig option to optionally add a custom signature to the solo
+mining coinbsae
+- Compact gbt solo extra data and store the length, allowing it to be variable,
+leaving room for a signature
+- miner.php - Kano summary Pool Acc/Rej should be only work submitted
+- miner.php add best share and gen formatting for pool summary
+- miner.php - remove BGEN/GEN eval() errors from the web log
+- miner.php allow optional fields when gen is disabled
+- miner.php dont format missing gen fields
+- miner.php make Summary a custompage
+- miner.php allow uers and system lists of customsummarypages and add more
+examples
+- Fix getwork share submission
+- Cosmetic fix to udev rules
+- Put WU on the hashrate status to compact lines further
+- miner.php show api/rig errors at the top of a customsummarypage
+
+
 Version 4.2.2 - 29th March 2014
 
 - Minor correctness fix for unnecessary free
