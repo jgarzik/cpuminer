@@ -985,7 +985,6 @@ static void load_temp_cutoffs()
 	}
 }
 
-#ifdef USE_ICARUS
 static char *set_float_125_to_500(const char *arg, float *i)
 {
 	char *err = opt_set_floatval(arg, i);
@@ -998,7 +997,6 @@ static char *set_float_125_to_500(const char *arg, float *i)
 
 	return NULL;
 }
-#endif
 
 static char *set_null(const char __maybe_unused *arg)
 {
@@ -4827,6 +4825,11 @@ void write_config(FILE *fcfg)
 			     (void *)opt->cb_arg == (void *)set_int_32_to_63) &&
 			    opt->desc != opt_hidden)
 				fprintf(fcfg, ",\n\"%s\" : \"%d\"", p+2, *(int *)opt->u.arg);
+
+			if (opt->type & OPT_HASARG &&
+			    ((void *)opt->cb_arg == (void *)set_float_125_to_500) &&
+			    opt->desc != opt_hidden)
+				fprintf(fcfg, ",\n\"%s\" : \"%.1f\"", p+2, *(float *)opt->u.arg);
 
 			if (opt->type & OPT_HASARG &&
 			    ((void *)opt->cb_arg == (void *)opt_set_charp) &&
