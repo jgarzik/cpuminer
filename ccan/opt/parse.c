@@ -107,6 +107,8 @@ int parse_one(int *argc, char *argv[], unsigned *offset,
 		if (!optarg)
 			return parse_err(errlog, argv[0], o, len,
 					 "requires an argument");
+		if (opt_table[i].type == OPT_PROCESSARG)
+			opt_set_charp(optarg, opt_table[i].u.arg);
 		problem = opt_table[i].cb_arg(optarg, opt_table[i].u.arg);
 	}
 

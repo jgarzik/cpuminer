@@ -116,7 +116,7 @@ static void check_opt(const struct opt_table *entry)
 	const char *p;
 	unsigned len;
 
-	if (entry->type != OPT_HASARG && entry->type != OPT_NOARG)
+	if (entry->type != OPT_HASARG && entry->type != OPT_NOARG && entry->type != OPT_PROCESSARG)
 		errx(1, "Option %s: unknown entry type %u",
 		     entry->names, entry->type);
 
