@@ -292,6 +292,16 @@ static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	applog(LOG_INFO, "%s %d: Successfully initialised %s",
 	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
 
+	/* Sanity check and recognise the hexfury */
+	if (info->chips <= 2 || info->chips > 999)
+		info->chips = 2;
+	else if (info->chips == 6)
+		bitfury->drv->name = "HXF";
+	info->filtered_hw = calloc(sizeof(int), info->chips);
+	info->job = calloc(sizeof(int), info->chips);
+	info->submits = calloc(sizeof(int), info->chips);
+	if (!info->filtered_hw || !info->job || !info->submits)
+		quit(1, "Failed to calloc bxf chip arrays");
 	info->total_nonces = 1;
 	info->temp_target = opt_bxf_temp_target * 10;
 	/* This unsets it to make sure it gets set on the first pass */
@@ -801,7 +811,7 @@ static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *inf
 		       bitfury->drv->name, bitfury->device_id);
 		return;
 	}
-	if (chip > -1 && chip < 2)
+	if (likely(chip > -1 && chip < info->chips))
 		info->submits[chip]++;
 
 	applog(LOG_DEBUG, "%s %d: Parsed nonce %u workid %d timestamp %u",
@@ -947,7 +957,7 @@ static void parse_bxf_job(struct cgpu_info *bitfury, struct bitfury_info *info, 
 		       bitfury->drv->name, bitfury->device_id);
 		return;
 	}
-	if (chip > 1) {
+	if (chip >= info->chips) {
 		applog(LOG_INFO, "%s %d: Invalid job chip number %d",
 		       bitfury->drv->name, bitfury->device_id, chip);
 		return;
@@ -964,7 +974,7 @@ static void parse_bxf_hwerror(struct cgpu_info *bitfury, struct bitfury_info *in
 		       bitfury->drv->name, bitfury->device_id);
 		return;
 	}
-	if (chip > 1) {
+	if (chip >= info->chips) {
 		applog(LOG_INFO, "%s %d: Invalid hwerror chip number %d",
 		       bitfury->drv->name, bitfury->device_id, chip);
 		return;
@@ -1408,6 +1418,7 @@ static struct api_data *bxf_api_stats(struct cgpu_info *bitfury, struct bitfury_
 	struct api_data *root = NULL;
 	double nonce_rate;
 	char buf[32];
+	int i;
 
 	sprintf(buf, "%d.%d", info->ver_major, info->ver_minor);
 	root = api_add_string(root, "Version", buf, true);
@@ -1419,12 +1430,14 @@ static struct api_data *bxf_api_stats(struct cgpu_info *bitfury, struct bitfury_
 	root = api_add_double(root, "Temperature", &bitfury->temp, false);
 	root = api_add_int(root, "Max DeciTemp", &info->max_decitemp, false);
 	root = api_add_uint8(root, "Clock", &info->clocks, false);
-	root = api_add_int(root, "Core0 hwerror", &info->filtered_hw[0], false);
-	root = api_add_int(root, "Core1 hwerror", &info->filtered_hw[1], false);
-	root = api_add_int(root, "Core0 jobs", &info->job[0], false);
-	root = api_add_int(root, "Core1 jobs", &info->job[1], false);
-	root = api_add_int(root, "Core0 submits", &info->submits[0], false);
-	root = api_add_int(root, "Core1 submits", &info->submits[1], false);
+	for (i = 0; i < info->chips; i++) {
+		sprintf(buf, "Core%d hwerror", i);
+		root = api_add_int(root, buf, &info->filtered_hw[i], false);
+		sprintf(buf, "Core%d jobs", i);
+		root = api_add_int(root, buf, &info->job[i], false);
+		sprintf(buf, "Core%d submits", i);
+		root = api_add_int(root, buf, &info->submits[i], false);
+	}
 
 	return root;
 }

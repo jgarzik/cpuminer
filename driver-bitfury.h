@@ -88,9 +88,9 @@ struct bitfury_info {
 	int hw_rev;
 	int chips;
 	uint8_t clocks; // There are two but we set them equal
-	int filtered_hw[2]; // Hardware errors we're told about but are filtered
-	int job[2]; // Completed jobs we're told about
-	int submits[2]; // Submitted responses
+	int *filtered_hw; // Hardware errors we're told about but are filtered
+	int *job; // Completed jobs we're told about
+	int *submits; // Submitted responses
 
 	/* NF1 specific data */
 	struct mcp_settings mcp;
