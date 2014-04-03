@@ -985,48 +985,6 @@ static void load_temp_cutoffs()
 	}
 }
 
-static char *set_api_allow(const char *arg)
-{
-	opt_set_charp(arg, &opt_api_allow);
-
-	return NULL;
-}
-
-static char *set_api_groups(const char *arg)
-{
-	opt_set_charp(arg, &opt_api_groups);
-
-	return NULL;
-}
-
-static char *set_api_description(const char *arg)
-{
-	opt_set_charp(arg, &opt_api_description);
-
-	return NULL;
-}
-
-static char *set_api_mcast_addr(const char *arg)
-{
-	opt_set_charp(arg, &opt_api_mcast_addr);
-
-	return NULL;
-}
-
-static char *set_api_mcast_code(const char *arg)
-{
-	opt_set_charp(arg, &opt_api_mcast_code);
-
-	return NULL;
-}
-
-static char *set_api_mcast_des(const char *arg)
-{
-	opt_set_charp(arg, &opt_api_mcast_des);
-
-	return NULL;
-}
-
 #ifdef USE_ICARUS
 static char *set_icarus_options(const char *arg)
 {
@@ -1145,13 +1103,13 @@ static struct opt_table opt_config_table[] = {
 		     "Set AntminerU1 frequency in MHz, range 125-500"),
 #endif
 	OPT_WITH_ARG("--api-allow",
-		     set_api_allow, NULL, NULL,
+		     opt_set_charp, NULL, &opt_api_allow,
 		     "Allow API access only to the given list of [G:]IP[/Prefix] addresses[/subnets]"),
 	OPT_WITH_ARG("--api-description",
-		     set_api_description, NULL, NULL,
+		     opt_set_charp, NULL, &opt_api_description,
 		     "Description placed in the API status header, default: cgminer version"),
 	OPT_WITH_ARG("--api-groups",
-		     set_api_groups, NULL, NULL,
+		     opt_set_charp, NULL, &opt_api_groups,
 		     "API one letter groups G:cmd:cmd[,P:cmd:*...] defining the cmds a groups can use"),
 	OPT_WITHOUT_ARG("--api-listen",
 			opt_set_bool, &opt_api_listen,
@@ -1160,13 +1118,13 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_api_mcast,
 			"Enable API Multicast listener, default: disabled"),
 	OPT_WITH_ARG("--api-mcast-addr",
-		     set_api_mcast_addr, NULL, NULL,
+		     opt_set_charp, NULL, &opt_api_mcast_addr,
 		     "API Multicast listen address"),
 	OPT_WITH_ARG("--api-mcast-code",
-		     set_api_mcast_code, NULL, NULL,
+		     opt_set_charp, NULL, &opt_api_mcast_code,
 		     "Code expected in the API Multicast message, don't use '-'"),
 	OPT_WITH_ARG("--api-mcast-des",
-		     set_api_mcast_des, NULL, NULL,
+		     opt_set_charp, NULL, &opt_api_mcast_des,
 		     "Description appended to the API Multicast reply, default: ''"),
 	OPT_WITH_ARG("--api-mcast-port",
 		     set_int_1_to_65535, opt_show_intval, &opt_api_mcast_port,
@@ -4997,18 +4955,6 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"stop-time\" : \"%d:%d\"", schedstop.tm.tm_hour, schedstop.tm.tm_min);
 	if (opt_socks_proxy && *opt_socks_proxy)
 		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", json_escape(opt_socks_proxy));
-	if (opt_api_allow)
-		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", json_escape(opt_api_allow));
-	if (strcmp(opt_api_mcast_addr, API_MCAST_ADDR) != 0)
-		fprintf(fcfg, ",\n\"api-mcast-addr\" : \"%s\"", json_escape(opt_api_mcast_addr));
-	if (strcmp(opt_api_mcast_code, API_MCAST_CODE) != 0)
-		fprintf(fcfg, ",\n\"api-mcast-code\" : \"%s\"", json_escape(opt_api_mcast_code));
-	if (*opt_api_mcast_des)
-		fprintf(fcfg, ",\n\"api-mcast-des\" : \"%s\"", json_escape(opt_api_mcast_des));
-	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
-		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", json_escape(opt_api_description));
-	if (opt_api_groups)
-		fprintf(fcfg, ",\n\"api-groups\" : \"%s\"", json_escape(opt_api_groups));
 #ifdef USE_ICARUS
 	if (opt_icarus_options)
 		fprintf(fcfg, ",\n\"icarus-options\" : \"%s\"", json_escape(opt_icarus_options));
