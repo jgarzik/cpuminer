@@ -14,7 +14,6 @@
 #include "usbutils.h"
 #include "mcp2210.h"
 
-#define BXF_CLOCK_DEFAULT 54
 #define BXF_CLOCK_OFF 0
 #define BXF_CLOCK_MIN 32
 #define BXF_CLOCK_MAX 63 // Not really used since we only get hw errors above default
@@ -26,6 +25,7 @@
 extern int opt_bxf_temp_target;
 extern int opt_nf1_bits;
 extern int opt_bxm_bits;
+extern int opt_bxf_bits;
 
 #define NF1_PIN_LED 0
 #define NF1_PIN_SCK_OVR 5

@@ -192,8 +192,9 @@ Options for both config file and command line:
 --bitmain-hwerror   Set bitmain device detect hardware error
 --bitmain-options   Set bitmain options baud:miners:asic:timeout:freq
 --bitmain-temp      Set bitmain target temperature
+--bxf-bits <arg>    Set max BXF bits for overclocking (default: 54)
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
---bxm-bits <arg>    Set BXM bits for overclocking (default: 50)
+--bxm-bits <arg>    Set BXM bits for overclocking (default: 54)
 --btc-address <arg> Set bitcoin target address when solo mining to bitcoind
 --compact           Use compact display without per device statistics
 --debug|-D          Enable debug output

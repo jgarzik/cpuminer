@@ -1327,6 +1327,9 @@ static struct opt_table opt_config_table[] = {
 		     "Bitmine A1 options ref_clk_khz:sys_clk_khz:spi_clk_khz:override_chip_num"),
 #endif
 #ifdef USE_BITFURY
+	OPT_WITH_ARG("--bxf-bits",
+		     set_int_32_to_63, opt_show_intval, &opt_bxf_bits,
+		     "Set max BXF bits for overclocking"),
 	OPT_WITH_ARG("--bxf-temp-target",
 		     set_int_0_to_200, opt_show_intval, &opt_bxf_temp_target,
 		     "Set target temperature for BXF devices"),

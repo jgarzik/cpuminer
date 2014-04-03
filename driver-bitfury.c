@@ -17,7 +17,8 @@
 
 int opt_bxf_temp_target = BXF_TEMP_TARGET / 10;
 int opt_nf1_bits = 50;
-int opt_bxm_bits = 50;
+int opt_bxm_bits = 54;
+int opt_bxf_bits = 54;
 
 /* Wait longer 1/3 longer than it would take for a full nonce range */
 #define BF1WAIT 1600
@@ -903,7 +904,7 @@ static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info,
 			goto out;
 		}
 		/* implies: decitemp < info->last_decitemp */
-		if (info->clocks >= BXF_CLOCK_DEFAULT)
+		if (info->clocks >= opt_bxf_bits)
 			goto out;
 		applog(LOG_DEBUG, "%s %d: Temp %d in target and falling, increasing clock",
 		       bitfury->drv->name, bitfury->device_id, decitemp);
@@ -911,7 +912,7 @@ static void parse_bxf_temp(struct cgpu_info *bitfury, struct bitfury_info *info,
 		goto out;
 	}
 	/* implies: decitemp < info->temp_target - BXF_TEMP_HYSTERESIS */
-	if (info->clocks >= BXF_CLOCK_DEFAULT)
+	if (info->clocks >= opt_bxf_bits)
 		goto out;
 	applog(LOG_DEBUG, "%s %d: Temp %d below target, increasing clock",
 		bitfury->drv->name, bitfury->device_id, decitemp);
@@ -1032,7 +1033,7 @@ static bool bxf_prepare(struct cgpu_info *bitfury, struct bitfury_info *info)
 	mutex_init(&info->lock);
 	if (pthread_create(&info->read_thr, NULL, bxf_get_results, (void *)bitfury))
 		quit(1, "Failed to create bxf read_thr");
-	return bxf_send_clock(bitfury, info, BXF_CLOCK_DEFAULT);
+	return bxf_send_clock(bitfury, info, opt_bxf_bits);
 }
 
 static bool bitfury_prepare(struct thr_info *thr)

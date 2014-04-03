@@ -211,8 +211,9 @@ ASIC SPECIFIC COMMANDS
 --bitmain-hwerror   Set bitmain device detect hardware error
 --bitmain-options   Set bitmain options baud:miners:asic:timeout:freq
 --bitmain-temp      Set bitmain target temperature
+--bxf-bits <arg>    Set max BXF bits for overclocking (default: 54)
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
---bxm-bits <arg>    Set BXM bits for overclocking (default: 50)
+--bxm-bits <arg>    Set BXM bits for overclocking (default: 54)
 --hfa-hash-clock <arg> Set hashfast clock speed (default: 550)
 --hfa-fail-drop <arg> Set how many MHz to drop clockspeed each failure on an overlocked hashfast device (default: 10)
 --hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)
@@ -440,6 +441,12 @@ throttles BFLSC devices by allowing them to temporarily go idle.
 
 BITFURY Devices
 
+--bxf-bits <arg>    Set max BXF bits for overclocking (default: 54)
+
+In combination with the dynamic clocking on Bi*fury devices, this sets the
+highest bit target that cgminer will aim for.
+
+
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
 
 Cgminer uses dynamic clocking on Bi*fury devices to try and maintain the
@@ -447,10 +454,10 @@ temperature just below an optimal target. This option allows you to change the
 target temperature. When actively cooled below this, the devices will run at
 maximum speed.
 
---bxm-bits <arg>    Set BXM bits for overclocking (default: 50)
+--bxm-bits <arg>    Set BXM bits for overclocking (default: 54)
 
-Choose the overclocking  bits for BFx2 devices, where 54~55 is optimal but
-may be beyond the power usage of USB2 specifications.
+Choose the overclocking  bits for BFx2 devices.
+
 
 --nfu-bits <arg>    Set nanofury bits for overclocking range 32-63 (default: 50)
 
