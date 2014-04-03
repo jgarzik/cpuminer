@@ -8,10 +8,12 @@ Currently supported devices include:
 - KnCminer Mercury, Saturn and Jupiter
 - BlackArrow Bitfury
 - Bi*fury USB
+- Onestring miner USB
+- Hexfury USB
 - Nanofury USB
 - Other bitfury USB devices
 - Hashfast Babyjet and Sierra
-- Antminer U1 USB
+- Antminer U1/U2/U2+ USB
 - Cointerra
 - Antminer S1
 - BFx2 USB
@@ -211,8 +213,8 @@ ASIC SPECIFIC COMMANDS
 --bitmain-hwerror   Set bitmain device detect hardware error
 --bitmain-options   Set bitmain options baud:miners:asic:timeout:freq
 --bitmain-temp      Set bitmain target temperature
---bxf-bits <arg>    Set max BXF bits for overclocking (default: 54)
---bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
+--bxf-bits <arg>    Set max BXF/HXF bits for overclocking (default: 54)
+--bxf-temp-target <arg> Set target temperature for BXF/HXF devices (default: 82)
 --bxm-bits <arg>    Set BXM bits for overclocking (default: 54)
 --hfa-hash-clock <arg> Set hashfast clock speed (default: 550)
 --hfa-fail-drop <arg> Set how many MHz to drop clockspeed each failure on an overlocked hashfast device (default: 10)
@@ -441,13 +443,13 @@ throttles BFLSC devices by allowing them to temporarily go idle.
 
 BITFURY Devices
 
---bxf-bits <arg>    Set max BXF bits for overclocking (default: 54)
+--bxf-bits <arg>    Set max BXF/HXF bits for overclocking (default: 54)
 
 In combination with the dynamic clocking on Bi*fury devices, this sets the
 highest bit target that cgminer will aim for.
 
 
---bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
+--bxf-temp-target <arg> Set target temperature for BXF/HXF devices (default: 82)
 
 Cgminer uses dynamic clocking on Bi*fury devices to try and maintain the
 temperature just below an optimal target. This option allows you to change the

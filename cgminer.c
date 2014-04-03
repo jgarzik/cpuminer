@@ -1174,10 +1174,10 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_BITFURY
 	OPT_WITH_ARG("--bxf-bits",
 		     set_int_32_to_63, opt_show_intval, &opt_bxf_bits,
-		     "Set max BXF bits for overclocking"),
+		     "Set max BXF/HXF bits for overclocking"),
 	OPT_WITH_ARG("--bxf-temp-target",
 		     set_int_0_to_200, opt_show_intval, &opt_bxf_temp_target,
-		     "Set target temperature for BXF devices"),
+		     "Set target temperature for BXF/HXF devices"),
 	OPT_WITH_ARG("--bxm-bits",
 		     set_int_0_to_100, opt_show_intval, &opt_bxm_bits,
 		     "Set BXM bits for overclocking"),

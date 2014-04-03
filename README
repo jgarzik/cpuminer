@@ -192,8 +192,8 @@ Options for both config file and command line:
 --bitmain-hwerror   Set bitmain device detect hardware error
 --bitmain-options   Set bitmain options baud:miners:asic:timeout:freq
 --bitmain-temp      Set bitmain target temperature
---bxf-bits <arg>    Set max BXF bits for overclocking (default: 54)
---bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
+--bxf-bits <arg>    Set max BXF/HXF bits for overclocking (default: 54)
+--bxf-temp-target <arg> Set target temperature for BXF/HXF devices (default: 82)
 --bxm-bits <arg>    Set BXM bits for overclocking (default: 54)
 --btc-address <arg> Set bitcoin target address when solo mining to bitcoind
 --compact           Use compact display without per device statistics
@@ -302,8 +302,8 @@ See FGPA-README for more information regarding this.
 Cgminer should automatically find all of your Avalon ASIC, BFL ASIC, BitForce
 FPGAs, Icarus bitstream FPGAs, Klondike ASIC, ASICMINER usb block erupters,
 KnC ASICs, BaB ASICs, Hashfast ASICs, ModMiner FPGAs, BPMC/BGMC BF1 USB ASICs,
-Bi*fury USB ASICs, Nanofury USB ASICs, Antminer U1 USB ASICs, Cointerra
-devices and BFx2 USB ASICs.
+Bi*fury USB ASICs, Onestring miner USB ASICs, Hexfury USB ASICs, Nanofury USB
+ASICs, Antminer U1/U2/U2+ USB ASICs, Cointerra devices and BFx2 USB ASICs.
 
 ---
 
