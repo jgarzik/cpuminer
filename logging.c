@@ -54,7 +54,7 @@ void _applog(int prio, const char *str, bool force)
 {
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog) {
-		syslog(prio, "%s", str);
+		syslog(LOG_LOCAL0 | prio, "%s", str);
 	}
 #else
 	if (0) {}
