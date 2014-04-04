@@ -292,11 +292,13 @@ static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	applog(LOG_INFO, "%s %d: Successfully initialised %s",
 	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
 
-	/* Sanity check and recognise the hexfury */
+	/* Sanity check and recognise variations */
 	if (info->chips <= 2 || info->chips > 999)
 		info->chips = 2;
 	else if (info->chips == 6)
 		bitfury->drv->name = "HXF";
+	else if (info->chips > 6)
+		bitfury->drv->name = "MXF";
 	info->filtered_hw = calloc(sizeof(int), info->chips);
 	info->job = calloc(sizeof(int), info->chips);
 	info->submits = calloc(sizeof(int), info->chips);
@@ -799,6 +801,29 @@ static void bitfury_detect(bool __maybe_unused hotplug)
 	usb_detect(&bitfury_drv, bitfury_detect_one);
 }
 
+static void adjust_bxf_chips(struct cgpu_info *bitfury, struct bitfury_info *info, int chips)
+{
+	size_t old, new;
+
+	if (likely(chips <= info->chips))
+		return;
+	if (chips > 999)
+		return;
+	old = sizeof(int) * info->chips;
+	new = sizeof(int) * chips;
+	applog(LOG_INFO, "%s %d: Adjust chip size to %d", bitfury->drv->name, bitfury->device_id,
+	       chips);
+
+	recalloc(info->filtered_hw, old, new);
+	recalloc(info->job, old, new);
+	recalloc(info->submits, old, new);
+	if (info->chips == 2 && chips <= 6)
+		bitfury->drv->name = "HXF";
+	else if (info->chips <= 6 && chips > 6)
+		bitfury->drv->name = "MXF";
+	info->chips = chips;
+}
+
 static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *info, char *buf)
 {
 	struct work *match_work, *tmp, *work = NULL;
@@ -811,7 +836,11 @@ static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *inf
 		       bitfury->drv->name, bitfury->device_id);
 		return;
 	}
-	if (likely(chip > -1 && chip < info->chips))
+	adjust_bxf_chips(bitfury, info, chip);
+	if (unlikely(chip >= info->chips || chip < 0)) {
+		applog(LOG_INFO, "%s %d: Invalid submit chip number %d",
+		       bitfury->drv->name, bitfury->device_id, chip);
+	} else
 		info->submits[chip]++;
 
 	applog(LOG_DEBUG, "%s %d: Parsed nonce %u workid %d timestamp %u",
@@ -957,7 +986,8 @@ static void parse_bxf_job(struct cgpu_info *bitfury, struct bitfury_info *info, 
 		       bitfury->drv->name, bitfury->device_id);
 		return;
 	}
-	if (chip >= info->chips) {
+	adjust_bxf_chips(bitfury, info, chip);
+	if (chip >= info->chips || chip < 0) {
 		applog(LOG_INFO, "%s %d: Invalid job chip number %d",
 		       bitfury->drv->name, bitfury->device_id, chip);
 		return;
@@ -974,7 +1004,8 @@ static void parse_bxf_hwerror(struct cgpu_info *bitfury, struct bitfury_info *in
 		       bitfury->drv->name, bitfury->device_id);
 		return;
 	}
-	if (chip >= info->chips) {
+	adjust_bxf_chips(bitfury, info, chip);
+	if (chip >= info->chips || chip < 0) {
 		applog(LOG_INFO, "%s %d: Invalid hwerror chip number %d",
 		       bitfury->drv->name, bitfury->device_id, chip);
 		return;
