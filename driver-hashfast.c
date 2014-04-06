@@ -1872,6 +1872,9 @@ static void hfa_statline_before(char *buf, size_t bufsiz, struct cgpu_info *hash
 	if (!hashfast->device_data)
 		return;
 	info = hashfast->device_data;
+	/* Can happen during init sequence */
+	if (!info->die_status)
+		return;
 	max_volt = 0.0;
 
 	for (i = 0; i < info->asic_count; i++) {
