@@ -879,9 +879,7 @@ static void hfa_detect(bool __maybe_unused hotplug)
 	/* Set up the CRC tables only once. */
 	if (!hfa_crc8_set)
 		hfa_init_crc8();
-	/* Bringing each device online takes a massive amount of work, so only
-	 * do one at a time. */
-	usb_detect_one(&hashfast_drv, hfa_detect_one);
+	usb_detect(&hashfast_drv, hfa_detect_one);
 }
 
 static bool hfa_get_packet(struct cgpu_info *hashfast, struct hf_header *h)
@@ -1255,7 +1253,7 @@ static void *hfa_read(void *arg)
 static void hfa_set_fanspeed(struct cgpu_info *hashfast, struct hashfast_info *info,
 			     int fanspeed);
 
-static bool hfa_prepare(struct thr_info *thr)
+static bool hfa_init(struct thr_info *thr)
 {
 	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
@@ -1937,7 +1935,7 @@ struct device_drv hashfast_drv = {
 	.name = "HFA",
 	.max_diff = 256.0, // Limit max diff to get some nonces back regardless
 	.drv_detect = hfa_detect,
-	.thread_prepare = hfa_prepare,
+	.thread_init = hfa_init,
 	.hash_work = &hash_driver_work,
 	.scanwork = hfa_scanwork,
 	.get_api_stats = hfa_api_stats,
