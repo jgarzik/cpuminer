@@ -8970,7 +8970,7 @@ static void hotplug_process(void)
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
 
-			if (cgpu->drv->thread_prepare && !cgpu->drv->thread_prepare(thr)) {
+			if (!cgpu->drv->thread_prepare(thr)) {
 				null_device_drv(cgpu->drv);
 				cgpu->deven = DEV_DISABLED;
 				continue;
