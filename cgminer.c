@@ -7707,9 +7707,8 @@ void *miner_thread(void *userdata)
 
 	cgpu->last_device_valid_work = time(NULL);
 	drv->hash_work(mythr);
-out:
 	drv->thread_shutdown(mythr);
-
+out:
 	return NULL;
 }
 
