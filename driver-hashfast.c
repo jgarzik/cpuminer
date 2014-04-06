@@ -1266,19 +1266,6 @@ static bool hfa_init(struct thr_info *thr)
 
 	/* hashfast_reset should fill in details for info */
 	ret = hfa_reset(hashfast, info);
-	if (!ret)
-		goto out;
-
-	/* We will have extracted the serial number by now */
-	if (info->has_opname && !info->opname_valid)
-		hfa_choose_opname(hashfast, info);
-
-	/* Use the opname as the displayed unique identifier */
-	hashfast->unique_id = info->op_name;
-
-	/* Inherit the old device id */
-	if (info->old_cgpu)
-		hashfast->device_id = info->old_cgpu->device_id;
 
 	// The per-die status array
 	info->die_status = calloc(info->asic_count, sizeof(struct hf_g1_die_data));
@@ -1299,6 +1286,19 @@ static bool hfa_init(struct thr_info *thr)
 	info->works = calloc(sizeof(struct work *), info->num_sequence);
 	if (!info->works)
 		quit(1, "Failed to calloc info works in hfa_detect_common");
+	if (!ret)
+		goto out;
+
+	/* We will have extracted the serial number by now */
+	if (info->has_opname && !info->opname_valid)
+		hfa_choose_opname(hashfast, info);
+
+	/* Use the opname as the displayed unique identifier */
+	hashfast->unique_id = info->op_name;
+
+	/* Inherit the old device id */
+	if (info->old_cgpu)
+		hashfast->device_id = info->old_cgpu->device_id;
 
 	/* If we haven't found a matching old instance, we might not have
 	 * a valid op_name yet or lack support so try to match based on
