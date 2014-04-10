@@ -1,4 +1,5 @@
 /*
+ * Copyright 2014 Con Kolivas <kernel@kolivas.org>
  * Copyright 2014 Zvi Shteingart - Spondoolies-tech.com
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -27,6 +28,7 @@ typedef enum spond_work_state {
 
 #define MAX_JOBS_IN_MINERGATE MINERGATE_TOTAL_QUEUE // 1.5 sec worth of jobs
 #define MAX_NROLES 50 
+
 typedef struct {
 	struct work      *cgminer_work;
 	SPONDWORK_STATE  state;
@@ -39,7 +41,7 @@ typedef struct {
 struct spond_adapter {
 	pthread_mutex_t lock;
 	ADAPTER_STATE adapter_state;
-	void* cgpu;
+	void *cgpu;
 
 	// Statistics
 	int wins;
