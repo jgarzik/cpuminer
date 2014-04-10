@@ -105,7 +105,8 @@ cgminer_SOURCES += driver-cointerra.c driver-cointerra.h
 endif
 
 if HAS_SPONDOOLIES
-cgminer_SOURCES += driver-spondoolies.c mg_proto_parser.c
+cgminer_SOURCES += driver-spondoolies.c driver-spondoolies.h \
+		   mg_proto_parser.c mg_proto_parser.h
 endif
 
 if HAS_BAB
