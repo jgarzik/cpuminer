@@ -304,6 +304,20 @@ if test "x$modminer" = xyes; then
 fi
 AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
 
+
+
+spondoolies="no"
+
+AC_ARG_ENABLE([spondoolies],
+	[AC_HELP_STRING([--enable-spondoolies],[Compile support for Spondoolies (default disabled)])],
+	[spondoolies=$enableval]
+	)
+if test "x$spondoolies" = xyes; then
+	AC_DEFINE([USE_SPONDOOLIES], [1], [Defined to 1 if Spondoolies support is wanted])
+fi
+AM_CONDITIONAL([HAS_SPONDOOLIES], [test x$spondoolies = xyes])
+
+
 curses="auto"
 
 AC_ARG_WITH([curses],
@@ -562,6 +576,12 @@ else
 	echo "  Cointerra.ASICs......: Disabled"
 fi
 
+if test "x$spondoolies" = xyes; then
+	echo "  Spondoolies.ASICs....: Enabled"
+else
+	echo "  Spondoolies.ASICs....: Disabled"
+fi
+
 if test "x$bitmine_A1" = xyes; then
 	echo "  Bitmine-A1.ASICs.....: Enabled"
 else
@@ -604,7 +624,7 @@ else
 	echo "  ModMiner.FPGAs.......: Disabled"
 fi
 
-if test "x$avalon$avalon2$bab$bflsc$bitforce$bitfury$hashfast$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1" = xnononononononononononononononono; then
+if test "x$avalon$avalon2$bab$bflsc$bitforce$bitfury$hashfast$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$spondoolies" = xnonononononononononononononononono; then
 	AC_MSG_ERROR([No mining configured in])
 fi
 

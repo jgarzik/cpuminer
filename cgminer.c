@@ -76,6 +76,11 @@ char *curly = ":D";
 #include "driver-bflsc.h"
 #endif
 
+#ifdef USE_SPONDOOLIES
+#include "driver-spondoolies.h"
+#endif
+
+
 #ifdef USE_BITFURY
 #include "driver-bitfury.h"
 #endif
@@ -1637,6 +1642,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_BITMINE_A1
 		"Bitmine.A1 "
+#endif
+#ifdef USE_SPONDOOLIES
+		"spondoolies "
 #endif
 		"mining support.\n"
 		, packagename);
