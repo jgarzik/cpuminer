@@ -295,7 +295,7 @@ static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	/* Sanity check and recognise variations */
 	if (info->chips <= 2 || info->chips > 999)
 		info->chips = 2;
-	else if (info->chips == 6)
+	else if (info->chips <= 6)
 		bitfury->drv->name = "HXF";
 	else if (info->chips > 6)
 		bitfury->drv->name = "MXF";
