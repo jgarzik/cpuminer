@@ -33,7 +33,6 @@
 # include <netinet/tcp.h>
 # include <netdb.h>
 #else
-# include <windows.h>
 # include <winsock2.h>
 # include <ws2tcpip.h>
 # include <mmsystem.h>
