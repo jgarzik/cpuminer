@@ -801,8 +801,9 @@ static void bitfury_detect(bool __maybe_unused hotplug)
 	usb_detect(&bitfury_drv, bitfury_detect_one);
 }
 
-static void adjust_bxf_chips(struct cgpu_info *bitfury, struct bitfury_info *info, int chips)
+static void adjust_bxf_chips(struct cgpu_info *bitfury, struct bitfury_info *info, int chip)
 {
+	int chips = chip + 1;
 	size_t old, new;
 
 	if (likely(chips <= info->chips))
