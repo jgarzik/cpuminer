@@ -1904,10 +1904,9 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 #ifdef WIN32
 			// Windows specific message
 			case LIBUSB_ERROR_NOT_SUPPORTED:
-				applog(LOG_ERR,
-					"USB init, open device failed, err %d, "
-					"you need to install a WinUSB driver for %s",
-					err, devstr);
+				applog(LOG_ERR, "USB init, open device failed, err %d, ", err);
+				applog(LOG_ERR, "You need to install a WinUSB driver for %s", devstr);
+				applog(LOG_ERR, "And associate %s with WinUSB using zadig", devstr);
 				applog(LOG_ERR, "See README.txt file included for help");
 				break;
 #endif
