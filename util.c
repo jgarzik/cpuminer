@@ -1525,15 +1525,15 @@ static void clear_sock(struct pool *pool)
 }
 
 /* Realloc memory to new size and zero any extra memory added */
-void _recalloc(void *ptr, size_t old, size_t new, const char *file, const char *func, const int line)
+void _recalloc(void **ptr, size_t old, size_t new, const char *file, const char *func, const int line)
 {
 	if (new == old)
 		return;
-	ptr = realloc(ptr, new);
-	if (unlikely(!ptr))
+	*ptr = realloc(*ptr, new);
+	if (unlikely(!*ptr))
 		quitfrom(1, file, func, line, "Failed to realloc");
 	if (new > old)
-		memset(ptr + old, 0, new - old);
+		memset(*ptr + old, 0, new - old);
 }
 
 /* Make sure the pool sockbuf is large enough to cope with any coinbase size
