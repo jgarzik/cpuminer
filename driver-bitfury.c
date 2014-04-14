@@ -1226,7 +1226,7 @@ static int64_t bxf_scan(struct cgpu_info *bitfury, struct bitfury_info *info)
 	int aged;
 
 	bxf_update_work(bitfury, info);
-	cgsleep_ms(600);
+	cgsleep_ms(1200 / info->chips);
 
 	mutex_lock(&info->lock);
 	ret = bitfury_rate(info);
