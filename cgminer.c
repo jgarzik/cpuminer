@@ -7883,6 +7883,7 @@ retry_pool:
 					continue;
 				}
 
+				sprintf(lpreq, "{\"id\": 0, \"method\": \"getblockhash %d\"}\n", height);
 				get_gbt_curl(pool, 500);
 				curl_easy_setopt(pool->gbt_curl, CURLOPT_FORBID_REUSE, 1);
 				val = json_rpc_call(pool->gbt_curl, pool->rpc_url, pool->rpc_userpass,
