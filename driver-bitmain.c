@@ -796,7 +796,7 @@ static void bitmain_update_temps(struct cgpu_info *bitmain, struct bitmain_info 
 	}
 	sprintf(tmp, ", TempMAX: %dC", info->temp_max);
 	strcat(msg, tmp);
-	applog(LOG_INFO, msg);
+	applog(LOG_INFO, "%s", msg);
 	info->temp_history_index++;
 	info->temp_sum += bitmain->temp;
 	applog(LOG_DEBUG, "%s%d: temp_index: %d, temp_count: %d, temp_max: %d",
