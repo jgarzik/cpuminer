@@ -193,8 +193,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 	if (thr) {
 		avalon2 = thr->cgpu;
 		info = avalon2->device_data;
-	} else // FIXME: Should this happen at all!?
-		return 0;
+	}
 
 	memcpy((uint8_t *)ar, pkg, AVA2_READ_SIZE);
 
