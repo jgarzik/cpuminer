@@ -179,12 +179,15 @@ static void spondoolies_detect(__maybe_unused bool hotplug)
 	applog(LOG_DEBUG, "SPOND spondoolies_detect done");
 }
 
-static struct api_data *spondoolies_api_stats(struct cgpu_info __maybe_unused *cgpu)
+static struct api_data *spondoolies_api_stats(struct cgpu_info *cgpu)
 {
+	struct spond_adapter *a = cgpu->device_data;
 	struct api_data *root = NULL;
 
-	applog(LOG_DEBUG, "SPOND spondoolies_api_stats");
-	applog(LOG_DEBUG, "SPOND spondoolies_api_stats done");
+	root = api_add_int(root, "Temperature rate", &a->temp_rate, false);
+	root = api_add_int(root, "Temparature rear", &a->rear_temp, false);
+	root = api_add_int(root, "Temparature front", &a->front_temp, false);
+
 	return root;
 }
 
@@ -323,13 +326,41 @@ return_unlock:
 	return ret;
 }
 
+static void spond_poll_stats(struct cgpu_info *spond, struct spond_adapter *a)
+{
+	FILE *fp = fopen("/var/run/mg_rate_temp", "r");
+
+	if (!fp) {
+		applog(LOG_DEBUG, "SPOND unable to open mg_rate_temp");
+		a->temp_rate = a->rear_temp = a->front_temp = 0;
+	} else {
+		int ret = fscanf(fp, "%d %d %d", &a->temp_rate, &a->rear_temp, &a->front_temp);
+
+		if (ret != 3)
+			a->temp_rate = a->rear_temp = a->front_temp = 0;
+		fclose(fp);
+	}
+	applog(LOG_DEBUG, "SPOND poll_stats rate: %d rear: %d front: %d",
+	       a->temp_rate, a->rear_temp, a->front_temp);
+	/* Use the rear temperature as the dev temperature for now */
+	spond->temp = a->rear_temp;
+}
+
 // Return completed work to submit_nonce() and work_completed() 
 // struct timeval last_force_queue = {0};  
 static int64_t spond_scanhash(struct thr_info *thr)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct spond_adapter *a = cgpu->device_data;
-	int64_t ghashes=0;
+	int64_t ghashes = 0;
+	time_t now_t;
+
+	now_t = time(NULL);
+	/* Poll stats only once per second */
+	if (now_t != a->last_stats) {
+		a->last_stats = now_t;
+		spond_poll_stats(cgpu, a);
+	}
 
 	if (a->parse_resp) {
 		int array_size, i;

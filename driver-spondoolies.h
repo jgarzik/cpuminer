@@ -60,6 +60,14 @@ struct spond_adapter {
 	minergate_req_packet* mp_next_req;
 	minergate_rsp_packet* mp_last_rsp;
 	spond_driver_work my_jobs[MAX_JOBS_IN_MINERGATE];
+
+	// Temperature statistics
+	int temp_rate;
+	int rear_temp;
+	int front_temp;
+
+	// Last second we polled stats
+	time_t last_stats;
 };
 
 // returns non-zero if needs to change ASICs.
