@@ -86,6 +86,7 @@ struct avalon2_info {
 
 	int get_voltage[AVA2_DEFAULT_MODULARS];
 	int get_frequency[AVA2_DEFAULT_MODULARS];
+	int power_good[AVA2_DEFAULT_MODULARS];
 
 	int fan_pwm;
 
