@@ -279,7 +279,6 @@ static bool spondoolies_queue_full(struct cgpu_info *cgpu)
 
 	// see if we have enough jobs
 	if (a->works_pending_tx == REQUEST_SIZE) {
-		cgsleep_ms(40);
 		ret = true;
 		goto return_unlock;
 	}
@@ -287,13 +286,12 @@ static bool spondoolies_queue_full(struct cgpu_info *cgpu)
 	// see if can take 1 more job.
 	next_job_id = (a->current_job_id + 1) % MAX_JOBS_IN_MINERGATE;
 	if (a->my_jobs[next_job_id].cgminer_work) {
-		cgsleep_ms(40);
 		ret = true;
 		goto return_unlock;
 	}
 	work = get_queued(cgpu);
 	if (!work) {
-		ret = true;
+		cgsleep_ms(10);
 		goto return_unlock;
 	}
 
@@ -353,8 +351,10 @@ static int64_t spond_scanhash(struct thr_info *thr)
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct spond_adapter *a = cgpu->device_data;
 	int64_t ghashes = 0;
+	cgtimer_t cgt;
 	time_t now_t;
 
+	cgsleep_prepare_r(&cgt);
 	now_t = time(NULL);
 	/* Poll stats only once per second */
 	if (now_t != a->last_stats) {
@@ -411,6 +411,8 @@ static int64_t spond_scanhash(struct thr_info *thr)
 
 		a->parse_resp = 0;
 	}
+	cgsleep_ms_r(&cgt, 40);
+
 	return ghashes;
 }
 
