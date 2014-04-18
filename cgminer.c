@@ -2776,10 +2776,6 @@ void _wlogprint(const char *str)
 		unlock_curses();
 	}
 }
-#else
-static void switch_logsize(bool __maybe_unused newdevs)
-{
-}
 #endif
 
 #ifdef HAVE_CURSES
