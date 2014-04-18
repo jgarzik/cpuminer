@@ -32,7 +32,7 @@ typedef enum spond_work_state {
 typedef struct {
 	struct work      *cgminer_work;
 	SPONDWORK_STATE  state;
-	uint32_t         merkel_root;
+	uint32_t         merkle_root;
 	time_t           start_time;
 	int              job_id[MAX_NROLES];
 	int              ntime_clones;

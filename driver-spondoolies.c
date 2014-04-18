@@ -316,7 +316,7 @@ static bool spondoolies_queue_full(struct cgpu_info *cgpu)
 		a->works_in_driver++;
 		a->works_pending_tx++;
 		a->mp_next_req->req_count++;
-		a->my_jobs[a->current_job_id].merkel_root = pkt_job->mrkle_root;
+		a->my_jobs[a->current_job_id].merkle_root = pkt_job->mrkle_root;
 		a->my_jobs[a->current_job_id].ntime_clones++;
 	}
 
@@ -375,7 +375,7 @@ static int64_t spond_scanhash(struct thr_info *thr)
 			minergate_do_job_rsp* work = a->mp_last_rsp->rsp + i;
 			job_id = work->work_id_in_sw;
 			if ((a->my_jobs[job_id].cgminer_work)) {
-				if (a->my_jobs[job_id].merkel_root == work->mrkle_root) {
+				if (a->my_jobs[job_id].merkle_root == work->mrkle_root) {
 					assert(a->my_jobs[job_id].state == SPONDWORK_STATE_IN_BUSY);
 					a->works_in_minergate_and_pending_tx--;
 					a->works_in_driver--;
@@ -400,7 +400,7 @@ static int64_t spond_scanhash(struct thr_info *thr)
 				} else {
 					a->bad++;
 					printf("Dropping minergate old job id=%d mrkl=%x my-mrkl=%x\n",
-					       job_id, a->my_jobs[job_id].merkel_root, work->mrkle_root);
+					       job_id, a->my_jobs[job_id].merkle_root, work->mrkle_root);
 				}
 			} else {
 				a->empty++;
