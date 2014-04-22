@@ -429,7 +429,7 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 		;
 
-	set_target(target, pool->swork.diff);
+	set_target(target, pool->sdiff);
 	memcpy(pkg.data, target, 32);
 	if (opt_debug) {
 		char *target_str;
