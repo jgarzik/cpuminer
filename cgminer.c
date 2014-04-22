@@ -8928,6 +8928,10 @@ bool add_cgpu(struct cgpu_info *cgpu)
 		devices[total_devices++] = cgpu;
 
 	adjust_mostdevs();
+#ifdef USE_USBUTILS
+	if (cgpu->usbdev && !cgpu->unique_id && cgpu->usbdev->serial_string)
+		cgpu->unique_id = str_text(cgpu->usbdev->serial_string);
+#endif
 	return true;
 }
 
