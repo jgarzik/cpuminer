@@ -1328,9 +1328,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--no-submit-stale",
 			opt_set_invbool, &opt_submit_stale,
 		        "Don't submit shares if they are detected as stale"),
+#ifdef USE_BITFURY
 	OPT_WITH_ARG("--osm-led-mode",
 		     set_int_0_to_4, opt_show_intval, &opt_osm_led_mode,
 		     "Set LED mode for OneStringMiner devices"),
+#endif
 	OPT_WITH_ARG("--pass|-p",
 		     set_pass, NULL, &opt_set_null,
 		     "Password for bitcoin JSON-RPC server"),
@@ -9016,7 +9018,9 @@ static void hotplug_process(void)
 	wr_unlock(&mining_thr_lock);
 
 	adjust_mostdevs();
+#ifdef HAVE_CURSES
 	switch_logsize(true);
+#endif
 }
 
 #define DRIVER_DRV_DETECT_HOTPLUG(X) X##_drv.drv_detect(true);
