@@ -415,6 +415,19 @@ static struct usb_find_devices find_dev[] = {
 	},
 	{
 		.drv = DRIVER_bitfury,
+		.name = "OSM",
+		.ident = IDENT_BXF,
+		.idVendor = 0x198c,
+		.idProduct = 0xb1f1,
+		.config = 1,
+		.timeout = BITFURY_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		.iManufacturer = "c-scape",
+		.iProduct = "OneString",
+		INTINFO(bxf_ints)
+	},
+	{
+		.drv = DRIVER_bitfury,
 		.name = "NF1",
 		.ident = IDENT_NF1,
 		.idVendor = 0x04d8,
