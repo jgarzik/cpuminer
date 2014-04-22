@@ -737,6 +737,11 @@ static char *set_int_1_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 1, 10);
 }
 
+static char __maybe_unused *set_int_0_to_4(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 0, 4);
+}
+
 #ifdef USE_FPGA_SERIAL
 static char *opt_add_serial;
 static char *add_serial(char *arg)
@@ -1180,6 +1185,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bxf-bits",
 		     set_int_32_to_63, opt_show_intval, &opt_bxf_bits,
 		     "Set max BXF/HXF bits for overclocking"),
+	OPT_WITH_ARG("--bxf-debug",
+		     set_int_0_to_4, opt_show_intval, &opt_bxf_debug,
+		    "BXF: Debug all USB I/O, > is to the board(s), < is from the board(s)"),
 	OPT_WITH_ARG("--bxf-temp-target",
 		     set_int_0_to_200, opt_show_intval, &opt_bxf_temp_target,
 		     "Set target temperature for BXF/HXF devices"),
@@ -1320,6 +1328,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--no-submit-stale",
 			opt_set_invbool, &opt_submit_stale,
 		        "Don't submit shares if they are detected as stale"),
+	OPT_WITH_ARG("--osm-led-mode",
+		     set_int_0_to_4, opt_show_intval, &opt_osm_led_mode,
+		     "Set LED mode for OneStringMiner devices"),
 	OPT_WITH_ARG("--pass|-p",
 		     set_pass, NULL, &opt_set_null,
 		     "Password for bitcoin JSON-RPC server"),

@@ -19,6 +19,8 @@ int opt_bxf_temp_target = BXF_TEMP_TARGET / 10;
 int opt_nf1_bits = 50;
 int opt_bxm_bits = 54;
 int opt_bxf_bits = 54;
+int opt_bxf_debug;
+int opt_osm_led_mode = 4;
 
 /* Wait longer 1/3 longer than it would take for a full nonce range */
 #define BF1WAIT 1600
@@ -206,6 +208,13 @@ static bool bxf_send_msg(struct cgpu_info *bitfury, char *buf, enum usb_cmds cmd
 	if (unlikely(bitfury->usbinfo.nodev))
 		return false;
 
+	if (opt_bxf_debug) {
+		char *strbuf = str_text(buf);
+
+		applog(LOG_ERR, "%s %d: >BXF [%s]", bitfury->drv->name, bitfury->device_id, strbuf);
+		free(strbuf);
+	}
+
 	len = strlen(buf);
 	applog(LOG_DEBUG, "%s %d: Sending %s", bitfury->drv->name, bitfury->device_id, buf);
 	err = usb_write(bitfury, buf, len, &amount, cmd);
@@ -215,6 +224,22 @@ static bool bxf_send_msg(struct cgpu_info *bitfury, char *buf, enum usb_cmds cmd
 		return false;
 	}
 	return true;
+}
+
+static bool bxf_send_debugmode(struct cgpu_info *bitfury)
+{
+	char buf[16];
+
+	sprintf(buf, "debug-mode %d\n", opt_bxf_debug);
+	return bxf_send_msg(bitfury, buf, C_BXF_DEBUGMODE);
+}
+
+static bool bxf_send_ledmode(struct cgpu_info *bitfury)
+{
+	char buf[16];
+
+	sprintf(buf, "led-mode %d\n", opt_osm_led_mode);
+	return bxf_send_msg(bitfury, buf, C_BXF_LEDMODE);
 }
 
 /* Returns the amount received only if we receive a full message, otherwise
@@ -1042,7 +1067,7 @@ static void *bxf_get_results(void *userdata)
 	bxf_update_work(bitfury, info);
 
 	while (likely(!bitfury->shutdown)) {
-		char *msg;
+		char *msg, *strbuf;
 		int err;
 
 		if (unlikely(bitfury->usbinfo.nodev))
@@ -1057,14 +1082,25 @@ static void *bxf_get_results(void *userdata)
 		if (!err)
 			continue;
 
-		PARSE_BXF_MSG(submit);
+		if (opt_bxf_debug) {
+			strbuf = str_text(buf);
+			applog(LOG_ERR, "%s %d: < [%s]",
+				bitfury->drv->name, bitfury->device_id, strbuf);
+			free(strbuf);
+		}
+
+                PARSE_BXF_MSG(submit);
 		PARSE_BXF_MSG(temp);
 		PARSE_BXF_MSG(needwork);
 		PARSE_BXF_MSG(job);
 		PARSE_BXF_MSG(hwerror);
 
-		applog(LOG_DEBUG, "%s %d: Unrecognised string %s",
-		       bitfury->drv->name, bitfury->device_id, buf);
+		if (buf[0] != '#') {
+			strbuf = str_text(buf);
+			applog(LOG_DEBUG, "%s %d: Unrecognised string %s",
+			       bitfury->drv->name, bitfury->device_id, strbuf);
+			free(strbuf);
+		}
 	}
 out:
 	return NULL;
@@ -1072,9 +1108,13 @@ out:
 
 static bool bxf_prepare(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
+	bxf_send_ledmode(bitfury);
+	bxf_send_debugmode(bitfury);
+
 	mutex_init(&info->lock);
 	if (pthread_create(&info->read_thr, NULL, bxf_get_results, (void *)bitfury))
 		quit(1, "Failed to create bxf read_thr");
+
 	return bxf_send_clock(bitfury, info, opt_bxf_bits);
 }
 

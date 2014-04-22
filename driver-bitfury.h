@@ -26,6 +26,8 @@ extern int opt_bxf_temp_target;
 extern int opt_nf1_bits;
 extern int opt_bxm_bits;
 extern int opt_bxf_bits;
+extern int opt_bxf_debug;
+extern int opt_osm_led_mode;
 
 #define NF1_PIN_LED 0
 #define NF1_PIN_SCK_OVR 5
