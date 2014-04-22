@@ -193,8 +193,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 	if (thr) {
 		avalon2 = thr->cgpu;
 		info = avalon2->device_data;
-	} else // FIXME: Should this happen at all!?
-		return 0;
+	}
 
 	memcpy((uint8_t *)ar, pkg, AVA2_READ_SIZE);
 
@@ -263,6 +262,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			memcpy(&(info->get_voltage[modular_id]), ar->data + 12, 4);
 			memcpy(&(info->local_work[modular_id]), ar->data + 16, 4);
 			memcpy(&(info->hw_work[modular_id]), ar->data + 20, 4);
+			memcpy(&(info->power_good[modular_id]), ar->data + 24, 4);
 
 			info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]);
 			info->get_voltage[modular_id] = be32toh(info->get_voltage[modular_id]);
@@ -273,6 +273,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			info->hw_works[modular_id] += info->hw_work[modular_id];
 
 			info->get_voltage[modular_id] = decode_voltage(info->get_voltage[modular_id]);
+			info->power_good[modular_id] = info->power_good[modular_id]  >> 24;
+
 			avalon2->temp = get_temp_max(info);
 			break;
 		case AVA2_P_ACKDETECT:
@@ -797,6 +799,11 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 		sprintf(buf, "Frequency%d", i + 1);
 		root = api_add_int(root, buf, &(info->get_frequency[i]), false);
 	}
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		sprintf(buf, "Power good %02x", i + 1);
+	root = api_add_int(root, buf, &(info->power_good[i]), false);
+	}
+
 
 	return root;
 }
