@@ -134,6 +134,7 @@ static void bitfury_identify(struct cgpu_info *bitfury)
 			bf1_identify(bitfury);
 			break;
 		case IDENT_BXF:
+		case IDENT_OSM:
 		default:
 			break;
 	}
@@ -320,9 +321,9 @@ static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	/* Sanity check and recognise variations */
 	if (info->chips <= 2 || info->chips > 999)
 		info->chips = 2;
-	else if (info->chips <= 6)
+	else if (info->chips <= 6 && info->ident == IDENT_BXF)
 		bitfury->drv->name = "HXF";
-	else if (info->chips > 6)
+	else if (info->chips > 6 && info->ident == IDENT_BXF)
 		bitfury->drv->name = "MXF";
 	info->filtered_hw = calloc(sizeof(int), info->chips);
 	info->job = calloc(sizeof(int), info->chips);
@@ -798,6 +799,7 @@ static struct cgpu_info *bitfury_detect_one(struct libusb_device *dev, struct us
 			ret = bf1_detect_one(bitfury, info);
 			break;
 		case IDENT_BXF:
+		case IDENT_OSM:
 			ret = bxf_detect_one(bitfury, info);
 			break;
 		case IDENT_NF1:
@@ -843,9 +845,9 @@ static void adjust_bxf_chips(struct cgpu_info *bitfury, struct bitfury_info *inf
 	recalloc(info->filtered_hw, old, new);
 	recalloc(info->job, old, new);
 	recalloc(info->submits, old, new);
-	if (info->chips == 2 && chips <= 6)
+	if (info->chips == 2 && chips <= 6 && info->ident == IDENT_BXF)
 		bitfury->drv->name = "HXF";
-	else if (info->chips <= 6 && chips > 6)
+	else if (info->chips <= 6 && chips > 6 && info->ident == IDENT_BXF)
 		bitfury->drv->name = "MXF";
 	info->chips = chips;
 }
@@ -1127,6 +1129,7 @@ static bool bitfury_prepare(struct thr_info *thr)
 
 	switch(info->ident) {
 		case IDENT_BXF:
+		case IDENT_OSM:
 			return bxf_prepare(bitfury, info);
 			break;
 		case IDENT_BF1:
@@ -1386,6 +1389,7 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 			ret = bf1_scan(thr, bitfury, info);
 			break;
 		case IDENT_BXF:
+		case IDENT_OSM:
 			ret = bxf_scan(bitfury, info);
 			break;
 		case IDENT_NF1:
@@ -1448,6 +1452,7 @@ static void bitfury_flush_work(struct cgpu_info *bitfury)
 
 	switch(info->ident) {
 		case IDENT_BXF:
+		case IDENT_OSM:
 			bxf_send_flush(bitfury);
 			bxf_update_work(bitfury, info);
 			bxf_update_work(bitfury, info);
@@ -1463,6 +1468,7 @@ static void bitfury_update_work(struct cgpu_info *bitfury)
 
 	switch(info->ident) {
 		case IDENT_BXF:
+		case IDENT_OSM:
 			bxf_update_work(bitfury, info);
 		case IDENT_BF1:
 		default:
@@ -1526,6 +1532,7 @@ static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
 			return bf1_api_stats(info);
 			break;
 		case IDENT_BXF:
+		case IDENT_OSM:
 			return bxf_api_stats(cgpu, info);
 			break;
 		default:
@@ -1540,6 +1547,7 @@ static void bitfury_get_statline_before(char *buf, size_t bufsiz, struct cgpu_in
 
 	switch(info->ident) {
 		case IDENT_BXF:
+		case IDENT_OSM:
 			tailsprintf(buf, bufsiz, "%5.1fC", cgpu->temp);
 			break;
 		default:
@@ -1583,6 +1591,7 @@ static void bitfury_shutdown(struct thr_info *thr)
 			bf1_close(bitfury);
 			break;
 		case IDENT_BXF:
+		case IDENT_OSM:
 			bxf_close(info);
 			break;
 		case IDENT_NF1:

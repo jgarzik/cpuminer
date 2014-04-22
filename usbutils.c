@@ -416,7 +416,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRIVER_bitfury,
 		.name = "OSM",
-		.ident = IDENT_BXF,
+		.ident = IDENT_OSM,
 		.idVendor = 0x198c,
 		.idProduct = 0xb1f1,
 		.config = 1,
