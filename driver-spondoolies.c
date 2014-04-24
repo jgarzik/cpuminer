@@ -184,7 +184,7 @@ static struct api_data *spondoolies_api_stats(struct cgpu_info *cgpu)
 	struct spond_adapter *a = cgpu->device_data;
 	struct api_data *root = NULL;
 
-	root = api_add_int(root, "Temperature rate", &a->temp_rate, false);
+	root = api_add_int(root, "ASICs total rate", &a->temp_rate, false);
 	root = api_add_int(root, "Temparature rear", &a->rear_temp, false);
 	root = api_add_int(root, "Temparature front", &a->front_temp, false);
 
