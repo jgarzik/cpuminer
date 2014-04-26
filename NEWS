@@ -1,3 +1,38 @@
+Version 4.3.0 - 18th April 2014
+
+- Put sleep in spond hash instead of queue full function
+- Remove unused function for when compiled without curses
+- Fix typo
+- Add temperature rate, front, rear and device temperature to spond API output
+- Limit bxf sleep in bxf_scan to 100ms minimum for strings of many chips
+- -Werror=format-security error on driver-bitmain.c
+- Fix parameters passed with getblockhash
+- Check the block hash with the proper command when looking for orphan chains
+- syslog requires a facility ... in more than one place
+- Shuffle windows headers included
+- Adjust the bxf sleep time according to the number of chips detected
+- Fix off by one error in bxf chip count when adjusting device size
+- Recalloc correct pointer
+- Make instructions associated with winusb error even more explicit
+- Add midsing headers to cgminer source in Makefile
+- Trivial style changes to mg proto parser
+- Trivial style and warning clean ups on spondoolies driver
+- Merge spondoolies driver patch
+- Call any BXF device with 3-6 chips reported HXF
+- Avoid derefrence when calling statline before on hfa device during init
+sequence
+- Calloc the info structures even on failed hfa reset to prevent later possible
+dereference
+- Load all hfa devices based on identification alone and defer init sequence
+till mining thread init sequence to allow all devices to be recognised rapidly
+but each device initialisation not delay others
+- Do not do thread shutdown unless thread init succeeded
+- Remove unnecessary check for thread_prepare function
+- Recognise variations on BXF based on chip value returned in responses
+- Provide helper function for recallocing memory
+- syslog requires a facility
+
+
 Version 4.2.3 - 3rd April 2014
 
 - Decay the per device hashrates when only the watchdog is calling the hashmeter

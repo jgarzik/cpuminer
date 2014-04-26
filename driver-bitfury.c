@@ -19,6 +19,8 @@ int opt_bxf_temp_target = BXF_TEMP_TARGET / 10;
 int opt_nf1_bits = 50;
 int opt_bxm_bits = 54;
 int opt_bxf_bits = 54;
+int opt_bxf_debug;
+int opt_osm_led_mode = 4;
 
 /* Wait longer 1/3 longer than it would take for a full nonce range */
 #define BF1WAIT 1600
@@ -132,6 +134,7 @@ static void bitfury_identify(struct cgpu_info *bitfury)
 			bf1_identify(bitfury);
 			break;
 		case IDENT_BXF:
+		case IDENT_OSM:
 		default:
 			break;
 	}
@@ -206,6 +209,13 @@ static bool bxf_send_msg(struct cgpu_info *bitfury, char *buf, enum usb_cmds cmd
 	if (unlikely(bitfury->usbinfo.nodev))
 		return false;
 
+	if (opt_bxf_debug) {
+		char *strbuf = str_text(buf);
+
+		applog(LOG_ERR, "%s %d: >BXF [%s]", bitfury->drv->name, bitfury->device_id, strbuf);
+		free(strbuf);
+	}
+
 	len = strlen(buf);
 	applog(LOG_DEBUG, "%s %d: Sending %s", bitfury->drv->name, bitfury->device_id, buf);
 	err = usb_write(bitfury, buf, len, &amount, cmd);
@@ -215,6 +225,22 @@ static bool bxf_send_msg(struct cgpu_info *bitfury, char *buf, enum usb_cmds cmd
 		return false;
 	}
 	return true;
+}
+
+static bool bxf_send_debugmode(struct cgpu_info *bitfury)
+{
+	char buf[16];
+
+	sprintf(buf, "debug-mode %d\n", opt_bxf_debug);
+	return bxf_send_msg(bitfury, buf, C_BXF_DEBUGMODE);
+}
+
+static bool bxf_send_ledmode(struct cgpu_info *bitfury)
+{
+	char buf[16];
+
+	sprintf(buf, "led-mode %d\n", opt_osm_led_mode);
+	return bxf_send_msg(bitfury, buf, C_BXF_LEDMODE);
 }
 
 /* Returns the amount received only if we receive a full message, otherwise
@@ -292,11 +318,13 @@ static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	applog(LOG_INFO, "%s %d: Successfully initialised %s",
 	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
 
-	/* Sanity check and recognise the hexfury */
+	/* Sanity check and recognise variations */
 	if (info->chips <= 2 || info->chips > 999)
 		info->chips = 2;
-	else if (info->chips == 6)
+	else if (info->chips <= 6 && info->ident == IDENT_BXF)
 		bitfury->drv->name = "HXF";
+	else if (info->chips > 6 && info->ident == IDENT_BXF)
+		bitfury->drv->name = "MXF";
 	info->filtered_hw = calloc(sizeof(int), info->chips);
 	info->job = calloc(sizeof(int), info->chips);
 	info->submits = calloc(sizeof(int), info->chips);
@@ -771,6 +799,7 @@ static struct cgpu_info *bitfury_detect_one(struct libusb_device *dev, struct us
 			ret = bf1_detect_one(bitfury, info);
 			break;
 		case IDENT_BXF:
+		case IDENT_OSM:
 			ret = bxf_detect_one(bitfury, info);
 			break;
 		case IDENT_NF1:
@@ -799,6 +828,30 @@ static void bitfury_detect(bool __maybe_unused hotplug)
 	usb_detect(&bitfury_drv, bitfury_detect_one);
 }
 
+static void adjust_bxf_chips(struct cgpu_info *bitfury, struct bitfury_info *info, int chip)
+{
+	int chips = chip + 1;
+	size_t old, new;
+
+	if (likely(chips <= info->chips))
+		return;
+	if (chips > 999)
+		return;
+	old = sizeof(int) * info->chips;
+	new = sizeof(int) * chips;
+	applog(LOG_INFO, "%s %d: Adjust chip size to %d", bitfury->drv->name, bitfury->device_id,
+	       chips);
+
+	recalloc(info->filtered_hw, old, new);
+	recalloc(info->job, old, new);
+	recalloc(info->submits, old, new);
+	if (info->chips == 2 && chips <= 6 && info->ident == IDENT_BXF)
+		bitfury->drv->name = "HXF";
+	else if (info->chips <= 6 && chips > 6 && info->ident == IDENT_BXF)
+		bitfury->drv->name = "MXF";
+	info->chips = chips;
+}
+
 static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *info, char *buf)
 {
 	struct work *match_work, *tmp, *work = NULL;
@@ -811,7 +864,11 @@ static void parse_bxf_submit(struct cgpu_info *bitfury, struct bitfury_info *inf
 		       bitfury->drv->name, bitfury->device_id);
 		return;
 	}
-	if (likely(chip > -1 && chip < info->chips))
+	adjust_bxf_chips(bitfury, info, chip);
+	if (unlikely(chip >= info->chips || chip < 0)) {
+		applog(LOG_INFO, "%s %d: Invalid submit chip number %d",
+		       bitfury->drv->name, bitfury->device_id, chip);
+	} else
 		info->submits[chip]++;
 
 	applog(LOG_DEBUG, "%s %d: Parsed nonce %u workid %d timestamp %u",
@@ -957,7 +1014,8 @@ static void parse_bxf_job(struct cgpu_info *bitfury, struct bitfury_info *info, 
 		       bitfury->drv->name, bitfury->device_id);
 		return;
 	}
-	if (chip >= info->chips) {
+	adjust_bxf_chips(bitfury, info, chip);
+	if (chip >= info->chips || chip < 0) {
 		applog(LOG_INFO, "%s %d: Invalid job chip number %d",
 		       bitfury->drv->name, bitfury->device_id, chip);
 		return;
@@ -974,7 +1032,8 @@ static void parse_bxf_hwerror(struct cgpu_info *bitfury, struct bitfury_info *in
 		       bitfury->drv->name, bitfury->device_id);
 		return;
 	}
-	if (chip >= info->chips) {
+	adjust_bxf_chips(bitfury, info, chip);
+	if (chip >= info->chips || chip < 0) {
 		applog(LOG_INFO, "%s %d: Invalid hwerror chip number %d",
 		       bitfury->drv->name, bitfury->device_id, chip);
 		return;
@@ -1010,7 +1069,7 @@ static void *bxf_get_results(void *userdata)
 	bxf_update_work(bitfury, info);
 
 	while (likely(!bitfury->shutdown)) {
-		char *msg;
+		char *msg, *strbuf;
 		int err;
 
 		if (unlikely(bitfury->usbinfo.nodev))
@@ -1025,14 +1084,25 @@ static void *bxf_get_results(void *userdata)
 		if (!err)
 			continue;
 
-		PARSE_BXF_MSG(submit);
+		if (opt_bxf_debug) {
+			strbuf = str_text(buf);
+			applog(LOG_ERR, "%s %d: < [%s]",
+				bitfury->drv->name, bitfury->device_id, strbuf);
+			free(strbuf);
+		}
+
+                PARSE_BXF_MSG(submit);
 		PARSE_BXF_MSG(temp);
 		PARSE_BXF_MSG(needwork);
 		PARSE_BXF_MSG(job);
 		PARSE_BXF_MSG(hwerror);
 
-		applog(LOG_DEBUG, "%s %d: Unrecognised string %s",
-		       bitfury->drv->name, bitfury->device_id, buf);
+		if (buf[0] != '#') {
+			strbuf = str_text(buf);
+			applog(LOG_DEBUG, "%s %d: Unrecognised string %s",
+			       bitfury->drv->name, bitfury->device_id, strbuf);
+			free(strbuf);
+		}
 	}
 out:
 	return NULL;
@@ -1040,9 +1110,13 @@ out:
 
 static bool bxf_prepare(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
+	bxf_send_ledmode(bitfury);
+	bxf_send_debugmode(bitfury);
+
 	mutex_init(&info->lock);
 	if (pthread_create(&info->read_thr, NULL, bxf_get_results, (void *)bitfury))
 		quit(1, "Failed to create bxf read_thr");
+
 	return bxf_send_clock(bitfury, info, opt_bxf_bits);
 }
 
@@ -1055,6 +1129,7 @@ static bool bitfury_prepare(struct thr_info *thr)
 
 	switch(info->ident) {
 		case IDENT_BXF:
+		case IDENT_OSM:
 			return bxf_prepare(bitfury, info);
 			break;
 		case IDENT_BF1:
@@ -1190,11 +1265,14 @@ out:
 
 static int64_t bxf_scan(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
+	int ms, aged;
 	int64_t ret;
-	int aged;
 
 	bxf_update_work(bitfury, info);
-	cgsleep_ms(600);
+	ms = 1200 / info->chips;
+	if (ms < 100)
+		ms = 100;
+	cgsleep_ms(ms);
 
 	mutex_lock(&info->lock);
 	ret = bitfury_rate(info);
@@ -1311,6 +1389,7 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 			ret = bf1_scan(thr, bitfury, info);
 			break;
 		case IDENT_BXF:
+		case IDENT_OSM:
 			ret = bxf_scan(bitfury, info);
 			break;
 		case IDENT_NF1:
@@ -1373,6 +1452,7 @@ static void bitfury_flush_work(struct cgpu_info *bitfury)
 
 	switch(info->ident) {
 		case IDENT_BXF:
+		case IDENT_OSM:
 			bxf_send_flush(bitfury);
 			bxf_update_work(bitfury, info);
 			bxf_update_work(bitfury, info);
@@ -1388,6 +1468,7 @@ static void bitfury_update_work(struct cgpu_info *bitfury)
 
 	switch(info->ident) {
 		case IDENT_BXF:
+		case IDENT_OSM:
 			bxf_update_work(bitfury, info);
 		case IDENT_BF1:
 		default:
@@ -1451,6 +1532,7 @@ static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
 			return bf1_api_stats(info);
 			break;
 		case IDENT_BXF:
+		case IDENT_OSM:
 			return bxf_api_stats(cgpu, info);
 			break;
 		default:
@@ -1465,6 +1547,7 @@ static void bitfury_get_statline_before(char *buf, size_t bufsiz, struct cgpu_in
 
 	switch(info->ident) {
 		case IDENT_BXF:
+		case IDENT_OSM:
 			tailsprintf(buf, bufsiz, "%5.1fC", cgpu->temp);
 			break;
 		default:
@@ -1508,6 +1591,7 @@ static void bitfury_shutdown(struct thr_info *thr)
 			bf1_close(bitfury);
 			break;
 		case IDENT_BXF:
+		case IDENT_OSM:
 			bxf_close(info);
 			break;
 		case IDENT_NF1:

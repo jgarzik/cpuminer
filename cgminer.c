@@ -76,6 +76,11 @@ char *curly = ":D";
 #include "driver-bflsc.h"
 #endif
 
+#ifdef USE_SPONDOOLIES
+#include "driver-spondoolies.h"
+#endif
+
+
 #ifdef USE_BITFURY
 #include "driver-bitfury.h"
 #endif
@@ -732,6 +737,11 @@ static char *set_int_1_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 1, 10);
 }
 
+static char __maybe_unused *set_int_0_to_4(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 0, 4);
+}
+
 #ifdef USE_FPGA_SERIAL
 static char *opt_add_serial;
 static char *add_serial(char *arg)
@@ -1175,6 +1185,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bxf-bits",
 		     set_int_32_to_63, opt_show_intval, &opt_bxf_bits,
 		     "Set max BXF/HXF bits for overclocking"),
+	OPT_WITH_ARG("--bxf-debug",
+		     set_int_0_to_4, opt_show_intval, &opt_bxf_debug,
+		    "BXF: Debug all USB I/O, > is to the board(s), < is from the board(s)"),
 	OPT_WITH_ARG("--bxf-temp-target",
 		     set_int_0_to_200, opt_show_intval, &opt_bxf_temp_target,
 		     "Set target temperature for BXF/HXF devices"),
@@ -1315,6 +1328,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--no-submit-stale",
 			opt_set_invbool, &opt_submit_stale,
 		        "Don't submit shares if they are detected as stale"),
+#ifdef USE_BITFURY
+	OPT_WITH_ARG("--osm-led-mode",
+		     set_int_0_to_4, opt_show_intval, &opt_osm_led_mode,
+		     "Set LED mode for OneStringMiner devices"),
+#endif
 	OPT_WITH_ARG("--pass|-p",
 		     set_pass, NULL, &opt_set_null,
 		     "Password for bitcoin JSON-RPC server"),
@@ -1637,6 +1655,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_BITMINE_A1
 		"Bitmine.A1 "
+#endif
+#ifdef USE_SPONDOOLIES
+		"spondoolies "
 #endif
 		"mining support.\n"
 		, packagename);
@@ -2767,10 +2788,6 @@ void _wlogprint(const char *str)
 		wprintw(logwin, "%s", str);
 		unlock_curses();
 	}
-}
-#else
-static void switch_logsize(bool __maybe_unused newdevs)
-{
 }
 #endif
 
@@ -7707,9 +7724,8 @@ void *miner_thread(void *userdata)
 
 	cgpu->last_device_valid_work = time(NULL);
 	drv->hash_work(mythr);
-out:
 	drv->thread_shutdown(mythr);
-
+out:
 	return NULL;
 }
 
@@ -7876,6 +7892,7 @@ retry_pool:
 					continue;
 				}
 
+				sprintf(lpreq, "{\"id\": 0, \"method\": \"getblockhash\", \"params\": [%d]}\n", height);
 				get_gbt_curl(pool, 500);
 				curl_easy_setopt(pool->gbt_curl, CURLOPT_FORBID_REUSE, 1);
 				val = json_rpc_call(pool->gbt_curl, pool->rpc_url, pool->rpc_userpass,
@@ -8913,6 +8930,11 @@ bool add_cgpu(struct cgpu_info *cgpu)
 		devices[total_devices++] = cgpu;
 
 	adjust_mostdevs();
+#ifdef USE_USBUTILS
+	if (cgpu->usbdev && !cgpu->unique_id && cgpu->usbdev->serial_string &&
+	    strlen(cgpu->usbdev->serial_string) > 4)
+		cgpu->unique_id = str_text(cgpu->usbdev->serial_string);
+#endif
 	return true;
 }
 
@@ -8970,7 +8992,7 @@ static void hotplug_process(void)
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
 
-			if (cgpu->drv->thread_prepare && !cgpu->drv->thread_prepare(thr)) {
+			if (!cgpu->drv->thread_prepare(thr)) {
 				null_device_drv(cgpu->drv);
 				cgpu->deven = DEV_DISABLED;
 				continue;
@@ -8996,7 +9018,9 @@ static void hotplug_process(void)
 	wr_unlock(&mining_thr_lock);
 
 	adjust_mostdevs();
+#ifdef HAVE_CURSES
 	switch_logsize(true);
+#endif
 }
 
 #define DRIVER_DRV_DETECT_HOTPLUG(X) X##_drv.drv_detect(true);

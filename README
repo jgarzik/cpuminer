@@ -119,23 +119,23 @@ CGMiner specific configuration options:
   --enable-bitforce       Compile support for BitForce FPGAs (default
                           disabled)
   --enable-bitfury        Compile support for BitFury ASICs (default disabled)
-  --enable-cointerra      Compile support for Cointerra ASICs (default
+  --enable-bitmine_A1     Compile support for Bitmine.ch A1 ASICs (default
                           disabled)
   --enable-drillbit       Compile support for Drillbit BitFury ASICs (default
                           disabled)
   --enable-hashfast       Compile support for Hashfast (default disabled)
   --enable-icarus         Compile support for Icarus (default disabled)
-  --enable-knc            Compile support for KnC miners (default disabled)
   --enable-klondike       Compile support for Klondike (default disabled)
   --enable-knc            Compile support for KnC miners (default disabled)
+  --enable-avalon2        Compile support for Avalon2 (default disabled)
   --enable-minion         Compile support for Minion BlackArrow ASIC (default
                           disabled)
   --enable-modminer       Compile support for ModMiner FPGAs(default disabled)
+  --enable-spondoolies    Compile support for Spondoolies (default disabled)
   --disable-libcurl       Disable building with libcurl for getwork and GBT
                           support
   --without-curses        Compile support for curses TUI (default enabled)
   --with-system-libusb    Compile against dynamic system libusb (default use
-                          included static libusb)
 
 Basic *nix build instructions:
 	To actually build:

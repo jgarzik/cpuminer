@@ -33,7 +33,6 @@
 # include <netinet/tcp.h>
 # include <netdb.h>
 #else
-# include <windows.h>
 # include <winsock2.h>
 # include <ws2tcpip.h>
 # include <mmsystem.h>
@@ -1522,6 +1521,18 @@ static void clear_sock(struct pool *pool)
 	mutex_unlock(&pool->stratum_lock);
 
 	clear_sockbuf(pool);
+}
+
+/* Realloc memory to new size and zero any extra memory added */
+void _recalloc(void **ptr, size_t old, size_t new, const char *file, const char *func, const int line)
+{
+	if (new == old)
+		return;
+	*ptr = realloc(*ptr, new);
+	if (unlikely(!*ptr))
+		quitfrom(1, file, func, line, "Failed to realloc");
+	if (new > old)
+		memset(*ptr + old, 0, new - old);
 }
 
 /* Make sure the pool sockbuf is large enough to cope with any coinbase size

@@ -879,9 +879,7 @@ static void hfa_detect(bool __maybe_unused hotplug)
 	/* Set up the CRC tables only once. */
 	if (!hfa_crc8_set)
 		hfa_init_crc8();
-	/* Bringing each device online takes a massive amount of work, so only
-	 * do one at a time. */
-	usb_detect_one(&hashfast_drv, hfa_detect_one);
+	usb_detect(&hashfast_drv, hfa_detect_one);
 }
 
 static bool hfa_get_packet(struct cgpu_info *hashfast, struct hf_header *h)
@@ -1255,7 +1253,7 @@ static void *hfa_read(void *arg)
 static void hfa_set_fanspeed(struct cgpu_info *hashfast, struct hashfast_info *info,
 			     int fanspeed);
 
-static bool hfa_prepare(struct thr_info *thr)
+static bool hfa_init(struct thr_info *thr)
 {
 	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
@@ -1268,19 +1266,6 @@ static bool hfa_prepare(struct thr_info *thr)
 
 	/* hashfast_reset should fill in details for info */
 	ret = hfa_reset(hashfast, info);
-	if (!ret)
-		goto out;
-
-	/* We will have extracted the serial number by now */
-	if (info->has_opname && !info->opname_valid)
-		hfa_choose_opname(hashfast, info);
-
-	/* Use the opname as the displayed unique identifier */
-	hashfast->unique_id = info->op_name;
-
-	/* Inherit the old device id */
-	if (info->old_cgpu)
-		hashfast->device_id = info->old_cgpu->device_id;
 
 	// The per-die status array
 	info->die_status = calloc(info->asic_count, sizeof(struct hf_g1_die_data));
@@ -1301,6 +1286,19 @@ static bool hfa_prepare(struct thr_info *thr)
 	info->works = calloc(sizeof(struct work *), info->num_sequence);
 	if (!info->works)
 		quit(1, "Failed to calloc info works in hfa_detect_common");
+	if (!ret)
+		goto out;
+
+	/* We will have extracted the serial number by now */
+	if (info->has_opname && !info->opname_valid)
+		hfa_choose_opname(hashfast, info);
+
+	/* Use the opname as the displayed unique identifier */
+	hashfast->unique_id = info->op_name;
+
+	/* Inherit the old device id */
+	if (info->old_cgpu)
+		hashfast->device_id = info->old_cgpu->device_id;
 
 	/* If we haven't found a matching old instance, we might not have
 	 * a valid op_name yet or lack support so try to match based on
@@ -1874,6 +1872,9 @@ static void hfa_statline_before(char *buf, size_t bufsiz, struct cgpu_info *hash
 	if (!hashfast->device_data)
 		return;
 	info = hashfast->device_data;
+	/* Can happen during init sequence */
+	if (!info->die_status)
+		return;
 	max_volt = 0.0;
 
 	for (i = 0; i < info->asic_count; i++) {
@@ -1937,7 +1938,7 @@ struct device_drv hashfast_drv = {
 	.name = "HFA",
 	.max_diff = 256.0, // Limit max diff to get some nonces back regardless
 	.drv_detect = hfa_detect,
-	.thread_prepare = hfa_prepare,
+	.thread_init = hfa_init,
 	.hash_work = &hash_driver_work,
 	.scanwork = hfa_scanwork,
 	.get_api_stats = hfa_api_stats,
