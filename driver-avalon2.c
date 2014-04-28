@@ -696,10 +696,14 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		pool = current_pool();
 		if (!pool->has_stratum)
 			quit(1, "Avalon2: Miner Manager have to use stratum pool");
-		if (pool->coinbase_len > AVA2_P_COINBASE_SIZE)
-			quit(1, "Avalon2: Miner Manager pool coinbase length have to less then %d", AVA2_P_COINBASE_SIZE);
-		if (pool->merkles > AVA2_P_MERKLES_COUNT)
-			quit(1, "Avalon2: Miner Manager merkles have to less then %d", AVA2_P_MERKLES_COUNT);
+		if (pool->coinbase_len > AVA2_P_COINBASE_SIZE) {
+			applog(LOG_ERR, "Avalon2: Miner Manager pool coinbase length have to less then %d", AVA2_P_COINBASE_SIZE);
+			return 0;
+		}
+		if (pool->merkles > AVA2_P_MERKLES_COUNT) {
+			applog(LOG_ERR, "Avalon2: Miner Manager merkles have to less then %d", AVA2_P_MERKLES_COUNT);
+			return 0;
+		}
 
 		info->diff = (int)pool->swork.diff - 1;
 		info->pool_no = pool->pool_no;
@@ -719,7 +723,12 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		tmp = be32toh(info->fan_pwm);
 		memcpy(send_pkg.data, &tmp, 4);
 
-		tmp = encode_voltage(info->set_voltage);
+		applog(LOG_DEBUG, "Avalon2: Temp max: %d, Cut off temp: %d",
+		       info->temp_max, avalon->cutofftemp);
+		if (info->temp_max >= avlaon->cutofftemp)
+			tmp = encode_voltage(0);
+		else
+			tmp = encode_voltage(info->set_voltage);
 		tmp = be32toh(tmp);
 		memcpy(send_pkg.data + 4, &tmp, 4);
 
