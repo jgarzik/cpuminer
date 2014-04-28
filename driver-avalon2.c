@@ -51,6 +51,8 @@ int opt_avalon2_fan_max = AVA2_DEFAULT_FAN_MAX;
 int opt_avalon2_voltage_min = AVA2_DEFAULT_VOLTAGE;
 int opt_avalon2_voltage_max = AVA2_DEFAULT_VOLTAGE_MAX;
 
+int opt_avalon2_overheat = AVALON2_TEMP_OVERHEAT;
+
 static inline uint8_t rev8(uint8_t d)
 {
     int i;
@@ -724,8 +726,8 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		memcpy(send_pkg.data, &tmp, 4);
 
 		applog(LOG_DEBUG, "Avalon2: Temp max: %d, Cut off temp: %d",
-		       info->temp_max, avalon->cutofftemp);
-		if (info->temp_max >= avlaon->cutofftemp)
+		       info->temp_max, opt_avalon2_overheat);
+		if (info->temp_max >= opt_avalon2_overheat)
 			tmp = encode_voltage(0);
 		else
 			tmp = encode_voltage(info->set_voltage);

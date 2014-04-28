@@ -37,6 +37,8 @@
 #define AVA2_DEFAULT_FREQUENCY_MIN	300
 #define AVA2_DEFAULT_FREQUENCY_MAX	2000
 
+#define AVALON2_TEMP_OVERHEAT	88
+
 /* Avalon2 protocol package type */
 #define AVA2_H1	'A'
 #define AVA2_H2	'V'
@@ -132,6 +134,7 @@ struct avalon2_info {
 extern char *set_avalon2_fan(char *arg);
 extern char *set_avalon2_freq(char *arg);
 extern char *set_avalon2_voltage(char *arg);
+extern int opt_avalon2_overheat;
 
 #endif /* USE_AVALON2 */
 #endif	/* _AVALON2_H_ */
