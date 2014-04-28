@@ -165,6 +165,17 @@ static inline int get_temp_max(struct avalon2_info *info)
 	return info->temp_max;
 }
 
+static inline int get_currect_temp_max(struct avalon2_info *info)
+{
+	int i;
+	int t = 0;
+	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i++) {
+		if (t <= info->temp[i])
+			t = info->temp[i];
+	}
+	return t;
+}
+
 /* http://www.onsemi.com/pub_link/Collateral/ADP3208D.PDF */
 static inline uint32_t encode_voltage(uint32_t v)
 {
@@ -725,9 +736,9 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		tmp = be32toh(info->fan_pwm);
 		memcpy(send_pkg.data, &tmp, 4);
 
-		applog(LOG_DEBUG, "Avalon2: Temp max: %d, Cut off temp: %d",
-		       info->temp_max, opt_avalon2_overheat);
-		if (info->temp_max >= opt_avalon2_overheat)
+		applog(LOG_ERR, "Avalon2: Temp max: %d, Cut off temp: %d",
+		       get_currect_temp_max(info), opt_avalon2_overheat);
+		if (get_currect_temp_max(info) >= opt_avalon2_overheat)
 			tmp = encode_voltage(0);
 		else
 			tmp = encode_voltage(info->set_voltage);
