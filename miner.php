@@ -1173,6 +1173,8 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 	 */
 	switch ($name)
 	{
+	case '0':
+		break;
 	case 'Last Share Time':
 		if ($section == 'total')
 			break;
