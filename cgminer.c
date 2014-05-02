@@ -1903,7 +1903,6 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	local_work++;
 	work->pool = pool;
 	work->gbt = true;
-	work->id = total_work_inc();
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_GBT;
 	work->work_block = work_block;
@@ -6821,7 +6820,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	work->pool = pool;
 	work->stratum = true;
 	work->nonce = 0;
-	work->id = total_work_inc();
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
 	work->work_block = work_block;
@@ -6963,7 +6961,6 @@ static void gen_solo_work(struct pool *pool, struct work *work)
 	work->gbt = true;
 	work->pool = pool;
 	work->nonce = 0;
-	work->id = total_work_inc();
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_SOLO;
 	work->work_block = work_block;
