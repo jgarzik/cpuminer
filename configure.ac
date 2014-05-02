@@ -106,13 +106,6 @@ case $target in
 	;;
 esac
 
-have_cgminer_sdk=false
-if test -n "$CGMINER_SDK"; then
-	have_cgminer_sdk=true
-	CPPFLAGS="-I$CGMINER_SDK/include $CPPFLAGS"
-	LDFLAGS="-L$CGMINER_SDK/lib/$target $LDFLAGS"
-fi
-
 has_winpthread=false
 if test "x$have_win32" = xtrue; then
         has_winpthread=true
