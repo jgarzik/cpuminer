@@ -7173,7 +7173,6 @@ bool submit_noffset_nonce(struct thr_info *thr, struct work *work_in, uint32_t n
 		inc_hw_errors(thr);
 		goto out;
 	}
-	ret = true;
 	update_work_stats(thr, work);
 
 	if (opt_benchfile && opt_benchfile_display)
@@ -7184,6 +7183,7 @@ bool submit_noffset_nonce(struct thr_info *thr, struct work *work_in, uint32_t n
 		       thr->cgpu->device_id);
 		goto  out;
 	}
+	ret = true;
 	submit_work_async(work);
 
 out:
