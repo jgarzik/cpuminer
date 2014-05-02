@@ -1774,7 +1774,7 @@ void clean_work(struct work *work)
 
 /* All dynamically allocated work structs should be freed here to not leak any
  * ram from arrays allocated within the work struct */
-void free_work(struct work *work)
+void _free_work(struct work *work)
 {
 	clean_work(work);
 	free(work);
@@ -3989,7 +3989,12 @@ struct work *make_clone(struct work *work)
 	return work_clone;
 }
 
-static void stage_work(struct work *work);
+static void _stage_work(struct work *work);
+
+#define stage_work(WORK) do { \
+	_stage_work(WORK); \
+	WORK = NULL; \
+} while (0)
 
 static bool clone_available(void)
 {
@@ -4374,7 +4379,7 @@ void switch_pools(struct pool *selected)
 
 }
 
-void discard_work(struct work *work)
+void _discard_work(struct work *work)
 {
 	if (!work->clone && !work->rolls && !work->mined) {
 		if (work->pool) {
@@ -4717,7 +4722,7 @@ static bool hash_push(struct work *work)
 	return rc;
 }
 
-static void stage_work(struct work *work)
+static void _stage_work(struct work *work)
 {
 	applog(LOG_DEBUG, "Pushing work from pool %d to hash queue", work->pool->pool_no);
 	work->work_block = work_block;
