@@ -7170,6 +7170,7 @@ bool submit_noffset_nonce(struct thr_info *thr, struct work *work_in, uint32_t n
 
 	_copy_work(work, work_in, noffset);
 	if (!test_nonce(work, nonce)) {
+		free_work(work);
 		inc_hw_errors(thr);
 		goto out;
 	}
@@ -7178,17 +7179,16 @@ bool submit_noffset_nonce(struct thr_info *thr, struct work *work_in, uint32_t n
 	if (opt_benchfile && opt_benchfile_display)
 		benchfile_dspwork(work, nonce);
 
+	ret = true;
 	if (!fulltest(work->hash, work->target)) {
+		free_work(work);
 		applog(LOG_INFO, "%s %d: Share above target", thr->cgpu->drv->name,
 		       thr->cgpu->device_id);
 		goto  out;
 	}
-	ret = true;
 	submit_work_async(work);
 
 out:
-	if (!ret)
-		free_work(work);
 	return ret;
 }
 
