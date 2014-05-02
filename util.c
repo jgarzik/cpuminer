@@ -1855,6 +1855,24 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 	url = (char *)json_string_value(json_array_get(val, 0));
 	if (!url)
 		url = pool->sockaddr_url;
+	else {
+		char *dot_pool, *dot_reconnect;
+		dot_pool = strchr(pool->sockaddr_url, '.');
+		if (!dot_pool) {
+			applog(LOG_ERR, "Reconnect from invalid pool '%s'", pool->sockaddr_url);
+			return false;
+		}
+		dot_reconnect = strchr(url, '.');
+		if (!dot_reconnect) {
+			applog(LOG_ERR, "Reconnect to invalid url '%s'", url);
+			return false;
+		}
+		if (strcmp(dot_pool, dot_reconnect)) {
+			applog(LOG_ERR, "Reconnect ignored due to non-matching url from %s to %s",
+				pool->sockaddr_url, url);
+			return false;
+		}
+	}
 
 	port = (char *)json_string_value(json_array_get(val, 1));
 	if (!port)
