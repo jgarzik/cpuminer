@@ -9116,6 +9116,7 @@ static void initialise_usb(void) {
 int main(int argc, char *argv[])
 {
 	struct sigaction handler;
+	struct work *work = NULL;
 	bool pool_msg = false;
 	struct thr_info *thr;
 	struct block *block;
@@ -9521,7 +9522,6 @@ begin_bench:
 		int ts, max_staged = max_queue;
 		struct pool *pool, *cp;
 		bool lagging = false;
-		struct work *work;
 
 		if (opt_work_update)
 			signal_work_update();
@@ -9566,6 +9566,8 @@ begin_bench:
 			continue;
 		}
 
+		if (work)
+			discard_work(work);
 		work = make_work();
 
 		if (lagging && !pool_tset(cp, &cp->lagging)) {
@@ -9658,6 +9660,7 @@ retry:
 			cgsleep_ms(5000);
 			push_curl_entry(ce, pool);
 			pool = select_pool(!opt_fail_only);
+			free_work(work);
 			goto retry;
 		}
 		if (ts >= max_staged)
