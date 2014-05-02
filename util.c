@@ -1859,17 +1859,19 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 		char *dot_pool, *dot_reconnect;
 		dot_pool = strchr(pool->sockaddr_url, '.');
 		if (!dot_pool) {
-			applog(LOG_ERR, "Reconnect from invalid pool '%s'", pool->sockaddr_url);
+			applog(LOG_ERR, "Denied stratum reconnect request for pool without domain '%s'",
+			       pool->sockaddr_url);
 			return false;
 		}
 		dot_reconnect = strchr(url, '.');
 		if (!dot_reconnect) {
-			applog(LOG_ERR, "Reconnect to invalid url '%s'", url);
+			applog(LOG_ERR, "Denied stratum reconnect request to url without domain '%s'",
+			       url);
 			return false;
 		}
 		if (strcmp(dot_pool, dot_reconnect)) {
-			applog(LOG_ERR, "Reconnect ignored due to non-matching url from %s to %s",
-				pool->sockaddr_url, url);
+			applog(LOG_ERR, "Denied stratum reconnect request to non-matching domain url '%s'",
+				pool->sockaddr_url);
 			return false;
 		}
 	}
@@ -1883,7 +1885,7 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 	if (!extract_sockaddr(address, &sockaddr_url, &stratum_port))
 		return false;
 
-	applog(LOG_NOTICE, "Reconnect requested from pool %d to %s", pool->pool_no, address);
+	applog(LOG_WARNING, "Stratum reconnect requested from pool %d to %s", pool->pool_no, address);
 
 	clear_pool_work(pool);
 
