@@ -309,8 +309,8 @@ cglock_t control_lock;
 pthread_mutex_t stats_lock;
 
 int hw_errors;
-int total_accepted, total_rejected, total_diff1;
-int total_getworks, total_stale, total_discarded;
+int64_t total_accepted, total_rejected, total_diff1;
+int64_t total_getworks, total_stale, total_discarded;
 double total_diff_accepted, total_diff_rejected, total_diff_stale;
 static int staged_rollable;
 unsigned int new_blocks;
@@ -2538,12 +2538,12 @@ static void curses_print_status(void)
 	wclrtoeol(statuswin);
 	if (opt_widescreen) {
 		cg_mvwprintw(statuswin, 3, 0, " A:%.0f  R:%.0f  HW:%d  WU:%.1f/m |"
-			     " ST: %d  SS: %d  NB: %d  LW: %d  GF: %d  RF: %d",
+			     " ST: %d  SS: %"PRId64"  NB: %d  LW: %d  GF: %d  RF: %d",
 			     total_diff_accepted, total_diff_rejected, hw_errors,
 			     total_diff1 / total_secs * 60,
 			     total_staged(), total_stale, new_blocks, local_work, total_go, total_ro);
 	} else if (alt_status) {
-		cg_mvwprintw(statuswin, 3, 0, " ST: %d  SS: %d  NB: %d  LW: %d  GF: %d  RF: %d",
+		cg_mvwprintw(statuswin, 3, 0, " ST: %d  SS: %"PRId64"  NB: %d  LW: %d  GF: %d  RF: %d",
 			     total_staged(), total_stale, new_blocks, local_work, total_go, total_ro);
 	} else {
 		cg_mvwprintw(statuswin, 3, 0, " A:%.0f  R:%.0f  HW:%d  WU:%.1f/m",
@@ -4760,9 +4760,9 @@ static void display_pool_summary(struct pool *pool)
 		if (!pool->has_stratum)
 			wlog("%s own long-poll support\n", pool->hdr_path ? "Has" : "Does not have");
 		wlog(" Queued work requests: %d\n", pool->getwork_requested);
-		wlog(" Share submissions: %d\n", pool->accepted + pool->rejected);
-		wlog(" Accepted shares: %d\n", pool->accepted);
-		wlog(" Rejected shares: %d\n", pool->rejected);
+		wlog(" Share submissions: %"PRId64"\n", pool->accepted + pool->rejected);
+		wlog(" Accepted shares: %"PRId64"\n", pool->accepted);
+		wlog(" Rejected shares: %"PRId64"\n", pool->rejected);
 		wlog(" Accepted difficulty shares: %1.f\n", pool->diff_accepted);
 		wlog(" Rejected difficulty shares: %1.f\n", pool->diff_rejected);
 		if (pool->accepted || pool->rejected)
@@ -5513,7 +5513,7 @@ retry:
 		wlogprint("Hardware Errors %d\n", cgpu->hw_errors);
 		wlogprint("Last Share Pool %d\n", cgpu->last_share_pool_time > 0 ? cgpu->last_share_pool : -1);
 		wlogprint("Total MH %.1f\n", cgpu->total_mhashes);
-		wlogprint("Diff1 Work %d\n", cgpu->diff1);
+		wlogprint("Diff1 Work %"PRId64"\n", cgpu->diff1);
 		wlogprint("Difficulty Accepted %.1f\n", cgpu->diff_accepted);
 		wlogprint("Difficulty Rejected %.1f\n", cgpu->diff_rejected);
 		wlogprint("Last Share Difficulty %.1f\n", cgpu->last_share_diff);
@@ -8123,10 +8123,10 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 
 			/* Get a rolling utility per pool over 10 mins */
 			if (intervals > 19) {
-				int shares = pool->diff1 - pool->last_shares;
+				double shares = pool->diff1 - pool->last_shares;
 
 				pool->last_shares = pool->diff1;
-				pool->utility = (pool->utility + (double)shares * 0.63) / 1.63;
+				pool->utility = (pool->utility + shares * 0.63) / 1.63;
 				pool->shares = pool->utility;
 			}
 
@@ -8366,9 +8366,9 @@ void print_summary(void)
 	applog(LOG_WARNING, "Average hashrate: %.1f Mhash/s", displayed_hashes);
 	applog(LOG_WARNING, "Solved blocks: %d", found_blocks);
 	applog(LOG_WARNING, "Best share difficulty: %s", best_share);
-	applog(LOG_WARNING, "Share submissions: %d", total_accepted + total_rejected);
-	applog(LOG_WARNING, "Accepted shares: %d", total_accepted);
-	applog(LOG_WARNING, "Rejected shares: %d", total_rejected);
+	applog(LOG_WARNING, "Share submissions: %"PRId64, total_accepted + total_rejected);
+	applog(LOG_WARNING, "Accepted shares: %"PRId64, total_accepted);
+	applog(LOG_WARNING, "Rejected shares: %"PRId64, total_rejected);
 	applog(LOG_WARNING, "Accepted difficulty shares: %1.f", total_diff_accepted);
 	applog(LOG_WARNING, "Rejected difficulty shares: %1.f", total_diff_rejected);
 	if (total_accepted || total_rejected)
@@ -8377,7 +8377,7 @@ void print_summary(void)
 	applog(LOG_WARNING, "Utility (accepted shares / min): %.2f/min", utility);
 	applog(LOG_WARNING, "Work Utility (diff1 shares solved / min): %.2f/min\n", work_util);
 
-	applog(LOG_WARNING, "Stale submissions discarded due to new blocks: %d", total_stale);
+	applog(LOG_WARNING, "Stale submissions discarded due to new blocks: %"PRId64, total_stale);
 	applog(LOG_WARNING, "Unable to get work from server occasions: %d", total_go);
 	applog(LOG_WARNING, "Work items generated locally: %d", local_work);
 	applog(LOG_WARNING, "Submitting work remotely delay occasions: %d", total_ro);
@@ -8390,9 +8390,9 @@ void print_summary(void)
 			applog(LOG_WARNING, "Pool: %s", pool->rpc_url);
 			if (pool->solved)
 				applog(LOG_WARNING, "SOLVED %d BLOCK%s!", pool->solved, pool->solved > 1 ? "S" : "");
-			applog(LOG_WARNING, " Share submissions: %d", pool->accepted + pool->rejected);
-			applog(LOG_WARNING, " Accepted shares: %d", pool->accepted);
-			applog(LOG_WARNING, " Rejected shares: %d", pool->rejected);
+			applog(LOG_WARNING, " Share submissions: %"PRId64, pool->accepted + pool->rejected);
+			applog(LOG_WARNING, " Accepted shares: %"PRId64, pool->accepted);
+			applog(LOG_WARNING, " Rejected shares: %"PRId64, pool->rejected);
 			applog(LOG_WARNING, " Accepted difficulty shares: %1.f", pool->diff_accepted);
 			applog(LOG_WARNING, " Rejected difficulty shares: %1.f", pool->diff_rejected);
 			if (pool->accepted || pool->rejected)
