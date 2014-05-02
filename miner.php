@@ -1173,7 +1173,11 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 	 */
 	switch ($name)
 	{
+	case '0':
+		break;
 	case 'Last Share Time':
+		if ($section == 'total')
+			break;
 		if ($section == 'POOL')
 		{
 			if ($value == 0)
@@ -1198,12 +1202,16 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 		break;
 	case 'Last getwork':
 	case 'Last Valid Work':
+		if ($section == 'total')
+			break;
 		if ($value == 0)
 			$ret = 'Never';
 		else
 			$ret = ($value - $when) . 's';
 		break;
 	case 'Last Share Pool':
+		if ($section == 'total')
+			break;
 		if ($value == -1)
 		{
 			$ret = 'None';
@@ -1212,6 +1220,8 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 		break;
 	case 'Elapsed':
 	case 'Device Elapsed':
+		if ($section == 'total')
+			break;
 		$s = $value % 60;
 		$value -= $s;
 		$value /= 60;
@@ -1244,6 +1254,8 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 		}
 		break;
 	case 'Last Well':
+		if ($section == 'total')
+			break;
 		if ($value == '0')
 		{
 			$ret = 'Never';
@@ -1253,6 +1265,8 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 			$ret = date('H:i:s', $value);
 		break;
 	case 'Last Not Well':
+		if ($section == 'total')
+			break;
 		if ($value == '0')
 			$ret = 'Never';
 		else
@@ -1262,6 +1276,8 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 		}
 		break;
 	case 'Reason Not Well':
+		if ($section == 'total')
+			break;
 		if ($value != 'None')
 			$class = $errorclass;
 		break;
@@ -1296,6 +1312,8 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 		$ret = number_format($value, 2).'/m';
 		break;
 	case 'Temperature':
+		if ($section == 'total')
+			break;
 		$ret = $value.'&deg;C';
 		if (!isset($alldata['GPU']))
 		{
@@ -1307,10 +1325,14 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 	case 'Memory Clock':
 	case 'GPU Voltage':
 	case 'GPU Activity':
+		if ($section == 'total')
+			break;
 		if ($value == 0)
 			$class = $warnclass;
 		break;
 	case 'Fan Percent':
+		if ($section == 'total')
+			break;
 		if ($value == 0)
 			$class = $warnclass;
 		else
@@ -1323,6 +1345,8 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 		}
 		break;
 	case 'Fan Speed':
+		if ($section == 'total')
+			break;
 		if ($value == 0)
 			$class = $warnclass;
 		else
@@ -1413,25 +1437,35 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 		$ret = number_format((float)$parts[0]).$dec;
 		break;
 	case 'Status':
+		if ($section == 'total')
+			break;
 		if ($value != 'Alive')
 			$class = $errorclass;
 		break;
 	case 'Enabled':
+		if ($section == 'total')
+			break;
 		if ($value != 'Y')
 			$class = $warnclass;
 		break;
 	case 'No Device':
+		if ($section == 'total')
+			break;
 		if ($value != 'false')
 			$class = $errorclass;
 		break;
 	case 'When':
 	case 'Current Block Time':
+		if ($section == 'total')
+			break;
 		$ret = date($dfmt, $value);
 		break;
+	case 'Last Share Difficulty':
+		if ($section == 'total')
+			break;
 	case 'Difficulty Accepted':
 	case 'Difficulty Rejected':
 	case 'Difficulty Stale':
-	case 'Last Share Difficulty':
 		if ($value != '')
 			$ret = number_format((float)$value, 2);
 		break;
@@ -1439,10 +1473,14 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 	case 'Device Rejected%':
 	case 'Pool Rejected%':
 	case 'Pool Stale%':
+		if ($section == 'total')
+			break;
 		if ($value != '')
 			$ret = number_format((float)$value, 2) . '%';
 		break;
 	case 'Best Share':
+		if ($section == 'total')
+			break;
 	case 'Hardware Errors':
 		if ($value != '')
 			$ret = number_format((float)$value);
@@ -1470,6 +1508,8 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 			$ret = number_format((float)$value, 2);
 		break;
 	case 'AvShr':
+		if ($section == 'total')
+			break;
 		if ($value != '')
 			$ret = number_format((float)$value, 2);
 		if ($value == 0)
@@ -1534,14 +1574,16 @@ function showdatetime()
 #
 global $singlerigsum;
 $singlerigsum = array(
- 'devs' => array('MHS av' => 1, 'MHS 5s' => 1, 'Accepted' => 1, 'Rejected' => 1,
+ 'devs' => array('MHS av' => 1, 'MHS 5s' => 1, 'MHS 1m' => 1, 'MHS 5m' => 1,
+			'MHS 15m' => 1, 'Accepted' => 1, 'Rejected' => 1,
 			'Hardware Errors' => 1, 'Utility' => 1, 'Total MH' => 1,
-			'Diff1 Shares' => 1, 'Diff1 Work' => 1, 'Difficulty Accepted' => 1,
-			'Difficulty Rejected' => 1),
+			'Diff1 Shares' => 1, 'Diff1 Work' => 1,
+			'Difficulty Accepted' => 1, 'Difficulty Rejected' => 1),
  'pools' => array('Getworks' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Discarded' => 1,
 			'Stale' => 1, 'Get Failures' => 1, 'Remote Failures' => 1,
-			'Diff1 Shares' => 1, 'Diff1 Work' => 1, 'Difficulty Accepted' => 1,
-			'Difficulty Rejected' => 1, 'Difficulty Stale' => 1),
+			'Diff1 Shares' => 1, 'Diff1 Work' => 1,
+			'Difficulty Accepted' => 1, 'Difficulty Rejected' => 1,
+			'Difficulty Stale' => 1),
  'notify' => array('*' => 1));
 #
 function showtotal($total, $when, $oldvalues)
