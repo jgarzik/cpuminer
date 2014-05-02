@@ -1774,7 +1774,7 @@ void clean_work(struct work *work)
 
 /* All dynamically allocated work structs should be freed here to not leak any
  * ram from arrays allocated within the work struct */
-void free_work(struct work *work)
+void _free_work(struct work *work)
 {
 	clean_work(work);
 	free(work);
@@ -1903,7 +1903,6 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	local_work++;
 	work->pool = pool;
 	work->gbt = true;
-	work->id = total_work_inc();
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_GBT;
 	work->work_block = work_block;
@@ -3990,7 +3989,12 @@ struct work *make_clone(struct work *work)
 	return work_clone;
 }
 
-static void stage_work(struct work *work);
+static void _stage_work(struct work *work);
+
+#define stage_work(WORK) do { \
+	_stage_work(WORK); \
+	WORK = NULL; \
+} while (0)
 
 static bool clone_available(void)
 {
@@ -4375,7 +4379,7 @@ void switch_pools(struct pool *selected)
 
 }
 
-void discard_work(struct work *work)
+void _discard_work(struct work *work)
 {
 	if (!work->clone && !work->rolls && !work->mined) {
 		if (work->pool) {
@@ -4718,7 +4722,7 @@ static bool hash_push(struct work *work)
 	return rc;
 }
 
-static void stage_work(struct work *work)
+static void _stage_work(struct work *work)
 {
 	applog(LOG_DEBUG, "Pushing work from pool %d to hash queue", work->pool->pool_no);
 	work->work_block = work_block;
@@ -6821,7 +6825,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	work->pool = pool;
 	work->stratum = true;
 	work->nonce = 0;
-	work->id = total_work_inc();
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
 	work->work_block = work_block;
@@ -6963,7 +6966,6 @@ static void gen_solo_work(struct pool *pool, struct work *work)
 	work->gbt = true;
 	work->pool = pool;
 	work->nonce = 0;
-	work->id = total_work_inc();
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_SOLO;
 	work->work_block = work_block;
@@ -6994,7 +6996,6 @@ struct work *get_work(struct thr_info *thr, const int thr_id)
 		work = hash_pop(true);
 		if (stale_work(work, false)) {
 			discard_work(work);
-			work = NULL;
 			wake_gws();
 		}
 	}
@@ -7172,7 +7173,6 @@ bool submit_noffset_nonce(struct thr_info *thr, struct work *work_in, uint32_t n
 		inc_hw_errors(thr);
 		goto out;
 	}
-	ret = true;
 	update_work_stats(thr, work);
 
 	if (opt_benchfile && opt_benchfile_display)
@@ -7183,6 +7183,7 @@ bool submit_noffset_nonce(struct thr_info *thr, struct work *work_in, uint32_t n
 		       thr->cgpu->device_id);
 		goto  out;
 	}
+	ret = true;
 	submit_work_async(work);
 
 out:
@@ -7414,7 +7415,6 @@ struct work *get_queued(struct cgpu_info *cgpu)
 		work = cgpu->unqueued_work;
 		if (unlikely(stale_work(work, false))) {
 			discard_work(work);
-			work = NULL;
 			wake_gws();
 		} else
 			__add_queued(cgpu, work);
@@ -9116,6 +9116,7 @@ static void initialise_usb(void) {
 int main(int argc, char *argv[])
 {
 	struct sigaction handler;
+	struct work *work = NULL;
 	bool pool_msg = false;
 	struct thr_info *thr;
 	struct block *block;
@@ -9521,7 +9522,6 @@ begin_bench:
 		int ts, max_staged = max_queue;
 		struct pool *pool, *cp;
 		bool lagging = false;
-		struct work *work;
 
 		if (opt_work_update)
 			signal_work_update();
@@ -9566,6 +9566,8 @@ begin_bench:
 			continue;
 		}
 
+		if (work)
+			discard_work(work);
 		work = make_work();
 
 		if (lagging && !pool_tset(cp, &cp->lagging)) {
@@ -9658,6 +9660,7 @@ retry:
 			cgsleep_ms(5000);
 			push_curl_entry(ce, pool);
 			pool = select_pool(!opt_fail_only);
+			free_work(work);
 			goto retry;
 		}
 		if (ts >= max_staged)

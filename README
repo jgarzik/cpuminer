@@ -136,6 +136,7 @@ CGMiner specific configuration options:
                           support
   --without-curses        Compile support for curses TUI (default enabled)
   --with-system-libusb    Compile against dynamic system libusb (default use
+                          included static libusb)
 
 Basic *nix build instructions:
 	To actually build:
