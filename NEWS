@@ -1,6 +1,6 @@
 Version 4.3.2 - 2nd May 2014
 
-- Revert "upgrade some int to int64_t to avoid overflows in reporting"
+- Fix accounting bug with nrolltime drivers
 
 
 Version 4.3.1 - 2nd May 2014
