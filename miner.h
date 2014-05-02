@@ -486,7 +486,7 @@ struct cgpu_info {
 	double temp;
 	int cutofftemp;
 
-	int diff1;
+	int64_t diff1;
 	double diff_accepted;
 	double diff_rejected;
 	int last_share_pool;
@@ -1110,8 +1110,8 @@ extern double total_rolling;
 extern double total_mhashes_done;
 extern unsigned int new_blocks;
 extern unsigned int found_blocks;
-extern int total_accepted, total_rejected, total_diff1;;
-extern int total_getworks, total_stale, total_discarded;
+extern int64_t total_accepted, total_rejected, total_diff1;
+extern int64_t total_getworks, total_stale, total_discarded;
 extern double total_diff_accepted, total_diff_rejected, total_diff_stale;
 extern unsigned int local_work;
 extern unsigned int total_go, total_ro;
@@ -1152,11 +1152,11 @@ struct stratum_work {
 struct pool {
 	int pool_no;
 	int prio;
-	int accepted, rejected;
+	int64_t accepted, rejected;
 	int seq_rejects;
 	int seq_getfails;
 	int solved;
-	int diff1;
+	int64_t diff1;
 	char diff[8];
 	int quota;
 	int quota_gcd;
@@ -1480,6 +1480,7 @@ enum api_data_type {
 	API_UINT32,
 	API_HEX32,
 	API_UINT64,
+	API_INT64,
 	API_DOUBLE,
 	API_ELAPSED,
 	API_BOOL,
