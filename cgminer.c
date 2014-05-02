@@ -6996,7 +6996,6 @@ struct work *get_work(struct thr_info *thr, const int thr_id)
 		work = hash_pop(true);
 		if (stale_work(work, false)) {
 			discard_work(work);
-			work = NULL;
 			wake_gws();
 		}
 	}
@@ -7416,7 +7415,6 @@ struct work *get_queued(struct cgpu_info *cgpu)
 		work = cgpu->unqueued_work;
 		if (unlikely(stale_work(work, false))) {
 			discard_work(work);
-			work = NULL;
 			wake_gws();
 		} else
 			__add_queued(cgpu, work);
