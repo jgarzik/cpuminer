@@ -7539,6 +7539,7 @@ int age_queued_work(struct cgpu_info *cgpu, double secs)
 	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
 		if (tdiff(&tv_now, &work->tv_work_start) > secs) {
 			__work_completed(cgpu, work);
+			free_work(work);
 			aged++;
 		}
 	}
