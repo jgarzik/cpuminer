@@ -23,15 +23,15 @@
 #define BXF_TEMP_HYSTERESIS 30
 
 extern int opt_bxf_temp_target;
-extern int opt_nf1_bits;
+extern int opt_nfu_bits;
 extern int opt_bxm_bits;
 extern int opt_bxf_bits;
 extern int opt_bxf_debug;
 extern int opt_osm_led_mode;
 
-#define NF1_PIN_LED 0
-#define NF1_PIN_SCK_OVR 5
-#define NF1_PIN_PWR_EN 6
+#define NFU_PIN_LED 0
+#define NFU_PIN_SCK_OVR 5
+#define NFU_PIN_PWR_EN 6
 
 #define SPIBUF_SIZE 16384
 #define BITFURY_REFRESH_DELAY 100
@@ -94,7 +94,7 @@ struct bitfury_info {
 	int *job; // Completed jobs we're told about
 	int *submits; // Submitted responses
 
-	/* NF1 specific data */
+	/* NFU specific data */
 	struct mcp_settings mcp;
 	char spibuf[SPIBUF_SIZE];
 	unsigned int spibufsz;

@@ -1316,7 +1316,7 @@ static struct opt_table opt_config_table[] = {
 #endif // defined(unix)
 #ifdef USE_BITFURY
 	OPT_WITH_ARG("--nfu-bits",
-		     set_int_32_to_63, opt_show_intval, &opt_nf1_bits,
+		     set_int_32_to_63, opt_show_intval, &opt_nfu_bits,
 		     "Set nanofury bits for overclocking, range 32-63"),
 #endif
 	OPT_WITHOUT_ARG("--net-delay",

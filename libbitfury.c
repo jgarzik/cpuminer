@@ -122,7 +122,7 @@ void spi_set_freq(struct bitfury_info *info)
 
 void spi_send_conf(struct bitfury_info *info)
 {
-	const int8_t nf1_counters[16] = { 64, 64, SECOND_BASE, SECOND_BASE+4, SECOND_BASE+2,
+	const int8_t nfu_counters[16] = { 64, 64, SECOND_BASE, SECOND_BASE+4, SECOND_BASE+2,
 		SECOND_BASE+2+16, SECOND_BASE, SECOND_BASE+1, (FIRST_BASE)%65, (FIRST_BASE+1)%65,
 		(FIRST_BASE+3)%65, (FIRST_BASE+3+16)%65, (FIRST_BASE+4)%65, (FIRST_BASE+4+4)%65,
 		(FIRST_BASE+3+3)%65, (FIRST_BASE+3+1+3)%65 };
@@ -136,7 +136,7 @@ void spi_send_conf(struct bitfury_info *info)
 		spi_config_reg(info, i, 0);
 	/* Program counters correctly for rounds processing, here it should
 	 * start consuming power */
-	spi_add_data(info, 0x0100, nf1_counters, 16);
+	spi_add_data(info, 0x0100, nfu_counters, 16);
 }
 
 void spi_send_init(struct bitfury_info *info)
@@ -228,9 +228,9 @@ bool spi_reset(struct cgpu_info *bitfury, struct bitfury_info *info)
 	int r;
 
 	// SCK_OVRRIDE
-	mcp->value.pin[NF1_PIN_SCK_OVR] = MCP2210_GPIO_PIN_HIGH;
-	mcp->direction.pin[NF1_PIN_SCK_OVR] = MCP2210_GPIO_OUTPUT;
-	mcp->designation.pin[NF1_PIN_SCK_OVR] = MCP2210_PIN_GPIO;
+	mcp->value.pin[NFU_PIN_SCK_OVR] = MCP2210_GPIO_PIN_HIGH;
+	mcp->direction.pin[NFU_PIN_SCK_OVR] = MCP2210_GPIO_OUTPUT;
+	mcp->designation.pin[NFU_PIN_SCK_OVR] = MCP2210_PIN_GPIO;
 	if (!mcp2210_set_gpio_settings(bitfury, mcp))
 		return false;
 
@@ -243,7 +243,7 @@ bool spi_reset(struct cgpu_info *bitfury, struct bitfury_info *info)
 	}
 
 	// Deactivate override
-	mcp->direction.pin[NF1_PIN_SCK_OVR] = MCP2210_GPIO_INPUT;
+	mcp->direction.pin[NFU_PIN_SCK_OVR] = MCP2210_GPIO_INPUT;
 	if (!mcp2210_set_gpio_settings(bitfury, mcp))
 		return false;
 
