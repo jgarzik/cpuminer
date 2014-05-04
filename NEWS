@@ -1,3 +1,11 @@
+Version 4.3.3 - 3rd May 2014
+
+- Fix typo
+- Work should be freed when aged, fixing a massive memory leak for bxf devices
+- miner.php fix single rig summary/config field formatting
+- miner.php fix single rig total formatting
+
+
 Version 4.3.2 - 2nd May 2014
 
 - Fix accounting bug with nrolltime drivers
