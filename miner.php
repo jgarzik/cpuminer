@@ -1315,12 +1315,9 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 		if ($section == 'total')
 			break;
 		$ret = $value.'&deg;C';
-		if (!isset($alldata['GPU']))
-		{
-			if ($value == 0)
-				$ret = '&nbsp;';
-			break;
-		}
+		if ($value == 0)
+			$ret = '&nbsp;';
+		break;
 	case 'Fan Percent':
 		if ($section == 'total')
 			break;
