@@ -70,9 +70,11 @@ struct bitfury_info {
 	bool valid; /* Set on first valid data being found */
 	bool failing; /* Set when an attempted restart has been sent */
 
+	int chips;
+	char product[8];
+
 	/* BF1 specific data */
 	uint8_t version;
-	char product[8];
 	uint32_t serial;
 	struct timeval tv_start;
 
@@ -88,7 +90,6 @@ struct bitfury_info {
 	int ver_major;
 	int ver_minor;
 	int hw_rev;
-	int chips;
 	uint8_t clocks; // There are two but we set them equal
 	int *filtered_hw; // Hardware errors we're told about but are filtered
 	int *job; // Completed jobs we're told about

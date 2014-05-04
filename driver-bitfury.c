@@ -414,6 +414,16 @@ static bool nfu_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	bool ret = false;
 	int i, val;
 
+	/* Identify number of chips, and use it in device name if it can fit
+	 * into 3 chars, otherwise use generic NFU name. */
+	val = sscanf(bitfury->usbdev->prod_string, "NanoFury NF%u ", &info->chips);
+	if (val < 1)
+		info->chips = 1;
+	else if (info->chips < 10) {
+		sprintf(info->product, "NF%u", info->chips);
+		bitfury->drv->name = info->product;
+	}
+
 	info->spi_txrx = &mcp_spi_txrx;
 	mcp2210_get_gpio_settings(bitfury, mcp);
 
