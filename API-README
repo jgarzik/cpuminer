@@ -136,7 +136,7 @@ If you request a command that can't be used due to requiring parameters,
 a command that isn't a report, or an invalid command, you'll get an 'E' STATUS
 for that one but it will still attempt to process all other commands supplied
 
-Blank/missing commands are ignore e.g. +devs++
+Blank/missing commands are ignored e.g. +devs++
 will just show 'devs' using the new layout
 
 For API version 1.10 and later:
