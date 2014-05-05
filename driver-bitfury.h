@@ -32,6 +32,7 @@ extern int opt_osm_led_mode;
 #define NFU_PIN_LED 0
 #define NFU_PIN_SCK_OVR 5
 #define NFU_PIN_PWR_EN 6
+#define NFU_PIN_PWR_EN0 7
 
 #define SPIBUF_SIZE 16384
 #define BITFURY_REFRESH_DELAY 100

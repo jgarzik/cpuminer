@@ -459,6 +459,7 @@ static bool nfu_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	/* Set LED and PWR pins to output and high */
 	mcp->direction.pin[NFU_PIN_LED] = mcp->direction.pin[NFU_PIN_PWR_EN] = MCP2210_GPIO_OUTPUT;
 	mcp->value.pin[NFU_PIN_LED] = mcp->value.pin[NFU_PIN_PWR_EN] = MCP2210_GPIO_PIN_HIGH;
+	mcp->value.pin[NFU_PIN_PWR_EN0] = MCP2210_GPIO_PIN_LOW;
 
 	mcp->direction.pin[4] = MCP2210_GPIO_OUTPUT;
 	mcp->designation.pin[4] = MCP2210_PIN_CS;
