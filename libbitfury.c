@@ -370,8 +370,10 @@ bool libbitfury_sendHashData(struct thr_info *thr, struct cgpu_info *bitfury,
 					uint32_t nonce; //possible nonce
 
 					nonce = decnonce(newbuf[i]);
-					if (bitfury_checkresults(thr, info->owork[chip_n], nonce))
+					if (bitfury_checkresults(thr, info->owork[chip_n], nonce)) {
+						info->submits[chip_n]++;
 						info->nonces++;
+					}
 				}
 			}
 			memcpy(oldbuf, newbuf, 17 * 4);

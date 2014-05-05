@@ -389,8 +389,7 @@ static void nfu_close(struct cgpu_info *bitfury)
 
 static bool nfu_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
-	bool ret;
-
+	bool ret = true;
 	int i;
 
 	for (i = 0; i < info->chips; i++) {
@@ -424,6 +423,7 @@ static void nfu_alloc_arrays(struct bitfury_info *info)
 	info->second_run = calloc(sizeof(bool), info->chips);
 	info->work = calloc(sizeof(struct work *), info->chips);
 	info->owork = calloc(sizeof(struct work *), info->chips);
+	info->submits = calloc(sizeof(int *), info->chips);
 }
 
 static bool nfu_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
@@ -1540,6 +1540,20 @@ static struct api_data *bxf_api_stats(struct cgpu_info *bitfury, struct bitfury_
 	return root;
 }
 
+static struct api_data *nfu_api_stats(struct bitfury_info *info)
+{
+	struct api_data *root = NULL;
+	char buf[32];
+	int i;
+
+	root = api_add_int(root, "Chips", &info->chips, false);
+	for (i = 0; i < info->chips; i++) {
+		sprintf(buf, "Core%d submits", i);
+		root = api_add_int(root, buf, &info->submits[i], false);
+	}
+	return root;
+}
+
 static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
 {
 	struct bitfury_info *info = cgpu->device_data;
@@ -1551,6 +1565,10 @@ static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
 		case IDENT_BXF:
 		case IDENT_OSM:
 			return bxf_api_stats(cgpu, info);
+			break;
+		case IDENT_NFU:
+		case IDENT_BXM:
+			return nfu_api_stats(info);
 			break;
 		default:
 			break;
