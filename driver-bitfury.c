@@ -389,13 +389,23 @@ static void nfu_close(struct cgpu_info *bitfury)
 
 static bool nfu_reinit(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
-	spi_clear_buf(info);
-	spi_add_break(info);
-	spi_set_freq(info);
-	spi_send_conf(info);
-	spi_send_init(info);
-	spi_reset(bitfury, info);
-	return info->spi_txrx(bitfury, info);
+	bool ret;
+
+	int i;
+
+	for (i = 0; i < info->chips; i++) {
+		spi_clear_buf(info);
+		spi_add_break(info);
+		spi_add_fasync(info, i);
+		spi_set_freq(info);
+		spi_send_conf(info);
+		spi_send_init(info);
+		spi_reset(bitfury, info);
+		ret = info->spi_txrx(bitfury, info);
+		if (!ret)
+			break;
+	}
+	return ret;
 }
 
 static bool nfu_set_spi_settings(struct cgpu_info *bitfury, struct bitfury_info *info)
@@ -404,6 +414,16 @@ static bool nfu_set_spi_settings(struct cgpu_info *bitfury, struct bitfury_info 
 
 	return mcp2210_set_spi_transfer_settings(bitfury, mcp->bitrate, mcp->icsv,
 		mcp->acsv, mcp->cstdd, mcp->ldbtcsd, mcp->sdbd, mcp->bpst, mcp->spimode);
+}
+
+static void nfu_alloc_arrays(struct bitfury_info *info)
+{
+	info->payload = calloc(sizeof(struct bitfury_payload), info->chips);
+	info->oldbuf = calloc(sizeof(unsigned int) * 17, info->chips);
+	info->job_switched = calloc(sizeof(bool), info->chips);
+	info->second_run = calloc(sizeof(bool), info->chips);
+	info->work = calloc(sizeof(struct work *), info->chips);
+	info->owork = calloc(sizeof(struct work *), info->chips);
 }
 
 static bool nfu_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
@@ -423,6 +443,7 @@ static bool nfu_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 		sprintf(info->product, "NF%u", info->chips);
 		bitfury->drv->name = info->product;
 	}
+	nfu_alloc_arrays(info);
 
 	info->spi_txrx = &mcp_spi_txrx;
 	mcp2210_get_gpio_settings(bitfury, mcp);
@@ -531,7 +552,7 @@ static bool nfu_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
 	spi_clear_buf(info);
 
-	info->total_nonces = 1;
+	info->total_nonces = info->chips;
 out:
 	if (!ret)
 		nfu_close(bitfury);
@@ -766,6 +787,10 @@ static bool bxm_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 	if (!ret)
 		goto out;
 	info->osc6_bits = opt_bxm_bits;
+	/* Only have 2 chip devices for now */
+	info->chips = 2;
+	nfu_alloc_arrays(info);
+
 	ret = bxm_reinit(bitfury, info);
 	if (!ret)
 		goto out;
@@ -1336,28 +1361,10 @@ static int64_t nfu_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 			struct bitfury_info *info)
 {
 	int64_t ret = 0;
+	int i;
 
-	bitfury_check_work(thr, bitfury, info, 0);
-
-	ret = bitfury_rate(info);
-
-	if (unlikely(bitfury->usbinfo.nodev)) {
-		applog(LOG_WARNING, "%s %d: Device disappeared, disabling thread",
-		       bitfury->drv->name, bitfury->device_id);
-		ret = -1;
-	}
-
-	return ret;
-}
-
-static int64_t bxm_scan(struct thr_info *thr, struct cgpu_info *bitfury,
-			struct bitfury_info *info)
-{
-	int64_t ret = 0;
-	int chip_n;
-
-	for (chip_n = 0; chip_n < 2; chip_n++)
-		bitfury_check_work(thr, bitfury, info, chip_n);
+	for (i = 0; i < info->chips; i++)
+		bitfury_check_work(thr, bitfury, info, i);
 
 	ret = bitfury_rate(info);
 
@@ -1403,10 +1410,8 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 			ret = bxf_scan(bitfury, info);
 			break;
 		case IDENT_NFU:
-			ret = nfu_scan(thr, bitfury, info);
-			break;
 		case IDENT_BXM:
-			ret = bxm_scan(thr, bitfury, info);
+			ret = nfu_scan(thr, bitfury, info);
 			break;
 		default:
 			ret = 0;
