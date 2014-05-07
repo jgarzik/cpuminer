@@ -2190,14 +2190,16 @@ static void devstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 		io_close(io_data);
 }
 
-static void edevstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void edevstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	bool io_open = false;
 	int devcount = 0;
 	int numasc = 0;
 	int numpga = 0;
 	int i;
+#ifdef USE_USBUTILS
 	time_t howoldsec = 0;
+#endif
 
 #ifdef HAVE_AN_ASIC
 	numasc = numascs();
@@ -2212,8 +2214,10 @@ static void edevstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		return;
 	}
 
+#ifdef USE_USBUTILS
 	if (param && *param)
 		howoldsec = (time_t)atoi(param);
+#endif
 
 	message(io_data, MSG_DEVS, 0, NULL, isjson);
 	if (isjson)
@@ -3315,17 +3319,19 @@ static void minerstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		io_close(io_data);
 }
 
-static void minerestats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void minerestats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct cgpu_info *cgpu;
 	bool io_open = false;
 	struct api_data *extra;
 	char id[20];
 	int i, j;
+#ifdef USE_USBUTILS
 	time_t howoldsec = 0;
 
 	if (param && *param)
 		howoldsec = (time_t)atoi(param);
+#endif
 
 	message(io_data, MSG_MINESTATS, 0, NULL, isjson);
 	if (isjson)
