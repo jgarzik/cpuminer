@@ -6751,7 +6751,6 @@ void submit_nonce2_nonce(struct thr_info *thr, uint32_t pool_no, uint32_t nonce2
 	pool->nonce2 = nonce2;
 	gen_stratum_work(pool, work);
 
-	work->device_diff = MIN(drv->working_diff, work->work_difficulty);
 	submit_nonce(thr, work, nonce);
 	free_work(work);
 }
@@ -7118,9 +7117,9 @@ static void update_work_stats(struct thr_info *thr, struct work *work)
 	}
 
 	mutex_lock(&stats_lock);
-	total_diff1 += work->device_diff;
-	thr->cgpu->diff1 += work->device_diff;
-	work->pool->diff1 += work->device_diff;
+	total_diff1 += work->work_difficulty;
+	thr->cgpu->diff1 += work->work_difficulty;
+	work->pool->diff1 += work->work_difficulty;
 	thr->cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
 }
@@ -7249,7 +7248,7 @@ static void hash_sole_work(struct thr_info *mythr)
 				"mining thread %d", thr_id);
 			break;
 		}
-		work->device_diff = MIN(drv->working_diff, work->work_difficulty);
+		work->device_diff = MIN(drv->max_diff, work->work_difficulty);
 
 		do {
 			cgtime(&tv_start);
@@ -8833,8 +8832,6 @@ void fill_device_drv(struct device_drv *drv)
 		drv->zero_stats = &noop_zero_stats;
 	if (!drv->max_diff)
 		drv->max_diff = 1;
-	if (!drv->working_diff)
-		drv->working_diff = 1;
 }
 
 void null_device_drv(struct device_drv *drv)
@@ -8870,7 +8867,6 @@ void null_device_drv(struct device_drv *drv)
 
 	drv->zero_stats = &noop_zero_stats;
 	drv->max_diff = 1;
-	drv->working_diff = 1;
 }
 
 void enable_device(struct cgpu_info *cgpu)

@@ -223,7 +223,7 @@ static void fill_minergate_request(minergate_do_job_req* work, struct work *cg_w
 				   int ntime_offset)
 {
 	uint32_t x[64/4];
-	int wd;
+	uint64_t wd;
 
 	memset(work, 0, sizeof(minergate_do_job_req));
 	//work->
@@ -237,7 +237,7 @@ static void fill_minergate_request(minergate_do_job_req* work, struct work *cg_w
 	//work->leading_zeroes = get_leading_zeroes(cg_work->target);
 	// Is there no better way to get leading zeroes?
 	work->leading_zeroes = 30;
-	wd = (int)round(cg_work->work_difficulty);
+	wd = round(cg_work->work_difficulty);
 	while (wd) {
 		work->leading_zeroes++;
 		wd = wd >> 1;
@@ -430,6 +430,7 @@ struct device_drv spondoolies_drv = {
 	.drv_id = DRIVER_spondoolies,
 	.dname = "Spondoolies",
 	.name = "SPN",
+	.max_diff = 32.0, // Limit max diff to get some nonces back regardless
 	.drv_detect = spondoolies_detect,
 	.get_api_stats = spondoolies_api_stats,
 	.thread_prepare = spondoolies_prepare,

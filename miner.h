@@ -351,7 +351,6 @@ struct device_drv {
 
 	/* Highest target diff the device supports */
 	double max_diff;
-	double working_diff;
 };
 
 extern struct device_drv *copy_drv(struct device_drv*);
@@ -1303,7 +1302,8 @@ struct work {
 	unsigned char	target[32];
 	unsigned char	hash[32];
 
-	unsigned char	device_target[32];
+	/* This is the diff the device is currently aiming for and must be
+	 * the minimum of work_difficulty & drv->max_diff */
 	double		device_diff;
 	uint64_t	share_diff;
 
@@ -1341,6 +1341,8 @@ struct work {
 	uint32_t	id;
 	UT_hash_handle	hh;
 
+	/* This is the diff work we're aiming to submit and should match the
+	 * work->target binary */
 	double		work_difficulty;
 
 	// Allow devices to identify work if multiple sub-devices
