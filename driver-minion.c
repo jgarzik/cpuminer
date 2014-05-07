@@ -210,6 +210,27 @@ struct minion_header {
 #define MINION_CHIP_SIG_SHIFT3 (((MINION_CHIP_SIG & 0xffffff00) >>  8) & 0x00ffffff)
 #define MINION_CHIP_SIG_SHIFT4 (((MINION_CHIP_SIG & 0xffff0000) >> 16) & 0x0000ffff)
 
+#define MINION_FREQ_MIN 1
+#define MINION_FREQ_MAX 14
+
+static uint32_t minion_freq[] = {
+	0x0,
+	0x205032,	//  1 =  100Mhz
+	0x203042,	//  2 =  200Mhz
+	0x20204B,	//  3 =  300Mhz
+	0x201042,	//  4 =  400Mhz
+	0x201053,	//  5 =  500Mhz
+	0x200032,	//  6 =  600Mhz
+	0x20003A,	//  7 =  700Mhz
+	0x200042,	//  8 =  800Mhz
+	0x20004B,	//  9 =  900Mhz
+	0x200053,	// 10 = 1000Mhz
+	0x21005B,	// 11 = 1100Mhz
+	0x210064,	// 12 = 1200Mhz
+	0x21006C,	// 13 = 1300Mhz
+	0x210074	// 14 = 1400Mhz
+};
+
 #define STA_TEMP(_sta) ((uint16_t)((_sta)[3] & 0x1f))
 #define STA_CORES(_sta) ((uint16_t)((_sta)[2]))
 #define STA_FREQ(_sta) ((uint32_t)((_sta)[1]) * 0x100 + (uint32_t)((_sta)[0]))
