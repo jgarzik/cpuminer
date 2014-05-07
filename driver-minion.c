@@ -1903,12 +1903,8 @@ static void *minion_spi_reply(void *userdata)
 									K_WUNLOCK(minioninfo->rnonce_list);
 									cgsem_post(&(minioninfo->nonce_ready));
 								} else {
-									applog(LOG_ERR, "%s%i: Invalid task_id - chip %d core %d task 0x%04x nonce 0x%08x",
-											minioncgpu->drv->name, minioncgpu->device_id,
-											DATAR(item)->chip,
-											DATAR(item)->core,
-											DATAR(item)->task_id,
-											DATAR(item)->nonce);
+									applog(LOG_ERR, "%s%i: Invalid task_id - chip %d",
+											minioncgpu->drv->name, minioncgpu->device_id, chip);
 								}
 							}
 						}
