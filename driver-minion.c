@@ -406,8 +406,9 @@ typedef struct k_list {
 #define K_RLOCK(_list) cg_rlock(_list->lock)
 #define K_RUNLOCK(_list) cg_runlock(_list->lock)
 
-// Set this to 0 to remove iostats processing
-#define DO_IO_STATS 1
+// Set this to 1 to enable iostats processing
+// N.B. it slows down mining
+#define DO_IO_STATS 0
 
 #if DO_IO_STATS
 #define IO_STAT_NOW(_tv) cgtime(_tv)
@@ -2731,6 +2732,7 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 	root = api_add_int(root, "RFree Count", &(minioninfo->rfree_list->count), true);
 	root = api_add_int(root, "RNonce Count", &(minioninfo->rnonce_list->count), true);
 
+#if DO_IO_STATS
 #define sta_api(_name, _iostat) \
 	do { \
 		if ((_iostat).count) { \
@@ -2774,6 +2776,7 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 				    minioncgpu->drv->name, minioncgpu->device_id,
 				    total_secs, buf, data);
 	}
+#endif
 
 	root = api_add_elapsed(root, "Elapsed", &(total_secs), true);
 
