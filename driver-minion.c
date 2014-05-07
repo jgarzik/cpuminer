@@ -2561,6 +2561,30 @@ static int64_t minion_scanwork(__maybe_unused struct thr_info *thr)
 	return hashcount;
 }
 
+static const char *min_temp_0 = "<40";
+static const char *min_temp_1 = "40-60";
+static const char *min_temp_3 = "60-80";
+static const char *min_temp_7 = "80-100";
+static const char *min_temp_15 = ">100";
+static const char *min_temp_invalid = "?";
+
+static const char *temp_str(uint16_t temp)
+{
+	switch (temp) {
+		case 0:
+			return min_temp_0;
+		case 1:
+			return min_temp_1;
+		case 3:
+			return min_temp_3;
+		case 7:
+			return min_temp_7;
+		case 15:
+			return min_temp_15;
+	}
+	return min_temp_invalid;
+}
+
 static void minion_get_statline_before(char *buf, size_t bufsiz, struct cgpu_info *minioncgpu)
 {
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
@@ -2579,8 +2603,8 @@ static void minion_get_statline_before(char *buf, size_t bufsiz, struct cgpu_inf
 	}
 	mutex_unlock(&(minioninfo->sta_lock));
 
-	tailsprintf(buf, bufsiz, "max%3dC Ch:%2d Co:%d",
-				 (int)max_temp, minioninfo->chips, (int)cores);
+	tailsprintf(buf, bufsiz, "max%sC Ch:%2d Co:%d",
+				 temp_str(max_temp), minioninfo->chips, (int)cores);
 }
 
 #define CHIPS_PER_STAT 8
@@ -2606,8 +2630,16 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 
 	max_chip = 0;
 	for (chip = 0; chip < MINION_CHIPS; chip++)
-		if (minioninfo->chip[chip])
+		if (minioninfo->chip[chip]) {
 			max_chip = chip;
+
+			snprintf(buf, sizeof(buf), "Chip %d Temperature", chip);
+			root = api_add_const(root, buf, temp_str(minioninfo->chip_status[chip].temp), false);
+			snprintf(buf, sizeof(buf), "Chip %d Cores", chip);
+			root = api_add_uint16(root, buf, &(minioninfo->chip_status[chip].cores), true);
+			snprintf(buf, sizeof(buf), "Chip %d Frequency", chip);
+			root = api_add_uint32(root, buf, &(minioninfo->chip_status[chip].freq), true);
+		}
 
 	for (i = 0; i <= max_chip; i += CHIPS_PER_STAT) {
 		to = i + CHIPS_PER_STAT - 1;
