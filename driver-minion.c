@@ -10,6 +10,8 @@
 #include "config.h"
 #include "compat.h"
 #include "miner.h"
+#include <ctype.h>
+#include <math.h>
 
 #ifndef LINUX
 static void minion_detect(__maybe_unused bool hotplug)
@@ -211,7 +213,9 @@ struct minion_header {
 #define MINION_CHIP_SIG_SHIFT4 (((MINION_CHIP_SIG & 0xffff0000) >> 16) & 0x0000ffff)
 
 #define MINION_FREQ_MIN 1
+#define MINION_FREQ_DEF 10
 #define MINION_FREQ_MAX 14
+#define MINION_FREQ_FACTOR 100
 
 static uint32_t minion_freq[] = {
 	0x0,
@@ -533,6 +537,7 @@ struct minion_info {
 	// TODO: need to track disabled chips - done?
 	int chips;
 	bool chip[MINION_CHIPS];
+	int init_freq[MINION_CHIPS];
 
 	uint32_t next_task_id;
 
@@ -1089,12 +1094,13 @@ static int build_cmd(struct cgpu_info *minioncgpu, struct minion_info *minioninf
 	return reply;
 }
 
-// TODO: hard coded for now
 static void init_chip(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, int chip)
 {
 	uint8_t rbuf[MINION_BUFSIZ];
 	uint8_t data[4];
 	__maybe_unused int reply;
+	int choice;
+	uint32_t freq;
 
 	// Complete chip reset
 	data[0] = 0x00;
@@ -1124,6 +1130,20 @@ static void init_chip(struct cgpu_info *minioncgpu, struct minion_info *minionin
 
 	reply = build_cmd(minioncgpu, minioninfo,
 			  chip, WRITE_ADDR(MINION_SYS_MISC_CTL),
+			  rbuf, 0, data);
+
+	// Set chip frequency
+	choice = minioninfo->init_freq[chip];
+	if (choice < MINION_FREQ_MIN || choice > MINION_FREQ_MAX)
+		choice = MINION_FREQ_DEF;
+	freq = minion_freq[choice];
+	data[0] = (uint8_t)(freq & 0xff);
+	data[1] = (uint8_t)(((freq & 0xff00) >> 8) & 0xff);
+	data[2] = (uint8_t)(((freq & 0xff0000) >> 16) & 0xff);
+	data[3] = (uint8_t)(((freq & 0xff000000) >> 24) & 0xff);
+
+	reply = build_cmd(minioncgpu, minioninfo,
+			  chip, WRITE_ADDR(MINION_SYS_FREQ_CTL),
 			  rbuf, 0, data);
 }
 
@@ -1598,6 +1618,40 @@ static bool minion_init_gpio_interrupt(struct cgpu_info *minioncgpu, struct mini
 	return true;
 }
 
+static void minion_process_options(struct minion_info *minioninfo)
+{
+	int last_freq = MINION_FREQ_DEF;
+	char *freq, *comma, *buf;
+	int i;
+
+	if (opt_minion_freq && *opt_minion_freq) {
+		buf = freq = strdup(opt_minion_freq);
+		comma = strchr(freq, ',');
+		if (comma)
+			*(comma++) = '\0';
+
+		for (i = 0; i < MINION_CHIPS; i++) {
+			if (freq && isdigit(*freq)) {
+				last_freq = (int)round((double)atoi(freq) / (double)MINION_FREQ_FACTOR);
+				if (last_freq < MINION_FREQ_MIN)
+					last_freq = MINION_FREQ_MIN;
+				if (last_freq > MINION_FREQ_MAX)
+					last_freq = MINION_FREQ_MAX;
+
+				freq = comma;
+				if (comma) {
+					comma = strchr(freq, ',');
+					if (comma)
+						*(comma++) = '\0';
+				}
+			}
+			minioninfo->init_freq[i] = last_freq;
+		}
+
+		free(buf);
+	}
+}
+
 static void minion_detect(bool hotplug)
 {
 	struct cgpu_info *minioncgpu = NULL;
@@ -1628,6 +1682,11 @@ static void minion_detect(bool hotplug)
 
 	mutex_init(&(minioninfo->spi_lock));
 	mutex_init(&(minioninfo->sta_lock));
+
+	for (i = 0; i < MINION_CHIPS; i++)
+		minioninfo->init_freq[i] = MINION_FREQ_DEF;
+
+	minion_process_options(minioninfo);
 
 	applog(LOG_WARNING, "%s: checking for chips ...", minioncgpu->drv->dname);
 
