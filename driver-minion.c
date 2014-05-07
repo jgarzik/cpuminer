@@ -2720,6 +2720,8 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 			root = api_add_uint16(root, buf, &(minioninfo->chip_status[chip].cores), true);
 			snprintf(buf, sizeof(buf), "Chip %d Frequency", chip);
 			root = api_add_uint32(root, buf, &(minioninfo->chip_status[chip].freq), true);
+			snprintf(buf, sizeof(buf), "Chip %d InitFreq", chip);
+			root = api_add_int(root, buf, &(minioninfo->init_freq[chip]), true);
 		}
 
 	for (i = 0; i <= max_chip; i += CHIPS_PER_STAT) {
