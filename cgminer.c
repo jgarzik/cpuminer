@@ -238,6 +238,9 @@ static char *opt_set_bitmain_freq;
 static char *opt_set_hfa_fan;
 #endif
 static char *opt_set_null;
+#ifdef USE_MINION
+char *opt_minion_freq;
+#endif
 
 #ifdef USE_USBUTILS
 char *opt_usb_select = NULL;
@@ -1309,6 +1312,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--lowmem",
 			opt_set_bool, &opt_lowmem,
 			"Minimise caching of shares for low memory applications"),
+#ifdef USE_MINION
+	OPT_WITH_ARG("--minion-freq",
+		     opt_set_charp, NULL, &opt_minion_freq,
+		     "Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1000)"),
+#endif
 #if defined(unix) || defined(__APPLE__)
 	OPT_WITH_ARG("--monitor|-m",
 		     opt_set_charp, NULL, &opt_stderr_cmd,

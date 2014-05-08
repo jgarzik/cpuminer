@@ -7,6 +7,7 @@ Currently supported devices include:
 - BF1 (bitfury) USB (red and blue)
 - KnCminer Mercury, Saturn and Jupiter
 - BlackArrow Bitfury
+- BlackArrow Minion
 - Bi*fury USB
 - Onestring miner USB
 - Hexfury USB
@@ -53,6 +54,14 @@ BlackArrow Bitfury devices need the --enable-bab option when compiling cgminer.
 
 The current BlackArrow Bitfury devices are similar to the Bitfury GPIO mining
 boards, with both V1 and V2 controllers, and come up as BaB.
+
+
+BlackArrow Minion devices
+
+BlackArrow Minion devices need the --enable-minion option when compiling
+cgminer.
+
+BlackArrow Minion devices are SPI/GPIO mining devices and come up as MBA
 
 
 BITFURY devices
@@ -225,6 +234,7 @@ ASIC SPECIFIC COMMANDS
 --hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
 --hfa-temp-target <arg> Set the hashfast target temperature (0 to disable) (default: 88)
 --klondike-options <arg> Set klondike options clock:temptarget
+--minion-freq <arg> Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1000)
 --nfu-bits <arg>    Set nanofury bits for overclocking, range 32-63 (default: 50)
 
 
