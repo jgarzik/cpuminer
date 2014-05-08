@@ -22,6 +22,7 @@
 #define AVA2_IO_SPEED		115200
 
 #define AVA2_DEFAULT_MINERS	10
+#define AVA2_AVA3_MINERS	5
 #define AVA2_DEFAULT_MODULARS	4
 
 #define AVA2_PWM_MAX	0x3FF
@@ -68,6 +69,16 @@
 #define AVA2_P_ACKDETECT	25
 #define AVA2_P_TEST_RET		26
 /* Avalon2 protocol package type */
+
+/* Avalon2/3 prefix */
+#define AVA2_FW2_PREFIXSTR	"20"
+#define AVA2_FW3_PREFIXSTR	"33"
+
+#define AVA2_MM_VERNULL		"NONE"
+
+#define AVA2_ID_AVA2		(0x3255)
+#define AVA2_ID_AVA3		(0x3233)
+#define AVA2_ID_AVAX		(0x3200)
 
 struct avalon2_pkg {
 	uint8_t head[2];

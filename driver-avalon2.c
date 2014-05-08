@@ -238,7 +238,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			miner = be32toh(miner);
 			pool_no = be32toh(pool_no);
 			if (miner >= AVA2_DEFAULT_MINERS ||
-			    modular_id >= AVA2_DEFAULT_MINERS || 
+			    modular_id >= AVA2_DEFAULT_MINERS ||
 			    pool_no >= total_pools ||
 			    pool_no < 0) {
 				applog(LOG_DEBUG, "Avalon2: Wrong miner/pool/id no %d,%d,%d", miner, pool_no, modular_id);
@@ -560,7 +560,7 @@ static bool avalon2_detect_one(const char *devpath)
 
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		modular[i] = 0;
-		strcpy(mm_version[i], "NONE");
+		strcpy(mm_version[i], AVA2_MM_VERNULL);
 		/* Send out detect pkg */
 		memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
 		tmp = be32toh(i);
@@ -783,23 +783,61 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 	int i, a, b;
 	char buf[24];
 	double hwp;
+	int devtype[AVA2_DEFAULT_MODULARS];
+	int minerindex = 0;
+
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		devtype[i] = AVA2_ID_AVAX;
+		if(strncmp((char*)&(info->mm_version[i]), AVA2_FW2_PREFIXSTR, 2) == 0){
+			devtype[i] = AVA2_ID_AVA2;
+		}
+		else if(strncmp((char*)&(info->mm_version[i]), AVA2_FW3_PREFIXSTR, 2) == 0){
+			devtype[i] = AVA2_ID_AVA3;
+		}
+		else if(strncmp((char*)&(info->mm_version[i]), AVA2_MM_VERNULL, 4) == 0){
+			continue;
+		}
+
 		sprintf(buf, "ID%d MM Version", i + 1);
 		root = api_add_string(root, buf, &(info->mm_version[i]), false);
 	}
-	for (i = 0; i < AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS; i++) {
-		sprintf(buf, "Match work count%02d", i + 1);
-		root = api_add_int(root, buf, &(info->matching_work[i]), false);
+
+	minerindex = 0;
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++){
+		if(devtype[i] == AVA2_ID_AVA2){
+			for (i = minerindex; i < (minerindex + AVA2_DEFAULT_MINERS); i++) {
+				sprintf(buf, "Match work count%02d", i+1);
+				root = api_add_int(root, buf, &(info->matching_work[i]), false);
+			}
+			minerindex += AVA2_DEFAULT_MINERS;
+		}else
+		if(devtype[i] == AVA2_ID_AVA3){
+			for (i = minerindex; i < (minerindex + AVA2_AVA3_MINERS); i++) {
+				sprintf(buf, "Match work count%02d", i+1);
+				root = api_add_int(root, buf, &(info->matching_work[i]), false);
+			}
+			minerindex += AVA2_AVA3_MINERS;
+		}
+		else{
+			minerindex += AVA2_DEFAULT_MINERS;
+		}
 	}
+
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if(devtype[i] == AVA2_ID_AVAX)
+			continue;
 		sprintf(buf, "Local works%d", i + 1);
 		root = api_add_int(root, buf, &(info->local_works[i]), false);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if(devtype[i] == AVA2_ID_AVAX)
+			continue;
 		sprintf(buf, "Hardware error works%d", i + 1);
 		root = api_add_int(root, buf, &(info->hw_works[i]), false);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if(devtype[i] == AVA2_ID_AVAX)
+			continue;
 		a = info->hw_works[i];
 		b = info->local_works[i];
 		hwp = b ? ((double)a / (double)b) : 0;
@@ -808,26 +846,35 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 		root = api_add_percent(root, buf, &hwp, true);
 	}
 	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i++) {
+		if(devtype[i/2] == AVA2_ID_AVAX)
+			continue;
 		sprintf(buf, "Temperature%d", i + 1);
 		root = api_add_int(root, buf, &(info->temp[i]), false);
 	}
 	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i++) {
+		if(devtype[i/2] == AVA2_ID_AVAX)
+			continue;
 		sprintf(buf, "Fan%d", i + 1);
 		root = api_add_int(root, buf, &(info->fan[i]), false);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if(devtype[i] == AVA2_ID_AVAX)
+			continue;
 		sprintf(buf, "Voltage%d", i + 1);
 		root = api_add_int(root, buf, &(info->get_voltage[i]), false);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if(devtype[i] == AVA2_ID_AVAX)
+			continue;
 		sprintf(buf, "Frequency%d", i + 1);
 		root = api_add_int(root, buf, &(info->get_frequency[i]), false);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if(devtype[i] == AVA2_ID_AVAX)
+			continue;
 		sprintf(buf, "Power good %02x", i + 1);
-	root = api_add_int(root, buf, &(info->power_good[i]), false);
+		root = api_add_int(root, buf, &(info->power_good[i]), false);
 	}
-
 
 	return root;
 }
