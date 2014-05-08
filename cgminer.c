@@ -772,10 +772,10 @@ static char *set_loadbalance(enum pool_strategy *strategy)
 	return NULL;
 }
 
-static char *set_rotate(const char *arg, int *i)
+static char *set_rotate(const char *arg, char __maybe_unused *i)
 {
 	pool_strategy = POOL_ROTATE;
-	return set_int_range(arg, i, 0, 9999);
+	return set_int_range(arg, &opt_rotate_period, 0, 9999);
 }
 
 static char *set_rr(enum pool_strategy *strategy)
@@ -1371,7 +1371,7 @@ static struct opt_table opt_config_table[] = {
 		     set_null, NULL, &opt_set_null,
 		     opt_hidden),
 	OPT_WITH_ARG("--rotate",
-		     set_rotate, opt_show_intval, &opt_rotate_period,
+		     set_rotate, NULL, &opt_set_null,
 		     "Change multipool strategy from failover to regularly rotate at N minutes"),
 	OPT_WITHOUT_ARG("--round-robin",
 		     set_rr, &pool_strategy,
