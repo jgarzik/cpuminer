@@ -2214,8 +2214,7 @@ static enum nonce_state oknonce(struct thr_info *thr, struct cgpu_info *minioncg
 	minioninfo->chip_bad[chip]++;
 	minioninfo->core_bad[chip][core]++;
 	inc_hw_errors(thr);
-
-applog(LOG_ERR, "%s%i: HW ERROR chip %d core %d task 0x%04x nonce 0x%08x", minioncgpu->drv->name, minioncgpu->device_id, chip, core, task_id, nonce);
+//applog(LOG_ERR, "%s%i: HW ERROR chip %d core %d task 0x%04x nonce 0x%08x", minioncgpu->drv->name, minioncgpu->device_id, chip, core, task_id, nonce);
 
 	return NONCE_BAD_NONCE;
 }
