@@ -7125,9 +7125,9 @@ static void update_work_stats(struct thr_info *thr, struct work *work)
 	}
 
 	mutex_lock(&stats_lock);
-	total_diff1 += work->work_difficulty;
-	thr->cgpu->diff1 += work->work_difficulty;
-	work->pool->diff1 += work->work_difficulty;
+	total_diff1 += work->device_diff;
+	thr->cgpu->diff1 += work->device_diff;
+	work->pool->diff1 += work->device_diff;
 	thr->cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
 }
