@@ -334,6 +334,7 @@ typedef struct witem {
 	int nonces;
 	bool urgent;
 	bool stale; // if stale, don't decrement count_up when discarded
+	bool rolled;
 } WITEM;
 
 #define ALLOC_TITEMS 256
@@ -557,6 +558,9 @@ struct minion_info {
 	uint64_t untested_nonces;
 	uint64_t tested_nonces;
 
+	uint64_t work_unrolled;
+	uint64_t work_rolled;
+
 	// Work items
 	K_LIST *wfree_list;
 	K_STORE *wwork_list;
@@ -752,7 +756,7 @@ static void k_remove(K_LIST *list, K_ITEM *item)
 	list->count--;
 }
 
-static void ready_work(struct cgpu_info *minioncgpu, struct work *work)
+static void ready_work(struct cgpu_info *minioncgpu, struct work *work, bool rolled)
 {
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	K_ITEM *item = NULL;
@@ -766,6 +770,7 @@ static void ready_work(struct cgpu_info *minioncgpu, struct work *work)
 	memset(&(DATAW(item)->sent), 0, sizeof(DATAW(item)->sent));
 	DATAW(item)->nonces = 0;
 	DATAW(item)->urgent = false;
+	DATAW(item)->rolled = rolled;
 
 	k_add_head(minioninfo->wwork_list, item, MINION_FFL_HERE);
 
@@ -2119,7 +2124,10 @@ static void cleanup_older(struct cgpu_info *minioncgpu, int chip, K_ITEM *item, 
 			applog(MINION_LOG, "%s%i: marking complete - old task 0x%04x chip %d",
 					   minioncgpu->drv->name, minioncgpu->device_id,
 					   DATAW(tail)->task_id, chip);
-			work_completed(minioncgpu, DATAW(tail)->work);
+			if (DATAW(tail)->rolled)
+				free_work(DATAW(tail)->work);
+			else
+				work_completed(minioncgpu, DATAW(tail)->work);
 			K_WLOCK(minioninfo->wchip_list[chip]);
 			k_free_head(minioninfo->wfree_list, tail, MINION_FFL_HERE);
 			tail = minioninfo->wchip_list[chip]->tail;
@@ -2132,7 +2140,10 @@ static void cleanup_older(struct cgpu_info *minioncgpu, int chip, K_ITEM *item, 
 			applog(MINION_LOG, "%s%i: marking complete - old task 0x%04x chip %d",
 					   minioncgpu->drv->name, minioncgpu->device_id,
 					   DATAW(item)->task_id, chip);
-			work_completed(minioncgpu, DATAW(item)->work);
+			if (DATAW(item)->rolled)
+				free_work(DATAW(item)->work);
+			else
+				work_completed(minioncgpu, DATAW(item)->work);
 			K_WLOCK(minioninfo->wchip_list[chip]);
 			k_free_head(minioninfo->wfree_list, item, MINION_FFL_HERE);
 		}
@@ -2593,9 +2604,9 @@ static void minion_shutdown(struct thr_info *thr)
 static bool minion_queue_full(struct cgpu_info *minioncgpu)
 {
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
-	struct work *work;
-	int count;
-	bool ret;
+	struct work *work, *usework;
+	int count, need, roll, roll_limit;
+	bool ret, rolled;
 
 	K_RLOCK(minioninfo->wwork_list);
 	count = minioninfo->wwork_list->count;
@@ -2604,14 +2615,32 @@ static bool minion_queue_full(struct cgpu_info *minioncgpu)
 	if (count >= (MINION_QUE_HIGH * minioninfo->chips))
 		ret = true;
 	else {
+		need = (MINION_QUE_HIGH * minioninfo->chips) - count;
 		work = get_queued(minioncgpu);
-		if (work)
-			ready_work(minioncgpu, work);
-		else
+		if (work) {
+			roll_limit = work->drv_rolllimit;
+			roll = 0;
+			do {
+				if (roll == 0) {
+					usework = work;
+					minioninfo->work_unrolled++;
+					rolled = false;
+				} else {
+					usework = copy_work_noffset(work, roll);
+					minioninfo->work_rolled++;
+					rolled = true;
+				}
+				ready_work(minioncgpu, usework, rolled);
+			} while (--need > 0 && ++roll <= roll_limit);
+		} else {
 			// Avoid a hard loop when we can't get work fast enough
 			cgsleep_us(42);
+		}
 
-		ret = false;
+		if (need > 0)
+			ret = false;
+		else
+			ret = true;
 	}
 
 	return ret;
@@ -2838,6 +2867,9 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 				    total_secs, buf, data);
 	}
 #endif
+
+	root = api_add_uint64(root, "Work Unrolled", &(minioninfo->work_unrolled), true);
+	root = api_add_uint64(root, "Work Rolled", &(minioninfo->work_rolled), true);
 
 	root = api_add_elapsed(root, "Elapsed", &(total_secs), true);
 
