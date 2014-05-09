@@ -977,10 +977,12 @@ static int _do_ioctl(struct minion_info *minioninfo, uint8_t *obuf, uint32_t osi
 #endif
 
 	if ((int)osiz > MINION_BUFSIZ)
-		quitfrom(1, file, func, line, "%s() invalid osiz %u > %d", __func__, osiz, MINION_BUFSIZ);
+		quitfrom(1, file, func, line, "%s() invalid osiz %u > %d (chip=%d reg=0x%02x)",
+				__func__, osiz, MINION_BUFSIZ, (int)(obuf[0]), obuf[1]);
 
 	if (rsiz >= osiz)
-		quitfrom(1, file, func, line, "%s() invalid rsiz %u >= osiz %u", __func__, rsiz, osiz);
+		quitfrom(1, file, func, line, "%s() invalid rsiz %u >= osiz %u (chip=%u reg=0x%02x)",
+				__func__, rsiz, osiz, (int)(obuf[0]), obuf[1]);
 
 	memset(&obuf[0] + osiz - rsiz, 0xff, rsiz);
 
