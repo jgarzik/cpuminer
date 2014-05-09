@@ -966,11 +966,6 @@ static void display_ioctl(int reply, uint32_t osiz, uint8_t *obuf, uint32_t rsiz
 
 static int _do_ioctl(struct minion_info *minioninfo, uint8_t *obuf, uint32_t osiz, uint8_t *rbuf, uint32_t rsiz, MINION_FFL_ARGS)
 {
-/*
-	// TODO: remove these 2 later and rename the z[or]buf back to [or]buf
-	//  this simply ensures the IO buffers displayed are not affected by a bug elsewhere - during dev/testing
-	uint8_t obuf[MINION_BUFSIZ], rbuf[MINION_BUFSIZ];
-*/
 
 	struct spi_ioc_transfer tran;
 	int ret;
@@ -985,7 +980,6 @@ static int _do_ioctl(struct minion_info *minioninfo, uint8_t *obuf, uint32_t osi
 	if (rsiz >= osiz)
 		quitfrom(1, file, func, line, "%s() invalid rsiz %u >= osiz %u", __func__, rsiz, osiz);
 
-//	memcpy(obuf, zobuf, osiz);
 	memset(&obuf[0] + osiz - rsiz, 0xff, rsiz);
 
 #if MINION_SHOW_IO
@@ -1033,7 +1027,6 @@ static int _do_ioctl(struct minion_info *minioninfo, uint8_t *obuf, uint32_t osi
 
 //	display_ioctl(ret, osiz, obuf, rsiz, rbuf);
 
-//	memcpy(zrbuf, &rbuf[0], osiz);
 	return ret;
 }
 
