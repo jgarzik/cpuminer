@@ -2336,7 +2336,10 @@ static void minion_flush_work(struct cgpu_info *minioncgpu)
 		// mark complete all stale unused work (oldest first)
 		prev_unused = stale_unused_work;
 		while (prev_unused) {
-			work_completed(minioncgpu, DATAW(prev_unused)->work);
+			if (DATAW(prev_unused)->rolled)
+				free_work(DATAW(prev_unused)->work);
+			else
+				work_completed(minioncgpu, DATAW(prev_unused)->work);
 			prev_unused = prev_unused->prev;
 		}
 
