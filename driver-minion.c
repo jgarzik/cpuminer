@@ -133,6 +133,19 @@ static void minion_detect(__maybe_unused bool hotplug)
 // enable 'no nonce' report
 #define SYS_MISC_CTL_DEFAULT 0x04
 
+#define MINION_TEMP_40 0
+#define MINION_TEMP_60 1
+#define MINION_TEMP_80 3
+#define MINION_TEMP_100 7
+#define MINION_TEMP_OVER 15
+
+static const char *min_temp_40 = "<40";
+static const char *min_temp_60 = "40-60";
+static const char *min_temp_80 = "60-80";
+static const char *min_temp_100 = "80-100";
+static const char *min_temp_over = ">100";
+static const char *min_temp_invalid = "?";
+
 // CORE data size is DATA_SIZ
 #define MINION_CORE_ENA0_31 0x10
 #define MINION_CORE_ENA32_63 0x11
@@ -250,6 +263,7 @@ struct minion_status {
 	uint16_t cores;
 	uint32_t freq;
 	struct timeval last;
+	bool overheat;
 };
 
 // TODO: untested/unused
@@ -1756,7 +1770,7 @@ static void *minion_spi_write(void *userdata)
 {
 	struct cgpu_info *minioncgpu = (struct cgpu_info *)userdata;
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
-	K_ITEM *item, *tail;
+	K_ITEM *item, *tail, *task;
 	TITEM *titem;
 
 	applog(MINION_LOG, "%s%i: SPI writing...",
@@ -1838,6 +1852,46 @@ static void *minion_spi_write(void *userdata)
 							minioninfo->chip_status[chip].cores = STA_CORES(rep);
 							minioninfo->chip_status[chip].freq = STA_FREQ(rep);
 							mutex_unlock(&(minioninfo->sta_lock));
+
+							if (minioninfo->chip_status[chip].overheat) {
+								switch (STA_TEMP(rep)) {
+									case MINION_TEMP_40:
+									case MINION_TEMP_60:
+									case MINION_TEMP_80:
+										minioninfo->chip_status[chip].overheat = false;
+										applog(LOG_WARNING, "%s%d: chip %d cooled, restarting",
+												    minioncgpu->drv->name,
+												    minioncgpu->device_id,
+												    chip);
+										break;
+									default:
+										break;
+								}
+							} else {
+								if (STA_TEMP(rep) == MINION_TEMP_OVER) {
+									applog(LOG_WARNING, "%s%d: chip %d overheated! idling",
+											    minioncgpu->drv->name,
+											    minioncgpu->device_id,
+											    chip);
+									K_WLOCK(minioninfo->tfree_list);
+									task = k_get_head(minioninfo->tfree_list, MINION_FFL_HERE);
+									DATAT(task)->chip = chip;
+									DATAT(task)->write = true;
+									DATAT(task)->address = MINION_SYS_RSTN_CTL;
+									DATAT(task)->task_id = 0; // ignored
+									DATAT(task)->wsiz = MINION_SYS_SIZ;
+									DATAT(task)->rsiz = 0;
+									DATAT(task)->wbuf[0] = SYS_RSTN_CTL_FLUSH;
+									DATAT(task)->wbuf[1] = 0;
+									DATAT(task)->wbuf[2] = 0;
+									DATAT(task)->wbuf[3] = 0;
+									DATAT(task)->urgent = true;
+									k_add_head(minioninfo->task_list, task, MINION_FFL_HERE);
+									K_WUNLOCK(minioninfo->tfree_list);
+
+									minioninfo->chip_status[chip].overheat = true;
+								}
+							}
 						}
 						break;
 					case WRITE_ADDR(MINION_QUE_0):
@@ -2472,7 +2526,7 @@ static void minion_do_work(struct cgpu_info *minioncgpu)
 	 */
 	for (state = 0; state < 3; state++) {
 		for (chip = 0; chip < MINION_CHIPS; chip++) {
-			if (minioninfo->chip[chip]) {
+			if (minioninfo->chip[chip] && !minioninfo->chip_status[chip].overheat) {
 				K_RLOCK(minioninfo->wchip_list[chip]);
 				count = minioninfo->wchip_list[chip]->count_up;
 				K_RUNLOCK(minioninfo->wchip_list[chip]);
@@ -2675,26 +2729,19 @@ static int64_t minion_scanwork(__maybe_unused struct thr_info *thr)
 	return hashcount;
 }
 
-static const char *min_temp_0 = "<40";
-static const char *min_temp_1 = "40-60";
-static const char *min_temp_3 = "60-80";
-static const char *min_temp_7 = "80-100";
-static const char *min_temp_15 = ">100";
-static const char *min_temp_invalid = "?";
-
 static const char *temp_str(uint16_t temp)
 {
 	switch (temp) {
-		case 0:
-			return min_temp_0;
-		case 1:
-			return min_temp_1;
-		case 3:
-			return min_temp_3;
-		case 7:
-			return min_temp_7;
-		case 15:
-			return min_temp_15;
+		case MINION_TEMP_40:
+			return min_temp_40;
+		case MINION_TEMP_60:
+			return min_temp_60;
+		case MINION_TEMP_80:
+			return min_temp_80;
+		case MINION_TEMP_100:
+			return min_temp_100;
+		case MINION_TEMP_OVER:
+			return min_temp_over;
 	}
 	return min_temp_invalid;
 }
@@ -2755,6 +2802,8 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 			root = api_add_uint32(root, buf, &(minioninfo->chip_status[chip].freq), true);
 			snprintf(buf, sizeof(buf), "Chip %d InitFreq", chip);
 			root = api_add_int(root, buf, &(minioninfo->init_freq[chip]), true);
+			snprintf(buf, sizeof(buf), "Chip %d Overheat", chip);
+			root = api_add_bool(root, buf, &(minioninfo->chip_status[chip].overheat), true);
 		}
 
 	for (i = 0; i <= max_chip; i += CHIPS_PER_STAT) {
