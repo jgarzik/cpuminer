@@ -293,6 +293,12 @@ struct minion_result {
 
 #define MINION_RES_DATA_SIZ sizeof(struct minion_result)
 
+/*
+ * (MINION_SPI_BUFSIZ - HSIZE()) / MINION_RES_DATA_SIZ
+ * less a little bit to round it out
+ */
+#define MINION_MAX_RES 120
+
 #define MIDSTATE_BYTES 32
 #define MERKLE7_OFFSET 64
 #define MERKLE_BYTES 12
@@ -2005,12 +2011,19 @@ static void *minion_spi_reply(void *userdata)
 				 * (except at startup) so the answer is always valid
 				 * i.e. there could be more, but never less
 				 */
-				if (res > 0) {
+				uint8_t left = res;
+				while (left > 0) {
+					res = left;
+					if (res > MINION_MAX_RES)
+						res = MINION_MAX_RES;
+					left -= res;
 					res_task.chip = chip;
 					res_task.reply = 0;
 					res_task.rsiz = res * MINION_RES_DATA_SIZ;
 					minion_txrx(&res_task);
-					if (res_task.reply > 0) {
+					if (res_task.reply <= 0)
+						break;
+					else {
 						if (res_task.reply < (int)MINION_RES_DATA_SIZ) {
 							char *buf = bin2hex((unsigned char *)(&(res_task.rbuf[res_task.osiz - res_task.rsiz])), (int)(res_task.rsiz));
 							applog(LOG_ERR, "%s%i: Bad work reply (%s) size %d, should be at least %d",
