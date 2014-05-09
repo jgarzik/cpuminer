@@ -2410,6 +2410,44 @@ static void minion_flush_work(struct cgpu_info *minioncgpu)
 	}
 }
 
+static void sys_chip_sta(struct cgpu_info *minioncgpu, int chip)
+{
+	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
+	struct timeval now;
+	K_ITEM *item;
+	int limit;
+
+	cgtime(&now);
+	// No lock required since 'last' is only accessed here
+	if (minioninfo->chip_status[chip].last.tv_sec == 0) {
+		memcpy(&(minioninfo->chip_status[chip].last), &now, sizeof(now));
+	} else {
+		limit = MINION_STATS_UPDATE_TIME_mS +
+			(int)(random() % MINION_STATS_UPDATE_RAND_mS);
+		if (ms_tdiff(&now, &(minioninfo->chip_status[chip].last)) > limit) {
+			memcpy(&(minioninfo->chip_status[chip].last), &now, sizeof(now));
+
+			K_WLOCK(minioninfo->tfree_list);
+			item = k_get_head(minioninfo->tfree_list, MINION_FFL_HERE);
+			K_WUNLOCK(minioninfo->tfree_list);
+
+			DATAT(item)->chip = chip;
+			DATAT(item)->write = false;
+			DATAT(item)->address = READ_ADDR(MINION_SYS_CHIP_STA);
+			DATAT(item)->task_id = 0;
+			DATAT(item)->wsiz = 0;
+			DATAT(item)->rsiz = MINION_SYS_SIZ;
+			DATAT(item)->urgent = false;
+
+			K_WLOCK(minioninfo->task_list);
+			k_add_head(minioninfo->task_list, item, MINION_FFL_HERE);
+			K_WUNLOCK(minioninfo->task_list);
+
+			cgtime(&(minioninfo->chip_status[chip].last));
+		}
+	}
+}
+
 static void new_work_task(struct cgpu_info *minioncgpu, K_ITEM *witem, int chip, bool urgent, uint8_t state)
 {
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
@@ -2455,40 +2493,8 @@ static void new_work_task(struct cgpu_info *minioncgpu, K_ITEM *witem, int chip,
 		cgsem_post(&(minioninfo->task_ready));
 
 	// N.B. this will only update often enough if a chip is > ~2GH/s
-	if (!urgent) {
-		struct timeval now;
-		int limit;
-
-		cgtime(&now);
-		// No lock required since 'last' is only accessed here
-		if (minioninfo->chip_status[chip].last.tv_sec == 0) {
-			memcpy(&(minioninfo->chip_status[chip].last), &now, sizeof(now));
-		} else {
-			limit = MINION_STATS_UPDATE_TIME_mS +
-				(int)(random() % MINION_STATS_UPDATE_RAND_mS);
-			if (ms_tdiff(&now, &(minioninfo->chip_status[chip].last)) > limit) {
-				memcpy(&(minioninfo->chip_status[chip].last), &now, sizeof(now));
-
-				K_WLOCK(minioninfo->tfree_list);
-				item = k_get_head(minioninfo->tfree_list, MINION_FFL_HERE);
-				K_WUNLOCK(minioninfo->tfree_list);
-
-				DATAT(item)->chip = chip;
-				DATAT(item)->write = false;
-				DATAT(item)->address = READ_ADDR(MINION_SYS_CHIP_STA);
-				DATAT(item)->task_id = 0;
-				DATAT(item)->wsiz = 0;
-				DATAT(item)->rsiz = MINION_SYS_SIZ;
-				DATAT(item)->urgent = false;
-
-				K_WLOCK(minioninfo->task_list);
-				k_add_head(minioninfo->task_list, item, MINION_FFL_HERE);
-				K_WUNLOCK(minioninfo->task_list);
-
-				cgtime(&(minioninfo->chip_status[chip].last));
-			}
-		}
-	}
+	if (!urgent)
+		sys_chip_sta(minioncgpu, chip);
 }
 
 // TODO: stale work ...
@@ -2599,7 +2605,9 @@ static void minion_do_work(struct cgpu_info *minioncgpu)
 						}
 						break;
 				}
-			}
+			} else
+				if (minioninfo->chip[chip] && minioninfo->chip_status[chip].overheat && state == 2)
+					sys_chip_sta(minioncgpu, chip);
 		}
 	}
 }
