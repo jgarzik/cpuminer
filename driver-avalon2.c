@@ -780,47 +780,44 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct avalon2_info *info = cgpu->device_data;
-	int i, a, b;
+	int i, j, a, b;
 	char buf[24];
 	double hwp;
 	int devtype[AVA2_DEFAULT_MODULARS];
-	int minerindex = 0;
+	int minerindex, minercount;
 
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		devtype[i] = AVA2_ID_AVAX;
-		if(strncmp((char*)&(info->mm_version[i]), AVA2_FW2_PREFIXSTR, 2) == 0){
-			devtype[i] = AVA2_ID_AVA2;
-		}
-		else if(strncmp((char*)&(info->mm_version[i]), AVA2_FW3_PREFIXSTR, 2) == 0){
-			devtype[i] = AVA2_ID_AVA3;
-		}
-		else if(strncmp((char*)&(info->mm_version[i]), AVA2_MM_VERNULL, 4) == 0){
+		if (!strncmp((char *)&(info->mm_version[i]), AVA2_MM_VERNULL, 4))
 			continue;
-		}
+		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW2_PREFIXSTR, 2))
+			devtype[i] = AVA2_ID_AVA2;
+		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW3_PREFIXSTR, 2))
+			devtype[i] = AVA2_ID_AVA3;
 
 		sprintf(buf, "ID%d MM Version", i + 1);
 		root = api_add_string(root, buf, &(info->mm_version[i]), false);
 	}
 
 	minerindex = 0;
-	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++){
-		if(devtype[i] == AVA2_ID_AVA2){
-			for (i = minerindex; i < (minerindex + AVA2_DEFAULT_MINERS); i++) {
-				sprintf(buf, "Match work count%02d", i+1);
-				root = api_add_int(root, buf, &(info->matching_work[i]), false);
-			}
+	minercount = 0;
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if (devtype[i] == AVA2_ID_AVAX) {
 			minerindex += AVA2_DEFAULT_MINERS;
-		}else
-		if(devtype[i] == AVA2_ID_AVA3){
-			for (i = minerindex; i < (minerindex + AVA2_AVA3_MINERS); i++) {
-				sprintf(buf, "Match work count%02d", i+1);
-				root = api_add_int(root, buf, &(info->matching_work[i]), false);
-			}
-			minerindex += AVA2_AVA3_MINERS;
+			continue;
 		}
-		else{
-			minerindex += AVA2_DEFAULT_MINERS;
+
+		if (devtype[i] == AVA2_ID_AVA2)
+			minercount = AVA2_DEFAULT_MINERS;
+
+		if (devtype[i] == AVA2_ID_AVA3)
+			minercount = AVA2_AVA3_MINERS;
+
+		for (j = minerindex; j < (minerindex + minercount); j++) {
+			sprintf(buf, "Match work count%02d", j+1);
+			root = api_add_int(root, buf, &(info->matching_work[j]), false);
 		}
+		minerindex += AVA2_DEFAULT_MINERS;
 	}
 
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
