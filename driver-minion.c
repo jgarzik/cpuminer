@@ -212,10 +212,12 @@ struct minion_header {
 #define MINION_CHIP_SIG_SHIFT3 (((MINION_CHIP_SIG & 0xffffff00) >>  8) & 0x00ffffff)
 #define MINION_CHIP_SIG_SHIFT4 (((MINION_CHIP_SIG & 0xffff0000) >> 16) & 0x0000ffff)
 
-#define MINION_FREQ_MIN 1
-#define MINION_FREQ_DEF 10
-#define MINION_FREQ_MAX 14
+#define MINION_FREQ_MIN 100
+#define MINION_FREQ_DEF 1000
+#define MINION_FREQ_MAX 1400
 #define MINION_FREQ_FACTOR 100
+#define MINION_FREQ_FACTOR_MIN 1
+#define MINION_FREQ_FACTOR_MAX 14
 
 static uint32_t minion_freq[] = {
 	0x0,
@@ -1134,6 +1136,11 @@ static void init_chip(struct cgpu_info *minioncgpu, struct minion_info *minionin
 	choice = minioninfo->init_freq[chip];
 	if (choice < MINION_FREQ_MIN || choice > MINION_FREQ_MAX)
 		choice = MINION_FREQ_DEF;
+	choice /= MINION_FREQ_FACTOR;
+	if (choice < MINION_FREQ_FACTOR_MIN)
+		choice = MINION_FREQ_FACTOR_MIN;
+	if (choice > MINION_FREQ_FACTOR_MAX)
+		choice = MINION_FREQ_FACTOR_MAX;
 	freq = minion_freq[choice];
 	data[0] = (uint8_t)(freq & 0xff);
 	data[1] = (uint8_t)(((freq & 0xff00) >> 8) & 0xff);
@@ -1630,7 +1637,7 @@ static void minion_process_options(struct minion_info *minioninfo)
 
 		for (i = 0; i < MINION_CHIPS; i++) {
 			if (freq && isdigit(*freq)) {
-				last_freq = (int)round((double)atoi(freq) / (double)MINION_FREQ_FACTOR);
+				last_freq = (int)(round((double)atoi(freq) / (double)MINION_FREQ_FACTOR)) * MINION_FREQ_FACTOR;
 				if (last_freq < MINION_FREQ_MIN)
 					last_freq = MINION_FREQ_MIN;
 				if (last_freq > MINION_FREQ_MAX)
