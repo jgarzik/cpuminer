@@ -39,7 +39,7 @@ static void minion_detect(__maybe_unused bool hotplug)
  * TODO: These will need adjusting for final hardware
  * Look them up and calculate them?
  */
-#define MINION_QUE_HIGH 4
+#define MINION_QUE_HIGH 42
 #define MINION_QUE_LOW 2
 
 #define MINION_FFL " - from %s %s() line %d"
