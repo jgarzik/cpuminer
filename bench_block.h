@@ -2,8 +2,7 @@
 #define __BENCH_BLOCK_H__
 
 /* This contains 32 carefully chosen work items, 16 of which return diff >= 32
- * at nonces spaced ~ 0x00100000 apart and 16 < diff 32 spaced ~ 0x01000000
- * apart. */
+ * at nonces spaced ~ 0x10000000 apart and 16 < diff 32. */
 
 const char bench_hidiffs[16][324] = {
 // 0002108b diff 131
