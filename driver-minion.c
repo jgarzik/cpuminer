@@ -1776,7 +1776,7 @@ static void *minion_spi_write(void *userdata)
 {
 	struct cgpu_info *minioncgpu = (struct cgpu_info *)userdata;
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
-	K_ITEM *item, *tail, *task;
+	K_ITEM *item, *tail, *task, *work;
 	TITEM *titem;
 
 	applog(MINION_LOG, "%s%i: SPI writing...",
@@ -1879,6 +1879,7 @@ static void *minion_spi_write(void *userdata)
 											    minioncgpu->drv->name,
 											    minioncgpu->device_id,
 											    chip);
+
 									K_WLOCK(minioninfo->tfree_list);
 									task = k_get_head(minioninfo->tfree_list, MINION_FFL_HERE);
 									DATAT(task)->chip = chip;
@@ -1900,8 +1901,20 @@ static void *minion_spi_write(void *userdata)
 							}
 						}
 						break;
-					case WRITE_ADDR(MINION_QUE_0):
 					case WRITE_ADDR(MINION_SYS_RSTN_CTL):
+						// Do this here after it has actually been flushed
+						if ((titem->wbuf[0] & SYS_RSTN_CTL_FLUSH) == SYS_RSTN_CTL_FLUSH) {
+							K_WLOCK(minioninfo->wwork_list);
+							work = minioninfo->wchip_list[titem->chip]->head;
+							while (work) {
+								DATAW(work)->stale = true;
+								work = work->next;
+							}
+							minioninfo->wchip_list[titem->chip]->count_up = 0;
+							K_WUNLOCK(minioninfo->wwork_list);
+						}
+						break;
+					case WRITE_ADDR(MINION_QUE_0):
 					default:
 						break;
 				}
@@ -2325,25 +2338,14 @@ static void *minion_results(void *userdata)
 static void minion_flush_work(struct cgpu_info *minioncgpu)
 {
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
-	K_ITEM *stale_unused_work, *prev_unused, *task, *prev_task, *work;
+	K_ITEM *stale_unused_work, *prev_unused, *task, *prev_task;
 	int i;
 
 	applog(MINION_LOG, "%s%i: flushing work",
 				minioncgpu->drv->name, minioncgpu->device_id);
 
-	// set stale all wchip_list contents
 	// TODO: N.B. scanwork also gets work locks - which master thread calls flush?
 	K_WLOCK(minioninfo->wwork_list);
-
-	for (i = 0; i < MINION_CHIPS; i++)
-		if (minioninfo->chip[i]) {
-			work = minioninfo->wchip_list[i]->head;
-			while (work) {
-				DATAW(work)->stale = true;
-				work = work->next;
-			}
-			minioninfo->wchip_list[i]->count_up = 0;
-		}
 
 	// Simply remove the whole unused wwork_list
 	stale_unused_work = minioninfo->wwork_list->tail;
