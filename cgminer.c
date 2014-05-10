@@ -3460,22 +3460,35 @@ static void calc_diff(struct work *work, double known)
 	}
 }
 
+static unsigned char bench_hidiff_bins[16][160];
+static unsigned char bench_lodiff_bins[16][160];
+static unsigned char bench_target[32];
+
+/* Iterate over the lo and hi diff benchmark work items such that we find one
+ * diff 32+ share every 32 work items. */
 static void get_benchmark_work(struct work *work)
 {
-	// Use a random work block pulled from a pool
-	static uint8_t bench_block[] = { CGMINER_BENCHMARK_BLOCK };
+	static int hidiff = 0, lodiff = 0;
+	static int direction = 1;
 
-	size_t bench_size = sizeof(*work);
-	size_t work_size = sizeof(bench_block);
-	size_t min_size = (work_size < bench_size ? work_size : bench_size);
-	memset(work, 0, sizeof(*work));
-	memcpy(work, &bench_block, min_size);
+	lodiff += direction;
+	if (lodiff < 1)
+		direction = 1;
+	if (lodiff > 15) {
+		direction = -1;
+		if (++hidiff > 15)
+			hidiff = 0;
+		memcpy(work, &bench_hidiff_bins[hidiff][0], 160);
+	} else
+		memcpy(work, &bench_lodiff_bins[lodiff][0], 160);
+	work->work_difficulty = 32;
+	memcpy(work->target, bench_target, 32);
+	work->drv_rolllimit = 0;
 	work->mandatory = true;
 	work->pool = pools[0];
 	cgtime(&work->tv_getwork);
 	copy_time(&work->tv_getwork_reply, &work->tv_getwork);
 	work->getwork_mode = GETWORK_MODE_BENCHMARK;
-	calc_diff(work, 0);
 }
 
 static void benchfile_dspwork(struct work *work, uint32_t nonce)
@@ -7030,6 +7043,22 @@ static void submit_work_async(struct work *work)
 	pthread_t submit_thread;
 
 	cgtime(&work->tv_work_found);
+	if (opt_benchmark) {
+		struct cgpu_info *cgpu = get_thr_cgpu(work->thr_id);
+
+		mutex_lock(&stats_lock);
+		cgpu->accepted++;
+		total_accepted++;
+		pool->accepted++;
+		cgpu->diff_accepted += work->work_difficulty;
+		total_diff_accepted += work->work_difficulty;
+		pool->diff_accepted += work->work_difficulty;
+		mutex_unlock(&stats_lock);
+
+		applog(LOG_NOTICE, "Accepted %s %d benchmark share nonce %08x",
+		       cgpu->drv->name, cgpu->device_id, *(uint32_t *)(work->data + 64 + 12));
+		return;
+	}
 
 	if (stale_work(work, true)) {
 		if (opt_submit_stale)
@@ -9238,6 +9267,12 @@ int main(int argc, char *argv[])
 		enable_pool(pool);
 		pool->idle = false;
 		successful_connect = true;
+
+		for (i = 0; i < 16; i++) {
+			hex2bin(&bench_hidiff_bins[i][0], &bench_hidiffs[i][0], 160);
+			hex2bin(&bench_lodiff_bins[i][0], &bench_lodiffs[i][0], 160);
+		}
+		set_target(bench_target, 32);
 	}
 
 #ifdef HAVE_CURSES
