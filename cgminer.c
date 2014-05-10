@@ -3468,19 +3468,6 @@ static unsigned char bench_target[32];
  * diff 32+ share every 32 work items. */
 static void get_benchmark_work(struct work *work)
 {
-	static int hidiff = 0, lodiff = 0;
-	static int direction = 1;
-
-	lodiff += direction;
-	if (lodiff < 1)
-		direction = 1;
-	if (lodiff > 15) {
-		direction = -1;
-		if (++hidiff > 15)
-			hidiff = 0;
-		memcpy(work, &bench_hidiff_bins[hidiff][0], 160);
-	} else
-		memcpy(work, &bench_lodiff_bins[lodiff][0], 160);
 	work->work_difficulty = 32;
 	memcpy(work->target, bench_target, 32);
 	work->drv_rolllimit = 0;
@@ -7004,8 +6991,23 @@ int share_work_tdiff(struct cgpu_info *cgpu)
 	return last_getwork - cgpu->last_device_valid_work;
 }
 
+static void set_benchmark_work(struct cgpu_info *cgpu, struct work *work)
+{
+	cgpu->lodiff += cgpu->direction;
+	if (cgpu->lodiff < 1)
+		cgpu->direction = 1;
+	if (cgpu->lodiff > 15) {
+		cgpu->direction = -1;
+		if (++cgpu->hidiff > 15)
+			cgpu->hidiff = 0;
+		memcpy(work, &bench_hidiff_bins[cgpu->hidiff][0], 160);
+	} else
+		memcpy(work, &bench_lodiff_bins[cgpu->lodiff][0], 160);
+}
+
 struct work *get_work(struct thr_info *thr, const int thr_id)
 {
+	struct cgpu_info *cgpu = thr->cgpu;
 	struct work *work = NULL;
 	time_t diff_t;
 
@@ -7025,14 +7027,17 @@ struct work *get_work(struct thr_info *thr, const int thr_id)
 	 * device failures. */
 	if (diff_t > 0) {
 		applog(LOG_DEBUG, "Get work blocked for %d seconds", (int)diff_t);
-		thr->cgpu->last_device_valid_work += diff_t;
+		cgpu->last_device_valid_work += diff_t;
 	}
 	applog(LOG_DEBUG, "Got work from get queue to get work for thread %d", thr_id);
 
 	work->thr_id = thr_id;
+	if (opt_benchmark)
+		set_benchmark_work(cgpu, work);
+
 	thread_reportin(thr);
 	work->mined = true;
-	work->device_diff = MIN(thr->cgpu->drv->max_diff, work->work_difficulty);
+	work->device_diff = MIN(cgpu->drv->max_diff, work->work_difficulty);
 	return work;
 }
 

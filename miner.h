@@ -517,6 +517,11 @@ struct cgpu_info {
 	bool shutdown;
 
 	struct timeval dev_start_tv;
+
+	/* For benchmarking only */
+	int hidiff;
+	int lodiff;
+	int direction;
 };
 
 extern bool add_cgpu(struct cgpu_info*);
