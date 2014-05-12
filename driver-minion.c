@@ -1865,7 +1865,7 @@ static void *minion_spi_reply(void *userdata)
 	somelow = false;
 	gotreplies = false;
 	while (minioncgpu->shutdown == false) {
-		for (chip = 0; chip < 1; chip++) {
+		for (chip = 0; chip < MINION_CHIPS; chip++) {
 			if (minioninfo->chip[chip]) {
 				uint8_t res = 0, cmd = 0;
 				fifo_task.chip = chip;
