@@ -136,6 +136,7 @@ static void minion_detect(__maybe_unused bool hotplug)
 // enable 'no nonce' report
 #define SYS_MISC_CTL_DEFAULT 0x04
 
+// Temperature returned by MINION_SYS_CHIP_STA 0x01 STA_TEMP()
 #define MINION_TEMP_40 0
 #define MINION_TEMP_60 1
 #define MINION_TEMP_80 3
@@ -148,6 +149,20 @@ static const char *min_temp_80 = "60-80";
 static const char *min_temp_100 = "80-100";
 static const char *min_temp_over = ">100";
 static const char *min_temp_invalid = "?";
+
+/*
+ * Temperature for MINION_SYS_TEMP_CTL 0x03 temp_thres [0:3]
+ * i.e. it starts at 120 and goes up in steps of 5 to 160
+ */
+#define MINION_TEMP_CTL_MIN 1
+#define MINION_TEMP_CTL_MAX 9
+#define MINION_TEMP_CTL_BITS 0x0f
+#define MINION_TEMP_CTL_DEF 135
+#define MINION_TEMP_CTL_STEP 5
+#define MINION_TEMP_CTL_MIN_VALUE 120
+#define MINION_TEMP_CTL_MAX_VALUE (MINION_TEMP_CTL_MIN_VALUE + \
+				(MINION_TEMP_CTL_STEP * \
+				(MINION_TEMP_CTL_MAX - MINION_TEMP_CTL_MIN)))
 
 // CORE data size is DATA_SIZ
 #define MINION_CORE_ENA0_31 0x10
@@ -278,6 +293,7 @@ struct minion_status {
 	struct timeval lastoverheat;
 	struct timeval lastrecover;
 	double overheattime;
+	uint32_t tempsent;
 };
 
 // TODO: untested/unused
@@ -548,6 +564,7 @@ struct minion_info {
 	int chips;
 	bool chip[MINION_CHIPS];
 	int init_freq[MINION_CHIPS];
+	int init_temp[MINION_CHIPS];
 
 	uint32_t next_task_id;
 
@@ -996,6 +1013,27 @@ static void init_chip(struct cgpu_info *minioncgpu, struct minion_info *minionin
 
 	reply = build_cmd(minioncgpu, minioninfo,
 			  chip, WRITE_ADDR(MINION_SYS_FREQ_CTL),
+			  rbuf, 0, data);
+
+	// Set temp threshold
+	choice = minioninfo->init_temp[chip];
+	if (choice < MINION_TEMP_CTL_MIN_VALUE || choice > MINION_TEMP_CTL_MAX_VALUE)
+		choice = MINION_TEMP_CTL_DEF;
+	choice -= MINION_TEMP_CTL_MIN_VALUE;
+	choice /= MINION_TEMP_CTL_STEP;
+	if (choice < MINION_TEMP_CTL_MIN)
+		choice = MINION_TEMP_CTL_MIN;
+	if (choice > MINION_TEMP_CTL_MAX)
+		choice = MINION_TEMP_CTL_MAX;
+	data[0] = (uint8_t)choice;
+	data[1] = 0;
+	data[2] = 0;
+	data[3] = 0;
+
+	minioninfo->chip_status[chip].tempsent = choice;
+
+	reply = build_cmd(minioncgpu, minioninfo,
+			  chip, WRITE_ADDR(MINION_SYS_TEMP_CTL),
 			  rbuf, 0, data);
 }
 
@@ -1474,10 +1512,11 @@ static bool minion_init_gpio_interrupt(struct cgpu_info *minioncgpu, struct mini
 
 static void minion_process_options(struct minion_info *minioninfo)
 {
-	int last_freq = MINION_FREQ_DEF;
-	char *freq, *comma, *buf;
+	int last_freq, last_temp;
+	char *freq, *temp, *comma, *buf;
 	int i;
 
+	last_freq = MINION_FREQ_DEF;
 	if (opt_minion_freq && *opt_minion_freq) {
 		buf = freq = strdup(opt_minion_freq);
 		comma = strchr(freq, ',');
@@ -1500,6 +1539,35 @@ static void minion_process_options(struct minion_info *minioninfo)
 				}
 			}
 			minioninfo->init_freq[i] = last_freq;
+		}
+
+		free(buf);
+	}
+
+	last_temp = MINION_TEMP_CTL_DEF;
+	if (opt_minion_temp && *opt_minion_temp) {
+		buf = temp = strdup(opt_minion_temp);
+		comma = strchr(temp, ',');
+		if (comma)
+			*(comma++) = '\0';
+
+		for (i = 0; i < MINION_CHIPS; i++) {
+			if (temp && isdigit(*temp)) {
+				last_temp = atoi(temp);
+				last_temp -= (last_temp % MINION_TEMP_CTL_STEP);
+				if (last_temp < MINION_TEMP_CTL_MIN)
+					last_temp = MINION_TEMP_CTL_MIN;
+				if (last_temp > MINION_TEMP_CTL_MAX)
+					last_temp = MINION_TEMP_CTL_MAX;
+
+				temp = comma;
+				if (comma) {
+					comma = strchr(temp, ',');
+					if (comma)
+						*(comma++) = '\0';
+				}
+			}
+			minioninfo->init_temp[i] = last_temp;
 		}
 
 		free(buf);
@@ -1539,6 +1607,9 @@ static void minion_detect(bool hotplug)
 
 	for (i = 0; i < MINION_CHIPS; i++)
 		minioninfo->init_freq[i] = MINION_FREQ_DEF;
+
+	for (i = 0; i < MINION_CHIPS; i++)
+		minioninfo->init_temp[i] = MINION_TEMP_CTL_DEF;
 
 	minion_process_options(minioninfo);
 
@@ -1710,7 +1781,7 @@ static void *minion_spi_write(void *userdata)
 										break;
 								}
 							} else {
-								if (STA_TEMP(rep) == MINION_TEMP_OVER) {
+								if (opt_minion_overheat && STA_TEMP(rep) == MINION_TEMP_OVER) {
 									cgtime(&(minioninfo->chip_status[chip].lastoverheat));
 									minioninfo->chip_status[chip].overheat = true;
 									applog(LOG_WARNING, "%s%d: chip %d overheated! idling",
@@ -2789,6 +2860,10 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 			root = api_add_int(root, buf, &(minioninfo->init_freq[chip]), true);
 			snprintf(buf, sizeof(buf), "Chip %d FreqSent", chip);
 			root = api_add_hex32(root, buf, &(minioninfo->chip_status[chip].freqsent), true);
+			snprintf(buf, sizeof(buf), "Chip %d InitTemp", chip);
+			root = api_add_int(root, buf, &(minioninfo->init_temp[chip]), true);
+			snprintf(buf, sizeof(buf), "Chip %d TempSent", chip);
+			root = api_add_hex32(root, buf, &(minioninfo->chip_status[chip].tempsent), true);
 			snprintf(buf, sizeof(buf), "Chip %d QueWork", chip);
 			root = api_add_uint32(root, buf, &(minioninfo->chip_status[chip].quework), true);
 			snprintf(buf, sizeof(buf), "Chip %d ChipWork", chip);
