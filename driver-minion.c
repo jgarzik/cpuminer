@@ -281,6 +281,9 @@ static uint32_t minion_freq[] = {
 #define MINION_STATS_UPDATE_TIME_mS 1000
 #define MINION_STATS_UPDATE_RAND_mS 1000
 
+// Don't report it more than once every ... 5s
+#define MINION_IDLE_MESSAGE_ms 5000
+
 struct minion_status {
 	uint16_t temp;
 	uint16_t cores;
@@ -300,6 +303,8 @@ struct minion_status {
 	double overheattime;
 	uint32_t tempsent;
 	uint32_t idle;
+	uint32_t last_rpt_idle;
+	struct timeval idle_rpt;
 };
 
 // TODO: untested/unused
@@ -2871,6 +2876,9 @@ static int64_t minion_scanwork(__maybe_unused struct thr_info *thr)
 	struct cgpu_info *minioncgpu = thr->cgpu;
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	int64_t hashcount = 0;
+	struct timeval now;
+	int msdiff;
+	int chip;
 
 	minion_do_work(minioncgpu);
 
@@ -2881,6 +2889,24 @@ static int64_t minion_scanwork(__maybe_unused struct thr_info *thr)
 	}
 	mutex_unlock(&(minioninfo->nonce_lock));
 
+	if (opt_minion_idlecount) {
+		for (chip = 0; chip < MINION_CHIPS; chip++) {
+			if (minioninfo->chip[chip]) {
+				if (minioninfo->chip_status[chip].idle !=
+				    minioninfo->chip_status[chip].last_rpt_idle) {
+					cgtime(&now);
+					msdiff = ms_tdiff(&now, &(minioninfo->chip_status[chip].idle_rpt));
+					if (msdiff >= MINION_IDLE_MESSAGE_ms) {
+						memcpy(&(minioninfo->chip_status[chip].idle_rpt), &now, sizeof(now));
+						applog(LOG_WARNING,
+							"%s%d: chip 1 internal idle increased %08x",
+							minioncgpu->drv->name, minioncgpu->device_id,
+							minioninfo->chip_status[chip].idle);
+					}
+				}
+			}
+		}
+	}
 	/*
 	 * To avoid wasting CPU, wait until we get an interrupt
 	 * before returning back to the main cgminer work loop

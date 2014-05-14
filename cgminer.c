@@ -242,6 +242,7 @@ static char *opt_set_null;
 char *opt_minion_freq;
 char *opt_minion_temp;
 bool opt_minion_overheat;
+bool opt_minion_idlecount;
 #endif
 
 #ifdef USE_USBUTILS
@@ -1324,6 +1325,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--minion-overheat",
 		     opt_set_bool, &opt_minion_overheat,
 		     "Enable directly halting any chip when the status exceeds 100C"),
+	OPT_WITHOUT_ARG("--minion-idlecount",
+		     opt_set_bool, &opt_minion_idlecount,
+		     "Report when IdleCount is >0 or changes"),
 #endif
 #if defined(unix) || defined(__APPLE__)
 	OPT_WITH_ARG("--monitor|-m",
