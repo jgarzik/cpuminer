@@ -2899,9 +2899,9 @@ static int64_t minion_scanwork(__maybe_unused struct thr_info *thr)
 					if (msdiff >= MINION_IDLE_MESSAGE_ms) {
 						memcpy(&(minioninfo->chip_status[chip].idle_rpt), &now, sizeof(now));
 						applog(LOG_WARNING,
-							"%s%d: chip 1 internal idle increased %08x",
+							"%s%d: chip %d internal idle increased %08x",
 							minioncgpu->drv->name, minioncgpu->device_id,
-							minioninfo->chip_status[chip].idle);
+							chip, minioninfo->chip_status[chip].idle);
 					}
 				}
 			}
