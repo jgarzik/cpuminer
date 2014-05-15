@@ -1480,7 +1480,7 @@ int usbi_handle_transfer_completion(struct usbi_transfer *itransfer,
 	usbi_mutex_lock(&ctx->flying_transfers_lock);
 	/* FIXME: Sanity check for some race where this entry has already been
 	 * removed! */
-	if (status == LIBUSB_TRANSFER_NO_DEVICE && (&itransfer->list)->next)
+	if ((&itransfer->list)->next)
 		list_del(&itransfer->list);
 	if (usbi_using_timerfd(ctx)) {
 		r = arm_timerfd_for_next_timeout(ctx);
