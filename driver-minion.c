@@ -433,6 +433,7 @@ typedef struct ritem {
 	int core;
 	uint32_t task_id;
 	uint32_t nonce;
+	struct timeval when;
 	/*
 	 * Only once per task_id if no nonces were found
 	 * Sent with core = 0
@@ -443,9 +444,21 @@ typedef struct ritem {
 	bool no_nonce;
 } RITEM;
 
+#define ALLOC_HITEMS 4096
+#define LIMIT_HITEMS 0
+
+// How much history to keep (5min)
+#define MINION_HISTORY_s 300
+
+typedef struct hitem {
+	int chip;
+	struct timeval when;
+} HITEM;
+
 #define DATAW(_item) ((WITEM *)(_item->data))
 #define DATAT(_item) ((TITEM *)(_item->data))
 #define DATAR(_item) ((RITEM *)(_item->data))
+#define DATAH(_item) ((HITEM *)(_item->data))
 
 // Set this to 1 to enable iostats processing
 // N.B. it slows down mining
@@ -608,6 +621,9 @@ struct minion_info {
 	uint64_t work_unrolled;
 	uint64_t work_rolled;
 
+	uint64_t spi_errors;
+	uint64_t chip_spi_errors[MINION_CHIPS];
+
 	// Work items
 	K_LIST *wfree_list;
 	K_STORE *wwork_list;
@@ -623,6 +639,20 @@ struct minion_info {
 	K_STORE *rnonce_list;
 
 	struct timeval last_did;
+
+	// Nonce history
+	K_LIST *hfree_list;
+	// A single list for quick removal
+	K_STORE *hnonce_list;
+	/* Note this stores a duplicate of hnonce_list, but per chip
+	   Thus allows to immeditaley find the 2nd last nonce per chip */
+	K_STORE *hchip_list[MINION_CHIPS];
+
+	struct timeval chip_rpt;
+	struct timeval oldest_nonce[MINION_CHIPS];
+	struct timeval newest_nonce[MINION_CHIPS];
+	uint64_t history_nonces[MINION_CHIPS];
+	double history_ghs[MINION_CHIPS];
 
 #if DO_IO_STATS
 	// Total
@@ -658,7 +688,8 @@ static void ready_work(struct cgpu_info *minioncgpu, struct work *work, bool rol
 	K_WUNLOCK(minioninfo->wfree_list);
 }
 
-static bool oldest_nonce(struct cgpu_info *minioncgpu, int *chip, int *core, uint32_t *task_id, uint32_t *nonce, bool *no_nonce)
+static bool oldest_nonce(struct cgpu_info *minioncgpu, int *chip, int *core, uint32_t *task_id,
+			uint32_t *nonce, bool *no_nonce, struct timeval *when)
 {
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	K_ITEM *item = NULL;
@@ -674,6 +705,7 @@ static bool oldest_nonce(struct cgpu_info *minioncgpu, int *chip, int *core, uin
 		*task_id = DATAR(item)->task_id;
 		*nonce = DATAR(item)->nonce;
 		*no_nonce = DATAR(item)->no_nonce;
+		memcpy(when, &(DATAR(item)->when), sizeof(*when));
 
 		k_free_head(minioninfo->rfree_list, item);
 	}
@@ -1661,6 +1693,13 @@ static void minion_detect(bool hotplug)
 	minioninfo->rfree_list = k_new_list("Reply", sizeof(RITEM), ALLOC_RITEMS, LIMIT_RITEMS, true);
 	minioninfo->rnonce_list = k_new_store(minioninfo->rfree_list);
 
+	if (opt_minion_chipreport > 0) {
+		minioninfo->hfree_list = k_new_list("History", sizeof(HITEM), ALLOC_HITEMS, LIMIT_HITEMS, true);
+		minioninfo->hnonce_list = k_new_store(minioninfo->hfree_list);
+		for (i = 0; i < MINION_CHIPS; i++)
+			minioninfo->hchip_list[i] = k_new_store(minioninfo->hfree_list);
+	}
+
 	cgsem_init(&(minioninfo->task_ready));
 	cgsem_init(&(minioninfo->nonce_ready));
 	cgsem_init(&(minioninfo->scan_work));
@@ -1932,6 +1971,7 @@ static void *minion_spi_reply(void *userdata)
 	int ret, chipwork, gap;
 	struct pollfd pfd;
 	bool somelow, gotreplies;
+	struct timeval now;
 
 	struct minion_header *head;
 	uint8_t rbuf[MINION_BUFSIZ];
@@ -2053,6 +2093,7 @@ applog(LOG_ERR, "%s%i: Large work reply res %d", minioncgpu->drv->name, minioncg
 					if (res_task.reply <= 0)
 						break;
 					else {
+						cgtime(&now);
 						if (res_task.reply < (int)MINION_RES_DATA_SIZ) {
 							char *buf = bin2hex((unsigned char *)(&(res_task.rbuf[res_task.osiz - res_task.rsiz])), (int)(res_task.rsiz));
 							applog(LOG_ERR, "%s%i: Bad work reply (%s) size %d, should be at least %d",
@@ -2078,6 +2119,7 @@ applog(LOG_ERR, "%s%i: Large work reply res %d", minioncgpu->drv->name, minioncg
 									DATAR(item)->task_id = RES_TASK(result);
 									DATAR(item)->nonce = RES_NONCE(result);
 									DATAR(item)->no_nonce = !RES_GOLD(result);
+									memcpy(&(DATAR(item)->when), &now, sizeof(now));
 //applog(LOG_ERR, "%s%i: ZZZ reply task_id 0x%04x - chip %d - gold %d", minioncgpu->drv->name, minioncgpu->device_id, RES_TASK(result), (int)RES_CHIP(result), (int)RES_GOLD(result));
 
 //if (RES_GOLD(result))
@@ -2201,7 +2243,8 @@ enum nonce_state {
 	NONCE_NO_NONCE,
 	NONCE_BAD_NONCE,
 	NONCE_BAD_WORK,
-	NONCE_NO_WORK
+	NONCE_NO_WORK,
+	NONCE_SPI_ERR
 };
 
 static void cleanup_older(struct cgpu_info *minioncgpu, int chip, K_ITEM *item, bool no_nonce)
@@ -2225,16 +2268,18 @@ static void cleanup_older(struct cgpu_info *minioncgpu, int chip, K_ITEM *item, 
 				minioninfo->chip_status[chip].chipwork--;
 				if (minioninfo->chip_status[chip].realwork > 0)
 					minioninfo->chip_status[chip].realwork--;
+/*
 				// If it had no valid work (only errors) then it won't have been cleaned up
-//				errs = (DATAW(tail)->errors > 0);
+				errs = (DATAW(tail)->errors > 0);
 				// queue must be false since older work than the reply must have already been sent
 				// reported for debugging i.e. if que=non-zero then there's a bug
-//				applog(errs ? LOG_DEBUG : LOG_ERR,
-//				applog(LOG_ERR,
-//					"%s%i: discarded old task 0x%04x chip %d no reply errs=%d (que=%d)",
-//					minioncgpu->drv->name, minioncgpu->device_id,
-//					DATAW(tail)->task_id, chip, DATAW(tail)->errors,
-//					DATAW(tail)->queued);
+				applog(errs ? LOG_DEBUG : LOG_ERR,
+				applog(LOG_ERR,
+					"%s%i: discarded old task 0x%04x chip %d no reply errs=%d (que=%d)",
+					minioncgpu->drv->name, minioncgpu->device_id,
+					DATAW(tail)->task_id, chip, DATAW(tail)->errors,
+					DATAW(tail)->queued);
+*/
 			}
 			K_WUNLOCK(minioninfo->wchip_list[chip]);
 			applog(MINION_LOG, "%s%i: marking complete - old task 0x%04x chip %d",
@@ -2270,10 +2315,34 @@ static void cleanup_older(struct cgpu_info *minioncgpu, int chip, K_ITEM *item, 
 	}
 }
 
-static enum nonce_state oknonce(struct thr_info *thr, struct cgpu_info *minioncgpu, int chip, int core, uint32_t task_id, uint32_t nonce, bool no_nonce)
+static enum nonce_state oknonce(struct thr_info *thr, struct cgpu_info *minioncgpu, int chip, int core,
+				uint32_t task_id, uint32_t nonce, bool no_nonce, struct timeval *when)
 {
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
-	K_ITEM *item;
+	struct timeval now;
+	K_ITEM *item, *tail;
+
+	if (chip < 0 || chip >= MINION_CHIPS) {
+		minioninfo->spi_errors++;
+		applog(LOG_ERR, "%s%i: SPI nonce error invalid chip %d",
+				minioncgpu->drv->name, minioncgpu->device_id, chip);
+		return NONCE_SPI_ERR;
+	}
+
+	if (!(minioninfo->chip[chip])) {
+		minioninfo->spi_errors++;
+		applog(LOG_ERR, "%s%i: SPI nonce error chip %d not present",
+				minioncgpu->drv->name, minioncgpu->device_id, chip);
+		return NONCE_SPI_ERR;
+	}
+
+	if (core < 0 || core >= MINION_CORES) {
+		minioninfo->spi_errors++;
+		minioninfo->chip_spi_errors[chip]++;
+		applog(LOG_ERR, "%s%i: SPI nonce error invalid core %d (chip %d)",
+				minioncgpu->drv->name, minioncgpu->device_id, core, chip);
+		return NONCE_SPI_ERR;
+	}
 
 	if (no_nonce)
 		minioninfo->chip_nononces[chip]++;
@@ -2285,7 +2354,7 @@ static enum nonce_state oknonce(struct thr_info *thr, struct cgpu_info *minioncg
 
 	if (!item) {
 		K_RUNLOCK(minioninfo->wchip_list[chip]);
-		applog(LOG_ERR, "%s%i: no work (chip %d core %d task 0x%04x)",
+		applog(LOG_ERR, "%s%i: no chip work (chip %d core %d task 0x%04x)",
 				minioncgpu->drv->name, minioncgpu->device_id,
 				chip, core, (int)task_id);
 		if (!no_nonce) {
@@ -2336,6 +2405,41 @@ static enum nonce_state oknonce(struct thr_info *thr, struct cgpu_info *minioncg
 		minioninfo->ok_nonces++;
 
 		cleanup_older(minioncgpu, chip, item, no_nonce);
+
+		if (opt_minion_chipreport > 0) {
+			cgtime(&now);
+
+			K_WLOCK(minioninfo->hnonce_list);
+			memcpy(&(minioninfo->newest_nonce[chip]), when, sizeof(*when));
+			if (minioninfo->history_nonces[chip] == 0)
+				memcpy(&(minioninfo->oldest_nonce[chip]), when, sizeof(*when));
+			minioninfo->history_nonces[chip]++;
+			item = k_unlink_head(minioninfo->hfree_list);
+			DATAH(item)->chip = chip;
+			memcpy(when, &(DATAH(item)->when), sizeof(*when));
+			k_add_head(minioninfo->hnonce_list, item);
+			k_add_head(minioninfo->hchip_list[chip], item);
+			tail = minioninfo->hnonce_list->tail;
+			while (tail && tdiff(&(DATAH(tail)->when), &now) > MINION_HISTORY_s) {
+				int chip_tmp = DATAH(tail)->chip;
+				// The 2 tails should be the same hitem
+				k_unlink_tail(minioninfo->hchip_list[chip_tmp]);
+				tail = k_unlink_tail(minioninfo->hnonce_list);
+				minioninfo->history_nonces[chip_tmp]--;
+				k_add_head(minioninfo->hfree_list, item);
+
+				// New oldest nonce
+				tail = minioninfo->hchip_list[chip_tmp]->tail;
+				if (tail) {
+					memcpy(&(minioninfo->oldest_nonce[chip_tmp]),
+						&(DATAH(tail)->when), sizeof(*when));
+				}
+
+				tail = minioninfo->hnonce_list->tail;
+			}
+			K_WUNLOCK(minioninfo->hnonce_list);
+		}
+
 		return NONCE_GOOD_NONCE;
 	}
 
@@ -2358,6 +2462,7 @@ static void *minion_results(void *userdata)
 	uint32_t task_id;
 	uint32_t nonce;
 	bool no_nonce;
+	struct timeval when;
 
 	applog(MINION_LOG, "%s%i: Results...",
 				minioncgpu->drv->name, minioncgpu->device_id);
@@ -2371,12 +2476,12 @@ static void *minion_results(void *userdata)
 	}
 
 	while (minioncgpu->shutdown == false) {
-		if (!oldest_nonce(minioncgpu, &chip, &core, &task_id, &nonce, &no_nonce)) {
+		if (!oldest_nonce(minioncgpu, &chip, &core, &task_id, &nonce, &no_nonce, &when)) {
 			cgsem_mswait(&(minioninfo->nonce_ready), MINION_NONCE_mS);
 			continue;
 		}
 
-		oknonce(thr, minioncgpu, chip, core, task_id, nonce, no_nonce);
+		oknonce(thr, minioncgpu, chip, core, task_id, nonce, no_nonce, &when);
 	}
 
 	return NULL;
@@ -2871,14 +2976,83 @@ static bool minion_queue_full(struct cgpu_info *minioncgpu)
 	return ret;
 }
 
+static void idle_report(struct cgpu_info *minioncgpu)
+{
+	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
+	struct timeval now;
+	int msdiff;
+	int chip;
+
+	for (chip = 0; chip < MINION_CHIPS; chip++) {
+		if (minioninfo->chip[chip]) {
+			if (minioninfo->chip_status[chip].idle !=
+			    minioninfo->chip_status[chip].last_rpt_idle) {
+				cgtime(&now);
+				msdiff = ms_tdiff(&now, &(minioninfo->chip_status[chip].idle_rpt));
+				if (msdiff >= MINION_IDLE_MESSAGE_ms) {
+					memcpy(&(minioninfo->chip_status[chip].idle_rpt), &now, sizeof(now));
+					applog(LOG_WARNING,
+						"%s%d: chip %d internal idle increased %08x",
+						minioncgpu->drv->name, minioncgpu->device_id,
+						chip, minioninfo->chip_status[chip].idle);
+				}
+			}
+		}
+	}
+}
+
+static void chip_report(struct cgpu_info *minioncgpu)
+{
+	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
+	struct timeval now;
+	char buf[512];
+	size_t len;
+	double ghs;
+	int msdiff;
+	int chip;
+	bool any;
+
+	cgtime(&now);
+	if (!(minioninfo->chip_rpt.tv_sec)) {
+		// No report yet so don't until now + opt_minion_chipreport
+		memcpy(&(minioninfo->chip_rpt), &now, sizeof(now));
+		return;
+	}
+	msdiff = ms_tdiff(&now, &(minioninfo->chip_rpt));
+	if (msdiff >= (opt_minion_chipreport * 1000)) {
+		buf[0] = '\0';
+		any = false;
+		K_RLOCK(minioninfo->hnonce_list);
+		for (chip = 0; chip < MINION_CHIPS; chip++) {
+			if (minioninfo->chip[chip]) {
+				len = strlen(buf);
+				if (minioninfo->history_nonces[chip] < 2)
+					ghs = 0.0;
+				else {
+					ghs = 0xffffffffull * (minioninfo->history_nonces[chip] - 1);
+					ghs /= 1000000000.0;
+					ghs /= tdiff(&(minioninfo->newest_nonce[chip]),
+							&(minioninfo->oldest_nonce[chip]));
+				}
+				snprintf(buf + len, sizeof(buf) - len,
+					 "%s%d:%.2f", any ? " " : "", chip, ghs);
+				minioninfo->history_ghs[chip] = ghs;
+				any = true;
+			}
+		}
+		K_RUNLOCK(minioninfo->hnonce_list);
+		applogsiz(LOG_WARNING, 512,
+			  "%s%d: Chip GHs %s",
+			  minioncgpu->drv->name, minioncgpu->device_id, buf);
+		memcpy(&(minioninfo->chip_rpt), &now, sizeof(now));
+	}
+}
+
 static int64_t minion_scanwork(__maybe_unused struct thr_info *thr)
 {
 	struct cgpu_info *minioncgpu = thr->cgpu;
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	int64_t hashcount = 0;
-	struct timeval now;
-	int msdiff;
-	int chip;
 
 	minion_do_work(minioncgpu);
 
@@ -2889,24 +3063,12 @@ static int64_t minion_scanwork(__maybe_unused struct thr_info *thr)
 	}
 	mutex_unlock(&(minioninfo->nonce_lock));
 
-	if (opt_minion_idlecount) {
-		for (chip = 0; chip < MINION_CHIPS; chip++) {
-			if (minioninfo->chip[chip]) {
-				if (minioninfo->chip_status[chip].idle !=
-				    minioninfo->chip_status[chip].last_rpt_idle) {
-					cgtime(&now);
-					msdiff = ms_tdiff(&now, &(minioninfo->chip_status[chip].idle_rpt));
-					if (msdiff >= MINION_IDLE_MESSAGE_ms) {
-						memcpy(&(minioninfo->chip_status[chip].idle_rpt), &now, sizeof(now));
-						applog(LOG_WARNING,
-							"%s%d: chip %d internal idle increased %08x",
-							minioncgpu->drv->name, minioncgpu->device_id,
-							chip, minioninfo->chip_status[chip].idle);
-					}
-				}
-			}
-		}
-	}
+	if (opt_minion_idlecount)
+		idle_report(minioncgpu);
+
+	if (opt_minion_chipreport > 0)
+		chip_report(minioncgpu);
+
 	/*
 	 * To avoid wasting CPU, wait until we get an interrupt
 	 * before returning back to the main cgminer work loop
@@ -3035,7 +3197,12 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 			cores[MINION_CORES] = '\0';
 			snprintf(buf, sizeof(buf), "Chip %d CoresAct", chip);
 			root = api_add_string(root, buf, cores, true);
+			snprintf(buf, sizeof(buf), "Chip %d History GHs", chip);
+			root = api_add_mhs(root, buf, &(minioninfo->history_ghs[chip]), true);
 		}
+
+	double his = MINION_HISTORY_s;
+	root = api_add_double(root, "History length", &his, true);
 
 	for (i = 0; i <= max_chip; i += CHIPS_PER_STAT) {
 		to = i + CHIPS_PER_STAT - 1;
@@ -3174,6 +3341,7 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 	}
 #endif
 
+	root = api_add_uint64(root, "SPI Errors", &(minioninfo->spi_errors), true);
 	root = api_add_uint64(root, "Work Unrolled", &(minioninfo->work_unrolled), true);
 	root = api_add_uint64(root, "Work Rolled", &(minioninfo->work_rolled), true);
 	root = api_add_uint64(root, "Ints", &(minioninfo->interrupts), true);
