@@ -2115,7 +2115,13 @@ applog(LOG_ERR, "%s%i: Large work reply res %d", minioncgpu->drv->name, minioncg
 									item = k_unlink_head(minioninfo->rfree_list);
 									K_WUNLOCK(minioninfo->rfree_list);
 
-									DATAR(item)->chip = RES_CHIP(result);
+									//DATAR(item)->chip = RES_CHIP(result);
+									// We can avoid any SPI transmission error of the chip number
+									DATAR(item)->chip = (uint8_t)chip;
+									if ((uint8_t)chip != RES_CHIP(result)) {
+										minioninfo->spi_errors++;
+										minioninfo->chip_spi_errors[chip]++;
+									}
 									DATAR(item)->core = RES_CORE(result);
 									DATAR(item)->task_id = RES_TASK(result);
 									DATAR(item)->nonce = RES_NONCE(result);
@@ -2322,21 +2328,13 @@ static enum nonce_state oknonce(struct thr_info *thr, struct cgpu_info *minioncg
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	struct timeval now;
 	K_ITEM *item, *tail;
+	uint32_t min_task_id, max_task_id;
 
-	// TODO: maybe later consider searching for the correct chip number?
-	//  e.g. with the task_id
-	if (chip < 0 || chip >= MINION_CHIPS) {
-		minioninfo->spi_errors++;
-		applog(LOG_ERR, "%s%i: SPI nonce error invalid chip %d",
-				minioncgpu->drv->name, minioncgpu->device_id, chip);
-		return NONCE_SPI_ERR;
-	}
-
+	// if the chip has been disabled - but we don't do that - so not possible (yet)
 	if (!(minioninfo->chip[chip])) {
-		minioninfo->spi_errors++;
-		applog(LOG_ERR, "%s%i: SPI nonce error chip %d not present",
+		applog(LOG_ERR, "%s%i: nonce error chip %d not present",
 				minioncgpu->drv->name, minioncgpu->device_id, chip);
-		return NONCE_SPI_ERR;
+		return NONCE_NO_WORK;
 	}
 
 	if (core < 0 || core >= MINION_CORES) {
@@ -2359,7 +2357,7 @@ static enum nonce_state oknonce(struct thr_info *thr, struct cgpu_info *minioncg
 
 	if (!item) {
 		K_RUNLOCK(minioninfo->wchip_list[chip]);
-		applog(LOG_ERR, "%s%i: no chip work (chip %d core %d task 0x%04x)",
+		applog(LOG_ERR, "%s%i: chip %d has no tasks (core %d task 0x%04x)",
 				minioncgpu->drv->name, minioncgpu->device_id,
 				chip, core, (int)task_id);
 		if (!no_nonce) {
@@ -2369,19 +2367,22 @@ static enum nonce_state oknonce(struct thr_info *thr, struct cgpu_info *minioncg
 		return NONCE_NO_WORK;
 	}
 
+	min_task_id = DATAW(item)->task_id;
 	while (item) {
 		if (DATAW(item)->task_id == task_id)
 			break;
 
 		item = item->prev;
 	}
+	max_task_id = DATAW(minioninfo->wchip_list[chip]->head)->task_id;
 	K_RUNLOCK(minioninfo->wchip_list[chip]);
 
 
 	if (!item) {
-		applog(LOG_ERR, "%s%i: chip %d core %d unknown work task 0x%04x (no_nonce=%d)",
+		applog(LOG_ERR, "%s%i: chip %d core %d unknown task 0x%04x (min=0x%04x max=0x%04x no_nonce=%d)",
 				minioncgpu->drv->name, minioncgpu->device_id,
-				chip, core, (int)task_id, no_nonce);
+				chip, core, (int)task_id, (int)min_task_id,
+				(int)max_task_id, no_nonce);
 		if (!no_nonce) {
 			minioninfo->untested_nonces++;
 			minioninfo->chip_err[chip]++;
