@@ -2408,7 +2408,7 @@ static enum nonce_state oknonce(struct thr_info *thr, struct cgpu_info *minioncg
 			cgtime(&now);
 			K_WLOCK(minioninfo->hfree_list);
 			item = k_unlink_head(minioninfo->hfree_list);
-			memcpy(when, &(DATAH(item)->when), sizeof(*when));
+			memcpy(&(DATAH(item)->when), when, sizeof(*when));
 			k_add_head(minioninfo->hchip_list[chip], item);
 			for (chip_tmp = 0; chip_tmp < MINION_CHIPS; chip_tmp++) {
 				tail = minioninfo->hchip_list[chip_tmp]->tail;
