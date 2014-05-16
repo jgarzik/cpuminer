@@ -3036,8 +3036,7 @@ static void chip_report(struct cgpu_info *minioncgpu)
 				else {
 					ghs = 0xffffffffull * (minioninfo->history_nonces[chip] - 1);
 					ghs /= 1000000000.0;
-					ghs /= tdiff(&(minioninfo->newest_nonce[chip]),
-							&(minioninfo->oldest_nonce[chip]));
+					ghs /= tdiff(&now, &(minioninfo->oldest_nonce[chip]));
 				}
 				snprintf(buf + len, sizeof(buf) - len,
 					 "%s%d=%.2f", any ? " " : "", chip, ghs);
