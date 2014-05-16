@@ -3040,7 +3040,7 @@ static void chip_report(struct cgpu_info *minioncgpu)
 							&(minioninfo->oldest_nonce[chip]));
 				}
 				snprintf(buf + len, sizeof(buf) - len,
-					 "%s%d:%.2f", any ? " " : "", chip, ghs);
+					 "%s%d=%.2f", any ? " " : "", chip, ghs);
 				minioninfo->history_ghs[chip] = ghs;
 				any = true;
 			}
