@@ -2986,13 +2986,14 @@ static void idle_report(struct cgpu_info *minioncgpu)
 {
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	struct timeval now;
+	uint32_t idle;
 	int msdiff;
 	int chip;
 
 	for (chip = 0; chip < MINION_CHIPS; chip++) {
 		if (minioninfo->chip[chip]) {
-			if (minioninfo->chip_status[chip].idle !=
-			    minioninfo->chip_status[chip].last_rpt_idle) {
+			idle = minioninfo->chip_status[chip].idle;
+			if (idle != minioninfo->chip_status[chip].last_rpt_idle) {
 				cgtime(&now);
 				msdiff = ms_tdiff(&now, &(minioninfo->chip_status[chip].idle_rpt));
 				if (msdiff >= MINION_IDLE_MESSAGE_ms) {
@@ -3000,7 +3001,8 @@ static void idle_report(struct cgpu_info *minioncgpu)
 					applog(LOG_WARNING,
 						"%s%d: chip %d internal idle increased %08x",
 						minioncgpu->drv->name, minioncgpu->device_id,
-						chip, minioninfo->chip_status[chip].idle);
+						chip, idle);
+					minioninfo->chip_status[chip].last_rpt_idle = idle;
 				}
 			}
 		}
