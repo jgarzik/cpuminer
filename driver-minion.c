@@ -452,7 +452,6 @@ typedef struct ritem {
 #define MINION_HISTORY_s 300
 
 typedef struct hitem {
-	int chip;
 	struct timeval when;
 } HITEM;
 
@@ -643,16 +642,9 @@ struct minion_info {
 
 	// Nonce history
 	K_LIST *hfree_list;
-	// A single list for quick removal
-	K_STORE *hnonce_list;
-	/* Note this stores a duplicate of hnonce_list, but per chip
-	   Thus allows to immeditaley find the 2nd last nonce per chip */
 	K_STORE *hchip_list[MINION_CHIPS];
 
 	struct timeval chip_rpt;
-	struct timeval oldest_nonce[MINION_CHIPS];
-	struct timeval newest_nonce[MINION_CHIPS];
-	uint64_t history_nonces[MINION_CHIPS];
 	double history_ghs[MINION_CHIPS];
 
 #if DO_IO_STATS
@@ -1696,7 +1688,6 @@ static void minion_detect(bool hotplug)
 
 	if (opt_minion_chipreport > 0) {
 		minioninfo->hfree_list = k_new_list("History", sizeof(HITEM), ALLOC_HITEMS, LIMIT_HITEMS, true);
-		minioninfo->hnonce_list = k_new_store(minioninfo->hfree_list);
 		for (i = 0; i < MINION_CHIPS; i++)
 			minioninfo->hchip_list[i] = k_new_store(minioninfo->hfree_list);
 	}
@@ -2413,37 +2404,21 @@ static enum nonce_state oknonce(struct thr_info *thr, struct cgpu_info *minioncg
 		cleanup_older(minioncgpu, chip, item, no_nonce);
 
 		if (opt_minion_chipreport > 0) {
+			int chip_tmp;
 			cgtime(&now);
-
-			K_WLOCK(minioninfo->hnonce_list);
-			memcpy(&(minioninfo->newest_nonce[chip]), when, sizeof(*when));
-			if (minioninfo->history_nonces[chip] == 0)
-				memcpy(&(minioninfo->oldest_nonce[chip]), when, sizeof(*when));
-			minioninfo->history_nonces[chip]++;
+			K_WLOCK(minioninfo->hfree_list);
 			item = k_unlink_head(minioninfo->hfree_list);
-			DATAH(item)->chip = chip;
 			memcpy(when, &(DATAH(item)->when), sizeof(*when));
-			k_add_head(minioninfo->hnonce_list, item);
 			k_add_head(minioninfo->hchip_list[chip], item);
-			tail = minioninfo->hnonce_list->tail;
-			while (tail && tdiff(&(DATAH(tail)->when), &now) > MINION_HISTORY_s) {
-				int chip_tmp = DATAH(tail)->chip;
-				// The 2 tails should be the same hitem
-				k_unlink_tail(minioninfo->hchip_list[chip_tmp]);
-				tail = k_unlink_tail(minioninfo->hnonce_list);
-				minioninfo->history_nonces[chip_tmp]--;
-				k_add_head(minioninfo->hfree_list, item);
-
-				// New oldest nonce
+			for (chip_tmp = 0; chip_tmp < MINION_CHIPS; chip_tmp++) {
 				tail = minioninfo->hchip_list[chip_tmp]->tail;
-				if (tail) {
-					memcpy(&(minioninfo->oldest_nonce[chip_tmp]),
-						&(DATAH(tail)->when), sizeof(*when));
+				while (tail && tdiff(&(DATAH(tail)->when), &now) > MINION_HISTORY_s) {
+					tail = k_unlink_tail(minioninfo->hchip_list[chip_tmp]);
+					k_add_head(minioninfo->hfree_list, item);
+					tail = minioninfo->hchip_list[chip_tmp]->tail;
 				}
-
-				tail = minioninfo->hnonce_list->tail;
 			}
-			K_WUNLOCK(minioninfo->hnonce_list);
+			K_WUNLOCK(minioninfo->hfree_list);
 		}
 
 		return NONCE_GOOD_NONCE;
@@ -3030,16 +3005,16 @@ static void chip_report(struct cgpu_info *minioncgpu)
 	if (msdiff >= (opt_minion_chipreport * 1000)) {
 		buf[0] = '\0';
 		any = false;
-		K_RLOCK(minioninfo->hnonce_list);
+		K_RLOCK(minioninfo->hfree_list);
 		for (chip = 0; chip < MINION_CHIPS; chip++) {
 			if (minioninfo->chip[chip]) {
 				len = strlen(buf);
-				if (minioninfo->history_nonces[chip] < 2)
+				if (minioninfo->hchip_list[chip]->count < 2)
 					ghs = 0.0;
 				else {
-					ghs = 0xffffffffull * (minioninfo->history_nonces[chip] - 1);
+					ghs = 0xffffffffull * (minioninfo->hchip_list[chip]->count - 1);
 					ghs /= 1000000000.0;
-					ghs /= tdiff(&now, &(minioninfo->oldest_nonce[chip]));
+					ghs /= tdiff(&now, &(DATAH(minioninfo->hchip_list[chip]->tail)->when));
 				}
 				snprintf(buf + len, sizeof(buf) - len,
 					 "%s%d=%.2f", any ? " " : "", chip, ghs);
@@ -3047,7 +3022,7 @@ static void chip_report(struct cgpu_info *minioncgpu)
 				any = true;
 			}
 		}
-		K_RUNLOCK(minioninfo->hnonce_list);
+		K_RUNLOCK(minioninfo->hfree_list);
 		applogsiz(LOG_WARNING, 512,
 			  "%s%d: Chip GHs %s",
 			  minioncgpu->drv->name, minioncgpu->device_id, buf);
