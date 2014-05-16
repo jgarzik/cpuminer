@@ -35,6 +35,7 @@ static void minion_detect(__maybe_unused bool hotplug)
 
 #define MINION_CHIPS 32
 #define MINION_CORES 99
+#define FAKE_CORE MINION_CORES
 
 /*
  * TODO: These will need adjusting for final hardware
@@ -598,8 +599,8 @@ struct minion_info {
 	uint64_t chip_good[MINION_CHIPS];
 	uint64_t chip_bad[MINION_CHIPS];
 	uint64_t chip_err[MINION_CHIPS];
-	uint64_t core_good[MINION_CHIPS][MINION_CORES];
-	uint64_t core_bad[MINION_CHIPS][MINION_CORES];
+	uint64_t core_good[MINION_CHIPS][MINION_CORES+1];
+	uint64_t core_bad[MINION_CHIPS][MINION_CORES+1];
 
 	uint32_t chip_core_ena[MINION_CORE_REPS][MINION_CHIPS];
 	uint32_t chip_core_act[MINION_CORE_REPS][MINION_CHIPS];
@@ -2322,6 +2323,8 @@ static enum nonce_state oknonce(struct thr_info *thr, struct cgpu_info *minioncg
 	struct timeval now;
 	K_ITEM *item, *tail;
 
+	// TODO: maybe later consider searching for the correct chip number?
+	//  e.g. with the task_id
 	if (chip < 0 || chip >= MINION_CHIPS) {
 		minioninfo->spi_errors++;
 		applog(LOG_ERR, "%s%i: SPI nonce error invalid chip %d",
@@ -2341,7 +2344,9 @@ static enum nonce_state oknonce(struct thr_info *thr, struct cgpu_info *minioncg
 		minioninfo->chip_spi_errors[chip]++;
 		applog(LOG_ERR, "%s%i: SPI nonce error invalid core %d (chip %d)",
 				minioncgpu->drv->name, minioncgpu->device_id, core, chip);
-		return NONCE_SPI_ERR;
+
+		// use the fake core number so we don't discard the result
+		core = FAKE_CORE;
 	}
 
 	if (no_nonce)
