@@ -27,6 +27,9 @@ static void minion_detect(__maybe_unused bool hotplug)
 #include <fcntl.h>
 #include <poll.h>
 
+// Define this to 1 to enable interrupt code and enable no_nonce
+#define ENABLE_INT_NONO 0
+
 #define MINION_SPI_BUS 0
 #define MINION_SPI_CHIP 0
 
@@ -139,8 +142,12 @@ static void minion_detect(__maybe_unused bool hotplug)
 				RSTN_CTL_SPI_SW_RSTN | \
 				RSTN_CTL_FLUSH_CMD_QUEUE)
 
+#if ENABLE_INT_NONO
 // enable 'no nonce' report
 #define SYS_MISC_CTL_DEFAULT 0x04
+#else
+#define SYS_MISC_CTL_DEFAULT 0x00
+#endif
 
 // Temperature returned by MINION_SYS_CHIP_STA 0x01 STA_TEMP()
 #define MINION_TEMP_40 0
@@ -1244,7 +1251,11 @@ static void enable_interrupt(struct cgpu_info *minioncgpu, struct minion_info *m
 			  rbuf, 0, data);
 
 //	data[0] = MINION_RESULT_INT;
+#if ENABLE_INT_NONO
 	data[0] = MINION_RESULT_INT | MINION_CMD_INT;
+#else
+	data[0] = 0x00;
+#endif
 	data[1] = 0x00;
 	data[2] = 0x00;
 	data[3] = 0x00;
@@ -1967,18 +1978,22 @@ static void *minion_spi_reply(void *userdata)
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	struct minion_result *result;
 	K_ITEM *item;
-	TITEM fifo_task, res_task, clr_task;
+	TITEM fifo_task, res_task;
 	int chip, resoff;
-	int ret, chipwork, gap;
-	struct pollfd pfd;
-	bool somelow, gotreplies;
+	int chipwork, gap;
+	bool somelow;
 	struct timeval now;
 
+#if ENABLE_INT_NONO
+	TITEM clr_task;
+	struct pollfd pfd;
 	struct minion_header *head;
 	uint8_t rbuf[MINION_BUFSIZ];
 	uint8_t wbuf[MINION_BUFSIZ];
 	uint32_t wsiz, rsiz;
-	int reply;
+	int ret, reply;
+	bool gotreplies = false;
+#endif
 
 	applog(MINION_LOG, "%s%i: SPI replying...",
 				minioncgpu->drv->name, minioncgpu->device_id);
@@ -2003,6 +2018,7 @@ static void *minion_spi_reply(void *userdata)
 	res_task.wsiz = 0;
 	res_task.rsiz = MINION_RES_DATA_SIZ;
 
+#if ENABLE_INT_NONO
 	// Clear RESULT_INT after reading all results
 	clr_task.chip = 0;
 	clr_task.write = true;
@@ -2022,9 +2038,9 @@ static void *minion_spi_reply(void *userdata)
 	SET_HEAD_SIZ(head, MINION_SYS_SIZ);
 	wsiz = HSIZE() + MINION_SYS_SIZ;
 	rsiz = MINION_SYS_SIZ; // for READ, use 0 for WRITE
+#endif
 
 	somelow = false;
-	gotreplies = false;
 	while (minioncgpu->shutdown == false) {
 		for (chip = 0; chip < MINION_CHIPS; chip++) {
 			if (minioninfo->chip[chip]) {
@@ -2151,11 +2167,14 @@ applog(LOG_ERR, "%s%i: Large work reply res %d", minioncgpu->drv->name, minioncg
 		if (somelow)
 			cgsem_post(&(minioninfo->scan_work));
 
+#if ENABLE_INT_NONO
 		if (gotreplies)
 			minion_txrx(&clr_task);
+#endif
 
+#if !ENABLE_INT_NONO
 		cgsleep_ms(MINION_REPLY_mS);
-
+#else
 		// TODO: this is going to require a bit of tuning with 2TH/s mining:
 		// The interrupt size MINION_RESULT_INT_SIZE should be high enough to expect
 		// most chips to have some results but low enough to cause negligible latency
@@ -2235,6 +2254,7 @@ applog(LOG_ERR, "%s%i: Large work reply res %d", minioncgpu->drv->name, minioncg
 			if (gotres)
 				cgsem_post(&(minioninfo->scan_work));
 		}
+#endif
 	}
 
 	return NULL;
