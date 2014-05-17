@@ -416,6 +416,7 @@ typedef struct witem {
 #define LIMIT_TITEMS 0
 
 typedef struct titem {
+	uint64_t tid;
 	uint8_t chip;
 	bool write;
 	uint8_t address;
@@ -641,6 +642,8 @@ struct minion_info {
 	K_LIST *tfree_list;
 	K_STORE *task_list;
 	K_STORE *treply_list;
+
+	uint64_t next_tid;
 
 	// Nonce replies
 	K_LIST *rfree_list;
@@ -1865,6 +1868,7 @@ static void *minion_spi_write(void *userdata)
 											    chip);
 									K_WLOCK(minioninfo->tfree_list);
 									task = k_unlink_head(minioninfo->tfree_list);
+									DATAT(task)->tid = ++(minioninfo->next_tid);
 									DATAT(task)->chip = chip;
 									DATAT(task)->write = true;
 									DATAT(task)->address = MINION_SYS_RSTN_CTL;
@@ -2539,6 +2543,7 @@ static void minion_flush_work(struct cgpu_info *minioncgpu)
 		if (minioninfo->chip[i]) {
 			// TODO: consider sending it now rather than adding to the task list?
 			task = k_unlink_head(minioninfo->tfree_list);
+			DATAT(task)->tid = ++(minioninfo->next_tid);
 			DATAT(task)->chip = i;
 			DATAT(task)->write = true;
 			DATAT(task)->address = MINION_SYS_RSTN_CTL;
@@ -2601,6 +2606,7 @@ static void sys_chip_sta(struct cgpu_info *minioncgpu, int chip)
 
 			K_WLOCK(minioninfo->tfree_list);
 			item = k_unlink_head(minioninfo->tfree_list);
+			DATAT(item)->tid = ++(minioninfo->next_tid);
 			K_WUNLOCK(minioninfo->tfree_list);
 
 			DATAT(item)->chip = chip;
@@ -2614,6 +2620,7 @@ static void sys_chip_sta(struct cgpu_info *minioncgpu, int chip)
 			K_WLOCK(minioninfo->task_list);
 			k_add_head(minioninfo->task_list, item);
 			item = k_unlink_head(minioninfo->tfree_list);
+			DATAT(item)->tid = ++(minioninfo->next_tid);
 			K_WUNLOCK(minioninfo->task_list);
 
 			DATAT(item)->chip = chip;
@@ -2633,6 +2640,7 @@ static void sys_chip_sta(struct cgpu_info *minioncgpu, int chip)
 				// Ena
 				K_WLOCK(minioninfo->tfree_list);
 				item = k_unlink_head(minioninfo->tfree_list);
+				DATAT(item)->tid = ++(minioninfo->next_tid);
 				K_WUNLOCK(minioninfo->tfree_list);
 
 				DATAT(item)->chip = chip;
@@ -2647,6 +2655,7 @@ static void sys_chip_sta(struct cgpu_info *minioncgpu, int chip)
 				k_add_head(minioninfo->task_list, item);
 				// Act
 				item = k_unlink_head(minioninfo->tfree_list);
+				DATAT(item)->tid = ++(minioninfo->next_tid);
 				K_WUNLOCK(minioninfo->task_list);
 
 				DATAT(item)->chip = chip;
@@ -2673,6 +2682,7 @@ static void new_work_task(struct cgpu_info *minioncgpu, K_ITEM *witem, int chip,
 
 	K_WLOCK(minioninfo->tfree_list);
 	item = k_unlink_head(minioninfo->tfree_list);
+	DATAT(item)->tid = ++(minioninfo->next_tid);
 	K_WUNLOCK(minioninfo->tfree_list);
 
 	DATAT(item)->chip = chip;
@@ -2853,6 +2863,7 @@ static void minion_do_work(struct cgpu_info *minioncgpu)
 		// Clear CMD interrupt since we've now sent more
 		K_WLOCK(minioninfo->tfree_list);
 		task = k_unlink_head(minioninfo->tfree_list);
+		DATAT(task)->tid = ++(minioninfo->next_tid);
 		DATAT(task)->chip = 0; // ignored
 		DATAT(task)->write = true;
 		DATAT(task)->address = MINION_SYS_INT_CLR;
