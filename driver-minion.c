@@ -1623,6 +1623,8 @@ static void minion_detect(bool hotplug)
 {
 	struct cgpu_info *minioncgpu = NULL;
 	struct minion_info *minioninfo = NULL;
+	char buf[512];
+	size_t off;
 	int i;
 
 	if (hotplug)
@@ -1662,9 +1664,17 @@ static void minion_detect(bool hotplug)
 
 	minion_detect_chips(minioncgpu, minioninfo);
 
-	applog(LOG_WARNING, "%s: found %d chip%s",
+	buf[0] = '\0';
+	for (i = 0; i < MINION_CHIPS; i++) {
+		if (minioninfo->chip[i]) {
+			off = strlen(buf);
+			snprintf(buf + off, sizeof(buf) - off, " %d", i);
+		}
+	}
+
+	applog(LOG_WARNING, "%s: found %d chip%s:%s",
 				minioncgpu->drv->dname, minioninfo->chips,
-				(minioninfo->chips == 1) ? "" : "s");
+				(minioninfo->chips == 1) ? "" : "s", buf);
 
 	if (minioninfo->chips == 0)
 		goto cleanup;
