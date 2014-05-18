@@ -1880,8 +1880,10 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 	free(tmp);
 	mutex_unlock(&pool->stratum_lock);
 
-	if (!restart_stratum(pool))
+	if (!restart_stratum(pool)) {
+		pool_failed(pool);
 		return false;
+	}
 
 	return true;
 }
