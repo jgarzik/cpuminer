@@ -22,7 +22,8 @@
 #define AVA2_IO_SPEED		115200
 
 #define AVA2_DEFAULT_MINERS	10
-#define AVA2_DEFAULT_MODULARS	3
+#define AVA2_AVA3_MINERS	5
+#define AVA2_DEFAULT_MODULARS	4
 
 #define AVA2_PWM_MAX	0x3FF
 #define AVA2_DEFAULT_FAN_PWM	80 /* % */
@@ -36,6 +37,8 @@
 #define AVA2_DEFAULT_FREQUENCY	1500 /* In MH/s */
 #define AVA2_DEFAULT_FREQUENCY_MIN	300
 #define AVA2_DEFAULT_FREQUENCY_MAX	2000
+
+#define AVALON2_TEMP_OVERHEAT	88
 
 /* Avalon2 protocol package type */
 #define AVA2_H1	'A'
@@ -66,6 +69,16 @@
 #define AVA2_P_ACKDETECT	25
 #define AVA2_P_TEST_RET		26
 /* Avalon2 protocol package type */
+
+/* Avalon2/3 firmware prefix */
+#define AVA2_FW2_PREFIXSTR	"20"
+#define AVA2_FW3_PREFIXSTR	"33"
+
+#define AVA2_MM_VERNULL		"NONE"
+
+#define AVA2_ID_AVA2		3255
+#define AVA2_ID_AVA3		3233
+#define AVA2_ID_AVAX		3200
 
 struct avalon2_pkg {
 	uint8_t head[2];
@@ -132,6 +145,7 @@ struct avalon2_info {
 extern char *set_avalon2_fan(char *arg);
 extern char *set_avalon2_freq(char *arg);
 extern char *set_avalon2_voltage(char *arg);
+extern int opt_avalon2_overheat;
 
 #endif /* USE_AVALON2 */
 #endif	/* _AVALON2_H_ */

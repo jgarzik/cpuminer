@@ -51,6 +51,8 @@ int opt_avalon2_fan_max = AVA2_DEFAULT_FAN_MAX;
 int opt_avalon2_voltage_min = AVA2_DEFAULT_VOLTAGE;
 int opt_avalon2_voltage_max = AVA2_DEFAULT_VOLTAGE_MAX;
 
+int opt_avalon2_overheat = AVALON2_TEMP_OVERHEAT;
+
 static inline uint8_t rev8(uint8_t d)
 {
     int i;
@@ -163,6 +165,17 @@ static inline int get_temp_max(struct avalon2_info *info)
 	return info->temp_max;
 }
 
+static inline int get_currect_temp_max(struct avalon2_info *info)
+{
+	int i;
+	int t = 0;
+	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i++) {
+		if (t <= info->temp[i])
+			t = info->temp[i];
+	}
+	return t;
+}
+
 /* http://www.onsemi.com/pub_link/Collateral/ADP3208D.PDF */
 static inline uint32_t encode_voltage(uint32_t v)
 {
@@ -209,7 +222,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 
 		memcpy(&modular_id, ar->data + 28, 4);
 		modular_id = be32toh(modular_id);
-		if (modular_id == 3)
+		if (modular_id > 3)
 			modular_id = 0;
 
 		switch(type) {
@@ -225,7 +238,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			miner = be32toh(miner);
 			pool_no = be32toh(pool_no);
 			if (miner >= AVA2_DEFAULT_MINERS ||
-			    modular_id >= AVA2_DEFAULT_MINERS || 
+			    modular_id >= AVA2_DEFAULT_MINERS ||
 			    pool_no >= total_pools ||
 			    pool_no < 0) {
 				applog(LOG_DEBUG, "Avalon2: Wrong miner/pool/id no %d,%d,%d", miner, pool_no, modular_id);
@@ -429,7 +442,7 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 		;
 
-	set_target(target, pool->swork.diff);
+	set_target(target, pool->sdiff);
 	memcpy(pkg.data, target, 32);
 	if (opt_debug) {
 		char *target_str;
@@ -529,7 +542,7 @@ static bool avalon2_detect_one(const char *devpath)
 	struct avalon2_info *info;
 	int ackdetect;
 	int fd;
-	int tmp, i, modular[3];
+	int tmp, i, modular[AVA2_DEFAULT_MODULARS];
 	char mm_version[AVA2_DEFAULT_MODULARS][16];
 
 	struct cgpu_info *avalon2;
@@ -547,7 +560,7 @@ static bool avalon2_detect_one(const char *devpath)
 
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		modular[i] = 0;
-		strcpy(mm_version[i], "NONE");
+		strcpy(mm_version[i], AVA2_MM_VERNULL);
 		/* Send out detect pkg */
 		memset(detect_pkg.data, 0, AVA2_P_DATA_LEN);
 		tmp = be32toh(i);
@@ -563,7 +576,7 @@ static bool avalon2_detect_one(const char *devpath)
 		memcpy(mm_version[i], ret_pkg.data, 15);
 		mm_version[i][15] = '\0';
 	}
-	if (!modular[0] && !modular[1] && !modular[2])
+	if (!modular[0] && !modular[1] && !modular[2] && !modular[3])
 		return false;
 
 	/* We have a real Avalon! */
@@ -585,6 +598,7 @@ static bool avalon2_detect_one(const char *devpath)
 	strcpy(info->mm_version[0], mm_version[0]);
 	strcpy(info->mm_version[1], mm_version[1]);
 	strcpy(info->mm_version[2], mm_version[2]);
+	strcpy(info->mm_version[3], mm_version[3]);
 
 	info->baud = AVA2_IO_SPEED;
 	info->fan_pwm = AVA2_DEFAULT_FAN_PWM;
@@ -597,6 +611,7 @@ static bool avalon2_detect_one(const char *devpath)
 	info->modulars[0] = modular[0];
 	info->modulars[1] = modular[1];
 	info->modulars[2] = modular[2];	/* Enable modular */
+	info->modulars[3] = modular[3];	/* Enable modular */
 
 	info->fd = -1;
 	/* Set asic to idle mode after detect */
@@ -696,10 +711,14 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		pool = current_pool();
 		if (!pool->has_stratum)
 			quit(1, "Avalon2: Miner Manager have to use stratum pool");
-		if (pool->coinbase_len > AVA2_P_COINBASE_SIZE)
-			quit(1, "Avalon2: Miner Manager pool coinbase length have to less then %d", AVA2_P_COINBASE_SIZE);
-		if (pool->merkles > AVA2_P_MERKLES_COUNT)
-			quit(1, "Avalon2: Miner Manager merkles have to less then %d", AVA2_P_MERKLES_COUNT);
+		if (pool->coinbase_len > AVA2_P_COINBASE_SIZE) {
+			applog(LOG_ERR, "Avalon2: Miner Manager pool coinbase length have to less then %d", AVA2_P_COINBASE_SIZE);
+			return 0;
+		}
+		if (pool->merkles > AVA2_P_MERKLES_COUNT) {
+			applog(LOG_ERR, "Avalon2: Miner Manager merkles have to less then %d", AVA2_P_MERKLES_COUNT);
+			return 0;
+		}
 
 		info->diff = (int)pool->swork.diff - 1;
 		info->pool_no = pool->pool_no;
@@ -719,7 +738,12 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		tmp = be32toh(info->fan_pwm);
 		memcpy(send_pkg.data, &tmp, 4);
 
-		tmp = encode_voltage(info->set_voltage);
+		applog(LOG_ERR, "Avalon2: Temp max: %d, Cut off temp: %d",
+		       get_currect_temp_max(info), opt_avalon2_overheat);
+		if (get_currect_temp_max(info) >= opt_avalon2_overheat)
+			tmp = encode_voltage(0);
+		else
+			tmp = encode_voltage(info->set_voltage);
 		tmp = be32toh(tmp);
 		memcpy(send_pkg.data + 4, &tmp, 4);
 
@@ -756,26 +780,61 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct avalon2_info *info = cgpu->device_data;
-	int i, a, b;
+	int i, j, a, b;
 	char buf[24];
 	double hwp;
+	int devtype[AVA2_DEFAULT_MODULARS];
+	int minerindex, minercount;
+
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		devtype[i] = AVA2_ID_AVAX;
+		if (!strncmp((char *)&(info->mm_version[i]), AVA2_MM_VERNULL, 4))
+			continue;
+		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW2_PREFIXSTR, 2))
+			devtype[i] = AVA2_ID_AVA2;
+		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW3_PREFIXSTR, 2))
+			devtype[i] = AVA2_ID_AVA3;
+
 		sprintf(buf, "ID%d MM Version", i + 1);
 		root = api_add_string(root, buf, &(info->mm_version[i]), false);
 	}
-	for (i = 0; i < AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS; i++) {
-		sprintf(buf, "Match work count%02d", i + 1);
-		root = api_add_int(root, buf, &(info->matching_work[i]), false);
-	}
+
+	minerindex = 0;
+	minercount = 0;
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if (devtype[i] == AVA2_ID_AVAX) {
+			minerindex += AVA2_DEFAULT_MINERS;
+			continue;
+		}
+
+		if (devtype[i] == AVA2_ID_AVA2)
+			minercount = AVA2_DEFAULT_MINERS;
+
+		if (devtype[i] == AVA2_ID_AVA3)
+			minercount = AVA2_AVA3_MINERS;
+
+		for (j = minerindex; j < (minerindex + minercount); j++) {
+			sprintf(buf, "Match work count%02d", j+1);
+			root = api_add_int(root, buf, &(info->matching_work[j]), false);
+		}
+		minerindex += AVA2_DEFAULT_MINERS;
+	}
+
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if(devtype[i] == AVA2_ID_AVAX)
+			continue;
 		sprintf(buf, "Local works%d", i + 1);
 		root = api_add_int(root, buf, &(info->local_works[i]), false);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if(devtype[i] == AVA2_ID_AVAX)
+			continue;
 		sprintf(buf, "Hardware error works%d", i + 1);
 		root = api_add_int(root, buf, &(info->hw_works[i]), false);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if(devtype[i] == AVA2_ID_AVAX)
+			continue;
 		a = info->hw_works[i];
 		b = info->local_works[i];
 		hwp = b ? ((double)a / (double)b) : 0;
@@ -784,26 +843,35 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 		root = api_add_percent(root, buf, &hwp, true);
 	}
 	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i++) {
+		if(devtype[i/2] == AVA2_ID_AVAX)
+			continue;
 		sprintf(buf, "Temperature%d", i + 1);
 		root = api_add_int(root, buf, &(info->temp[i]), false);
 	}
 	for (i = 0; i < 2 * AVA2_DEFAULT_MODULARS; i++) {
+		if(devtype[i/2] == AVA2_ID_AVAX)
+			continue;
 		sprintf(buf, "Fan%d", i + 1);
 		root = api_add_int(root, buf, &(info->fan[i]), false);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if(devtype[i] == AVA2_ID_AVAX)
+			continue;
 		sprintf(buf, "Voltage%d", i + 1);
 		root = api_add_int(root, buf, &(info->get_voltage[i]), false);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if(devtype[i] == AVA2_ID_AVAX)
+			continue;
 		sprintf(buf, "Frequency%d", i + 1);
 		root = api_add_int(root, buf, &(info->get_frequency[i]), false);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
+		if(devtype[i] == AVA2_ID_AVAX)
+			continue;
 		sprintf(buf, "Power good %02x", i + 1);
-	root = api_add_int(root, buf, &(info->power_good[i]), false);
+		root = api_add_int(root, buf, &(info->power_good[i]), false);
 	}
-
 
 	return root;
 }

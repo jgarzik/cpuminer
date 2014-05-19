@@ -1117,6 +1117,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_CBARG("--avalon2-voltage",
 		     set_avalon2_voltage, NULL, &opt_set_avalon2_voltage,
 		     "Set Avalon2 core voltage, in millivolts"),
+	OPT_WITH_ARG("--avalon2-cutoff",
+		     set_int_0_to_100, opt_show_intval, &opt_avalon2_overheat,
+		     "Set Avalon2 overheat cut off temperature"),
 #endif
 #ifdef USE_BAB
 	OPT_WITH_ARG("--bab-options",
