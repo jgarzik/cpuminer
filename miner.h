@@ -247,6 +247,7 @@ static inline int fsync (int fd)
 	DRIVER_ADD_COMMAND(bab) \
 	DRIVER_ADD_COMMAND(minion) \
 	DRIVER_ADD_COMMAND(ants1) \
+	DRIVER_ADD_COMMAND(ants2) \
 	DRIVER_ADD_COMMAND(avalon2) \
 	DRIVER_ADD_COMMAND(avalon) \
 	DRIVER_ADD_COMMAND(spondoolies)
@@ -428,6 +429,7 @@ struct cgpu_info {
 	char *name;
 	char *device_path;
 	void *device_data;
+	void *dup_data;
 	char *unique_id;
 #ifdef USE_USBUTILS
 	struct cg_usb_device *usbdev;
@@ -1008,6 +1010,15 @@ extern char *opt_bitmine_a1_options;
 extern char *opt_bitmain_options;
 extern bool opt_bitmain_hwerror;
 #endif
+#ifdef USE_ANT_S2
+extern char *opt_bitmain_dev;
+extern char *opt_bitmain_options;
+extern bool opt_bitmain_hwerror;
+extern bool opt_bitmain_checkall;
+extern bool opt_bitmain_checkn2diff;
+extern bool opt_bitmain_beeper;
+extern bool opt_bitmain_tempoverctrl;
+#endif
 #ifdef USE_MINION
 extern char *opt_minion_freq;
 #endif
@@ -1538,5 +1549,8 @@ extern struct api_data *api_add_hs(struct api_data *root, char *name, double *da
 extern struct api_data *api_add_diff(struct api_data *root, char *name, double *data, bool copy_data);
 extern struct api_data *api_add_percent(struct api_data *root, char *name, double *data, bool copy_data);
 extern struct api_data *api_add_avg(struct api_data *root, char *name, float *data, bool copy_data);
+
+extern void dupalloc(struct cgpu_info *cgpu, int timelimit);
+extern bool isdupnonce(struct cgpu_info *cgpu, struct work *work, uint32_t nonce);
 
 #endif /* __MINER_H__ */

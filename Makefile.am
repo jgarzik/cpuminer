@@ -45,6 +45,8 @@ cgminer_SOURCES	+= logging.c
 
 cgminer_SOURCES	+= klist.h klist.c
 
+cgminer_SOURCES	+= noncedup.c
+
 if NEED_FPGAUTILS
 cgminer_SOURCES += fpgautils.c fpgautils.h
 endif
@@ -125,6 +127,10 @@ cgminer_SOURCES += driver-minion.c
 endif
 
 if HAS_ANT_S1
+cgminer_SOURCES += driver-bitmain.c driver-bitmain.h
+endif
+
+if HAS_ANT_S2
 cgminer_SOURCES += driver-bitmain.c driver-bitmain.h
 endif
 

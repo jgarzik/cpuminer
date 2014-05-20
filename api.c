@@ -30,7 +30,7 @@
 	defined(USE_HASHFAST) || defined(USE_BITFURY) || defined(USE_KLONDIKE) || \
 	defined(USE_KNC) || defined(USE_BAB) || defined(USE_DRILLBIT) || \
 	defined(USE_MINION) || defined(USE_COINTERRA) || defined(USE_BITMINE_A1) || \
-	defined(USE_ANT_S1) || defined(USE_SPONDOOLIES)
+	defined(USE_ANT_S1) || defined(USE_ANT_S2) || defined(USE_SPONDOOLIES)
 #define HAVE_AN_ASIC 1
 #endif
 
@@ -156,6 +156,9 @@ static const char *SHA256STR = "sha256";
 static const char *DEVICECODE = ""
 #ifdef USE_ANT_S1
 			"ANT "
+#endif
+#ifdef USE_ANT_S2
+			"AS2 "
 #endif
 #ifdef USE_AVALON
 			"AVA "

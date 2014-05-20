@@ -12,7 +12,7 @@
 #ifndef BITMAIN_H
 #define BITMAIN_H
 
-#ifdef USE_ANT_S1
+#if defined(USE_ANT_S1) || defined(USE_ANT_S2)
 
 #include "util.h"
 #include "klist.h"
@@ -54,7 +54,11 @@
 
 #define BITMAIN_AUTO_CYCLE 1024
 
+#ifdef USE_ANT_S1
 #define BITMAIN_FTDI_READSIZE 510
+#else // S2
+#define BITMAIN_FTDI_READSIZE 2048
+#endif
 #define BITMAIN_USB_PACKETSIZE 512
 #define BITMAIN_SENDBUF_SIZE 8192
 #define BITMAIN_READBUF_SIZE 8192
@@ -62,25 +66,52 @@
 #define BITMAIN_READ_TIMEOUT 18 /* Enough to only half fill the buffer */
 #define BITMAIN_LATENCY 1
 
+#ifdef USE_ANT_S1
 #define BITMAIN_MAX_WORK_NUM       8
 #define BITMAIN_MAX_WORK_QUEUE_NUM 64
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 1
 #define BITMAIN_MAX_NONCE_NUM      8
 #define BITMAIN_MAX_CHAIN_NUM      8
+#else // S2
+#define BITMAIN_MAX_WORK_NUM       64
+#define BITMAIN_MAX_WORK_QUEUE_NUM 4096
+#define BITMAIN_MAX_DEAL_QUEUE_NUM 32
+#define BITMAIN_MAX_NONCE_NUM      128
+#define BITMAIN_MAX_CHAIN_NUM      16
+#endif
+
 #define BITMAIN_MAX_TEMP_NUM       32
 #define BITMAIN_MAX_FAN_NUM        32
 
+#ifdef USE_ANT_S1
 #define BITMAIN_SEND_STATUS_TIME   10 //s
 #define BITMAIN_SEND_FULL_SPACE    128
+#else // S2
+#define BITMAIN_SEND_STATUS_TIME   15 //s
+#define BITMAIN_SEND_FULL_SPACE    512
+#endif
 
 #define BITMAIN_OVERHEAT_SLEEP_MS_MAX 10000
 #define BITMAIN_OVERHEAT_SLEEP_MS_MIN 200
 #define BITMAIN_OVERHEAT_SLEEP_MS_DEF 600
 #define BITMAIN_OVERHEAT_SLEEP_MS_STEP 200
 
+#ifdef USE_ANT_S2
+struct bitmain_packet_head {
+	uint8_t token_type;
+	uint8_t version;
+	uint16_t length;
+} __attribute__((packed, aligned(4)));
+#endif
+
 struct bitmain_txconfig_token {
 	uint8_t token_type;
+#ifdef USE_ANT_S1
 	uint8_t length;
+#else // S2
+	uint8_t version;
+	uint16_t length;
+#endif
 	uint8_t reset                :1;
 	uint8_t fan_eft              :1;
 	uint8_t timeout_eft          :1;
@@ -89,7 +120,14 @@ struct bitmain_txconfig_token {
 	uint8_t chain_check_time_eft :1;
 	uint8_t chip_config_eft      :1;
 	uint8_t hw_error_eft         :1;
+#ifdef USE_ANT_S1
 	uint8_t reserved1;
+#else // S2
+	uint8_t beeper_ctrl          :1;
+	uint8_t temp_over_ctrl       :1;
+	uint8_t reserved1            :6;
+	uint8_t reserved[2];
+#endif
 
 	uint8_t chain_num;
 	uint8_t asic_num;
@@ -113,6 +151,7 @@ struct bitmain_txtask_work {
 } __attribute__((packed, aligned(4)));
 
 struct bitmain_txtask_token {
+#ifdef USE_ANT_S1
 	uint8_t token_type;
 	uint8_t reserved1;
 	uint16_t length;
@@ -121,9 +160,21 @@ struct bitmain_txtask_token {
 	uint8_t reserved3[3];
 	struct bitmain_txtask_work works[BITMAIN_MAX_WORK_NUM];
 	uint16_t crc;
+#else // S2
+	uint8_t token_type;
+	uint8_t version;
+	uint16_t length;
+	uint8_t new_block            :1;
+	uint8_t reserved1            :7;
+	uint8_t diff;
+	uint8_t reserved2[2];
+	struct bitmain_txtask_work works[BITMAIN_MAX_WORK_NUM];
+	uint16_t crc;
+#endif
 } __attribute__((packed, aligned(4)));
 
 struct bitmain_rxstatus_token {
+#ifdef USE_ANT_S1
 	uint8_t token_type;
 	uint8_t length;
 	uint8_t chip_status_eft      :1;
@@ -134,9 +185,23 @@ struct bitmain_rxstatus_token {
 	uint8_t chip_address;
 	uint8_t reg_address;
 	uint16_t crc;
+#else // S2
+	uint8_t token_type;
+	uint8_t version;
+	uint16_t length;
+	uint8_t chip_status_eft      :1;
+	uint8_t detect_get           :1;
+	uint8_t reserved1            :6;
+	uint8_t reserved2[3];
+
+	uint8_t chip_address;
+	uint8_t reg_address;
+	uint16_t crc;
+#endif
 } __attribute__((packed, aligned(4)));
 
 struct bitmain_rxstatus_data {
+#ifdef USE_ANT_S1
 	uint8_t data_type;
 	uint8_t length;
 	uint8_t chip_value_eft       :1;
@@ -154,6 +219,28 @@ struct bitmain_rxstatus_data {
 	uint8_t temp[BITMAIN_MAX_TEMP_NUM];
 	uint8_t fan[BITMAIN_MAX_FAN_NUM];
 	uint16_t crc;
+#else // S2
+	uint8_t data_type;
+	uint8_t version;
+	uint16_t length;
+	uint8_t chip_value_eft       :1;
+	uint8_t reserved1            :7;
+	uint8_t chain_num;
+	uint16_t fifo_space;
+	uint8_t hw_version[4];
+	uint8_t fan_num;
+	uint8_t temp_num;
+	uint16_t fan_exist;
+	uint32_t temp_exist;
+	uint32_t nonce_error;
+	uint32_t reg_value;
+	uint32_t chain_asic_exist[BITMAIN_MAX_CHAIN_NUM*8];
+	uint32_t chain_asic_status[BITMAIN_MAX_CHAIN_NUM*8];
+	uint8_t chain_asic_num[BITMAIN_MAX_CHAIN_NUM];
+	uint8_t temp[BITMAIN_MAX_TEMP_NUM];
+	uint8_t fan[BITMAIN_MAX_FAN_NUM];
+	uint16_t crc;
+#endif
 } __attribute__((packed, aligned(4)));
 
 struct bitmain_rxnonce_nonce {
@@ -162,24 +249,45 @@ struct bitmain_rxnonce_nonce {
 } __attribute__((packed, aligned(4)));
 
 struct bitmain_rxnonce_data {
+#ifdef USE_ANT_S1
 	uint8_t data_type;
 	uint8_t length;
 	uint8_t fifo_space;
 	uint8_t nonce_num;
 	struct bitmain_rxnonce_nonce nonces[BITMAIN_MAX_NONCE_NUM];
 	uint16_t crc;
+#else
+	uint8_t data_type;
+	uint8_t version;
+	uint16_t length;
+	uint16_t fifo_space;
+	uint16_t diff;
+	uint64_t total_nonce_num;
+	struct bitmain_rxnonce_nonce nonces[BITMAIN_MAX_NONCE_NUM];
+	uint16_t crc;
+#endif
 } __attribute__((packed, aligned(4)));
 
 struct bitmain_info {
 	int queued;
 	int results;
-
+#ifdef USE_ANT_S1
 	int baud;
 	int chain_num;
 	int asic_num;
 	int chain_asic_num[BITMAIN_MAX_CHAIN_NUM];
 	uint32_t chain_asic_status[BITMAIN_MAX_CHAIN_NUM];
 	char chain_asic_status_t[BITMAIN_MAX_CHAIN_NUM][40];
+#else // S2
+	int device_fd;
+	int baud;
+	int chain_num;
+	int asic_num;
+	int chain_asic_num[BITMAIN_MAX_CHAIN_NUM];
+	uint32_t chain_asic_exist[BITMAIN_MAX_CHAIN_NUM*8];
+	uint32_t chain_asic_status[BITMAIN_MAX_CHAIN_NUM*8];
+	char chain_asic_status_t[BITMAIN_MAX_CHAIN_NUM][320];
+#endif
 	int timeout;
 	int errorcount;
 	uint32_t nonce_error;
@@ -192,7 +300,6 @@ struct bitmain_info {
 	int temp[BITMAIN_MAX_TEMP_NUM];
 
 	int temp_max;
-	int temp_hi;
 	int temp_avg;
 	int temp_history_count;
 	int temp_history_index;
@@ -201,12 +308,18 @@ struct bitmain_info {
 
 	int frequency;
 	int voltage;
+	int temp_hi;
+#ifdef USE_ANT_S2
+	uint64_t total_nonce_num;
+	int diff;
+#endif
 
 	int no_matching_work;
 	//int matching_work[BITMAIN_DEFAULT_CHAIN_NUM];
 
 	struct thr_info *thr;
 	pthread_t read_thr;
+	pthread_t write_thr;
 	pthread_mutex_t lock;
 	pthread_mutex_t qlock;
 	pthread_cond_t qcond;
@@ -216,9 +329,11 @@ struct bitmain_info {
 	unsigned int last_work_block;
 	struct timeval last_status_time;
 	int send_full_space;
+#ifdef USE_ANT_S2
+	int hw_version[4];
+#endif
 
 	int auto_queued;
-	int auto_nonces;
 	int auto_hw;
 
 	int idle;
@@ -236,7 +351,10 @@ struct bitmain_info {
 	// Work
 	K_LIST *work_list;
 	K_STORE *work_ready;
-
+#ifdef USE_ANT_S2
+	K_STORE *wbuild;
+#endif
+	uint32_t last_wid;
 	uint64_t work_search;
 	uint64_t tot_search;
 	uint64_t min_search;
@@ -251,19 +369,30 @@ struct bitmain_info {
 // Work
 typedef struct witem {
 	struct work *work;
-	bool clone;
+	uint32_t wid;
 } WITEM;
 
+#ifdef USE_ANT_S1
 #define ALLOC_WITEMS 1024
+#else
+#define ALLOC_WITEMS 32768
+#endif
 /*
  * The limit doesn't matter since we simply take the tail item
  * every time, optionally free it, and then put it on the head
  */
+#ifdef USE_ANT_S1
 #define LIMIT_WITEMS 1024
+#else
+#define LIMIT_WITEMS 32768
+#endif
 
 #define DATAW(_item) ((WITEM *)(_item->data))
 
 #define BITMAIN_READ_SIZE 12
+#ifdef USE_ANT_S2
+#define BITMAIN_ARRAY_SIZE 16384
+#endif
 
 #define BTM_GETS_ERROR -1
 #define BTM_GETS_OK 0
@@ -286,5 +415,5 @@ extern bool opt_bitmain_auto;
 extern char *set_bitmain_fan(char *arg);
 extern char *set_bitmain_freq(char *arg);
 
-#endif /* USE_ANT_S1 */
+#endif /* USE_ANT_S1 || USE_ANT_S2 */
 #endif	/* BITMAIN_H */
