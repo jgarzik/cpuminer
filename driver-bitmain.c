@@ -48,7 +48,7 @@ bool opt_bitmain_hwerror = false;
 #ifdef USE_ANT_S2
 bool opt_bitmain_checkall = false;
 bool opt_bitmain_checkn2diff = false;
-bool opt_bitmain_beeper = true;
+bool opt_bitmain_beeper = false;
 bool opt_bitmain_tempoverctrl = true;
 #endif
 int opt_bitmain_temp = BITMAIN_TEMP_TARGET;
@@ -494,8 +494,11 @@ static int bitmain_set_txtask(struct bitmain_info *info, uint8_t *sendbuf,
 		k_add_head(info->wbuild, witem);
 
 		diffbits = (int)floor(log2(DATAW(witem)->work->sdiff));
-		if (diffbits > 199)
-			diffbits = 199;
+		if (diffbits < 0)
+			diffbits = 0;
+		// Limit to 4096 so solo mining has reasonable mining stats
+		if (diffbits > 12)
+			diffbits = 12;
 
 		// Must use diffbits <= all work being sent
 		if (lowestdiffbits == -1 || lowestdiffbits > diffbits)
@@ -1765,6 +1768,13 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 	int tempover_ctrl = 1;
 	struct bitmain_packet_head packethead;
 	int asicnum = 0;
+
+	int mathtest = (int)floor(log2(42));
+	if (mathtest != 5) {
+		applog(LOG_ERR, "%s%d: %s() floating point math library is deficient",
+				bitmain->drv->name, bitmain->device_id, __func__);
+		return -1;
+	}
 #endif
 
 	/* Send reset, then check for result */
@@ -2724,6 +2734,7 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 	root = api_add_avg(root, "avg_failed", &avg, true);
 
 	root = api_add_int(root, "temp_hi", &(info->temp_hi), false);
+#ifdef USE_ANT_S1
 	root = api_add_bool(root, "overheat", &(info->overheat), true);
 	root = api_add_int(root, "overheat_temp", &(info->overheat_temp), true);
 	root = api_add_uint32(root, "overheat_count", &(info->overheat_count), true);
@@ -2732,6 +2743,7 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 	root = api_add_uint32(root, "overheat_slept", &(info->overheat_slept), true);
 	root = api_add_uint64(root, "overheat_total_sleep", &(info->overheat_total_sleep), true);
 	root = api_add_uint32(root, "overheat_recovers", &(info->overheat_recovers), true);
+#endif
 
 #ifdef USE_ANT_S2
 	root = api_add_bool(root, "opt_bitmain_beeper", &opt_bitmain_beeper, false);

@@ -338,8 +338,9 @@ struct bitmain_info {
 
 	int idle;
 	bool reset;
-	bool overheat;
 	bool optimal;
+#ifdef USE_ANT_S1
+	bool overheat;
 	int overheat_temp;
 	uint32_t overheat_count;
 	uint32_t overheat_sleep_ms;
@@ -347,6 +348,7 @@ struct bitmain_info {
 	uint32_t overheat_slept;
 	uint64_t overheat_total_sleep;
 	uint32_t overheat_recovers;
+#endif
 
 	// Work
 	K_LIST *work_list;
