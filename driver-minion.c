@@ -1440,6 +1440,7 @@ bad_out:
 	return false;
 }
 
+#if ENABLE_INT_NONO
 static bool minion_init_gpio_interrupt(struct cgpu_info *minioncgpu, struct minion_info *minioninfo)
 {
 	char pindir[64], ena[64], pin[8], dir[64], edge[64], act[64];
@@ -1592,6 +1593,7 @@ static bool minion_init_gpio_interrupt(struct cgpu_info *minioncgpu, struct mini
 
 	return true;
 }
+#endif
 
 static void minion_process_options(struct minion_info *minioninfo)
 {
@@ -1684,8 +1686,10 @@ static void minion_detect(bool hotplug)
 	if (!minion_init_spi(minioncgpu, minioninfo, MINION_SPI_BUS, MINION_SPI_CHIP))
 		goto unalloc;
 
+#if ENABLE_INT_NONO
 	if (!minion_init_gpio_interrupt(minioncgpu, minioninfo))
 		goto unalloc;
+#endif
 
 	mutex_init(&(minioninfo->spi_lock));
 	mutex_init(&(minioninfo->sta_lock));
