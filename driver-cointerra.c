@@ -903,7 +903,7 @@ resend:
 	if (reset_type == CTA_RESET_NEW) {
 		ret = cgsem_mswait(&info->reset_sem, CTA_RESET_TIMEOUT);
 		if (ret) {
-			if (++retries < 3) {
+			if (++retries < 5) {
 				applog(LOG_INFO, "%s %d: Timed out waiting for reset done msg, retrying",
 				       cointerra->drv->name, cointerra->device_id);
 				goto resend;
