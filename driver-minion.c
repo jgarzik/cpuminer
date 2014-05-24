@@ -676,7 +676,8 @@ struct minion_info {
 
 	struct timeval chip_rpt;
 	double history_ghs[MINION_CHIPS];
-	bool had_res_err[MINION_CHIPS];
+	// Gets reset to zero each time it is used in reporting
+	int res_err_count[MINION_CHIPS];
 
 #if DO_IO_STATS
 	// Total
@@ -2245,7 +2246,7 @@ static void *minion_spi_reply(void *userdata)
 									K_WUNLOCK(minioninfo->rnonce_list);
 									cgsem_post(&(minioninfo->nonce_ready));
 								} else {
-									minioninfo->had_res_err[chip] = true;
+									minioninfo->res_err_count[chip]++;
 									applog(MINTASK_LOG, "%s%i: Invalid res0 task_id 0x%04x - chip %d",
 											    minioncgpu->drv->name, minioncgpu->device_id,
 											    RES_TASK(result1), chip);
@@ -2452,7 +2453,7 @@ static enum nonce_state oknonce(struct thr_info *thr, struct cgpu_info *minioncg
 	}
 
 	if (core < 0 || core >= MINION_CORES) {
-		minioninfo->had_res_err[chip] = true;
+		minioninfo->res_err_count[chip]++;
 		minioninfo->spi_errors++;
 		minioninfo->chip_spi_errors[chip]++;
 		applog(MINTASK_LOG, "%s%i: SPI nonce error invalid core %d (chip %d)",
@@ -2474,7 +2475,7 @@ retry:
 
 	if (!item) {
 		K_RUNLOCK(minioninfo->wchip_list[chip]);
-		minioninfo->had_res_err[chip] = true;
+		minioninfo->res_err_count[chip]++;
 		applog(MINTASK_LOG, "%s%i: chip %d has no tasks (core %d task 0x%04x)",
 				    minioncgpu->drv->name, minioncgpu->device_id,
 				chip, core, (int)task_id);
@@ -2504,7 +2505,7 @@ retry:
 			goto retry;
 		}
 
-		minioninfo->had_res_err[chip] = true;
+		minioninfo->res_err_count[chip]++;
 		applog(MINTASK_LOG, "%s%i: chip %d core %d unknown task 0x%04x (min=0x%04x max=0x%04x no_nonce=%d)",
 				    minioncgpu->drv->name, minioncgpu->device_id,
 				    chip, core, (int)task_id, (int)min_task_id,
@@ -3141,13 +3142,16 @@ static void chip_report(struct cgpu_info *minioncgpu)
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	struct timeval now;
 	char buf[512];
+	char res_err_msg[2];
 	size_t len;
 	double ghs, expect, howlong;
 	int msdiff;
 	int chip;
 	bool any;
-	bool had_res_err;
+	int res_err_count;
 
+	res_err_msg[0] = '\0';
+	res_err_msg[1] = '\0';
 	cgtime(&now);
 	if (!(minioninfo->chip_rpt.tv_sec)) {
 		// No report yet so don't until now + opt_minion_chipreport
@@ -3169,11 +3173,17 @@ static void chip_report(struct cgpu_info *minioncgpu)
 					ghs /= 1000000000.0;
 					ghs /= tdiff(&now, &(DATAH(minioninfo->hchip_list[chip]->tail)->when));
 				}
-				had_res_err = minioninfo->had_res_err[chip];
-				minioninfo->had_res_err[chip] = false;
+				res_err_count = minioninfo->res_err_count[chip];
+				minioninfo->res_err_count[chip] = 0;
+				if (res_err_count > 100)
+					res_err_msg[0] = '!';
+				else if (res_err_count > 50)
+					res_err_msg[0] = '*';
+				else
+					res_err_msg[0] = '~';
 				snprintf(buf + len, sizeof(buf) - len,
 					 "%s%d=%s%.2f", any ? " " : "", chip,
-					 had_res_err ? "*" : "", ghs);
+					 (res_err_count > 0) ? res_err_msg : "", ghs);
 				minioninfo->history_ghs[chip] = ghs;
 				any = true;
 				if (total_secs >= MINION_HISTORY_s) {
