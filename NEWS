@@ -1,3 +1,56 @@
+Version 4.3.4 - 25th May 2014
+
+- Add support for 2 nonces per block in spond driver
+- Increase timeout on reset in cta driver to 5 seconds
+- Increase max diff on spondoolies driver slightly to be well below spi comms
+limitations
+- Use the active contents lock and safe list iteration within the linux usbfs
+code
+- Add Ruby Api Example
+- Automatic detect the small miners
+- Update default modules from 3 to 4
+- Fix the temp max. we should use currect max temp
+- add avalon2-cutoff options
+- Enable the cutofftemp to Avalon2. ignore longer coinbase and longer merkles
+stratum
+- Fix the diff value used on MM firmware
+- Mark pool as idle if stratum restart is failed
+- Add hacky workaround for double list removal race in libusb
+- Make the work given in benchmark mode deterministic on a per-device basis
+- Rework the benchmarking code to use a deterministic set of work items with a
+known number of diff share nonces at regular spaced intervals
+- minion - restrict nonce read result size to ioctl() limit
+- minion - must check temp when overheated
+- minion - idle chips that hit >100C until back to 80C
+- minion - report the chip/reg when aborting due to an invalid ioctl() size
+- minion - all freq in Mhz but only convert when used
+- minion - remove unused ioctl debug
+- minion - command queue is now larger
+- minion - check rolled in stale work cleanup
+- Work stats should be based on device_diff not work_difficulty since non-shares
+haven't been filtered out yet
+- Prevent a segfault when writing a config file containing 'rotate' option
+- minion - comment out HW debug message
+- minion - roll work to reduce CPU
+- minion - report init_freq in stats
+- api - howoldsec is only used for USB
+- minion - allow setting the frequency
+- minion - disable iostats by default since it slows down mining
+- minion - define frequency value table
+- minion - report temp/cores/freq and handle temp formatting
+- minion - item is undefined
+- Rationalise diffs stored in the work struct and document them to avoid further
+confusion
+- Add basic API stats for nfu drivers to see how many submits each chip returns
+- Add output direction for the EN0 pin on nfu driver
+- Support power management optimisations in newer nf* firmware
+- Support variable numbers of chips with NFU and BXM drivers
+- Identify number of chips in nanofury devices and change name accordingly
+- Rename nf1 driver to nfu in anticipation of support for more chips
+- Make hashfast reset counter rise on old instances when inheriting the value on
+new ones
+
+
 Version 4.3.3 - 3rd May 2014
 
 - Fix typo
