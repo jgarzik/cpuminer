@@ -179,6 +179,9 @@ static const char *min_temp_invalid = "?";
 #define MINION_TEMP_CTL_MAX_VALUE (MINION_TEMP_CTL_MIN_VALUE + \
 				(MINION_TEMP_CTL_STEP * \
 				(MINION_TEMP_CTL_MAX - MINION_TEMP_CTL_MIN)))
+#define MINION_TEMP_DISABLE "disable"
+#define MINION_TEMP_CTL_DISABLE -1
+#define MINION_TEMP_CTL_DISABLE_VALUE 0x20
 
 // CORE data size is DATA_SIZ
 #define MINION_CORE_ENA0_31 0x10
@@ -1093,15 +1096,19 @@ static void init_chip(struct cgpu_info *minioncgpu, struct minion_info *minionin
 
 	// Set temp threshold
 	choice = minioninfo->init_temp[chip];
-	if (choice < MINION_TEMP_CTL_MIN_VALUE || choice > MINION_TEMP_CTL_MAX_VALUE)
-		choice = MINION_TEMP_CTL_DEF;
-	choice -= MINION_TEMP_CTL_MIN_VALUE;
-	choice /= MINION_TEMP_CTL_STEP;
-	choice += MINION_TEMP_CTL_MIN;
-	if (choice < MINION_TEMP_CTL_MIN)
-		choice = MINION_TEMP_CTL_MIN;
-	if (choice > MINION_TEMP_CTL_MAX)
-		choice = MINION_TEMP_CTL_MAX;
+	if (choice == MINION_TEMP_CTL_DISABLE)
+		choice = MINION_TEMP_CTL_DISABLE_VALUE;
+	else {
+		if (choice < MINION_TEMP_CTL_MIN_VALUE || choice > MINION_TEMP_CTL_MAX_VALUE)
+			choice = MINION_TEMP_CTL_DEF;
+		choice -= MINION_TEMP_CTL_MIN_VALUE;
+		choice /= MINION_TEMP_CTL_STEP;
+		choice += MINION_TEMP_CTL_MIN;
+		if (choice < MINION_TEMP_CTL_MIN)
+			choice = MINION_TEMP_CTL_MIN;
+		if (choice > MINION_TEMP_CTL_MAX)
+			choice = MINION_TEMP_CTL_MAX;
+	}
 	data[0] = (uint8_t)choice;
 	data[1] = 0;
 	data[2] = 0;
@@ -1637,13 +1644,18 @@ static void minion_process_options(struct minion_info *minioninfo)
 			*(comma++) = '\0';
 
 		for (i = 0; i < MINION_CHIPS; i++) {
-			if (temp && isdigit(*temp)) {
-				last_temp = atoi(temp);
-				last_temp -= (last_temp % MINION_TEMP_CTL_STEP);
-				if (last_temp < MINION_TEMP_CTL_MIN_VALUE)
-					last_temp = MINION_TEMP_CTL_MIN_VALUE;
-				if (last_temp > MINION_TEMP_CTL_MAX_VALUE)
-					last_temp = MINION_TEMP_CTL_MAX_VALUE;
+			if (temp) {
+				if (isdigit(*temp)) {
+					last_temp = atoi(temp);
+					last_temp -= (last_temp % MINION_TEMP_CTL_STEP);
+					if (last_temp < MINION_TEMP_CTL_MIN_VALUE)
+						last_temp = MINION_TEMP_CTL_MIN_VALUE;
+					if (last_temp > MINION_TEMP_CTL_MAX_VALUE)
+						last_temp = MINION_TEMP_CTL_MAX_VALUE;
+				} else {
+					if (strcasecmp(temp, MINION_TEMP_DISABLE) == 0)
+						last_temp = MINION_TEMP_CTL_DISABLE;
+				}
 
 				temp = comma;
 				if (comma) {
@@ -3274,7 +3286,7 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 	char data[2048];
 	char buf[32];
 	int i, to, j;
-	int chip, max_chip, que_work, chip_work;
+	int chip, max_chip, que_work, chip_work, temp;
 
 	if (minioninfo->initialised == false)
 		return NULL;
@@ -3302,7 +3314,13 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 			snprintf(buf, sizeof(buf), "Chip %d FreqSent", chip);
 			root = api_add_hex32(root, buf, &(minioninfo->chip_status[chip].freqsent), true);
 			snprintf(buf, sizeof(buf), "Chip %d InitTemp", chip);
-			root = api_add_int(root, buf, &(minioninfo->init_temp[chip]), true);
+			temp = minioninfo->init_temp[chip];
+			if (temp == MINION_TEMP_CTL_DISABLE)
+				root = api_add_string(root, buf, MINION_TEMP_DISABLE, true);
+			else {
+				snprintf(data, sizeof(data), "%d", temp);
+				root = api_add_string(root, buf, data, true);
+			}
 			snprintf(buf, sizeof(buf), "Chip %d TempSent", chip);
 			root = api_add_hex32(root, buf, &(minioninfo->chip_status[chip].tempsent), true);
 			snprintf(buf, sizeof(buf), "Chip %d IdleCount", chip);
