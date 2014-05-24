@@ -363,7 +363,7 @@ static int64_t spond_scanhash(struct thr_info *thr)
 	}
 
 	if (a->parse_resp) {
-		int array_size, i;
+		int array_size, i, j;
 
 		mutex_lock(&a->lock);
 		ghashes = (a->mp_last_rsp->gh_div_10_rate);
@@ -379,15 +379,18 @@ static int64_t spond_scanhash(struct thr_info *thr)
 					assert(a->my_jobs[job_id].state == SPONDWORK_STATE_IN_BUSY);
 					a->works_in_minergate_and_pending_tx--;
 					a->works_in_driver--;
-					if (work->winner_nonce) {
-						struct work *cg_work = a->my_jobs[job_id].cgminer_work;
-
+					for (j = 0; j < 2; j++) {
+						if (work->winner_nonce[j]) {
+							bool __maybe_unused ok;
+							struct work *cg_work = a->my_jobs[job_id].cgminer_work;
 #ifndef SP_NTIME
-						submit_nonce(cg_work->thr, cg_work, work->winner_nonce);
+							ok = submit_nonce(cg_work->thr, cg_work, work->winner_nonce[j]);
 #else
-						submit_noffset_nonce(cg_work->thr, cg_work, work->winner_nonce, work->ntime_offset);
+							ok = submit_noffset_nonce(cg_work->thr, cg_work, work->winner_nonce[j], work->ntime_offset);
 #endif
-						a->wins++;
+							//printf("OK on %d:%d = %d\n",work->work_id_in_sw,j, ok);
+							a->wins++;
+						}
 					}
 					//printf("%d ntime_clones = %d\n",job_id,a->my_jobs[job_id].ntime_clones);
 					if ((--a->my_jobs[job_id].ntime_clones) == 0) {

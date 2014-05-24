@@ -29,7 +29,7 @@
 #define passert assert
 #endif
 
-#define MINERGATE_PROTOCOL_VERSION 5
+#define MINERGATE_PROTOCOL_VERSION 6
 #define MINERGATE_SOCKET_FILE "/tmp/connection_pipe"
 
 typedef enum {
@@ -58,7 +58,7 @@ typedef struct {
 typedef struct {
 	uint32_t work_id_in_sw;
 	uint32_t mrkle_root;     // to validate
-	uint32_t winner_nonce;
+	uint32_t winner_nonce[2];
 	uint8_t  ntime_offset;
 	uint8_t  res;            // 0 = done, 1 = overflow, 2 = dropped bist
 	uint8_t  resrv1;
