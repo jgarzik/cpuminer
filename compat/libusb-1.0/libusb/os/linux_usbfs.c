@@ -1144,6 +1144,7 @@ void linux_hotplug_enumerate(uint8_t busnum, uint8_t devaddr, const char *sys_na
 {
 	struct libusb_context *ctx;
 
+	usbi_mutex_lock(&active_contexts_lock);
 	list_for_each_entry(ctx, &active_contexts_list, list, struct libusb_context) {
 		if (usbi_get_device_by_session_id(ctx, busnum << 8 | devaddr)) {
 			/* device already exists in the context */
@@ -1153,14 +1154,16 @@ void linux_hotplug_enumerate(uint8_t busnum, uint8_t devaddr, const char *sys_na
 
 		linux_enumerate_device(ctx, busnum, devaddr, sys_name);
 	}
+	usbi_mutex_unlock(&active_contexts_lock);
 }
 
 void linux_hotplug_disconnected(uint8_t busnum, uint8_t devaddr, const char *sys_name)
 {
-	struct libusb_context *ctx;
+	struct libusb_context *ctx, *tmp;
 	struct libusb_device *dev;
 
-	list_for_each_entry(ctx, &active_contexts_list, list, struct libusb_context) {
+	usbi_mutex_lock(&active_contexts_lock);
+	list_for_each_entry_safe(ctx, tmp, &active_contexts_list, list, struct libusb_context) {
 		dev = usbi_get_device_by_session_id (ctx, busnum << 8 | devaddr);
 		if (NULL != dev) {
 			usbi_disconnect_device (dev);
@@ -1168,6 +1171,7 @@ void linux_hotplug_disconnected(uint8_t busnum, uint8_t devaddr, const char *sys
 			usbi_err(ctx, "device not found for session %x %s", busnum << 8 | devaddr, sys_name);
 		}
 	}
+	usbi_mutex_unlock(&active_contexts_lock);
 }
 
 #if !defined(USE_UDEV)
