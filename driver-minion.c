@@ -3176,11 +3176,11 @@ static void chip_report(struct cgpu_info *minioncgpu)
 				res_err_count = minioninfo->res_err_count[chip];
 				minioninfo->res_err_count[chip] = 0;
 				if (res_err_count > 100)
-					res_err_msg[0] = '\'';
+					res_err_msg[0] = '!';
 				else if (res_err_count > 50)
 					res_err_msg[0] = '*';
 				else
-					res_err_msg[0] = '~';
+					res_err_msg[0] = '\'';
 				snprintf(buf + len, sizeof(buf) - len,
 					 "%s%d=%s%.2f", any ? " " : "", chip,
 					 (res_err_count > 0) ? res_err_msg : "", ghs);
