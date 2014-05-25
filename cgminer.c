@@ -239,7 +239,11 @@ static char *opt_set_hfa_fan;
 #endif
 static char *opt_set_null;
 #ifdef USE_MINION
+int opt_minion_chipreport;
+bool opt_minion_idlecount;
 char *opt_minion_freq;
+bool opt_minion_overheat;
+char *opt_minion_temp;
 #endif
 
 #ifdef USE_USBUTILS
@@ -1316,9 +1320,21 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_lowmem,
 			"Minimise caching of shares for low memory applications"),
 #ifdef USE_MINION
+	OPT_WITH_ARG("--minion-chipreport",
+		     set_int_0_to_100, opt_show_intval, &opt_minion_chipreport,
+		     "Seconds to report chip 5min hashrate, range 0-100 (default: 0=disabled)"),
 	OPT_WITH_ARG("--minion-freq",
 		     opt_set_charp, NULL, &opt_minion_freq,
 		     "Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1000)"),
+	OPT_WITHOUT_ARG("--minion-idlecount",
+		     opt_set_bool, &opt_minion_idlecount,
+		     "Report when IdleCount is >0 or changes"),
+	OPT_WITHOUT_ARG("--minion-overheat",
+		     opt_set_bool, &opt_minion_overheat,
+		     "Enable directly halting any chip when the status exceeds 100C"),
+	OPT_WITH_ARG("--minion-temp",
+		     opt_set_charp, NULL, &opt_minion_temp,
+		     "Set minion chip temperature threshold, single value or comma list, range 120-160 (default: 135C)"),
 #endif
 #if defined(unix) || defined(__APPLE__)
 	OPT_WITH_ARG("--monitor|-m",
