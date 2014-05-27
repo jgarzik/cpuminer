@@ -240,8 +240,9 @@ static char *opt_set_hfa_fan;
 static char *opt_set_null;
 #ifdef USE_MINION
 int opt_minion_chipreport;
-bool opt_minion_idlecount;
+char *opt_minion_cores;
 char *opt_minion_freq;
+bool opt_minion_idlecount;
 bool opt_minion_overheat;
 char *opt_minion_temp;
 #endif
@@ -1326,6 +1327,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--minion-freq",
 		     opt_set_charp, NULL, &opt_minion_freq,
 		     "Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1000)"),
+	OPT_WITH_ARG("--minion-cores",
+		     opt_set_charp, NULL, &opt_minion_cores,
+		     opt_hidden),
 	OPT_WITHOUT_ARG("--minion-idlecount",
 		     opt_set_bool, &opt_minion_idlecount,
 		     "Report when IdleCount is >0 or changes"),

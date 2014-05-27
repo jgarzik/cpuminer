@@ -196,6 +196,8 @@ static const char *min_temp_invalid = "?";
 // All CORE data sizes are DATA_SIZ
 #define MINION_CORE_SIZ DATA_SIZ
 
+#define MINION_CORE_ALL "all"
+
 // RES data size is minion_result
 #define MINION_RES_DATA 0x20
 #define MINION_RES_PEEK 0x21
@@ -324,9 +326,8 @@ struct minion_status {
 	struct timeval idle_rpt;
 };
 
-// TODO: untested/unused
-#define ENABLE_CORE(_core, _n) ((_core)->core[_n >> 4] |= (1 << (_n % 8)))
-#define CORE_IDLE(_core, _n) ((_core)->core[_n >> 4] & (1 << (_n % 8)))
+#define ENABLE_CORE(_core, _n) ((_core[_n >> 3]) |= (1 << (_n % 8)))
+#define CORE_IDLE(_core, _n) ((_core[_n >> 3]) & (1 << (_n % 8)))
 
 #define FIFO_RES(_fifo, _off) ((_fifo)[(_off) + 0])
 #define FIFO_CMD(_fifo, _off) ((_fifo)[(_off) + 1])
@@ -612,6 +613,7 @@ struct minion_info {
 	bool chip[MINION_CHIPS];
 	int init_freq[MINION_CHIPS];
 	int init_temp[MINION_CHIPS];
+	uint8_t init_cores[MINION_CHIPS][DATA_SIZ*MINION_CORE_REPS];
 
 	uint32_t next_task_id;
 
@@ -1132,57 +1134,31 @@ static void enable_chip_cores(struct cgpu_info *minioncgpu, struct minion_info *
 	uint8_t rbuf[MINION_BUFSIZ];
 	uint8_t data[4];
 	__maybe_unused int reply;
-	int rep;
+	int rep, i;
 
-	data[0] = data[1] = data[2] = data[3] = 0x00;
-
-	// Enable all 32 cores
-	data[0] = 0xff;
-	data[1] = 0xff;
-	data[2] = 0xff;
-	data[3] = 0xff;
-
-	// testing
-//	data[0] = 0x02; // core 1
-//	data[1] = 0x00;
-//	data[2] = 0x00;
-//	data[3] = 0x00;
+	for (i = 0; i < 4; i++)
+		data[i] = minioninfo->init_cores[chip][i];
 
 	reply = build_cmd(minioncgpu, minioninfo,
 			  chip, WRITE_ADDR(MINION_CORE_ENA0_31),
 			  rbuf, 0, data);
 
-//	data[0] = 0x00;
-//	data[1] = 0x00;
-//	data[2] = 0x01; // core 48
-//	data[2] = 0x00;
-//	data[3] = 0x00;
-
-	// Enable all 32 cores
-	data[0] = 0xff;
-	data[1] = 0xff;
-	data[2] = 0xff;
-	data[3] = 0xff;
+	for (i = 0; i < 4; i++)
+		data[i] = minioninfo->init_cores[chip][i+4];
 
 	reply = build_cmd(minioncgpu, minioninfo,
 			  chip, WRITE_ADDR(MINION_CORE_ENA32_63),
 			  rbuf, 0, data);
 
-	// Enable all 32 cores
-	data[0] = 0xff;
-	data[1] = 0xff;
-	data[2] = 0xff;
-	data[3] = 0xff;
+	for (i = 0; i < 4; i++)
+		data[i] = minioninfo->init_cores[chip][i+8];
 
 	reply = build_cmd(minioncgpu, minioninfo,
 			  chip, WRITE_ADDR(MINION_CORE_ENA64_95),
 			  rbuf, 0, data);
 
-	data[0] = 0x07; // core 96,97,98
-//	data[0] = 0x04; // core 98
-	data[1] = 0x00;
-	data[2] = 0x00;
-	data[3] = 0x00;
+	for (i = 0; i < 4; i++)
+		data[i] = minioninfo->init_cores[chip][i+12];
 
 	reply = build_cmd(minioncgpu, minioninfo,
 			  chip, WRITE_ADDR(MINION_CORE_ENA96_98),
@@ -1608,11 +1584,27 @@ static bool minion_init_gpio_interrupt(struct cgpu_info *minioncgpu, struct mini
 }
 #endif
 
+// Default meaning all cores
+static void default_all_cores(uint8_t *cores)
+{
+	int i;
+
+	// clear all bits
+	for (i = 0; i < (int)(DATA_SIZ * MINION_CORE_REPS); i++)
+		cores[i] = 0x00;
+
+	// enable (only) all cores
+	for (i = 0; i < MINION_CORES; i++)
+		ENABLE_CORE(cores, i);
+}
+
 static void minion_process_options(struct minion_info *minioninfo)
 {
 	int last_freq, last_temp;
-	char *freq, *temp, *comma, *buf;
-	int i;
+	char *freq, *temp, *core, *comma, *buf, *plus, *minus;
+	uint8_t last_cores[DATA_SIZ*MINION_CORE_REPS];
+	int i, core1, core2;
+	bool cleared;
 
 	last_freq = MINION_FREQ_DEF;
 	if (opt_minion_freq && *opt_minion_freq) {
@@ -1638,7 +1630,6 @@ static void minion_process_options(struct minion_info *minioninfo)
 			}
 			minioninfo->init_freq[i] = last_freq;
 		}
-
 		free(buf);
 	}
 
@@ -1672,7 +1663,75 @@ static void minion_process_options(struct minion_info *minioninfo)
 			}
 			minioninfo->init_temp[i] = last_temp;
 		}
+		free(buf);
+	}
 
+	default_all_cores(&(last_cores[0]));
+	// default to all cores until we find valid data
+	cleared = false;
+	if (opt_minion_cores && *opt_minion_cores) {
+		buf = core = strdup(opt_minion_cores);
+		comma = strchr(core, ',');
+		if (comma)
+			*(comma++) = '\0';
+
+		for (i = 0; i < MINION_CHIPS; i++) {
+			// default to previous until we find valid data
+			cleared = false;
+			if (core) {
+				plus = strchr(core, '+');
+				if (plus)
+					*(plus++) = '\0';
+				while (core) {
+					minus = strchr(core, '-');
+					if (minus)
+						*(minus++) = '\0';
+					if (isdigit(*core)) {
+						core1 = atoi(core);
+						if (core1 >= 0 && core1 < MINION_CORES) {
+							if (!minus) {
+								if (!cleared) {
+									memset(last_cores, 0, sizeof(last_cores));
+									cleared = true;
+								}
+								ENABLE_CORE(last_cores, core1);
+							} else {
+								core2 = atoi(minus);
+								if (core2 >= core1) {
+									if (core2 >= MINION_CORES)
+										core2 = MINION_CORES - 1;
+									while (core1 <= core2) {
+										if (!cleared) {
+											memset(last_cores, 0,
+												sizeof(last_cores));
+											cleared = true;
+										}
+										ENABLE_CORE(last_cores, core1);
+										core1++;
+									}
+								}
+							}
+						}
+					} else {
+						if (strcasecmp(core, MINION_CORE_ALL) == 0)
+							default_all_cores(&(last_cores[0]));
+					}
+					core = plus;
+					if (plus) {
+						plus = strchr(core, '+');
+						if (plus)
+							*(plus++) = '\0';
+					}
+				}
+				core = comma;
+				if (comma) {
+					comma = strchr(core, ',');
+					if (comma)
+						*(comma++) = '\0';
+				}
+			}
+			memcpy(&(minioninfo->init_cores[i][0]), &(last_cores[0]), sizeof(last_cores));
+		}
 		free(buf);
 	}
 }
@@ -1712,11 +1771,12 @@ static void minion_detect(bool hotplug)
 	mutex_init(&(minioninfo->spi_lock));
 	mutex_init(&(minioninfo->sta_lock));
 
-	for (i = 0; i < MINION_CHIPS; i++)
+	for (i = 0; i < MINION_CHIPS; i++) {
 		minioninfo->init_freq[i] = MINION_FREQ_DEF;
-
-	for (i = 0; i < MINION_CHIPS; i++)
 		minioninfo->init_temp[i] = MINION_TEMP_CTL_DEF;
+		default_all_cores(&(minioninfo->init_cores[i][0]));
+	}
+
 
 	minion_process_options(minioninfo);
 
@@ -2877,7 +2937,10 @@ static void minion_do_work(struct cgpu_info *minioncgpu)
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	int count, chip, j, lowcount;
 	uint8_t state;
-	K_ITEM *item, *task;
+	K_ITEM *item;
+#if ENABLE_INT_NONO
+	K_ITEM *task;
+#endif
 	bool islow, sentwork;
 
 	// TODO: (remove this) Fake starved of work to test CMD Interrupt
@@ -2989,6 +3052,8 @@ static void minion_do_work(struct cgpu_info *minioncgpu)
 		}
 	}
 
+	sentwork = sentwork;
+#if ENABLE_INT_NONO
 	if (sentwork) {
 		// Clear CMD interrupt since we've now sent more
 		K_WLOCK(minioninfo->tfree_list);
@@ -3008,6 +3073,7 @@ static void minion_do_work(struct cgpu_info *minioncgpu)
 		k_add_head(minioninfo->task_list, task);
 		K_WUNLOCK(minioninfo->tfree_list);
 	}
+#endif
 
 //applog(LOG_ERR, "%s%i: chip %d fin: quew %d chw %d", minioncgpu->drv->name, minioncgpu->device_id, CHP, minioninfo->chip_status[CHP].quework, minioninfo->chip_status[CHP].chipwork);
 }
@@ -3289,21 +3355,24 @@ static void minion_get_statline_before(char *buf, size_t bufsiz, struct cgpu_inf
 {
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	uint16_t max_temp, cores;
-	int chip;
+	int chip, core;
 
 	max_temp = 0;
 	cores = 0;
 	mutex_lock(&(minioninfo->sta_lock));
 	for (chip = 0; chip < MINION_CHIPS; chip++) {
 		if (minioninfo->chip[chip]) {
-			cores += minioninfo->chip_status[chip].cores;
 			if (max_temp < minioninfo->chip_status[chip].temp)
 				max_temp = minioninfo->chip_status[chip].temp;
+			for (core = 0; core < MINION_CORES; core++) {
+				if (minioninfo->chip_core_ena[core >> 5][chip] & (0x1 << (core % 32)))
+					cores++;
+			}
 		}
 	}
 	mutex_unlock(&(minioninfo->sta_lock));
 
-	tailsprintf(buf, bufsiz, "max%sC Ch:%2d Co:%d",
+	tailsprintf(buf, bufsiz, "max%sC Ch:%d Co:%d",
 				 temp_str(max_temp), minioninfo->chips, (int)cores);
 }
 
@@ -3354,6 +3423,10 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 			}
 			snprintf(buf, sizeof(buf), "Chip %d TempSent", chip);
 			root = api_add_hex32(root, buf, &(minioninfo->chip_status[chip].tempsent), true);
+			__bin2hex(data, (unsigned char *)(&(minioninfo->init_cores[chip][0])),
+				  sizeof(minioninfo->init_cores[chip]));
+			snprintf(buf, sizeof(buf), "Chip %d InitCores", chip);
+			root = api_add_string(root, buf, data, true);
 			snprintf(buf, sizeof(buf), "Chip %d IdleCount", chip);
 			root = api_add_hex32(root, buf, &(minioninfo->chip_status[chip].idle), true);
 			snprintf(buf, sizeof(buf), "Chip %d QueWork", chip);
