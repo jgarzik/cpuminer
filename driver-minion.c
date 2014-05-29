@@ -651,7 +651,8 @@ struct minion_info {
 	uint64_t work_rolled;
 
 	uint64_t spi_errors;
-	uint64_t chip_spi_errors[MINION_CHIPS];
+	uint64_t fifo_spi_errors[MINION_CHIPS];
+	uint64_t res_spi_errors[MINION_CHIPS];
 
 	uint64_t tasks_failed[MINION_CHIPS];
 	uint64_t tasks_recovered[MINION_CHIPS];
@@ -855,7 +856,7 @@ static void display_ioctl(int reply, uint32_t osiz, uint8_t *obuf, uint32_t rsiz
 {
 	struct minion_result *res;
 	const char *name, *dir, *ex;
-	char buf[1024];
+	char buf[4096];
 	int i, rescount;
 
 	name = addr2txt(obuf[1]);
@@ -963,6 +964,7 @@ static int _do_ioctl(struct minion_info *minioninfo, uint8_t *obuf, uint32_t osi
 	memset(&obuf[0] + osiz - rsiz, 0xff, rsiz);
 
 #if MINION_SHOW_IO
+	// if the a5/5a outside the data change, it means data overrun or corruption
 	memset(dataw, 0xa5, sizeof(dataw));
 	memset(datar, 0x5a, sizeof(datar));
 	memcpy(&dataw[DATA_OFF], &obuf[0], osiz);
@@ -1985,7 +1987,6 @@ static void *minion_spi_write(void *userdata)
 					case READ_ADDR(MINION_SYS_CHIP_STA):
 						if (titem->reply >= (int)(titem->osiz)) {
 							uint8_t *rep = &(titem->rbuf[titem->osiz - titem->rsiz]);
-
 							mutex_lock(&(minioninfo->sta_lock));
 							minioninfo->chip_status[chip].temp = STA_TEMP(rep);
 							minioninfo->chip_status[chip].cores = STA_CORES(rep);
@@ -2047,28 +2048,20 @@ static void *minion_spi_write(void *userdata)
 						}
 						break;
 					case WRITE_ADDR(MINION_SYS_RSTN_CTL):
-//applog(LOG_WARNING, "%s%d: RSTN on chip %d", minioncgpu->drv->name, minioncgpu->device_id, chip);
 						// Do this here after it has actually been flushed
 						if ((titem->wbuf[0] & SYS_RSTN_CTL_FLUSH) == SYS_RSTN_CTL_FLUSH) {
-//applog(LOG_WARNING, "%s%d: flushing chip %d", minioncgpu->drv->name, minioncgpu->device_id, chip);
-//int ii = 0;
-//uint32_t fw = 0, lw = 0;
 							K_WLOCK(minioninfo->wwork_list);
 							work = minioninfo->wchip_list[chip]->head;
-//if (work) fw = DATAW(work)->task_id;
 							while (work) {
 								DATAW(work)->stale = true;
 								minioninfo->chip_status[chip].chipwork--;
 								if (minioninfo->chip_status[chip].realwork > 0)
 									minioninfo->chip_status[chip].realwork--;
-//lw = DATAW(work)->task_id;
 								work = work->next;
-//ii++;
 							}
 							minioninfo->chip_status[chip].chipwork = 0;
 							minioninfo->chip_status[chip].realwork = 0;
 							K_WUNLOCK(minioninfo->wwork_list);
-//applog(LOG_WARNING, "%s%d: flushed chip %d ii %d from task %d=0x%x to %d=0x%x", minioncgpu->drv->name, minioncgpu->device_id, chip, ii, (int)fw, (int)fw, (int)lw, (int)lw);
 						}
 						break;
 					case WRITE_ADDR(MINION_QUE_0):
@@ -2210,30 +2203,62 @@ static void *minion_spi_reply(void *userdata)
 	while (minioncgpu->shutdown == false) {
 		for (chip = 0; chip < MINION_CHIPS; chip++) {
 			if (minioninfo->chip[chip]) {
-				uint8_t res = 0, cmd = 0;
-				fifo_task.chip = chip;
-				fifo_task.reply = 0;
-				minion_txrx(&fifo_task);
-				if (fifo_task.reply > 0) {
-					if (fifo_task.reply < (int)(fifo_task.osiz)) {
-						char *buf = bin2hex((unsigned char *)(&(fifo_task.rbuf[fifo_task.osiz - fifo_task.rsiz])), (int)(fifo_task.rsiz));
-						applog(LOG_ERR, "%s%i: Bad fifo reply (%s) size %d, should be %d",
-								minioncgpu->drv->name, minioncgpu->device_id, buf,
-								fifo_task.reply, (int)(fifo_task.osiz));
-						free(buf);
-					} else {
-						if (fifo_task.reply > (int)(fifo_task.osiz)) {
-							applog(LOG_ERR, "%s%i: Unexpected fifo reply size %d, expected only %d",
-									minioncgpu->drv->name, minioncgpu->device_id,
+				int tries = 0;
+				uint8_t res, cmd;
+				while (++tries < 4) {
+					res = cmd = 0;
+					fifo_task.chip = chip;
+					fifo_task.reply = 0;
+					minion_txrx(&fifo_task);
+					if (fifo_task.reply <= 0)
+						break;
+					else {
+						if (fifo_task.reply < (int)(fifo_task.osiz)) {
+							char *buf = bin2hex((unsigned char *)(&(fifo_task.rbuf[fifo_task.osiz - fifo_task.rsiz])),
+										(int)(fifo_task.rsiz));
+							applog(LOG_ERR, "%s%i: Bad fifo reply (%s) size %d, should be %d",
+									minioncgpu->drv->name, minioncgpu->device_id, buf,
 									fifo_task.reply, (int)(fifo_task.osiz));
+							free(buf);
+							minioninfo->spi_errors++;
+							minioninfo->fifo_spi_errors[chip]++;
+							minioninfo->res_err_count[chip]++;
+						} else {
+							if (fifo_task.reply > (int)(fifo_task.osiz)) {
+								applog(LOG_ERR, "%s%i: Unexpected fifo reply size %d, expected only %d",
+										minioncgpu->drv->name, minioncgpu->device_id,
+										fifo_task.reply, (int)(fifo_task.osiz));
+							}
+							res = FIFO_RES(fifo_task.rbuf, fifo_task.osiz - fifo_task.rsiz);
+							cmd = FIFO_CMD(fifo_task.rbuf, fifo_task.osiz - fifo_task.rsiz);
+							// valid reply?
+							if (res <= MINION_QUE_MAX && cmd <= MINION_QUE_HIGH)
+								break;
+
+							applog(LOG_ERR, "%s%i: Bad fifo reply res %d (max is %d) cmd %d (max is %d)",
+									minioncgpu->drv->name, minioncgpu->device_id,
+									(int)res, MINION_QUE_MAX, (int)cmd, MINION_QUE_HIGH);
+							minioninfo->spi_errors++;
+							minioninfo->fifo_spi_errors[chip]++;
+							minioninfo->res_err_count[chip]++;
 						}
-						res = FIFO_RES(fifo_task.rbuf, fifo_task.osiz - fifo_task.rsiz);
-						cmd = FIFO_CMD(fifo_task.rbuf, fifo_task.osiz - fifo_task.rsiz);
 					}
 				}
 
+				// Give up on this chip this round
+				if (tries >= 4)
+					continue;
+
 				K_WLOCK(minioninfo->wwork_list);
-				minioninfo->chip_status[chip].realwork = (uint32_t)cmd;
+				// it shouldn't go up
+				if (cmd < minioninfo->chip_status[chip].realwork)
+					minioninfo->chip_status[chip].realwork = (uint32_t)cmd;
+				else {
+					cmd = (uint8_t)(minioninfo->chip_status[chip].realwork);
+					minioninfo->spi_errors++;
+					minioninfo->fifo_spi_errors[chip]++;
+					minioninfo->res_err_count[chip]++;
+				}
 				chipwork = (int)(minioninfo->chip_status[chip].chipwork);
 				K_WUNLOCK(minioninfo->wwork_list);
 				gap = chipwork - (int)cmd;
@@ -2257,20 +2282,26 @@ static void *minion_spi_reply(void *userdata)
 				 * You can't request results unless it says it has some.
 				 * We don't ever directly flush the output queue while processing
 				 * (except at startup) so the answer is always valid
-				 * i.e. there could be more, but never less
+				 * i.e. there could be more, but never less ... unless the reply was corrupt
 				 */
-				uint8_t left = res;
 				if (res > MINION_MAX_RES) {
 					applog(LOG_ERR, "%s%i: Large work reply chip %d res %d",
 							minioncgpu->drv->name, minioncgpu->device_id, chip, res);
+					minioninfo->spi_errors++;
+					minioninfo->fifo_spi_errors[chip]++;
+					minioninfo->res_err_count[chip]++;
+					res = 1; // Just read one result
 				}
 //else
 //applog(LOG_ERR, "%s%i: work reply res %d", minioncgpu->drv->name, minioncgpu->device_id, res);
+				uint8_t left = res;
+				int peeks = 0;
 				while (left > 0) {
 					res = left;
 					if (res > MINION_MAX_RES)
 						res = MINION_MAX_RES;
 					left -= res;
+repeek:
 					res1_task.chip = chip;
 					res1_task.reply = 0;
 					res1_task.rsiz = res * MINION_RES_DATA_SIZ;
@@ -2285,11 +2316,23 @@ static void *minion_spi_reply(void *userdata)
 									minioncgpu->drv->name, minioncgpu->device_id, buf,
 									res1_task.reply, (int)MINION_RES_DATA_SIZ);
 							free(buf);
+							minioninfo->spi_errors++;
+							minioninfo->res_spi_errors[chip]++;
+							minioninfo->res_err_count[chip]++;
 						} else {
 							if (res1_task.reply != (int)(res1_task.osiz)) {
 								applog(LOG_ERR, "%s%i: Unexpected work reply size %d, expected %d",
 										minioncgpu->drv->name, minioncgpu->device_id,
 										res1_task.reply, (int)(res1_task.osiz));
+								minioninfo->spi_errors++;
+								minioninfo->res_spi_errors[chip]++;
+								minioninfo->res_err_count[chip]++;
+								// Can retry a PEEK without losing data
+								if (minreread) {
+									if (++peeks < 4)
+										goto repeek;
+									break;
+								}
 							}
 
 							if (minreread) {
@@ -2297,9 +2340,11 @@ static void *minion_spi_reply(void *userdata)
 								res2_task.reply = 0;
 								res2_task.rsiz = res * MINION_RES_DATA_SIZ;
 								minion_txrx(&res2_task);
-								// Should never happen, but if it does, just wait for the next round
-								if (res2_task.reply <= 0)
-									break;
+								if (res2_task.reply <= 0) {
+									minioninfo->spi_errors++;
+									minioninfo->res_spi_errors[chip]++;
+									minioninfo->res_err_count[chip]++;
+								}
 							}
 
 							for (resoff = res1_task.osiz - res1_task.rsiz; resoff < (int)res1_task.osiz; resoff += MINION_RES_DATA_SIZ) {
@@ -2330,11 +2375,13 @@ static void *minion_spi_reply(void *userdata)
 									DATAR(item)->chip = (uint8_t)chip;
 									if ((uint8_t)chip != RES_CHIP(use1)) {
 										minioninfo->spi_errors++;
-										minioninfo->chip_spi_errors[chip]++;
+										minioninfo->res_spi_errors[chip]++;
+										minioninfo->res_err_count[chip]++;
 									}
 									if (use2 && (uint8_t)chip != RES_CHIP(use2)) {
 										minioninfo->spi_errors++;
-										minioninfo->chip_spi_errors[chip]++;
+										minioninfo->res_spi_errors[chip]++;
+										minioninfo->res_err_count[chip]++;
 									}
 									DATAR(item)->core = RES_CORE(use1);
 									DATAR(item)->task_id = RES_TASK(use1);
@@ -2559,15 +2606,16 @@ static enum nonce_state oknonce(struct thr_info *thr, struct cgpu_info *minioncg
 
 	// if the chip has been disabled - but we don't do that - so not possible (yet)
 	if (!(minioninfo->chip[chip])) {
+		minioninfo->spi_errors++;
 		applog(MINTASK_LOG, "%s%i: nonce error chip %d not present",
 				    minioncgpu->drv->name, minioncgpu->device_id, chip);
 		return NONCE_NO_WORK;
 	}
 
 	if (core < 0 || core >= MINION_CORES) {
-		minioninfo->res_err_count[chip]++;
 		minioninfo->spi_errors++;
-		minioninfo->chip_spi_errors[chip]++;
+		minioninfo->res_spi_errors[chip]++;
+		minioninfo->res_err_count[chip]++;
 		applog(MINTASK_LOG, "%s%i: SPI nonce error invalid core %d (chip %d)",
 				    minioncgpu->drv->name, minioncgpu->device_id, core, chip);
 
@@ -2587,6 +2635,8 @@ retry:
 
 	if (!item) {
 		K_RUNLOCK(minioninfo->wchip_list[chip]);
+		minioninfo->spi_errors++;
+		minioninfo->res_spi_errors[chip]++;
 		minioninfo->res_err_count[chip]++;
 		applog(MINTASK_LOG, "%s%i: chip %d has no tasks (core %d task 0x%04x)",
 				    minioncgpu->drv->name, minioncgpu->device_id,
@@ -2617,6 +2667,8 @@ retry:
 			goto retry;
 		}
 
+		minioninfo->spi_errors++;
+		minioninfo->res_spi_errors[chip]++;
 		minioninfo->res_err_count[chip]++;
 		applog(MINTASK_LOG, "%s%i: chip %d core %d unknown task 0x%04x (min=0x%04x max=0x%04x no_nonce=%d)",
 				    minioncgpu->drv->name, minioncgpu->device_id,
@@ -3598,10 +3650,21 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 			snprintf(buf, sizeof(buf),
 					"%s%8"PRIu64,
 					j == i ? "" : " ",
-					minioninfo->chip_spi_errors[j]);
+					minioninfo->fifo_spi_errors[j]);
 			strcat(data, buf);
 		}
-		snprintf(buf, sizeof(buf), "SpiErr %02d - %02d", i, to);
+		snprintf(buf, sizeof(buf), "FifoSpiErr %02d - %02d", i, to);
+		root = api_add_string(root, buf, data, true);
+
+		data[0] = '\0';
+		for (j = i; j <= to; j++) {
+			snprintf(buf, sizeof(buf),
+					"%s%8"PRIu64,
+					j == i ? "" : " ",
+					minioninfo->res_spi_errors[j]);
+			strcat(data, buf);
+		}
+		snprintf(buf, sizeof(buf), "ResSpiErr %02d - %02d", i, to);
 		root = api_add_string(root, buf, data, true);
 
 		data[0] = '\0';
@@ -3687,7 +3750,7 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 	}
 #endif
 
-	root = api_add_uint64(root, "SPI Errors", &(minioninfo->spi_errors), true);
+	root = api_add_uint64(root, "Total SPI Errors", &(minioninfo->spi_errors), true);
 	root = api_add_uint64(root, "Work Unrolled", &(minioninfo->work_unrolled), true);
 	root = api_add_uint64(root, "Work Rolled", &(minioninfo->work_rolled), true);
 	root = api_add_uint64(root, "Ints", &(minioninfo->interrupts), true);
