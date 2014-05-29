@@ -30,6 +30,9 @@ static void minion_detect(__maybe_unused bool hotplug)
 // Define this to 1 to enable interrupt code and enable no_nonce
 #define ENABLE_INT_NONO 0
 
+// Define this to 1 if compiling on RockChip and not on RPi
+#define MINION_ROCKCHIP 0
+
 // The code is always in - this just decides if it does it
 static bool minreread = true;
 
@@ -37,7 +40,7 @@ static bool minreread = true;
 #define MINION_SPI_CHIP 0
 
 //#define MINION_SPI_SPEED 2000000
-#define MINION_SPI_SPEED 100000
+#define MINION_SPI_SPEED 1000000
 #define MINION_SPI_BUFSIZ 1024
 
 #define MINION_CHIPS 32
@@ -49,7 +52,7 @@ static bool minreread = true;
  * Look them up and calculate them?
  */
 #define MINION_QUE_MAX 64
-#define MINION_QUE_HIGH 64
+#define MINION_QUE_HIGH 48
 #define MINION_QUE_SEND 16
 #define MINION_QUE_LOW 8
 
@@ -95,6 +98,7 @@ static bool minreread = true;
 
 // Header Pin 18 = GPIO5 = BCM 24
 #define MINION_GPIO_RESULT_INT_PIN 24
+// RockChip is pin 172 ...
 
 #define MINION_GPIO_SYS "/sys/class/gpio"
 #define MINION_GPIO_ENA "/export"
@@ -780,8 +784,18 @@ static const char *addr2txt(uint8_t addr)
 			return "RCoreEna96-98";
 		case WRITE_ADDR(MINION_CORE_ENA96_98):
 			return "WCoreEna96-98";
+		case READ_ADDR(MINION_CORE_ACT0_31):
+			return "RCoreAct0-31";
+		case READ_ADDR(MINION_CORE_ACT32_63):
+			return "RCoreAct32-63";
+		case READ_ADDR(MINION_CORE_ACT64_95):
+			return "RCoreAct64-95";
+		case READ_ADDR(MINION_CORE_ACT96_98):
+			return "RCoreAct96-98";
 		case READ_ADDR(MINION_RES_DATA):
 			return "RResData";
+		case READ_ADDR(MINION_RES_PEEK):
+			return "RResPeek";
 		case WRITE_ADDR(MINION_QUE_0):
 			return "WQueWork";
 		case READ_ADDR(MINION_NONCE_START):
@@ -802,6 +816,16 @@ static const char *addr2txt(uint8_t addr)
 			return "WResTrigger";
 		case WRITE_ADDR(MINION_SYS_QUE_TRIG):
 			return "WCmdTrigger";
+		case READ_ADDR(MINION_SYS_TEMP_CTL):
+			return "RTempCtrl";
+		case WRITE_ADDR(MINION_SYS_TEMP_CTL):
+			return "WTempCtrl";
+		case READ_ADDR(MINION_SYS_FREQ_CTL):
+			return "RFreqCtrl";
+		case WRITE_ADDR(MINION_SYS_FREQ_CTL):
+			return "WFreqCtrl";
+		case READ_ADDR(MINION_SYS_IDLE_CNT):
+			return "RIdleCnt";
 	}
 
 	// gcc warning if this is in default:
@@ -812,7 +836,7 @@ static const char *addr2txt(uint8_t addr)
 }
 
 // For display_ioctl()
-#define IOCTRL_LOG LOG_DEBUG
+#define IOCTRL_LOG LOG_WARNING
 
 // For all other debug so it can easily be switched always on
 #define MINION_LOG LOG_DEBUG
@@ -820,7 +844,13 @@ static const char *addr2txt(uint8_t addr)
 // For task corruption logging
 #define MINTASK_LOG LOG_DEBUG
 
-/*
+// Set to 1 for debug
+#define MINION_SHOW_IO 0
+
+#define DATA_ALL 2048
+#define DATA_OFF 512
+
+#if MINION_SHOW_IO
 static void display_ioctl(int reply, uint32_t osiz, uint8_t *obuf, uint32_t rsiz, uint8_t *rbuf)
 {
 	struct minion_result *res;
@@ -905,19 +935,18 @@ static void display_ioctl(int reply, uint32_t osiz, uint8_t *obuf, uint32_t rsiz
 		}
 	}
 }
-*/
+#endif
 
 #define MINION_UNEXPECTED_TASK -999
 #define MINION_OVERSIZE_TASK -998
 
-// Set to 1 for debug
-#define MINION_SHOW_IO 0
-
 static int _do_ioctl(struct minion_info *minioninfo, uint8_t *obuf, uint32_t osiz, uint8_t *rbuf, uint32_t rsiz, MINION_FFL_ARGS)
 {
-
 	struct spi_ioc_transfer tran;
 	int ret;
+#if MINION_SHOW_IO
+	char dataw[DATA_ALL], datar[DATA_ALL];
+#endif
 
 #if DO_IO_STATS
 	struct timeval sta, fin, lsta, lfin, tsd;
@@ -934,8 +963,15 @@ static int _do_ioctl(struct minion_info *minioninfo, uint8_t *obuf, uint32_t osi
 	memset(&obuf[0] + osiz - rsiz, 0xff, rsiz);
 
 #if MINION_SHOW_IO
-	char *buf = bin2hex((char *)obuf, osiz);
-	applog(LOG_WARNING, "*** %s() sending %s", __func__, buf);
+	memset(dataw, 0xa5, sizeof(dataw));
+	memset(datar, 0x5a, sizeof(datar));
+	memcpy(&dataw[DATA_OFF], &obuf[0], osiz);
+
+	char *buf = bin2hex((unsigned char *)&(dataw[DATA_OFF]), osiz);
+	applog(IOCTRL_LOG, "*** %s() sending %02x %02x %s %02x %02x",
+			   __func__,
+			   dataw[0], dataw[DATA_OFF-1], buf,
+			   dataw[DATA_OFF+osiz], dataw[DATA_ALL-1]);
 	free(buf);
 #endif
 
@@ -953,8 +989,13 @@ static int _do_ioctl(struct minion_info *minioninfo, uint8_t *obuf, uint32_t osi
 	tran.delay_usecs = 0;
 	tran.speed_hz = MINION_SPI_SPEED;
 
+#if MINION_SHOW_IO
+	tran.tx_buf = (uintptr_t)&(dataw[DATA_OFF]);
+	tran.rx_buf = (uintptr_t)&(datar[DATA_OFF]);
+#else
 	tran.tx_buf = (uintptr_t)obuf;
 	tran.rx_buf = (uintptr_t)rbuf;
+#endif
 
 	IO_STAT_NOW(&lsta);
 	mutex_lock(&(minioninfo->spi_lock));
@@ -969,14 +1010,19 @@ static int _do_ioctl(struct minion_info *minioninfo, uint8_t *obuf, uint32_t osi
 
 #if MINION_SHOW_IO
 	if (ret > 0) {
-		buf = bin2hex((char *)rbuf, ret);
-		applog(LOG_WARNING, "*** %s() reply %d = %s", __func__, ret, buf);
+		buf = bin2hex((unsigned char *)&(datar[DATA_OFF]), ret);
+		applog(IOCTRL_LOG, "*** %s() reply %d = %02x %02x %s %02x %02x",
+				   __func__, ret,
+				   datar[0], datar[DATA_OFF-1], buf,
+				   datar[DATA_OFF+osiz], datar[DATA_ALL-1]);
 		free(buf);
 	} else
-		applog(LOG_WARNING, "*** %s() reply = %d", __func__, ret);
-#endif
+		applog(LOG_ERR, "*** %s() reply = %d", __func__, ret);
 
-//	display_ioctl(ret, osiz, obuf, rsiz, rbuf);
+	memcpy(&rbuf[0], &datar[DATA_OFF], osiz);
+
+	display_ioctl(ret, osiz, (uint8_t *)(&dataw[DATA_OFF]), rsiz, (uint8_t *)(&datar[DATA_OFF]));
+#endif
 
 	return ret;
 }
@@ -1240,6 +1286,7 @@ static void enable_chip_cores(struct cgpu_info *minioncgpu, struct minion_info *
 	}
 }
 
+#if ENABLE_INT_NONO
 static void enable_interrupt(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, int chip)
 {
 	uint8_t rbuf[MINION_BUFSIZ];
@@ -1267,11 +1314,7 @@ static void enable_interrupt(struct cgpu_info *minioncgpu, struct minion_info *m
 			  rbuf, 0, data);
 
 //	data[0] = MINION_RESULT_INT;
-#if ENABLE_INT_NONO
 	data[0] = MINION_RESULT_INT | MINION_CMD_INT;
-#else
-	data[0] = 0x00;
-#endif
 	data[1] = 0x00;
 	data[2] = 0x00;
 	data[3] = 0x00;
@@ -1280,6 +1323,7 @@ static void enable_interrupt(struct cgpu_info *minioncgpu, struct minion_info *m
 			  chip, WRITE_ADDR(MINION_SYS_INT_ENA),
 			  rbuf, 0, data);
 }
+#endif
 
 // Simple detect - just check each chip for the signature
 static void minion_detect_chips(struct cgpu_info *minioncgpu, struct minion_info *minioninfo)
@@ -1351,18 +1395,22 @@ static void minion_detect_chips(struct cgpu_info *minioncgpu, struct minion_info
 			}
 		}
 
+#if ENABLE_INT_NONO
 		// After everything is ready
 		for (chip = 0; chip < MINION_CHIPS; chip++)
 			if (minioninfo->chip[chip])
 				enable_interrupt(minioncgpu, minioninfo, chip);
+#endif
 	}
 }
 
 static const char *minion_modules[] = {
+#if MINION_ROCKCHIP == 0
 	"i2c-dev",
 	"i2c-bcm2708",
 	"spidev",
 	"spi-bcm2708",
+#endif
 	NULL
 };
 
