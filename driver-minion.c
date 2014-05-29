@@ -64,7 +64,6 @@ static bool minreread = true;
 			__maybe_unused const int line
 
 #define minion_txrx(_task) _minion_txrx(minioncgpu, minioninfo, _task, MINION_FFL_HERE)
-#define do_ioctl(_obuf, _osiz, _rbuf, _rsiz) _do_ioctl(minioninfo, _obuf, _osiz, _rbuf, _rsiz, MINION_FFL_HERE)
 
 #define MINION_SYS_REGS 0x00
 #define MINION_CORE_REGS 0x10
@@ -941,7 +940,7 @@ static void display_ioctl(int reply, uint32_t osiz, uint8_t *obuf, uint32_t rsiz
 #define MINION_UNEXPECTED_TASK -999
 #define MINION_OVERSIZE_TASK -998
 
-static int _do_ioctl(struct minion_info *minioninfo, uint8_t *obuf, uint32_t osiz, uint8_t *rbuf, uint32_t rsiz, MINION_FFL_ARGS)
+static int __do_ioctl(struct minion_info *minioninfo, uint8_t *obuf, uint32_t osiz, uint8_t *rbuf, uint32_t rsiz, MINION_FFL_ARGS)
 {
 	struct spi_ioc_transfer tran;
 	int ret;
@@ -1028,6 +1027,29 @@ static int _do_ioctl(struct minion_info *minioninfo, uint8_t *obuf, uint32_t osi
 
 	return ret;
 }
+
+#if 1
+#define do_ioctl(_obuf, _osiz, _rbuf, _rsiz) __do_ioctl(minioninfo, _obuf, _osiz, _rbuf, _rsiz, MINION_FFL_HERE)
+#else
+#define do_ioctl(_obuf, _osiz, _rbuf, _rsiz) _do_ioctl(minioninfo, _obuf, _osiz, _rbuf, _rsiz, MINION_FFL_HERE)
+// This sends an expected to work, SPI command before each SPI command
+static int _do_ioctl(struct minion_info *minioninfo, uint8_t *obuf, uint32_t osiz, uint8_t *rbuf, uint32_t rsiz, MINION_FFL_ARGS)
+{
+	struct minion_header *head;
+	uint8_t buf1[MINION_BUFSIZ];
+	uint8_t buf2[MINION_BUFSIZ];
+	uint32_t siz;
+
+	head = (struct minion_header *)buf1;
+	head->chip = 1; // Needs to be set to a valid chip
+	head->reg = READ_ADDR(MINION_SYS_FIFO_STA);
+	SET_HEAD_SIZ(head, DATA_SIZ);
+	siz = HSIZE() + DATA_SIZ;
+	__do_ioctl(minioninfo, buf1, siz, buf2, MINION_CORE_SIZ, MINION_FFL_PASS);
+
+	return __do_ioctl(minioninfo, obuf, osiz, rbuf, rsiz, MINION_FFL_PASS);
+}
+#endif
 
 static bool _minion_txrx(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, TITEM *task, MINION_FFL_ARGS)
 {
