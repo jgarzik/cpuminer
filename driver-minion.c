@@ -652,6 +652,7 @@ struct minion_info {
 	uint64_t spi_errors;
 	uint64_t fifo_spi_errors[MINION_CHIPS];
 	uint64_t res_spi_errors[MINION_CHIPS];
+	uint64_t use_res2[MINION_CHIPS];
 
 	uint64_t tasks_failed[MINION_CHIPS];
 	uint64_t tasks_recovered[MINION_CHIPS];
@@ -2390,6 +2391,7 @@ repeek:
 									} else {
 										use1 = result2;
 										use2 = NULL;
+										minioninfo->use_res2[chip]++;
 									}
 
 									//DATAR(item)->chip = RES_CHIP(use1);
@@ -3692,8 +3694,9 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 		data[0] = '\0';
 		for (j = i; j <= to; j++) {
 			snprintf(buf, sizeof(buf),
-					"%s%"PRIu64"/%"PRIu64"/%"PRIu64"/%"PRIu64,
+					"%s%"PRIu64"/%"PRIu64"/%"PRIu64"/%"PRIu64"/%"PRIu64,
 					j == i ? "" : " ",
+					minioninfo->use_res2[j],
 					minioninfo->tasks_failed[j],
 					minioninfo->tasks_recovered[j],
 					minioninfo->nonces_failed[j],
