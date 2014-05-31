@@ -2874,7 +2874,7 @@ err_retry:
 		goto err_retry;
 	if (NODEV(err))
 		*transferred = 0;
-	else if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)
+	else if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN && *transferred)
 		cg_memcpy(data, buf, *transferred);
 
 	return err;
