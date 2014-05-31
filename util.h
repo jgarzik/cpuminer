@@ -157,11 +157,13 @@ int _cgsem_mswait(cgsem_t *cgsem, int ms, const char *file, const char *func, co
 void cgsem_reset(cgsem_t *cgsem);
 void cgsem_destroy(cgsem_t *cgsem);
 bool cg_completion_timeout(void *fn, void *fnarg, int timeout);
+void _cg_memcpy(void *dest, const void *src, unsigned int n, const char *file, const char *func, const int line);
 
 #define cgsem_init(_sem) _cgsem_init(_sem, __FILE__, __func__, __LINE__)
 #define cgsem_post(_sem) _cgsem_post(_sem, __FILE__, __func__, __LINE__)
 #define cgsem_wait(_sem) _cgsem_wait(_sem, __FILE__, __func__, __LINE__)
 #define cgsem_mswait(_sem, _timeout) _cgsem_mswait(_sem, _timeout, __FILE__, __func__, __LINE__)
+#define cg_memcpy(dest, src, n) _cg_memcpy(dest, src, n, __FILE__, __func__, __LINE__)
 
 /* Align a size_t to 4 byte boundaries for fussy arches */
 static inline void align_len(size_t *len)
