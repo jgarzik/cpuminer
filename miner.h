@@ -1014,7 +1014,12 @@ extern char *opt_bitmain_options;
 extern bool opt_bitmain_hwerror;
 #endif
 #ifdef USE_MINION
+extern int opt_minion_chipreport;
+extern char *opt_minion_cores;
 extern char *opt_minion_freq;
+extern bool opt_minion_idlecount;
+extern bool opt_minion_overheat;
+extern char *opt_minion_temp;
 #endif
 #ifdef USE_USBUTILS
 extern char *opt_usb_select;

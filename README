@@ -218,7 +218,11 @@ Options for both config file and command line:
 --load-balance      Change multipool strategy from failover to quota based balance
 --log|-l <arg>      Interval in seconds between log output (default: 5)
 --lowmem            Minimise caching of shares for low memory applications
+--minion-chipreport <arg> Seconds to report chip 5min hashrate, range 0-100 (default: 0=disabled)
 --minion-freq <arg> Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1000)
+--minion-idlecount  Report when IdleCount is >0 or changes
+--minion-overheat   Enable directly halting any chip when the status exceeds 100C
+--minion-temp <arg> Set minion chip temperature threshold, single value or comma list, range 120-160 (default: 135C)
 --monitor|-m <arg>  Use custom pipe cmd for output messages
 --nfu-bits <arg>    Set nanofury bits for overclocking, range 32-63 (default: 50)
 --net-delay         Impose small delays in networking to not overload slow routers

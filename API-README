@@ -482,6 +482,10 @@ api-example.php - a php script to access the API
  You must modify the line "$socket = getsock('127.0.0.1', 4028);" at the
  beginning of "function request($cmd)" to change where it looks for cgminer
 
+api-example.rb - a Ruby script to access the API.
+ usage: ruby api-example.rb command[:parameter] [HOST [PORT]]
+This script prints the parsed cgminer API response
+
 API.java/API.class
  a java program to access the API (with source code)
   usAge is: java API command address port
