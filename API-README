@@ -100,7 +100,7 @@ The STATUS section is:
    Standard long time of request in seconds
 
   Code=N
-   Each unique reply has a unigue Code (See api.c - #define MSG_NNNNNN)
+   Each unique reply has a unique Code (See api.c - #define MSG_NNNNNN)
 
   Msg=string
    Message matching the Code value N
