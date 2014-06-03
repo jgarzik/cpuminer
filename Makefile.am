@@ -89,6 +89,7 @@ cgminer_SOURCES += A1-common.h
 cgminer_SOURCES += A1-board-selector.h
 cgminer_SOURCES += A1-board-selector-CCD.c A1-board-selector-CCR.c
 cgminer_SOURCES += A1-trimpot-mcp4x.h A1-trimpot-mcp4x.c
+cgminer_SOURCES += i2c-context.c i2c-context.h
 endif
 
 if HAS_DRILLBIT

@@ -62,6 +62,8 @@ struct A1_chain {
 
 	struct work_queue active_wq;
 
+	/* mark chain disabled, do not try to re-enable it */
+	bool disabled;
 	uint8_t temp;
 	int last_temp_time;
 };
