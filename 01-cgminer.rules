@@ -43,3 +43,6 @@ ATTRS{idVendor}=="4254", ATTRS{idProduct}=="4153", SUBSYSTEM=="usb", ACTION=="ad
 
 # Cointerra
 ATTRS{idVendor}=="1cbe", ATTRS{idProduct}=="0003", SUBSYSTEM=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+
+# Drillbit Thumb
+ATTRS{idVendor}=="03eb", ATTRS{idProduct}=="2404", SUBSYSTEM=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
