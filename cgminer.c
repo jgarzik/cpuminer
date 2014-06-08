@@ -131,8 +131,11 @@ enum benchwork {
 	BENCHWORK_NONCETIME,
 	BENCHWORK_COUNT
 };
+
+#ifdef HAVE_LIBCURL
 static char *opt_btc_address;
 static char *opt_btc_sig;
+#endif
 static char *opt_benchfile;
 static bool opt_benchfile_display;
 static FILE *benchfile_in;
@@ -3834,6 +3837,13 @@ static void sighandler(int __maybe_unused sig)
 	kill_work();
 }
 
+static void _stage_work(struct work *work);
+
+#define stage_work(WORK) do { \
+	_stage_work(WORK); \
+	WORK = NULL; \
+} while (0)
+
 #ifdef HAVE_LIBCURL
 /* Called with pool_lock held. Recruit an extra curl if none are available for
  * this pool. */
@@ -4019,13 +4029,6 @@ struct work *make_clone(struct work *work)
 
 	return work_clone;
 }
-
-static void _stage_work(struct work *work);
-
-#define stage_work(WORK) do { \
-	_stage_work(WORK); \
-	WORK = NULL; \
-} while (0)
 
 static bool clone_available(void)
 {
