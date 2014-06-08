@@ -8593,6 +8593,7 @@ static void *test_pool_thread(void *arg)
 {
 	struct pool *pool = (struct pool *)arg;
 
+retry:
 	if (pool_active(pool, false)) {
 		pool_tset(pool, &pool->lagging);
 		pool_tclear(pool, &pool->idle);
@@ -8612,8 +8613,10 @@ static void *test_pool_thread(void *arg)
 
 		pool_resus(pool);
 		switch_pools(NULL);
-	} else
+	} else {
 		pool_died(pool);
+		goto retry;
+	}
 
 	return NULL;
 }
@@ -9534,6 +9537,7 @@ int main(int argc, char *argv[])
 		if (!use_curses)
 			early_quit(0, "No servers could be used! Exiting.");
 #ifdef HAVE_CURSES
+		touchwin(logwin);
 		wrefresh(logwin);
 		halfdelay(10);
 		if (getch() != ERR)
