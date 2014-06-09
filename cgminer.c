@@ -93,7 +93,7 @@ char *curly = ":D";
 #include "driver-hashfast.h"
 #endif
 
-#ifdef USE_ANT_S1
+#if defined(USE_ANT_S1) || defined(USE_ANT_S2)
 #include "driver-bitmain.h"
 #endif
 
@@ -232,10 +232,13 @@ char *opt_bab_options = NULL;
 #ifdef USE_BITMINE_A1
 char *opt_bitmine_a1_options = NULL;
 #endif
-#ifdef USE_ANT_S1
+#if defined(USE_ANT_S1) || defined(USE_ANT_S2)
 char *opt_bitmain_options;
 static char *opt_set_bitmain_fan;
 static char *opt_set_bitmain_freq;
+#endif
+#ifdef USE_ANT_S2
+char *opt_bitmain_dev;
 #endif
 #ifdef USE_HASHFAST
 static char *opt_set_hfa_fan;
@@ -1167,7 +1170,7 @@ static struct opt_table opt_config_table[] = {
 		     opt_set_charp, NULL, &opt_bitburner_fury_options,
 		     "Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq"),
 #endif
-#ifdef USE_ANT_S1
+#if defined(USE_ANT_S1) || defined(USE_ANT_S2)
 	OPT_WITHOUT_ARG("--bitmain-auto",
 			opt_set_bool, &opt_bitmain_auto,
 			"Adjust bitmain overclock frequency dynamically for best hashrate"),
@@ -1189,6 +1192,23 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bitmain-temp",
 		     set_int_0_to_100, opt_show_intval, &opt_bitmain_temp,
 		     "Set bitmain target temperature"),
+#endif
+#ifdef USE_ANT_S2
+	OPT_WITH_ARG("--bitmain-dev",
+		     opt_set_charp, NULL, &opt_bitmain_dev,
+		     "Set bitmain device"),
+	OPT_WITHOUT_ARG("--bitmainbeeper",
+			opt_set_bool, &opt_bitmain_beeper,
+			"Set bitmain beeper ringing"),
+	OPT_WITHOUT_ARG("--bitmain-checkall",
+			opt_set_bool, &opt_bitmain_checkall,
+			opt_hidden),
+	OPT_WITHOUT_ARG("--bitmain-checkn2diff",
+			opt_set_bool, &opt_bitmain_checkn2diff,
+			opt_hidden),
+	OPT_WITHOUT_ARG("--bitmaintempoverctrl",
+			opt_set_bool, &opt_bitmain_tempoverctrl,
+			"Set bitmain stop runing when temprerature is over 80 degree Celsius"),
 #endif
 #ifdef USE_BITMINE_A1
 	OPT_WITH_ARG("--bitmine-a1-options",
@@ -1644,6 +1664,9 @@ static char *opt_verusage_and_exit(const char *extra)
 	printf("%s\nBuilt with "
 #ifdef USE_ANT_S1
 		"ant.S1 "
+#endif
+#ifdef USE_ANT_S2
+		"ant.S2 "
 #endif
 #ifdef USE_AVALON
 		"avalon "

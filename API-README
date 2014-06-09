@@ -443,6 +443,12 @@ The list of requests - a (*) means it requires privileged access - and replies:
                                AVA+BTB opt=freq val=256 to 1024 - chip frequency
                                BTB opt=millivolts val=1000 to 1400 - corevoltage
 
+ lcd           LCD            An all-in-one short status summary of the miner
+                              e.g. Elapsed,GHS av,GHS 5m,GHS 5s,Temp,
+                                   Last Share Difficulty,Last Share Time,
+                                   Best Share,Last Valid Work,Found Blocks,
+                                   Pool,User|
+
  lockstats (*) none           There is no reply section just the STATUS section
                               stating the results of the request
                               A warning reply means lock stats are not compiled
@@ -506,6 +512,13 @@ miner.php - an example web page to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V3.4 (cgminer v4.3.?)
+
+Added API commands:
+ 'lcd' - An all-in-one short status summary of the miner
+
+---------
 
 API V3.3 (cgminer v4.2.0)
 

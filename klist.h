@@ -54,7 +54,7 @@ typedef struct k_list {
 #define K_STORE K_LIST
 
 /*
- * N.B. all locking is done in the code calling the k_ functions
+ * N.B. all locking is done in the code using the K_*LOCK macros
  */
 #define K_WLOCK(_list) cg_wlock(_list->lock)
 #define K_WUNLOCK(_list) cg_wunlock(_list->lock)
@@ -76,7 +76,12 @@ extern void _k_add_head(K_LIST *list, K_ITEM *item, KLIST_FFL_ARGS);
 #define k_free_head(__list, __item) _k_add_head(__list, __item, KLIST_FFL_HERE)
 extern void _k_add_tail(K_LIST *list, K_ITEM *item, KLIST_FFL_ARGS);
 #define k_add_tail(_list, _item) _k_add_tail(_list, _item, KLIST_FFL_HERE)
-extern void k_unlink_item(K_LIST *list, K_ITEM *item);
+extern void _k_unlink_item(K_LIST *list, K_ITEM *item, KLIST_FFL_ARGS);
+#define k_unlink_item(_list, _item) _k_unlink_item(_list, _item, KLIST_FFL_HERE)
+void _k_list_transfer_to_head(K_LIST *from, K_LIST *to, KLIST_FFL_ARGS);
+#define k_list_transfer_to_head(_from, _to) _k_list_transfer_to_head(_from, _to, KLIST_FFL_HERE)
+void _k_list_transfer_to_tail(K_LIST *from, K_LIST *to, KLIST_FFL_ARGS);
+#define k_list_transfer_to_tail(_from, _to) _k_list_transfer_to_tail(_from, _to, KLIST_FFL_HERE)
 extern K_LIST *_k_free_list(K_LIST *list, KLIST_FFL_ARGS);
 #define k_free_list(_list) _k_free_list(_list, KLIST_FFL_HERE)
 extern K_STORE *_k_free_store(K_STORE *store, KLIST_FFL_ARGS);
