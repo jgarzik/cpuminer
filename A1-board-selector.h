@@ -8,26 +8,37 @@
 #define RESET_HI_TIME_MS  100
 
 struct board_selector {
-	bool (*select)(uint8_t board);
-	void (*release)(void);
+	/* destructor */
 	void (*exit)(void);
+	/* select board and chip chain for given chain index*/
+	bool (*select)(uint8_t chain);
+	/* release access to selected chain */
+	void (*release)(void);
+	/* reset currently selected chain */
 	bool (*reset)(void);
+	/* reset all chains on board */
 	bool (*reset_all)(void);
-	uint8_t (*get_temp)(void);
+	/* get temperature for selected chain at given sensor */
+	uint8_t (*get_temp)(uint8_t sensor);
+	/* prepare board (voltage) for given sys_clock */
+	bool (*prepare_clock)(int clock_khz);
 };
 
 static bool dummy_select(uint8_t b) { (void)b; return true; }
 static void dummy_void(void) { };
 static bool dummy_bool(void) { return true; }
-static uint8_t dummy_u8(void) { return 0; }
+//static uint8_t dummy_u8(void) { return 0; }
+static uint8_t dummy_get_temp(uint8_t s) { (void)s; return 0; }
+static bool dummy_prepare_clock(int c) { (void)c; return true; }
 
 static const struct board_selector dummy_board_selector = {
+	.exit = dummy_void,
 	.select = dummy_select,
 	.release = dummy_void,
-	.exit = dummy_void,
 	.reset = dummy_bool,
 	.reset_all = dummy_bool,
-	.get_temp = dummy_u8,
+	.get_temp = dummy_get_temp,
+	.prepare_clock = dummy_prepare_clock,
 };
 
 /* CoinCraft Desk and Rig board selector constructors */
@@ -35,20 +46,5 @@ static const struct board_selector dummy_board_selector = {
 #define CCR_MAX_CHAINS	16
 extern struct board_selector *ccd_board_selector_init(void);
 extern struct board_selector *ccr_board_selector_init(void);
-
-
-/* common i2c context */
-struct i2c_ctx {
-	uint8_t addr;
-	int file;
-};
-
-/* the default I2C bus on RPi */
-#define I2C_BUS		"/dev/i2c-1"
-
-extern bool i2c_slave_write(struct i2c_ctx *ctx, uint8_t reg, uint8_t val);
-extern bool i2c_slave_read(struct i2c_ctx *ctx, uint8_t reg, uint8_t *val);
-extern bool i2c_slave_open(struct i2c_ctx *ctx, char *i2c_bus);
-extern void i2c_slave_close(struct i2c_ctx *ctx);
 
 #endif /* A1_BOARD_SELECTOR_H */

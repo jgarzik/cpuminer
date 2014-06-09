@@ -10,219 +10,88 @@
  */
 
 
-#include <sys/ioctl.h>
-#include <errno.h>
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <linux/i2c.h>
-#include <linux/i2c-dev.h>
-
-#include <stdint.h>
-#include <stdbool.h>
-#include <fcntl.h>
-
 #include "miner.h"
 
 #include "A1-board-selector.h"
+#include "i2c-context.h"
+
 
 static struct board_selector ccr_selector;
 
-
-bool i2c_slave_write(struct i2c_ctx *ctx, uint8_t reg, uint8_t val)
-{
-	union i2c_smbus_data data;
-	data.byte = val;
-
-	struct i2c_smbus_ioctl_data args;
-
-	args.read_write = I2C_SMBUS_WRITE;
-	args.command = reg;
-	args.size = I2C_SMBUS_BYTE_DATA;
-	args.data = &data;
-
-	if (ioctl(ctx->file, I2C_SMBUS, &args) == -1) {
-		applog(LOG_ERR, "Failed to write to fdesc %d: %s",
-		       ctx->file, strerror(errno));
-		return false;
-	}
-	applog(LOG_DEBUG, "W(0x%02x/0x%02x)=0x%02x", ctx->addr, reg, val);
-	return true;
-}
-
-bool i2c_slave_read(struct i2c_ctx *ctx, uint8_t reg, uint8_t *val)
-{
-	union i2c_smbus_data data;
-	struct i2c_smbus_ioctl_data args;
-
-	args.read_write = I2C_SMBUS_READ;
-	args.command = reg;
-	args.size = I2C_SMBUS_BYTE_DATA;
-	args.data = &data;
-
-	if (ioctl(ctx->file, I2C_SMBUS, &args) == -1) {
-		applog(LOG_ERR, "Failed to read from fdesc %d: %s",
-		       ctx->file, strerror(errno));
-		return false;
-	}
-	*val = data.byte;
-	applog(LOG_DEBUG, "R(0x%02x/0x%02x)=0x%02x", ctx->addr, reg, *val);
-	return true;
-}
-
-bool i2c_slave_open(struct i2c_ctx *ctx, char *i2c_bus)
-{
-	ctx->file = open(i2c_bus, O_RDWR);
-	if (ctx->file < 0) {
-		applog(LOG_INFO, "Failed to open i2c-1: %s", strerror(errno));
-		return false;
-	}
-
-	if (ioctl(ctx->file, I2C_SLAVE, ctx->addr) < 0) {
-		close(ctx->file);
-		return false;
-	}
-	return true;
-}
-
-void i2c_slave_close(struct i2c_ctx *ctx)
-{
-	if (ctx->file == -1)
-		return;
-	close(ctx->file);
-	ctx->file = -1;
-}
-
-
-struct ccr_ctx {
-	struct i2c_ctx U1_tca9548;
-	struct i2c_ctx U2_tca9535;
-	struct i2c_ctx U3_tca9535;
-	struct i2c_ctx U4_tca9535;
-	uint16_t chain_mask;
-	uint8_t active_chain;
-	pthread_mutex_t lock;
-	uint8_t boards_available;
-};
-
-static struct ccr_ctx ccr_ctx = {
-	.U1_tca9548 = { .addr = 0x70, .file = -1, },
-	.U2_tca9535 = { .addr = 0x20, .file = -1, },
-	.U3_tca9535 = { .addr = 0x23, .file = -1, },
-	.U4_tca9535 = { .addr = 0x22, .file = -1, },
-	.chain_mask = 0xffff,
-	.active_chain = 255,
-	.boards_available = 0x00,
-};
+static struct i2c_ctx *U1_tca9548;
+static struct i2c_ctx *U3_tca9535;
+static struct i2c_ctx *U4_tca9535;
+static uint8_t active_chain;
+static pthread_mutex_t lock;
 
 struct chain_mapping {
 	uint8_t chain_id;
 	uint8_t U1;
-	uint8_t U2p0;
-	uint8_t U2p1;
 	uint8_t U3p0;
 	uint8_t U3p1;
 };
 
 static const struct chain_mapping chain_mapping[CCR_MAX_CHAINS] = {
-	{  0, 0x01, 0x01, 0x80, 0x01, 0x00, },
-	{  1, 0x01, 0x01, 0x80, 0x00, 0x80, },
-	{  2, 0x02, 0x02, 0x40, 0x02, 0x00, },
-	{  3, 0x02, 0x02, 0x40, 0x00, 0x40, },
-	{  4, 0x04, 0x04, 0x20, 0x04, 0x00, },
-	{  5, 0x04, 0x04, 0x20, 0x00, 0x20, },
-	{  6, 0x08, 0x08, 0x10, 0x08, 0x00, },
-	{  7, 0x08, 0x08, 0x10, 0x00, 0x10, },
-	{  8, 0x10, 0x10, 0x08, 0x10, 0x00, },
-	{  9, 0x10, 0x10, 0x08, 0x00, 0x08, },
-	{ 10, 0x20, 0x20, 0x04, 0x20, 0x00, },
-	{ 11, 0x20, 0x20, 0x04, 0x00, 0x04, },
-	{ 12, 0x40, 0x40, 0x02, 0x40, 0x00, },
-	{ 13, 0x40, 0x40, 0x02, 0x00, 0x02, },
-	{ 14, 0x80, 0x80, 0x01, 0x80, 0x00, },
-	{ 15, 0x80, 0x80, 0x01, 0x00, 0x01, },
+	{  0, 0x01, 0x01, 0x00, },
+	{  1, 0x01, 0x00, 0x80, },
+	{  2, 0x02, 0x02, 0x00, },
+	{  3, 0x02, 0x00, 0x40, },
+	{  4, 0x04, 0x04, 0x00, },
+	{  5, 0x04, 0x00, 0x20, },
+	{  6, 0x08, 0x08, 0x00, },
+	{  7, 0x08, 0x00, 0x10, },
+	{  8, 0x10, 0x10, 0x00, },
+	{  9, 0x10, 0x00, 0x08, },
+	{ 10, 0x20, 0x20, 0x00, },
+	{ 11, 0x20, 0x00, 0x04, },
+	{ 12, 0x40, 0x40, 0x00, },
+	{ 13, 0x40, 0x00, 0x02, },
+	{ 14, 0x80, 0x80, 0x00, },
+	{ 15, 0x80, 0x00, 0x01, },
 };
 
 static void ccr_unlock(void)
 {
-	mutex_unlock(&ccr_ctx.lock);
+	mutex_unlock(&lock);
 }
 
 static void ccr_exit(void)
 {
-	i2c_slave_close(&ccr_ctx.U1_tca9548);
-	i2c_slave_close(&ccr_ctx.U2_tca9535);
-	i2c_slave_close(&ccr_ctx.U3_tca9535);
-	i2c_slave_close(&ccr_ctx.U4_tca9535);
+	if (U1_tca9548 != NULL)
+		U1_tca9548->exit(U1_tca9548);
+	if (U3_tca9535 != NULL)
+		U3_tca9535->exit(U3_tca9535);
+	if (U4_tca9535 != NULL)
+		U4_tca9535->exit(U4_tca9535);
 }
 
-static bool ccr_power_on_one_board(uint8_t chain)
-{
-	const struct chain_mapping *cm = &chain_mapping[chain];
-	if (chain & 1)
-		return false;
-	uint8_t new_power_mask = ccr_ctx.boards_available | cm->U2p0;
-	if (!i2c_slave_write(&ccr_ctx.U2_tca9535, 0x03, new_power_mask))
-		return false;
-	int i;
-	for (i = 0; i < 8; i ++) {
-		uint8_t val;
-		if (!i2c_slave_read(&ccr_ctx.U2_tca9535, 0x00, &val))
-			return false;
-		if (val & cm->U2p1) {
-			applog(LOG_INFO, "Power OK for chain %d after %d",
-			       chain, i);
-			ccr_ctx.boards_available = new_power_mask;
-			return true;
-		}
-		cgsleep_ms(10);
-	}
-	applog(LOG_INFO, "Power NOK for chain %d", chain);
-	return false;
-}
-static int ccr_power_on_boards(void)
-{
-	int i;
-	int boards = 0;
-	for (i = 0; i < CCR_MAX_CHAINS / 2; i++) {
-		if (ccr_power_on_one_board(i * 2))
-			boards++;
-	}
-	return boards;
-}
 
 extern struct board_selector *ccr_board_selector_init(void)
 {
-	mutex_init(&ccr_ctx.lock);
+	mutex_init(&lock);
 	applog(LOG_INFO, "ccr_board_selector_init()");
 
-			/* detect all i2c slaves */
-	bool res =	i2c_slave_open(&ccr_ctx.U1_tca9548, I2C_BUS) &&
-			i2c_slave_open(&ccr_ctx.U2_tca9535, I2C_BUS) &&
-			i2c_slave_open(&ccr_ctx.U3_tca9535, I2C_BUS) &&
-			i2c_slave_open(&ccr_ctx.U4_tca9535, I2C_BUS) &&
-			/* init I2C multiplexer */
-			i2c_slave_write(&ccr_ctx.U1_tca9548, 0x00, 0x00) &&
-			/* init power selector */
-			i2c_slave_write(&ccr_ctx.U2_tca9535, 0x06, 0xff) &&
-			i2c_slave_write(&ccr_ctx.U2_tca9535, 0x07, 0x00) &&
-			i2c_slave_write(&ccr_ctx.U2_tca9535, 0x03, 0x00) &&
-			/* init reset selector */
-			i2c_slave_write(&ccr_ctx.U3_tca9535, 0x06, 0x00) &&
-			i2c_slave_write(&ccr_ctx.U3_tca9535, 0x07, 0x00) &&
-			i2c_slave_write(&ccr_ctx.U3_tca9535, 0x02, 0x00) &&
-			i2c_slave_write(&ccr_ctx.U3_tca9535, 0x03, 0x00) &&
-			/* init chain selector */
-			i2c_slave_write(&ccr_ctx.U4_tca9535, 0x06, 0x00) &&
-			i2c_slave_write(&ccr_ctx.U4_tca9535, 0x07, 0x00) &&
-			i2c_slave_write(&ccr_ctx.U4_tca9535, 0x02, 0x00) &&
-			i2c_slave_write(&ccr_ctx.U4_tca9535, 0x03, 0x00);
-
-	if (!res)
+	/* detect all i2c slaves */
+	U1_tca9548 = i2c_slave_open(I2C_BUS, 0x70);
+	U3_tca9535 = i2c_slave_open(I2C_BUS, 0x23);
+	U4_tca9535 = i2c_slave_open(I2C_BUS, 0x22);
+	if (U1_tca9548 == NULL || U3_tca9535 == NULL || U4_tca9535 == NULL)
 		goto fail;
 
-	if (ccr_power_on_boards() == 0)
+			/* init I2C multiplexer */
+	bool res =	U1_tca9548->write(U1_tca9548, 0x00, 0x00) &&
+			/* init reset selector */
+			U3_tca9535->write(U3_tca9535, 0x06, 0x00) &&
+			U3_tca9535->write(U3_tca9535, 0x07, 0x00) &&
+			U3_tca9535->write(U3_tca9535, 0x02, 0x00) &&
+			U3_tca9535->write(U3_tca9535, 0x03, 0x00) &&
+			/* init chain selector */
+			U4_tca9535->write(U4_tca9535, 0x06, 0x00) &&
+			U4_tca9535->write(U4_tca9535, 0x07, 0x00) &&
+			U4_tca9535->write(U4_tca9535, 0x02, 0x00) &&
+			U4_tca9535->write(U4_tca9535, 0x03, 0x00);
+
+	if (!res)
 		goto fail;
 
 	return &ccr_selector;
@@ -237,29 +106,38 @@ static bool ccr_select(uint8_t chain)
 	if (chain >= CCR_MAX_CHAINS)
 		return false;
 
-	mutex_lock(&ccr_ctx.lock);
-	if (ccr_ctx.active_chain == chain)
+	mutex_lock(&lock);
+	if (active_chain == chain)
 		return true;
 
-	ccr_ctx.active_chain = chain;
+	active_chain = chain;
 	const struct chain_mapping *cm = &chain_mapping[chain];
-	if (!i2c_slave_write(&ccr_ctx.U4_tca9535, 0x02, cm->U3p0) ||
-	    !i2c_slave_write(&ccr_ctx.U4_tca9535, 0x03, cm->U3p1) ||
-	    !i2c_slave_write(&ccr_ctx.U1_tca9548, cm->U1, cm->U1))
+
+	if (!U1_tca9548->write(U1_tca9548, cm->U1, cm->U1))
 		return false;
 
+	if (!U4_tca9535->write(U4_tca9535, 0x02, cm->U3p0) ||
+	    !U4_tca9535->write(U4_tca9535, 0x03, cm->U3p1))
+		return false;
+
+	/* sanity check: ensure i2c command has been written before we leave */
+	uint8_t tmp;
+	if (!U4_tca9535->read(U4_tca9535, 0x02, &tmp) || tmp != cm->U3p0) {
+		applog(LOG_ERR, "ccr_select: wrote 0x%02x, read 0x%02x",
+		       cm->U3p0, tmp);
+	}
 	applog(LOG_DEBUG, "selected chain %d", chain);
 	return true;
 }
 
 static bool __ccr_board_selector_reset(uint8_t p0, uint8_t p1)
 {
-	if (!i2c_slave_write(&ccr_ctx.U3_tca9535, 0x02, p0) ||
-	    !i2c_slave_write(&ccr_ctx.U3_tca9535, 0x03, p1))
+	if (!U3_tca9535->write(U3_tca9535, 0x02, p0) ||
+	    !U3_tca9535->write(U3_tca9535, 0x03, p1))
 		return false;
 	cgsleep_ms(RESET_LOW_TIME_MS);
-	if (!i2c_slave_write(&ccr_ctx.U3_tca9535, 0x02, 0x00) ||
-	    !i2c_slave_write(&ccr_ctx.U3_tca9535, 0x03, 0x00))
+	if (!U3_tca9535->write(U3_tca9535, 0x02, 0x00) ||
+	    !U3_tca9535->write(U3_tca9535, 0x03, 0x00))
 		return false;
 	cgsleep_ms(RESET_HI_TIME_MS);
 	return true;
@@ -267,30 +145,33 @@ static bool __ccr_board_selector_reset(uint8_t p0, uint8_t p1)
 // we assume we are already holding the mutex
 static bool ccr_reset(void)
 {
-	const struct chain_mapping *cm = &chain_mapping[ccr_ctx.active_chain];
+	const struct chain_mapping *cm = &chain_mapping[active_chain];
+	applog(LOG_DEBUG, "resetting chain %d", cm->chain_id);
 	bool retval = __ccr_board_selector_reset(cm->U3p0, cm->U3p1);
 	return retval;
 }
 
 static bool ccr_reset_all(void)
 {
-	mutex_lock(&ccr_ctx.lock);
+	mutex_lock(&lock);
 	bool retval = __ccr_board_selector_reset(0xff, 0xff);
-	mutex_unlock(&ccr_ctx.lock);
+	mutex_unlock(&lock);
 	return retval;
 }
 
-static uint8_t ccr_get_temp(void)
+static uint8_t ccr_get_temp(uint8_t sensor_id)
 {
-	if (ccr_ctx.active_chain & 1)
+	if ((active_chain & 1) != 0 || sensor_id != 0)
+		return 0;
+
+	struct i2c_ctx *U7 = i2c_slave_open(I2C_BUS, 0x4c);
+	if (U7 == NULL)
 		return 0;
 
 	uint8_t retval = 0;
-	static struct i2c_ctx U7 = { .addr = 0x4c, .file = -1 };
-	if (i2c_slave_open(&U7, I2C_BUS)) {
-		i2c_slave_read(&U7, 0, &retval);
-		i2c_slave_close(&U7);
-	}
+	if (!U7->read(U7, 0, &retval))
+		retval = 0;
+	U7->exit(U7);
 	return retval;
 }
 

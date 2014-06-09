@@ -25,8 +25,9 @@
 #include "A1-board-selector.h"
 #include "A1-trimpot-mcp4x.h"
 
-/* one global board_selector is enough */
+/* one global board_selector and spi context is enough */
 static struct board_selector *board_selector;
+static struct spi_ctx *spi;
 
 /********** work queue */
 static bool wq_enqueue(struct work_queue *wq, struct work *work)
@@ -152,7 +153,7 @@ static uint8_t *exec_cmd(struct A1_chain *a1,
 	int poll_len = resp_len;
 	if (chip_id == 0) {
 		if (a1->num_chips == 0) {
-			applog(LOG_ERR, "%d: unknown chips in chain, "
+			applog(LOG_INFO, "%d: unknown chips in chain, "
 			       "assuming 8", a1->chain_id);
 			poll_len += 32;
 		}
@@ -668,7 +669,7 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 	struct A1_chain *a1 = malloc(sizeof(*a1));
 	assert(a1 != NULL);
 
-	applog(LOG_DEBUG, "%d: A1 init chain", a1->chain_id);
+	applog(LOG_DEBUG, "%d: A1 init chain", chain_id);
 	memset(a1, 0, sizeof(*a1));
 	a1->spi_ctx = ctx;
 	a1->chain_id = chain_id;
@@ -716,23 +717,40 @@ failure:
 	return NULL;
 }
 
+static bool detect_single_chain(void)
+{
+	board_selector = (struct board_selector*)&dummy_board_selector;
+	applog(LOG_WARNING, "A1: checking single chain");
+	struct A1_chain *a1 = init_A1_chain(spi, 0);
+	if (a1 == NULL)
+		return false;
+
+	struct cgpu_info *cgpu = malloc(sizeof(*cgpu));
+	assert(cgpu != NULL);
+
+	memset(cgpu, 0, sizeof(*cgpu));
+	cgpu->drv = &bitmineA1_drv;
+	cgpu->name = "BitmineA1.SingleChain";
+	cgpu->threads = 1;
+
+	cgpu->device_data = a1;
+
+	a1->cgpu = cgpu;
+	add_cgpu(cgpu);
+	applog(LOG_WARNING, "Detected single A1 chain with %d chips / %d cores",
+	       a1->num_active_chips, a1->num_cores);
+	return true;
+}
 
 bool detect_coincraft_desk(void)
 {
 	static const uint8_t mcp4x_mapping[] = { 0x2c, 0x2b, 0x2a, 0x29, 0x28 };
 	board_selector = ccd_board_selector_init();
 	if (board_selector == NULL) {
-		applog(LOG_ERR, "No CoinCrafd Desk backplane detected.");
+		applog(LOG_INFO, "No CoinCrafd Desk backplane detected.");
 		return false;
 	}
 	board_selector->reset_all();
-
-	struct spi_config cfg = default_spi_config;
-	cfg.mode = SPI_MODE_1;
-	cfg.speed = A1_config_options.spi_clk_khz * 1000;
-	struct spi_ctx *spi = spi_init(&cfg);
-	if (spi == NULL)
-		return false;
 
 	int boards_detected = 0;
 	int board_id;
@@ -764,14 +782,12 @@ bool detect_coincraft_desk(void)
 		cgpu->device_data = a1;
 
 		a1->cgpu = cgpu;
-		a1->trimpot = mcp;
 		add_cgpu(cgpu);
 		boards_detected++;
 	}
-	if (boards_detected == 0) {
-		spi_exit(spi);
+	if (boards_detected == 0)
 		return false;
-	}
+
 	applog(LOG_WARNING, "Detected CoinCraft Desk with %d boards",
 	       boards_detected);
 	return true;
@@ -783,29 +799,33 @@ bool detect_coincraft_rig_v3(void)
 	if (board_selector == NULL)
 		return false;
 
-	struct spi_config cfg = default_spi_config;
-	cfg.mode = SPI_MODE_1;
-	cfg.speed = A1_config_options.spi_clk_khz * 1000;
-	struct spi_ctx *spi[2];
-	spi[0]= spi_init(&cfg);
-	cfg.cs_line = 1;
-	spi[1]= spi_init(&cfg);
-
-	if (spi[0] == NULL || spi[1] == 0)
-		return false;
-
-
 	board_selector->reset_all();
 	int chains_detected = 0;
 	int c;
 	for (c = 0; c < CCR_MAX_CHAINS; c++) {
 		applog(LOG_WARNING, "checking RIG chain %d...", c);
 
-		board_selector->select(c);
-		struct A1_chain *a1 = init_A1_chain(spi[c & 1], c);
+		if (!board_selector->select(c))
+			continue;
+
+		struct A1_chain *a1 = init_A1_chain(spi, c);
 		board_selector->release();
+
 		if (a1 == NULL)
 			continue;
+
+		if (A1_config_options.wiper != 0 && (c & 1) == 0) {
+			struct mcp4x *mcp = mcp4x_init(0x28);
+			if (mcp == NULL) {
+				applog(LOG_ERR, "%d: Cant access poti", c);
+			} else {
+				mcp->set_wiper(mcp, 0, A1_config_options.wiper);
+				mcp->set_wiper(mcp, 1, A1_config_options.wiper);
+				mcp->exit(mcp);
+				applog(LOG_WARNING, "%d: set wiper to 0x%02x",
+					c, A1_config_options.wiper);
+			}
+		}
 
 		struct cgpu_info *cgpu = malloc(sizeof(*cgpu));
 		assert(cgpu != NULL);
@@ -832,7 +852,7 @@ bool detect_coincraft_rig_v3(void)
 /* Probe SPI channel and register chip chain */
 void A1_detect(bool hotplug)
 {
-	/* no hotplug support for now */
+	/* no hotplug support for SPI */
 	if (hotplug)
 		return;
 
@@ -842,27 +862,47 @@ void A1_detect(bool hotplug)
 		int sys_clk = 0;
 		int spi_clk = 0;
 		int override_chip_num = 0;
+		int wiper = 0;
 
-		sscanf(opt_bitmine_a1_options, "%d:%d:%d:%d",
-		       &ref_clk, &sys_clk, &spi_clk,  &override_chip_num);
+		sscanf(opt_bitmine_a1_options, "%d:%d:%d:%d:%d",
+		       &ref_clk, &sys_clk, &spi_clk,  &override_chip_num,
+		       &wiper);
 		if (ref_clk != 0)
 			A1_config_options.ref_clk_khz = ref_clk;
-		if (sys_clk != 0)
+		if (sys_clk != 0) {
+			if (sys_clk < 100000)
+				quit(1, "system clock must be above 100MHz");
 			A1_config_options.sys_clk_khz = sys_clk;
+		}
 		if (spi_clk != 0)
 			A1_config_options.spi_clk_khz = spi_clk;
 		if (override_chip_num != 0)
 			A1_config_options.override_chip_num = override_chip_num;
+		if (wiper != 0)
+			A1_config_options.wiper = wiper;
 
 		/* config options are global, scan them once */
 		parsed_config_options = &A1_config_options;
 	}
 	applog(LOG_DEBUG, "A1 detect");
+
+	/* register global SPI context */
+	struct spi_config cfg = default_spi_config;
+	cfg.mode = SPI_MODE_1;
+	cfg.speed = A1_config_options.spi_clk_khz * 1000;
+	spi = spi_init(&cfg);
+	if (spi == NULL)
+		return;
+
 	/* detect and register supported products */
 	if (detect_coincraft_desk())
 		return;
 	if (detect_coincraft_rig_v3())
 		return;
+	if (detect_single_chain())
+		return;
+	/* release SPI context if no A1 products found */
+	spi_exit(spi);
 }
 
 #define TEMP_UPDATE_INT_MS	2000
@@ -873,6 +913,10 @@ static int64_t A1_scanwork(struct thr_info *thr)
 	struct A1_chain *a1 = cgpu->device_data;
 	int32_t nonce_ranges_processed = 0;
 
+	if (a1->num_cores == 0) {
+		cgpu->deven = DEV_DISABLED;
+		return 0;
+	}
 	board_selector->select(a1->chain_id);
 
 	applog(LOG_DEBUG, "A1 running scanwork");
@@ -885,7 +929,7 @@ static int64_t A1_scanwork(struct thr_info *thr)
 	mutex_lock(&a1->lock);
 
 	if (a1->last_temp_time + TEMP_UPDATE_INT_MS < get_current_ms()) {
-		a1->temp = board_selector->get_temp();
+		a1->temp = board_selector->get_temp(0);
 		a1->last_temp_time = get_current_ms();
 	}
 	int cid = a1->chain_id;
@@ -956,7 +1000,7 @@ static int64_t A1_scanwork(struct thr_info *thr)
 
 			work = wq_dequeue(&a1->active_wq);
 			if (work == NULL) {
-				applog(LOG_ERR, "%d: chip %d: work underflow",
+				applog(LOG_INFO, "%d: chip %d: work underflow",
 				       cid, c);
 				break;
 			}
