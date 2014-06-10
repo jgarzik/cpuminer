@@ -6656,7 +6656,7 @@ retry_stratum:
 		}
 		applog(LOG_DEBUG, "FAILED to retrieve work from pool %u %s",
 		       pool->pool_no, pool->rpc_url);
-		if (!pinging)
+		if (!pinging && !pool->idle)
 			applog(LOG_WARNING, "Pool %u slow/down or URL or credentials invalid", pool->pool_no);
 	}
 out:
