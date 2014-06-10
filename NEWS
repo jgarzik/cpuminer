@@ -1,3 +1,25 @@
+Version 4.3.5 - 10th June 2014
+
+- Do some random sanity checking for stratum message parsing
+- Keep looking for when a pool comes to life at startup and touch the logwin so
+the message is not invisible
+- Fix no libcurl build
+- Added Drillbit Thumb to udev rules.
+- Avoid dereference on getting API stats on partially initialised HFA instances
+- A1: add support for updated product variants, small fixes
+- Add one more usbutils fix
+- Convert uses of usbutils memcpy to cg_memcpy
+- Add a sanity checking memcpy function which checks for overflows
+- minion - count force use reread
+- minion - add a disabled ioctl() test
+- minion - add more checking of SPI results for corruption
+- minion - optional (disabled) ioctl() debug
+- Increase S1 overheat to 75 degrees C
+- Add ruby api-example to API-README
+- minion - allow core selection at runtime
+- API - lcd all-in-one brief summary
+
+
 Version 4.3.4 - 25th May 2014
 
 - Add support for 2 nonces per block in spond driver
