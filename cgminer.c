@@ -8638,6 +8638,7 @@ retry:
 		switch_pools(NULL);
 	} else {
 		pool_died(pool);
+		sleep(5);
 		goto retry;
 	}
 
