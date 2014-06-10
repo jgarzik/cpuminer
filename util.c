@@ -738,7 +738,7 @@ static bool _valid_hex(char *s, const char *file, const char *func, const int li
 		unsigned char idx = s[i];
 
 		if (unlikely(hex2bin_tbl[idx] < 0)) {
-			applog(LOG_ERR, "Invalid char %x passed to valid_hex from"IN_FMT_FFL, idx, file, func, line);
+			applog(LOG_ERR, "Invalid char 0x%x passed to valid_hex from"IN_FMT_FFL, idx, file, func, line);
 			return ret;
 		}
 	}
@@ -747,6 +747,34 @@ static bool _valid_hex(char *s, const char *file, const char *func, const int li
 }
 
 #define valid_hex(s) _valid_hex(s, __FILE__, __func__, __LINE__)
+
+static bool _valid_ascii(char *s, const char *file, const char *func, const int line)
+{
+	bool ret = false;
+	int i, len;
+
+	if (unlikely(!s)) {
+		applog(LOG_ERR, "Null string passed to valid_ascii from"IN_FMT_FFL, file, func, line);
+		return ret;
+	}
+	len = strlen(s);
+	if (unlikely(!len)) {
+		applog(LOG_ERR, "Zero length string passed to valid_ascii from"IN_FMT_FFL, file, func, line);
+		return ret;
+	}
+	for (i = 0; i < len; i++) {
+		unsigned char idx = s[i];
+
+		if (unlikely(idx < 32 || idx > 126)) {
+			applog(LOG_ERR, "Invalid char 0x%x passed to valid_ascii from"IN_FMT_FFL, idx, file, func, line);
+			return ret;
+		}
+	}
+	ret = true;
+	return ret;
+}
+
+#define valid_ascii(s) _valid_ascii(s, __FILE__, __func__, __LINE__)
 
 static const int b58tobin_tbl[] = {
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
@@ -1713,7 +1741,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	ntime = __json_array_string(val, 7);
 	clean = json_is_true(json_array_get(val, 8));
 
-	if (!valid_hex(job_id) || !valid_hex(prev_hash) || !valid_hex(coinbase1) ||
+	if (!valid_ascii(job_id) || !valid_hex(prev_hash) || !valid_hex(coinbase1) ||
 	    !valid_hex(coinbase2) || !valid_hex(bbversion) || !valid_hex(nbit) ||
 	    !valid_hex(ntime)) {
 		/* Annoying but we must not leak memory */
