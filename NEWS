@@ -1,5 +1,6 @@
 Version 4.3.5 - 10th June 2014
 
+- Cointerra driver updates.
 - Sleep before retrying in the test pool thread after a pool has died
 - Use valid_ascii testing for job_id since it need not be hex only
 - Only show slow/down message till pool is flagged idle
