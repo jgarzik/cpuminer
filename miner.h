@@ -208,12 +208,6 @@ static inline int fsync (int fd)
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
-#ifdef MIPSEB
-#ifndef roundl
-#define roundl(x)   (long double)((long long)((x==0)?0.0:((x)+((x)>0)?0.5:-0.5)))
-#endif
-#endif
-
 /* No semtimedop on apple so ignore timeout till we implement one */
 #ifdef __APPLE__
 #define semtimedop(SEM, SOPS, VAL, TIMEOUT) semop(SEM, SOPS, VAL)
