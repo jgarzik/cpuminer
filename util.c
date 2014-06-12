@@ -730,10 +730,6 @@ static bool _valid_hex(char *s, const char *file, const char *func, const int li
 		return ret;
 	}
 	len = strlen(s);
-	if (unlikely(!len)) {
-		applog(LOG_ERR, "Zero length string passed to valid_hex from"IN_FMT_FFL, file, func, line);
-		return ret;
-	}
 	for (i = 0; i < len; i++) {
 		unsigned char idx = s[i];
 
