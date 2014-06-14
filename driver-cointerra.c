@@ -1335,7 +1335,7 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 
 	for (i = 0; i < CTA_CORES; i++) {
 		sprintf(buf, "CoreFmatch%d", i);
-		root = api_add_int16(root, buf, &info->fmatch_errors[i], false);
+		root = api_add_uint16(root, buf, &info->fmatch_errors[i], false);
 	}
 
 	return root;
