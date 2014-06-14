@@ -3006,13 +3006,18 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 				reason[reasonLen + 2] = ')'; reason[reasonLen + 3] = '\0';
 				memcpy(disposition + 7, reasontmp, reasonLen);
 				disposition[6] = ':'; disposition[reasonLen + 7] = '\0';
-			} else if (work->stratum && err && json_is_array(err)) {
-				json_t *reason_val = json_array_get(err, 1);
-				char *reason_str;
+			} else if (work->stratum && err) {
+				if (json_is_array(err)) {
+					json_t *reason_val = json_array_get(err, 1);
+					char *reason_str;
 
-				if (reason_val && json_is_string(reason_val)) {
-					reason_str = (char *)json_string_value(reason_val);
-					snprintf(reason, 31, " (%s)", reason_str);
+					if (reason_val && json_is_string(reason_val)) {
+						reason_str = (char *)json_string_value(reason_val);
+						snprintf(reason, 31, " (%s)", reason_str);
+					}
+				} else if (json_is_string(err)) {
+					const char *s = json_string_value(err);
+					snprintf(reason, 31, " (%s)", s);
 				}
 			}
 
