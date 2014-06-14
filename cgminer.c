@@ -8639,6 +8639,7 @@ retry:
 		if (unlikely(first_pool))
 			applog(LOG_NOTICE, "Switching to pool %d %s - first alive pool", pool->pool_no, pool->rpc_url);
 
+		pool_tclear(pool, &pool->idle);
 		pool_resus(pool);
 		switch_pools(NULL);
 	} else {
