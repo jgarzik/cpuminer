@@ -1387,20 +1387,19 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 	struct ICARUS_WORK workdata;
 	char *nonce_hex;
 	struct cgpu_info *icarus;
-	int ret, err, amount, tries, i;
+	int ret, err, amount, tries;
 	bool ok;
 	int correction_times = 0;
 #if (NONCE_CORRECTION_TIMES == 9)
 	int32_t correction_value[] = {0, 1, -1, 2, -2, 3, -3, 4, -4};
 #endif
 #if (NONCE_CORRECTION_TIMES == 3)
-		int32_t correction_value[] = {0, 1, -1};
+	int32_t correction_value[] = {0, 1, -1};
 #endif
 	NONCE_DATA nonce_data;
 
 	uint32_t nonce;
 	//int cmd_value = 0;
-	int chip_no;
 	int dev_id;
 
 	if ((sizeof(workdata) << 1) != (sizeof(golden_ob) - 1))
@@ -1654,7 +1653,7 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 {
 	struct cgpu_info *icarus = thr->cgpu;
 	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
-	int ret, err, amount;
+	int err, amount;
 	struct ICARUS_WORK workdata;
 	char *ob_hex;
 	struct work *work = NULL;
@@ -2011,27 +2010,14 @@ static int64_t rock_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
 	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
-	int ret, err, amount;
+	int ret;
 	unsigned char nonce_bin[ICARUS_BUF_SIZE];
-	struct ICARUS_WORK workdata;
-	char *ob_hex;
 	uint32_t nonce;
 	int64_t hash_count = 0;
 	struct timeval tv_start, tv_finish, elapsed;
-	struct timeval tv_history_start, tv_history_finish;
-	double Ti, Xi;
-	int curr_hw_errors, i;
-	bool was_hw_error;
 	struct work *work = NULL;
 
-	struct ICARUS_HISTORY *history0, *history;
-	int count;
-	double Hs, W, fullnonce;
-	int read_time;
-	bool limited;
 	int64_t estimate_hashes;
-	uint32_t values;
-	int64_t hash_count_range;
 	int correction_times = 0;
 #if (NONCE_CORRECTION_TIMES == 9)
 	int32_t correction_value[] = {0, 1, -1, 2, -2, 3, -3, 4, -4};
@@ -2192,7 +2178,6 @@ static int64_t rock_scanwork(struct thr_info *thr)
 #if  ROCKMINER_PRINT_DEBUG
 	applog(LOG_WARNING, "Rockminer nonce %s%d[%d/24]-%d: %08X",icarus->drv->name, icarus->device_id,nonce_data.chip_no,nonce_data.task_no, nonce);
 #endif
-	curr_hw_errors = icarus->hw_errors;
 
 #ifdef NONCE_TEST// ROCKMINER_PRINT_DEBUG
 	device_nonce_conunts[dev_id] ++;
