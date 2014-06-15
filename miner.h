@@ -986,6 +986,7 @@ extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern float opt_anu_freq;
+extern float opt_rock_freq;
 #endif
 extern bool opt_worktime;
 #ifdef USE_AVALON

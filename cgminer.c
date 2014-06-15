@@ -208,6 +208,7 @@ static bool no_work;
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 float opt_anu_freq = 200;
+float opt_rock_freq = 270;
 #endif
 bool opt_worktime;
 #ifdef USE_AVALON
@@ -9010,6 +9011,20 @@ static void adjust_mostdevs(void)
 	if (total_devices - zombie_devs > most_devices)
 		most_devices = total_devices - zombie_devs;
 }
+
+#ifdef USE_ICARUS
+bool icarus_get_device_id(struct cgpu_info *cgpu)
+{
+	static struct _cgpu_devid_counter *devids = NULL;
+	struct _cgpu_devid_counter *d;
+
+	HASH_FIND_STR(devids, cgpu->drv->name, d);
+	if (d)
+		return (d->lastid + 1);
+	else
+		return 0;
+}
+#endif
 
 bool add_cgpu(struct cgpu_info *cgpu)
 {
