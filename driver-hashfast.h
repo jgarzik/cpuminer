@@ -43,6 +43,11 @@ char *opt_hfa_options;
 #define HFA_FAN_DEFAULT 33
 #define HFA_FAN_MAX 85
 #define HFA_FAN_MIN 5
+#define HFA_VOLTAGE_DEFAULT 930
+
+// # Factory Operation Codes
+#define OP_SETTINGS             55      // Read or write settings
+#define OP_POWER                57
 
 // Matching fields for hf_statistics, but large #s for local accumulation, per-die
 struct hf_long_statistics {
@@ -149,6 +154,8 @@ struct hashfast_info {
 	pthread_t read_thr;
 	time_t last_restart;
 	time_t last_send;
+	int hash_voltage[4];                        // Hash voltage to use, in mV
+	int hash_clock_offset[4];                   // Hash clock offset in Mhz
 };
 
 #endif /* USE_HASHFAST */

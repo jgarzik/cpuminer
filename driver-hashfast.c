@@ -181,6 +181,30 @@ retry:
 	return true;
 }
 
+static bool hfa_send_generic_frame(struct cgpu_info *hashfast, uint8_t opcode, uint8_t chip_address,
+				   uint8_t core_address, uint16_t hdata, uint8_t *data, int len)
+{
+	uint8_t packet[256];
+	struct hf_header *p = (struct hf_header *)packet;
+	int tx_length, ret, amount;
+
+	p->preamble = HF_PREAMBLE;
+	p->operation_code = opcode;
+	p->chip_address = chip_address;
+	p->core_address = core_address;
+	p->hdata = htole16(hdata);
+	p->data_length = len / 4;
+	p->crc8 = hfa_crc8(packet);
+
+	if (len)
+		memcpy(&packet[sizeof(struct hf_header)], data, len);
+	tx_length = sizeof(struct hf_header) + len;
+
+	ret = usb_write(hashfast, (char *)packet, tx_length, &amount, C_NULL);
+
+	return ((ret >= 0) && (amount == tx_length));
+}
+
 static bool hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, uint16_t hdata,
 			   uint8_t *data, int len)
 {
@@ -368,6 +392,52 @@ static void hfa_choose_opname(struct cgpu_info *hashfast, struct hashfast_info *
 		sprintf(info->op_name, "%lx", (long unsigned int)usecs);
 	}
 	hfa_write_opname(hashfast, info);
+}
+
+// Generic setting header
+struct hf_settings_data {
+	uint8_t revision;
+	uint8_t ref_frequency;
+	uint16_t magic;
+	uint16_t frequency0;
+	uint16_t voltage0;
+	uint16_t frequency1;
+	uint16_t voltage1;
+	uint16_t frequency2;
+	uint16_t voltage2;
+	uint16_t frequency3;
+	uint16_t voltage3;
+} __attribute__((packed,aligned(4)));
+
+static bool hfa_set_voltages(struct cgpu_info *hashfast, struct hashfast_info *info)
+{
+	static bool powerResetBoardOnce = true;
+	uint16_t magic = 0x42AA;
+	struct hf_settings_data op_settings_data;
+
+	op_settings_data.revision = 1;
+	op_settings_data.ref_frequency = 25;
+	op_settings_data.magic = magic;
+
+	op_settings_data.frequency0 = info->hash_clock_rate + info->hash_clock_offset[0];
+	op_settings_data.voltage0 = info->hash_voltage[0];
+	op_settings_data.frequency1 = info->hash_clock_rate + info->hash_clock_offset[1];
+	op_settings_data.voltage1 = info->hash_voltage[1];
+	op_settings_data.frequency2 = info->hash_clock_rate + info->hash_clock_offset[2];
+	op_settings_data.voltage2 = info->hash_voltage[2];
+	op_settings_data.frequency3 = info->hash_clock_rate + info->hash_clock_offset[3];
+	op_settings_data.voltage3 = info->hash_voltage[3];
+
+	hfa_send_generic_frame(hashfast, OP_SETTINGS, 0x00, 0x01, magic, (uint8_t *)&op_settings_data, sizeof(op_settings_data));
+	// reset the board once to switch to new voltage settings
+	if (powerResetBoardOnce)
+	{
+		hfa_send_generic_frame(hashfast, OP_POWER, 0xff, 0x00, 0x1, NULL, 0);
+		hfa_send_generic_frame(hashfast, OP_POWER, 0xff, 0x00, 0x2, NULL, 0);
+		powerResetBoardOnce = false;
+	}
+
+	return true;
 }
 
 static bool hfa_send_shutdown(struct cgpu_info *hashfast);
@@ -637,7 +707,11 @@ static void hfa_set_clock(struct cgpu_info *hashfast, struct hashfast_info *info
 	 * usb_init_base message so we have to assume it's what we asked. */
 	info->base_clock = info->hash_clock_rate;
 	for (i = 0; i < info->asic_count; i++)
+	{
 		info->die_data[i].hash_clock = info->base_clock;
+		if (info->asic_count == 4)
+			info->die_data[i].hash_clock += info->hash_clock_offset[i];
+	}
 }
 
 /* Look for an op name match and apply any options to its first attempted
@@ -689,6 +763,44 @@ static void hfa_check_options(struct hashfast_info *info)
 				}
 				info->hash_clock_rate = lval;
 				break;
+			case 2:
+				lval = strtol(p, NULL, 10);
+				info->hash_voltage[0] = lval;
+				info->hash_voltage[1] = lval;
+				info->hash_voltage[2] = lval;
+				info->hash_voltage[3] = lval;
+				break;
+			case 3:
+				lval = strtol(p, NULL, 10);
+				info->hash_voltage[1] = lval;
+				info->hash_voltage[2] = lval;
+				info->hash_voltage[3] = lval;
+				break;
+			case 4:
+				lval = strtol(p, NULL, 10);
+				info->hash_voltage[2] = lval;
+				info->hash_voltage[3] = lval;
+				break;
+			case 5:
+				lval = strtol(p, NULL, 10);
+				info->hash_voltage[3] = lval;
+				break;
+			case 6:
+				lval = strtol(p, NULL, 10);
+				info->hash_clock_offset[0] = lval;
+				break;
+			case 7:
+				lval = strtol(p, NULL, 10);
+				info->hash_clock_offset[1] = lval;
+				break;
+			case 8:
+				lval = strtol(p, NULL, 10);
+				info->hash_clock_offset[2] = lval;
+				break;
+			case 9:
+				lval = strtol(p, NULL, 10);
+				info->hash_clock_offset[3] = lval;
+				break;
 		}
 	}
 	free(found);
@@ -707,6 +819,10 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 	if (!info)
 		quit(1, "Failed to calloc hashfast_info in hfa_detect_common");
 	hashfast->device_data = info;
+
+	// set default voltage
+	for (i = 0; i < 4; i++)
+		info->hash_voltage[i] = HFA_VOLTAGE_DEFAULT;
 
 	/* Try sending and receiving an OP_NAME */
 	ret = hfa_send_frame(hashfast, HF_USB_CMD(OP_NAME), 0, (uint8_t *)NULL, 0);
@@ -768,6 +884,18 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 			applog(LOG_NOTICE, "%s: Found device with name %s", hashfast->drv->name,
 			       info->op_name);
 			hfa_check_options(info);
+		}
+		if ((info->hash_voltage[0] != HFA_VOLTAGE_DEFAULT) ||
+			(info->hash_voltage[1] != HFA_VOLTAGE_DEFAULT) ||
+			(info->hash_voltage[2] != HFA_VOLTAGE_DEFAULT) ||
+			(info->hash_voltage[3] != HFA_VOLTAGE_DEFAULT))
+		{
+			hfa_set_voltages(hashfast, info);
+			applog(LOG_NOTICE, "%s: Set clocks and voltages (%dmv@%d,%dmv@%d,%dmv@%d,%dmv@%d)", hashfast->drv->name,
+				   info->hash_voltage[0], info->hash_clock_rate + info->hash_clock_offset[0],
+				   info->hash_voltage[1], info->hash_clock_rate + info->hash_clock_offset[1],
+				   info->hash_voltage[2], info->hash_clock_rate + info->hash_clock_offset[2],
+				   info->hash_voltage[3], info->hash_clock_rate + info->hash_clock_offset[3]);
 		}
 	}
 
@@ -1276,7 +1404,11 @@ static bool hfa_init(struct thr_info *thr)
 	if (unlikely(!(info->die_data)))
 		quit(1, "Failed to calloc die_data");
 	for (i = 0; i < info->asic_count; i++)
+	{
 		info->die_data[i].hash_clock = info->base_clock;
+		if (info->asic_count == 4)
+			info->die_data[i].hash_clock += info->hash_clock_offset[i];
+	}
 
 	// The per-die statistics array
 	info->die_statistics = calloc(info->asic_count, sizeof(struct hf_long_statistics));
@@ -1319,6 +1451,17 @@ static bool hfa_init(struct thr_info *thr)
 			hfa_set_clock(hashfast, info);
 		}
 	}
+
+	if (info->asic_count == 4)
+	    for (i = 0; i < info->asic_count; i++)
+		if (info->hash_clock_offset[i] != 0)
+		{
+			uint16_t hdata;
+			uint32_t diebit = 0x00000001ul << i;
+			hdata = (WR_CLOCK_VALUE << WR_COMMAND_SHIFT) | info->die_data[i].hash_clock;
+			hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), hdata, (uint8_t *)&diebit, 4);
+			applog(LOG_NOTICE, "%s: Set Hashfast die %d to %d MHz", hashfast->drv->name, i, info->die_data[i].hash_clock);
+		}
 
 	mutex_init(&info->lock);
 	mutex_init(&info->rlock);
