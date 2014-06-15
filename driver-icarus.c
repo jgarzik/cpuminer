@@ -1177,6 +1177,13 @@ cmr2_retry:
 		if (ret != ICA_NONCE_OK)
 			continue;
 
+		if (info->nonce_size == ICARUS_READ_SIZE && usb_buffer_size(icarus) == 4) {
+			applog(LOG_DEBUG, "%s %i: Detected Rockminer, deferring detection",
+			       icarus->drv->name, icarus->device_id);
+			usb_buffer_clear(icarus);
+			break;
+
+		}
 		if (info->nonce_size == ICARUS_READ_SIZE && usb_buffer_size(icarus) == 1) {
 			usb_buffer_clear(icarus);
 			icarus->usbdev->ident = info->ident = IDENT_ANU;
@@ -1341,9 +1348,24 @@ shin:
 
 static int64_t rock_scanwork(struct thr_info *thr);
 
+static bool rock_prepare(struct thr_info *thr)
+{
+	struct cgpu_info *icarus = thr->cgpu;
+
+	icarus->drv->name = "LIN";
+	return true;
+}
+
+static void rock_statline_before(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
+{
+	if (cgpu->temp)
+		tailsprintf(buf, bufsiz, "%3.0fMHz %3.0fC", opt_rock_freq, cgpu->temp);
+	else
+		tailsprintf(buf, bufsiz, "%.0fMHz", opt_rock_freq);
+}
+
 static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
-	int this_option_offset = ++option_offset;
 	struct ICARUS_INFO *info;
 	struct timeval tv_start, tv_finish;
 	int opt_debug = ROCKMINER_PRINT_DEBUG;
@@ -1364,13 +1386,9 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 	unsigned char nonce_bin[ROCK_READ_SIZE];
 	struct ICARUS_WORK workdata;
 	char *nonce_hex;
-	int baud, uninitialised_var(work_division), uninitialised_var(fpga_count);
 	struct cgpu_info *icarus;
 	int ret, err, amount, tries, i;
 	bool ok;
-	bool cmr2_ok[CAIRNSMORE2_INTS];
-	bool anu_freqset = false;
-	int cmr2_count;
 	int correction_times = 0;
 	#if (NONCE_CORRECTION_TIMES == 9)
 		int32_t correction_value[] = {0, 1, -1, 2, -2, 3, -3, 4, -4};
@@ -1389,25 +1407,20 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 		quithere(1, "Data and golden_ob sizes don't match");
 
 	icarus = usb_alloc_cgpu(&icarus_drv, 1);
-	icarus->drv->scanwork = rock_scanwork;
-	icarus->drv->dname = "Rockminer";
-	icarus->drv->name = "LIN";
 
 	if (!usb_init(icarus, dev, found))
 		goto shin;
 
-	get_options(this_option_offset, icarus, &baud, &work_division, &fpga_count);
-
 #ifdef WIN32
-		dev_id =icarus_get_device_id(icarus);
+	dev_id = icarus_get_device_id(icarus);
 #else
-    dev_id =icarus->device_id;
+	dev_id = icarus->device_id;
 #endif
 
 	hex2bin((void *)(&workdata), golden_ob, sizeof(workdata));
 #ifdef ROCKMINER
 	rev((void *)(&(workdata.midstate)), ICARUS_MIDSTATE_SIZE);
-    rev((void *)(&(workdata.work)), ICARUS_WORK_SIZE);
+	rev((void *)(&(workdata.work)), ICARUS_WORK_SIZE);
 #endif
 	opt_debug = ROCKMINER_PRINT_DEBUG;
 	if (opt_debug) {
@@ -1422,45 +1435,15 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 		quit(1, "Failed to malloc ICARUS_INFO");
 	(void)memset(info, 0, sizeof(struct ICARUS_INFO));
 	icarus->device_data = (void *)info;
-
-	info->ident = usb_ident(icarus);
-	switch (info->ident) {
-		case IDENT_ICA:
-		case IDENT_BLT:
-		case IDENT_LLT:
-		case IDENT_AMU:
-		case IDENT_CMR1:
-			info->timeout = ICARUS_WAIT_TIMEOUT;
-			break;
-		case IDENT_ANU:
-			info->timeout = ANT_WAIT_TIMEOUT;
-			break;
-		case IDENT_CMR2:
-			if (found->intinfo_count != CAIRNSMORE2_INTS) {
-				quithere(1, "CMR2 Interface count (%d) isn't expected: %d",
-						found->intinfo_count,
-						CAIRNSMORE2_INTS);
-			}
-			info->timeout = ICARUS_CMR2_TIMEOUT;
-			cmr2_count = 0;
-			for (i = 0; i < CAIRNSMORE2_INTS; i++)
-				cmr2_ok[i] = false;
-			break;
-		default:
-			quit(1, "%s icarus_detect_one() invalid %s ident=%d",
-				icarus->drv->dname, icarus->drv->dname, info->ident);
-	}
-
+	icarus->usbdev->ident = info->ident = IDENT_LIN;
 	info->nonce_size = ROCK_READ_SIZE;
-// For CMR2 test each USB Interface
-
-cmr2_retry:
+	info->fail_time = 10;
+	info->nonce_mask = 0xffffffff;
+	update_usb_stats(icarus);
 
 	tries = MAX_TRIES;
 	ok = false;
 	while (!ok && tries-- > 0) {
-		icarus_initialise(icarus, baud);
-
         #if ROCKMINER_PRINT_DEBUG
 		applog(LOG_WARNING, "tries: %d", tries);
 		#endif
@@ -1478,7 +1461,7 @@ cmr2_retry:
 		continue;
 
 		memset(nonce_bin, 0, sizeof(nonce_bin));
-		ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, NULL, 5000);
+		ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, NULL, 100);
 		#if ROCKMINER_PRINT_DEBUG
 		applog(LOG_WARNING, "Rockminer nonce_bin: %02X, %02X, %02X, %02X, %02X, %02X, %02X, %02X", nonce_bin[0], nonce_bin[1], nonce_bin[2], nonce_bin[3], nonce_bin[4], nonce_bin[5], nonce_bin[6], nonce_bin[7]);
 		#endif
@@ -1549,10 +1532,7 @@ cmr2_retry:
 				clear_chip_busy(dev_id);
 				rock_init_last_received_task_complete_time(dev_id);
 
-				if (info->ident == IDENT_ANU && !anu_freqset)
-					anu_freqset = true;
-				else
-					ok = true;
+				ok = true;
 				break;
 			} else {
 			    #if ROCKMINER_PRINT_DEBUG
@@ -1591,27 +1571,19 @@ cmr2_retry:
 	applog(LOG_DEBUG, "Icarus Detect: Test succeeded at %s: got %s",
 	       icarus->device_path, golden_nonce);
 
-	/* We have a real Icarus! */
+	/* We have a real Rockminer! */
 	if (!add_cgpu(icarus))
 		goto unshin;
 
-	update_usb_stats(icarus);
+	icarus->drv->scanwork = rock_scanwork;
+	icarus->drv->dname = "Rockminer";
+	icarus->drv->thread_prepare = &rock_prepare;
+	icarus->drv->get_statline_before = &rock_statline_before;
 
 	applog(LOG_INFO, "%s%d: Found at %s",
 		icarus->drv->name, icarus->device_id, icarus->device_path);
 
-	applog(LOG_DEBUG, "%s%d: Init baud=%d work_division=%d fpga_count=%d",
-		icarus->drv->name, icarus->device_id, baud, work_division, fpga_count);
-
-	info->baud = baud;
-	info->work_division = work_division;
-	info->fpga_count = fpga_count;
-	info->nonce_mask = mask(work_division);
-
-	info->golden_hashes = (golden_nonce_val & info->nonce_mask) * fpga_count;
 	timersub(&tv_finish, &tv_start, &(info->golden_tv));
-
-	set_timing_mode(this_option_offset, icarus);
 
 	return icarus;
 
@@ -1630,8 +1602,8 @@ shin:
 
 static void icarus_detect(bool __maybe_unused hotplug)
 {
-	//usb_detect(&icarus_drv, icarus_detect_one);
 	usb_detect(&icarus_drv, rock_detect_one);
+	usb_detect(&icarus_drv, icarus_detect_one);
 }
 
 static bool icarus_prepare(__maybe_unused struct thr_info *thr)
@@ -2148,13 +2120,9 @@ static int64_t rock_scanwork(struct thr_info *thr)
 		applog(LOG_WARNING, "Temperature of Device is too hign to work!");
 #endif
 
-		icarus->temp = (double)nonce_bin[NONCE_COMMAND_OFFSET];
-#if 0
-		if(icarus->temp == 128)
-			icarus->temp_have = 0;
-		else
-			icarus->temp_have = 1;
-#endif
+	icarus->temp = (double)nonce_bin[NONCE_COMMAND_OFFSET];
+	if (icarus->temp == 128)
+		icarus->temp = 0;
 
 	if (nonce_data.cmd_value == NONCE_TASK_COMPLETE_CMD)
 	{
@@ -2218,7 +2186,6 @@ static int64_t rock_scanwork(struct thr_info *thr)
 				(long unsigned int)estimate_hashes,
 				(long)elapsed.tv_sec, (long)elapsed.tv_usec);
 
-		hash_count = estimate_hashes;
 		goto out;
 	}
 
@@ -2350,111 +2317,6 @@ static int64_t rock_scanwork(struct thr_info *thr)
 			nonce, (long unsigned int)hash_count,
 			(long)elapsed.tv_sec, (long)elapsed.tv_usec);
 
-	// Ignore possible end condition values ... and hw errors
-	// TODO: set limitations on calculated values depending on the device
-	// to avoid crap values caused by CPU/Task Switching/Swapping/etc
-	if (info->do_icarus_timing
-	&&  !was_hw_error
-	&&  ((nonce & info->nonce_mask) > END_CONDITION)
-	&&  ((nonce & info->nonce_mask) < (info->nonce_mask & ~END_CONDITION))) {
-		cgtime(&tv_history_start);
-
-		history0 = &(info->history[0]);
-
-		if (history0->values == 0)
-			timeradd(&tv_start, &history_sec, &(history0->finish));
-
-		Ti = (double)(elapsed.tv_sec)
-			+ ((double)(elapsed.tv_usec))/((double)1000000)
-			- ((double)ICARUS_READ_TIME(info->baud));
-		Xi = (double)hash_count;
-		history0->sumXiTi += Xi * Ti;
-		history0->sumXi += Xi;
-		history0->sumTi += Ti;
-		history0->sumXi2 += Xi * Xi;
-
-		history0->values++;
-
-		if (history0->hash_count_max < hash_count)
-			history0->hash_count_max = hash_count;
-		if (history0->hash_count_min > hash_count || history0->hash_count_min == 0)
-			history0->hash_count_min = hash_count;
-
-		if (history0->values >= info->min_data_count
-		&&  timercmp(&tv_start, &(history0->finish), >)) {
-			for (i = INFO_HISTORY; i > 0; i--)
-				memcpy(&(info->history[i]),
-					&(info->history[i-1]),
-					sizeof(struct ICARUS_HISTORY));
-
-			// Initialise history0 to zero for summary calculation
-			memset(history0, 0, sizeof(struct ICARUS_HISTORY));
-
-			// We just completed a history data set
-			// So now recalc read_time based on the whole history thus we will
-			// initially get more accurate until it completes INFO_HISTORY
-			// total data sets
-			count = 0;
-			for (i = 1 ; i <= INFO_HISTORY; i++) {
-				history = &(info->history[i]);
-				if (history->values >= MIN_DATA_COUNT) {
-					count++;
-
-					history0->sumXiTi += history->sumXiTi;
-					history0->sumXi += history->sumXi;
-					history0->sumTi += history->sumTi;
-					history0->sumXi2 += history->sumXi2;
-					history0->values += history->values;
-
-					if (history0->hash_count_max < history->hash_count_max)
-						history0->hash_count_max = history->hash_count_max;
-					if (history0->hash_count_min > history->hash_count_min || history0->hash_count_min == 0)
-						history0->hash_count_min = history->hash_count_min;
-				}
-			}
-
-			// All history data
-			Hs = (history0->values*history0->sumXiTi - history0->sumXi*history0->sumTi)
-				/ (history0->values*history0->sumXi2 - history0->sumXi*history0->sumXi);
-			W = history0->sumTi/history0->values - Hs*history0->sumXi/history0->values;
-			hash_count_range = history0->hash_count_max - history0->hash_count_min;
-			values = history0->values;
-
-			// Initialise history0 to zero for next data set
-			memset(history0, 0, sizeof(struct ICARUS_HISTORY));
-
-			fullnonce = W + Hs * (((double)0xffffffff) + 1);
-			read_time = SECTOMS(fullnonce) - ICARUS_READ_REDUCE;
-			if (info->read_time_limit > 0 && read_time > info->read_time_limit) {
-				read_time = info->read_time_limit;
-				limited = true;
-			} else
-				limited = false;
-
-			info->Hs = Hs;
-			info->read_time = read_time;
-
-			info->fullnonce = fullnonce;
-			info->count = count;
-			info->W = W;
-			info->values = values;
-			info->hash_count_range = hash_count_range;
-
-			if (info->min_data_count < MAX_MIN_DATA_COUNT)
-				info->min_data_count *= 2;
-			else if (info->timing_mode == MODE_SHORT)
-				info->do_icarus_timing = false;
-
-			applog(LOG_WARNING, "%s%d Re-estimate: Hs=%e W=%e read_time=%dms%s fullnonce=%.3fs",
-					icarus->drv->name, icarus->device_id, Hs, W, read_time,
-					limited ? " (limited)" : "", fullnonce);
-		}
-		info->history_count++;
-		cgtime(&tv_history_finish);
-
-		timersub(&tv_history_finish, &tv_history_start, &tv_history_finish);
-		timeradd(&tv_history_finish, &(info->history_time), &(info->history_time));
-	}
 out:
 
 	return hash_count;

@@ -1065,6 +1065,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--anu-freq",
 		     set_float_125_to_500, &opt_show_intval, &opt_anu_freq,
 		     "Set AntminerU1 frequency in MHz, range 125-500"),
+	OPT_WITH_ARG("--rock-freq",
+		     set_float_125_to_500, &opt_show_intval, &opt_rock_freq,
+		     "Set RockMiner frequency in MHz, range 125-500"),
 #endif
 	OPT_WITH_ARG("--api-allow",
 		     opt_set_charp, NULL, &opt_api_allow,
