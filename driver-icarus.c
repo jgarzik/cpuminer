@@ -1390,9 +1390,9 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 	int ret, err, amount, tries, i;
 	bool ok;
 	int correction_times = 0;
-	#if (NONCE_CORRECTION_TIMES == 9)
-		int32_t correction_value[] = {0, 1, -1, 2, -2, 3, -3, 4, -4};
-	#endif
+#if (NONCE_CORRECTION_TIMES == 9)
+	int32_t correction_value[] = {0, 1, -1, 2, -2, 3, -3, 4, -4};
+#endif
 #if (NONCE_CORRECTION_TIMES == 3)
 		int32_t correction_value[] = {0, 1, -1};
 #endif
@@ -1418,10 +1418,8 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 #endif
 
 	hex2bin((void *)(&workdata), golden_ob, sizeof(workdata));
-#ifdef ROCKMINER
 	rev((void *)(&(workdata.midstate)), ICARUS_MIDSTATE_SIZE);
 	rev((void *)(&(workdata.work)), ICARUS_WORK_SIZE);
-#endif
 	opt_debug = ROCKMINER_PRINT_DEBUG;
 	if (opt_debug) {
 		ob_hex = bin2hex((void *)(&workdata), sizeof(workdata));
@@ -1444,9 +1442,9 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 	tries = MAX_TRIES;
 	ok = false;
 	while (!ok && tries-- > 0) {
-        #if ROCKMINER_PRINT_DEBUG
+#if ROCKMINER_PRINT_DEBUG
 		applog(LOG_WARNING, "tries: %d", tries);
-		#endif
+#endif
 		workdata.unused[ICARUS_UNUSED_SIZE - 3] = opt_rock_freq/10 - 1;
 		workdata.unused[ICARUS_UNUSED_SIZE - 2] = (MAX_TRIES-1-tries);
 		rmdev[dev_id].detect_chip_no ++;
@@ -1462,9 +1460,9 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 
 		memset(nonce_bin, 0, sizeof(nonce_bin));
 		ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, NULL, 100);
-		#if ROCKMINER_PRINT_DEBUG
+#if ROCKMINER_PRINT_DEBUG
 		applog(LOG_WARNING, "Rockminer nonce_bin: %02X, %02X, %02X, %02X, %02X, %02X, %02X, %02X", nonce_bin[0], nonce_bin[1], nonce_bin[2], nonce_bin[3], nonce_bin[4], nonce_bin[5], nonce_bin[6], nonce_bin[7]);
-		#endif
+#endif
 		if (ret != ICA_NONCE_OK)
 		{
 #if ROCKMINER_PRINT_DEBUG
@@ -1499,9 +1497,9 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 		nonce_data.cmd_value = nonce_bin[NONCE_TASK_CMD_OFFSET]&RM_CMD_MASK;
 		if (nonce_data.cmd_value == NONCE_TASK_COMPLETE_CMD)
 		{
-		    #if ROCKMINER_PRINT_DEBUG
+#if ROCKMINER_PRINT_DEBUG
 			applog(LOG_WARNING, "complete g_detect_chip_no: %d", rmdev[dev_id].detect_chip_no);
-			#endif
+#endif
 		workdata.unused[ICARUS_UNUSED_SIZE - 3] = opt_rock_freq/10 - 1;
 			workdata.unused[ICARUS_UNUSED_SIZE - 2] =  rmdev[dev_id].detect_chip_no;
 			rmdev[dev_id].detect_chip_no ++;
@@ -1512,18 +1510,18 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 				   (char *)(&workdata), sizeof(workdata), &amount, C_SENDWORK);
 			rock_print_work_data(&workdata);
 			if (err != LIBUSB_SUCCESS || amount != sizeof(workdata))
-			continue;
-			#if ROCKMINER_PRINT_DEBUG
+				continue;
+#if ROCKMINER_PRINT_DEBUG
 			applog(LOG_WARNING, "send_gold_nonce usb_write_ii");
-			#endif
+#endif
 			continue;
 		}
 
 		memcpy((char *)&nonce, nonce_bin, ICARUS_READ_SIZE);
 		nonce = htobe32(nonce);
-		#if ROCKMINER_PRINT_DEBUG
+#if ROCKMINER_PRINT_DEBUG
 		applog(LOG_WARNING, "Rockminer nonce: %08X", nonce);
-		#endif
+#endif
 		correction_times = 0;
 		while(correction_times<NONCE_CORRECTION_TIMES)
 		{
@@ -1535,9 +1533,9 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 				ok = true;
 				break;
 			} else {
-			    #if ROCKMINER_PRINT_DEBUG
+#if ROCKMINER_PRINT_DEBUG
 				applog(LOG_WARNING, "detect_one gold_nonce compare error times = %d\r\n", correction_times);
-				#endif
+#endif
 				if (tries < 0 && info->ident != IDENT_CMR2) {
 					applog(LOG_WARNING,
 						"Icarus Detect: "
@@ -1554,7 +1552,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 			correction_times++;
 		}
 
-		#if ROCKMINER_PRINT_DEBUG
+#if ROCKMINER_PRINT_DEBUG
 			if(correction_times > 0 )
 			{
 				if (correction_times < NONCE_CORRECTION_TIMES)
@@ -1562,7 +1560,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 				else
 				applog(LOG_WARNING, "Rockminer correction the Golden nonce fail %s%d[%d]=%d",icarus->drv->name, icarus->device_id,chip_no,correction_times);
 			}
-		#endif
+#endif
 
 	}
 
@@ -1662,10 +1660,10 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 	struct work *work = NULL;
 	int dev_id = icarus->device_id;
 
-    #if ROCKMINER_PRINT_DEBUG
-    applog(LOG_WARNING, "thr_info id:%d, device_thread:%d, icarus cgminer_id: %d, device_id: %d.", thr->id, thr->device_thread, icarus->cgminer_id, icarus->device_id);
+#if ROCKMINER_PRINT_DEBUG
+	applog(LOG_WARNING, "thr_info id:%d, device_thread:%d, icarus cgminer_id: %d, device_id: %d.", thr->id, thr->device_thread, icarus->cgminer_id, icarus->device_id);
 	applog(LOG_WARNING, "::::::::::::::g_work[%d][%d][%d] = 0x%x", dev_id, chip_no, current_task_id, (int)g_work[dev_id][chip_no][current_task_id]);
-	#endif
+#endif
 	if (g_work[dev_id][chip_no][current_task_id] == NULL)
 	{
 		work = get_work(thr, thr->id);
@@ -1678,15 +1676,15 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 	else
 	{
 		work = g_work[dev_id][chip_no][current_task_id];
-		#if ROCKMINER_PRINT_DEBUG
+#if ROCKMINER_PRINT_DEBUG
 		applog(LOG_WARNING, "::resend work");
-		#endif
+#endif
 	}
 
-    #if ROCKMINER_PRINT_DEBUG
+#if ROCKMINER_PRINT_DEBUG
 	//if(chip_no == 7)
 	applog(LOG_WARNING, "::::::::::::::g_work[%d][%d][%d] = 0x%x", dev_id, chip_no, current_task_id, (int)g_work[dev_id][chip_no][current_task_id]);
-	#endif
+#endif
 
 	memset((void *)(&workdata), 0, sizeof(workdata));
 	memcpy(&(workdata.midstate), work->midstate, ICARUS_MIDSTATE_SIZE);
@@ -1708,13 +1706,13 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 		free(ob_hex);
 	}
 
-	#ifndef ROCKMINER
+#ifndef ROCKMINER
 	rev((void *)(&(workdata.midstate)), ICARUS_MIDSTATE_SIZE);
 	rev((void *)(&(workdata.work)), ICARUS_WORK_SIZE);
 
 	if (info->speed_next_work || info->flash_next_work)
 		//cmr2_commands(icarus);
-	#endif
+#endif
 
 	// We only want results for the work we are about to send
 	usb_buffer_clear(icarus);
@@ -2035,9 +2033,9 @@ static int64_t rock_scanwork(struct thr_info *thr)
 	uint32_t values;
 	int64_t hash_count_range;
 	int correction_times = 0;
-	#if (NONCE_CORRECTION_TIMES == 9)
+#if (NONCE_CORRECTION_TIMES == 9)
 	int32_t correction_value[] = {0, 1, -1, 2, -2, 3, -3, 4, -4};
-	#endif
+#endif
 #if (NONCE_CORRECTION_TIMES == 3)
 	int32_t correction_value[] = {0, 1, -1};
 #endif
@@ -2078,9 +2076,9 @@ static int64_t rock_scanwork(struct thr_info *thr)
 		recv_time = time(NULL);
 		if (recv_time > rmdev[dev_id].chip[chip_no].last_received_task_complete_time + 1)
 		{
-		    #if NONCE_TEST
+#if NONCE_TEST
 			applog(LOG_WARNING, ":::chip_no error = %d nonce timeout", chip_no);
-			#endif
+#endif
 			rmdev[dev_id].chip[chip_no].last_received_task_complete_time = recv_time;
 			rock_send_task(chip_no, 0,thr);
 			break;
@@ -2090,9 +2088,9 @@ static int64_t rock_scanwork(struct thr_info *thr)
 	/* Icarus will return 4 bytes (ICARUS_READ_SIZE) nonces or nothing */
 	memset(nonce_bin, 0, sizeof(nonce_bin));
 	ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, thr, 3000);//info->read_time);
-	#if ROCKMINER_PRINT_DEBUG
+#if ROCKMINER_PRINT_DEBUG
 	applog(LOG_WARNING, "Rockminer nonce_bin: ret = %d. %02X, %02X, %02X, %02X, %02X, %02X, %02X, %02X", ret, nonce_bin[0], nonce_bin[1], nonce_bin[2], nonce_bin[3], nonce_bin[4], nonce_bin[5], nonce_bin[6], nonce_bin[7]);
-	#endif
+#endif
 	if((nonce_bin[NONCE_CHIP_NO_OFFSET]&RM_PRODUCT_MASK)==RM_PRODUCT_T1)
 		{
 			rmdev[dev_id].product_id = ROCKMINER_T1;
@@ -2148,15 +2146,15 @@ static int64_t rock_scanwork(struct thr_info *thr)
 
 	if (ret == ICA_NONCE_TIMEOUT)
 	{
-	    #if ROCKMINER_PRINT_DEBUG
+#if ROCKMINER_PRINT_DEBUG
 		applog(LOG_WARNING, "chip_no = %d nonce timeout, ret = %d", nonce_data.chip_no, ret);
-		#endif
+#endif
 		rock_send_task(nonce_data.chip_no, nonce_data.task_no, thr);
 	}
 
-    #if ROCKMINER_PRINT_DEBUG
+#if ROCKMINER_PRINT_DEBUG
 	applog(LOG_WARNING, "Rockminer chip_no: %d", nonce_data.chip_no);
-	#endif
+#endif
 
 	work = g_work[dev_id][nonce_data.chip_no][nonce_data.task_no];
 	if (work == NULL)
@@ -2191,9 +2189,9 @@ static int64_t rock_scanwork(struct thr_info *thr)
 
 	memcpy((char *)&nonce, nonce_bin, ICARUS_READ_SIZE);
 	nonce = htobe32(nonce);
-	#if  ROCKMINER_PRINT_DEBUG
+#if  ROCKMINER_PRINT_DEBUG
 	applog(LOG_WARNING, "Rockminer nonce %s%d[%d/24]-%d: %08X",icarus->drv->name, icarus->device_id,nonce_data.chip_no,nonce_data.task_no, nonce);
-	#endif
+#endif
 	curr_hw_errors = icarus->hw_errors;
 
 #ifdef NONCE_TEST// ROCKMINER_PRINT_DEBUG
@@ -2254,16 +2252,16 @@ static int64_t rock_scanwork(struct thr_info *thr)
 		{
 			hash_count++;
 			info->failing = false;
-			#if ROCKMINER_PRINT_DEBUG
+#if ROCKMINER_PRINT_DEBUG
 			applog(LOG_WARNING, "Rockminer nonce :::OK:::\r\n");
-			#endif
+#endif
 			break;
 		}
 		else
 		{
-		    #if ROCKMINER_PRINT_DEBUG
+#if ROCKMINER_PRINT_DEBUG
 			applog(LOG_WARNING, "Rockminer nonce error times = %d\r\n", correction_times);
-			#endif
+#endif
 			if(nonce == 0)
 			{
 				break;
@@ -2283,7 +2281,7 @@ static int64_t rock_scanwork(struct thr_info *thr)
 #ifdef NONCE_TEST// ROCKMINER_PRINT_DEBUG
 	    		device_nonce_corr_ok[dev_id] ++;
 		//applog(LOG_WARNING, "Rockminer correction the nonce success %s%d[%d]=%d",icarus->drv->name, icarus->dev_id,chip_no,correction_times);
-		#endif
+#endif
 	    	}
 		else
 			{
@@ -2295,19 +2293,7 @@ static int64_t rock_scanwork(struct thr_info *thr)
 
 	}
 
-	was_hw_error = (curr_hw_errors < icarus->hw_errors);
-
-	if (was_hw_error)
-		hash_count = 0;
-	else {
-		#if 0
-		hash_count = (nonce & info->nonce_mask);
-		hash_count++;
-		hash_count *= info->fpga_count;
-		#else
-		hash_count = (hash_count * info->nonce_mask);
-		#endif
-	}
+	hash_count = (hash_count * info->nonce_mask);
 
 	if (opt_debug || info->do_icarus_timing)
 		timersub(&tv_finish, &tv_start, &elapsed);
