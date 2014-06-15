@@ -930,15 +930,15 @@ unsigned char crc5(unsigned char *ptr, unsigned char len)
 		memcpy(crcin, crcout, 5);
 	}
 	crc = 0;
-	if(crcin[4])
+	if (crcin[4])
 		crc |= 0x10;
-	if(crcin[3])
+	if (crcin[3])
 		crc |= 0x08;
-	if(crcin[2])
+	if (crcin[2])
 		crc |= 0x04;
-	if(crcin[1])
+	if (crcin[1])
 		crc |= 0x02;
-	if(crcin[0])
+	if (crcin[0])
 		crc |= 0x01;
 	return crc;
 }
@@ -1039,10 +1039,9 @@ static bool set_anu_freq(struct cgpu_info *icarus, struct ICARUS_INFO *info)
 static void rock_init_last_received_task_complete_time(uint32_t dev_id)
 {
 	int i;
-	if(opt_rock_freq<rmdev[dev_id].min_frq||(opt_rock_freq>rmdev[dev_id].max_frq))
+	if (opt_rock_freq<rmdev[dev_id].min_frq||(opt_rock_freq>rmdev[dev_id].max_frq))
 			opt_rock_freq =rmdev[dev_id].def_frq;
-	for (i = 0; i < MAX_CHIP_NUM; ++i)
-	{
+	for (i = 0; i < MAX_CHIP_NUM; ++i) {
 		rmdev[dev_id].chip[i].last_received_task_complete_time = time(NULL);
 		rmdev[dev_id].chip[i].freq = opt_rock_freq/10 - 1;
 		rmdev[dev_id].chip[i].error_cnt= 0;
@@ -1447,7 +1446,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 		workdata.unused[ICARUS_UNUSED_SIZE - 3] = opt_rock_freq/10 - 1;
 		workdata.unused[ICARUS_UNUSED_SIZE - 2] = (MAX_TRIES-1-tries);
 		rmdev[dev_id].detect_chip_no ++;
-			if(rmdev[dev_id].detect_chip_no >=MAX_TRIES )
+			if (rmdev[dev_id].detect_chip_no >=MAX_TRIES )
 				rmdev[dev_id].detect_chip_no = 0;
 		//g_detect_chip_no[dev_id] = (g_detect_chip_no[dev_id] + 1) & MAX_CHIP_NUM;
 
@@ -1462,8 +1461,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 #if ROCKMINER_PRINT_DEBUG
 		applog(LOG_WARNING, "Rockminer nonce_bin: %02X, %02X, %02X, %02X, %02X, %02X, %02X, %02X", nonce_bin[0], nonce_bin[1], nonce_bin[2], nonce_bin[3], nonce_bin[4], nonce_bin[5], nonce_bin[6], nonce_bin[7]);
 #endif
-		if (ret != ICA_NONCE_OK)
-		{
+		if (ret != ICA_NONCE_OK) {
 #if ROCKMINER_PRINT_DEBUG
 		applog(LOG_WARNING, "detect_one get_gold_nonce error, tries = %d.\r\n", tries);
 #endif
@@ -1471,16 +1469,13 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 		}
 
 		//device max chip
-		if((nonce_bin[NONCE_CHIP_NO_OFFSET]&RM_PRODUCT_MASK)==RM_PRODUCT_T1)
-		{
+		if ((nonce_bin[NONCE_CHIP_NO_OFFSET]&RM_PRODUCT_MASK)==RM_PRODUCT_T1) {
 			rmdev[dev_id].product_id = ROCKMINER_T1;
 			rmdev[dev_id].chip_max = 24;
 			rmdev[dev_id].min_frq = 200;
 			rmdev[dev_id].def_frq = 280;
 			rmdev[dev_id].max_frq = 320;
-		}
-		else
-		{
+		 } else {
 			rmdev[dev_id].product_id= ROCKMINER_RBOX;
 			rmdev[dev_id].chip_max = 4;
 			rmdev[dev_id].min_frq = 200;
@@ -1488,21 +1483,19 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 			rmdev[dev_id].max_frq = 290;
 		}
 		nonce_data.chip_no = nonce_bin[NONCE_CHIP_NO_OFFSET]&RM_CHIP_MASK;
-		if (nonce_data.chip_no >= rmdev[dev_id].chip_max)
-		{
+		if (nonce_data.chip_no >= rmdev[dev_id].chip_max) {
 			nonce_data.chip_no = 0;
 		}
 
 		nonce_data.cmd_value = nonce_bin[NONCE_TASK_CMD_OFFSET]&RM_CMD_MASK;
-		if (nonce_data.cmd_value == NONCE_TASK_COMPLETE_CMD)
-		{
+		if (nonce_data.cmd_value == NONCE_TASK_COMPLETE_CMD) {
 #if ROCKMINER_PRINT_DEBUG
 			applog(LOG_WARNING, "complete g_detect_chip_no: %d", rmdev[dev_id].detect_chip_no);
 #endif
 		workdata.unused[ICARUS_UNUSED_SIZE - 3] = opt_rock_freq/10 - 1;
 			workdata.unused[ICARUS_UNUSED_SIZE - 2] =  rmdev[dev_id].detect_chip_no;
 			rmdev[dev_id].detect_chip_no ++;
-			if(rmdev[dev_id].detect_chip_no>=MAX_TRIES)
+			if (rmdev[dev_id].detect_chip_no>=MAX_TRIES)
 				rmdev[dev_id].detect_chip_no = 0;
 
 			err = usb_write_ii(icarus, info->intinfo,
@@ -1522,8 +1515,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 		applog(LOG_WARNING, "Rockminer nonce: %08X", nonce);
 #endif
 		correction_times = 0;
-		while(correction_times<NONCE_CORRECTION_TIMES)
-		{
+		while (correction_times<NONCE_CORRECTION_TIMES) {
 			nonce_hex = bin2hex(nonce_bin, 4);
 			if (golden_nonce_val == nonce + correction_value[correction_times]) {
 				clear_chip_busy(dev_id);
@@ -1542,8 +1534,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 						icarus->device_path, nonce_hex, golden_nonce);
 				}
 
-				if(nonce == 0)
-				{
+				if (nonce == 0) {
 					break;
 				}
 			}
@@ -1552,8 +1543,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 		}
 
 #if ROCKMINER_PRINT_DEBUG
-			if(correction_times > 0 )
-			{
+			if (correction_times > 0 ) {
 				if (correction_times < NONCE_CORRECTION_TIMES)
 				applog(LOG_WARNING, "Rockminer correction the Golden nonce success %s%d[%d]=%d",icarus->drv->name, icarus->device_id,chip_no,correction_times);
 				else
@@ -1663,17 +1653,13 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 	applog(LOG_WARNING, "thr_info id:%d, device_thread:%d, icarus cgminer_id: %d, device_id: %d.", thr->id, thr->device_thread, icarus->cgminer_id, icarus->device_id);
 	applog(LOG_WARNING, "::::::::::::::g_work[%d][%d][%d] = 0x%x", dev_id, chip_no, current_task_id, (int)g_work[dev_id][chip_no][current_task_id]);
 #endif
-	if (g_work[dev_id][chip_no][current_task_id] == NULL)
-	{
+	if (g_work[dev_id][chip_no][current_task_id] == NULL) {
 		work = get_work(thr, thr->id);
-		if (work == NULL)
-		{
+		if (work == NULL) {
 			return;
 		}
 		g_work[dev_id][chip_no][current_task_id] = work;
-	}
-	else
-	{
+	 } else {
 		work = g_work[dev_id][chip_no][current_task_id];
 #if ROCKMINER_PRINT_DEBUG
 		applog(LOG_WARNING, "::resend work");
@@ -1681,7 +1667,7 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 	}
 
 #if ROCKMINER_PRINT_DEBUG
-	//if(chip_no == 7)
+	//if (chip_no == 7)
 	applog(LOG_WARNING, "::::::::::::::g_work[%d][%d][%d] = 0x%x", dev_id, chip_no, current_task_id, (int)g_work[dev_id][chip_no][current_task_id]);
 #endif
 
@@ -1689,8 +1675,7 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 	memcpy(&(workdata.midstate), work->midstate, ICARUS_MIDSTATE_SIZE);
 	memcpy(&(workdata.work), work->data + ICARUS_WORK_DATA_OFFSET, ICARUS_WORK_SIZE);
 	workdata.unused[ICARUS_UNUSED_SIZE - 4] = 0xaa;
-	if((rmdev[dev_id].chip[chip_no].freq>(rmdev[dev_id].max_frq/10-1))||(rmdev[dev_id].chip[chip_no].freq<(rmdev[dev_id].min_frq/10-1)))
-	{
+	if ((rmdev[dev_id].chip[chip_no].freq>(rmdev[dev_id].max_frq/10-1))||(rmdev[dev_id].chip[chip_no].freq<(rmdev[dev_id].min_frq/10-1))) {
 		rock_init_last_received_task_complete_time(dev_id);
 	}
 	workdata.unused[ICARUS_UNUSED_SIZE - 3] = rmdev[dev_id].chip[chip_no].freq; //icarus->freq/10 - 1; ;
@@ -1725,8 +1710,7 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		icarus_initialise(icarus, info->baud);
 
-		if(g_work[dev_id][chip_no][current_task_id])
-		{
+		if (g_work[dev_id][chip_no][current_task_id]) {
 			free_work(g_work[dev_id][chip_no][current_task_id]);
 			g_work[dev_id][chip_no][current_task_id] = NULL;
 		}
@@ -2057,11 +2041,9 @@ static int64_t rock_scanwork(struct thr_info *thr)
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 
 
-	for (chip_no = 0; chip_no < rmdev[dev_id].chip_max; chip_no++)
-	{
+	for (chip_no = 0; chip_no < rmdev[dev_id].chip_max; chip_no++) {
 		recv_time = time(NULL);
-		if (recv_time > rmdev[dev_id].chip[chip_no].last_received_task_complete_time + 1)
-		{
+		if (recv_time > rmdev[dev_id].chip[chip_no].last_received_task_complete_time + 1) {
 #if NONCE_TEST
 			applog(LOG_WARNING, ":::chip_no error = %d nonce timeout", chip_no);
 #endif
@@ -2077,16 +2059,13 @@ static int64_t rock_scanwork(struct thr_info *thr)
 #if ROCKMINER_PRINT_DEBUG
 	applog(LOG_WARNING, "Rockminer nonce_bin: ret = %d. %02X, %02X, %02X, %02X, %02X, %02X, %02X, %02X", ret, nonce_bin[0], nonce_bin[1], nonce_bin[2], nonce_bin[3], nonce_bin[4], nonce_bin[5], nonce_bin[6], nonce_bin[7]);
 #endif
-	if((nonce_bin[NONCE_CHIP_NO_OFFSET]&RM_PRODUCT_MASK)==RM_PRODUCT_T1)
-		{
+	if ((nonce_bin[NONCE_CHIP_NO_OFFSET]&RM_PRODUCT_MASK)==RM_PRODUCT_T1) {
 			rmdev[dev_id].product_id = ROCKMINER_T1;
 			rmdev[dev_id].chip_max = 24;
 			rmdev[dev_id].min_frq = 200;
 			rmdev[dev_id].def_frq = 280;
 			rmdev[dev_id].max_frq = 320;
-		}
-		else
-		{
+		 } else {
 			rmdev[dev_id].product_id= ROCKMINER_RBOX;
 			rmdev[dev_id].chip_max = 4;
 			rmdev[dev_id].min_frq = 200;
@@ -2094,13 +2073,13 @@ static int64_t rock_scanwork(struct thr_info *thr)
 			rmdev[dev_id].max_frq = 290;
 		}
 	nonce_data.chip_no = nonce_bin[NONCE_CHIP_NO_OFFSET]&RM_CHIP_MASK;
-	if(nonce_data.chip_no>=rmdev[dev_id].chip_max)
+	if (nonce_data.chip_no>=rmdev[dev_id].chip_max)
 		nonce_data.chip_no=0;
 	nonce_data.task_no = nonce_bin[NONCE_TASK_NO_OFFSET]>=2?0:nonce_bin[NONCE_TASK_NO_OFFSET];
 	nonce_data.cmd_value = nonce_bin[NONCE_TASK_CMD_OFFSET]&RM_CMD_MASK;
 	nonce_data.work_state = nonce_bin[NONCE_TASK_CMD_OFFSET]&RM_STATUS_MASK;
 #if ROCKMINER_PRINT_DEBUG
-	if(nonce_data.work_state == 2)
+	if (nonce_data.work_state == 2)
 		applog(LOG_WARNING, "Temperature of Device is too hign to work!");
 #endif
 
@@ -2108,12 +2087,10 @@ static int64_t rock_scanwork(struct thr_info *thr)
 	if (icarus->temp == 128)
 		icarus->temp = 0;
 
-	if (nonce_data.cmd_value == NONCE_TASK_COMPLETE_CMD)
-	{
+	if (nonce_data.cmd_value == NONCE_TASK_COMPLETE_CMD) {
 		rmdev[dev_id].chip[nonce_data.chip_no].last_received_task_complete_time = time(NULL);
 
-		if (g_work[dev_id][nonce_data.chip_no][nonce_data.task_no])
-		{
+		if (g_work[dev_id][nonce_data.chip_no][nonce_data.task_no]) {
 			free_work(g_work[dev_id][nonce_data.chip_no][nonce_data.task_no]);
 			g_work[dev_id][nonce_data.chip_no][nonce_data.task_no] = NULL;
 		}
@@ -2124,14 +2101,12 @@ static int64_t rock_scanwork(struct thr_info *thr)
 		goto out;
 	}
 
-	if (nonce_data.cmd_value == NONCE_GET_TASK_CMD)
-	{
+	if (nonce_data.cmd_value == NONCE_GET_TASK_CMD) {
 		rock_send_task(nonce_data.chip_no, nonce_data.task_no, thr);
 		goto out;
 	}
 
-	if (ret == ICA_NONCE_TIMEOUT)
-	{
+	if (ret == ICA_NONCE_TIMEOUT) {
 #if ROCKMINER_PRINT_DEBUG
 		applog(LOG_WARNING, "chip_no = %d nonce timeout, ret = %d", nonce_data.chip_no, ret);
 #endif
@@ -2143,8 +2118,7 @@ static int64_t rock_scanwork(struct thr_info *thr)
 #endif
 
 	work = g_work[dev_id][nonce_data.chip_no][nonce_data.task_no];
-	if (work == NULL)
-	{
+	if (work == NULL) {
 		goto out;
 	}
 
@@ -2185,34 +2159,27 @@ static int64_t rock_scanwork(struct thr_info *thr)
 #endif
 
 	recv_time = time(NULL);
-	if((recv_time-rmdev[dev_id].dev_detect_time )>=60)//device_chip_max[device_id]
-		{
+	if ((recv_time-rmdev[dev_id].dev_detect_time )>=60)//device_chip_max[device_id] {
 		unsigned char i;
 		rmdev[dev_id].dev_detect_time  = recv_time;
 #ifdef NONCE_TEST// ROCKMINER_PRINT_DEBUG
 		applog(LOG_WARNING, "AMU%d Freq: %d0MHz/ %d0MHz/ %d0MHz/ %d0MHz ",dev_id,rmdev[dev_id].chip[0].freq+1,rmdev[dev_id].chip[1].freq+1,rmdev[dev_id].chip[2].freq+1,rmdev[dev_id].chip[3].freq+1);
 #endif
-			for (i = 0; i  < rmdev[dev_id].chip_max; i ++)
-			{
+			for (i = 0; i  < rmdev[dev_id].chip_max; i ++) {
 #ifdef NONCE_TEST// ROCKMINER_PRINT_DEBUG
 			applog(LOG_WARNING, "AMU%d Chip[%d] nonce=%d/%d/%d,freq:%d0MHz, ",dev_id,i,rmdev[dev_id].chip[i].error_cnt,chip_nonce_conunts[i],chip_work_conunts[i],rmdev[dev_id].chip[i].freq+1);
 			chip_nonce_conunts[i] = 0;
 			chip_work_conunts[i] = 0;
 #endif
-			if(rmdev[dev_id].chip[i].error_cnt>=12)
-				{
-				if(rmdev[dev_id].chip[i].freq>rmdev[dev_id].min_frq)	//200Mhz
-					{
+			if (rmdev[dev_id].chip[i].error_cnt>=12) {
+				if (rmdev[dev_id].chip[i].freq>rmdev[dev_id].min_frq)	//200Mhz {
 					rmdev[dev_id].chip[i].freq --;
 #ifdef  NONCE_TEST
 				applog(LOG_WARNING, "AMU%d Chip[%d]=%d SUB FREQ TO %d0MHz,DEF(%fMHz) ",dev_id,i,rmdev[dev_id].chip[i].error_cnt,rmdev[dev_id].chip[i].freq+1,opt_rock_freq);
 #endif
 					}
-				}
-			else if(rmdev[dev_id].chip[i].error_cnt<=1)
-				{
-				if(rmdev[dev_id].chip[i].freq<(rmdev[dev_id].def_frq/10-1))
-					{
+				 } else if (rmdev[dev_id].chip[i].error_cnt<=1) {
+				if (rmdev[dev_id].chip[i].freq<(rmdev[dev_id].def_frq/10-1)) {
 					rmdev[dev_id].chip[i].freq ++;
 #ifdef  NONCE_TEST
 				applog(LOG_WARNING, "AMU%d Chip[%d]=%d ADD FREQ TO %d0MHz,DEF(%fMHz) ",dev_id,i,rmdev[dev_id].chip[i].error_cnt,rmdev[dev_id].chip[i].freq+1,opt_rock_freq);
@@ -2231,45 +2198,35 @@ static int64_t rock_scanwork(struct thr_info *thr)
 		}
 
 	correction_times = 0;
-	while(correction_times<NONCE_CORRECTION_TIMES)
-	{
-		if (submit_nonce(thr, work, nonce + correction_value[correction_times]))
-		{
+	while (correction_times<NONCE_CORRECTION_TIMES) {
+		if (submit_nonce(thr, work, nonce + correction_value[correction_times])) {
 			hash_count++;
 			info->failing = false;
 #if ROCKMINER_PRINT_DEBUG
 			applog(LOG_WARNING, "Rockminer nonce :::OK:::\r\n");
 #endif
 			break;
-		}
-		else
-		{
+		 } else {
 #if ROCKMINER_PRINT_DEBUG
 			applog(LOG_WARNING, "Rockminer nonce error times = %d\r\n", correction_times);
 #endif
-			if(nonce == 0)
-			{
+			if (nonce == 0) {
 				break;
 			}
 		}
 		correction_times++;
 	}
 
-	if(correction_times > 0 )
-	{
-
+	if (correction_times > 0 ) {
 	/* FIXME: Where is this i supposed to come from? Comment out instead */
 	//rmdev[dev_id].chip[i].error_cnt ++;
 	    if (correction_times < NONCE_CORRECTION_TIMES)
 	    	{
-
 #ifdef NONCE_TEST// ROCKMINER_PRINT_DEBUG
 	    		device_nonce_corr_ok[dev_id] ++;
 		//applog(LOG_WARNING, "Rockminer correction the nonce success %s%d[%d]=%d",icarus->drv->name, icarus->dev_id,chip_no,correction_times);
 #endif
-	    	}
-		else
-			{
+	    	 } else {
 #ifdef NONCE_TEST// ROCKMINER_PRINT_DEBUG
 		device_nonce_corr_fail[dev_id] ++;
 #endif
