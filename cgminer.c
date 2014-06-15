@@ -1063,11 +1063,8 @@ static char *set_null(const char __maybe_unused *arg)
 static struct opt_table opt_config_table[] = {
 #ifdef USE_ICARUS
 	OPT_WITH_ARG("--anu-freq",
-		     set_float_125_to_500, &opt_show_intval, &opt_anu_freq,
+		     set_float_125_to_500, &opt_show_floatval, &opt_anu_freq,
 		     "Set AntminerU1 frequency in MHz, range 125-500"),
-	OPT_WITH_ARG("--rock-freq",
-		     set_float_125_to_500, &opt_show_intval, &opt_rock_freq,
-		     "Set RockMiner frequency in MHz, range 125-500"),
 #endif
 	OPT_WITH_ARG("--api-allow",
 		     opt_set_charp, NULL, &opt_api_allow,
@@ -1420,6 +1417,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--retry-pause",
 		     set_null, NULL, &opt_set_null,
 		     opt_hidden),
+#ifdef USE_ICARUS
+	OPT_WITH_ARG("--rock-freq",
+		     set_float_125_to_500, &opt_show_floatval, &opt_rock_freq,
+		     "Set RockMiner frequency in MHz, range 125-500"),
+#endif
 	OPT_WITH_ARG("--rotate",
 		     set_rotate, NULL, &opt_set_null,
 		     "Change multipool strategy from failover to regularly rotate at N minutes"),

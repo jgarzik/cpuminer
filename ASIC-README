@@ -18,6 +18,7 @@ Currently supported devices include:
 - Cointerra
 - Antminer S1
 - BFx2 USB
+- Rockminer R-Box
 
 No COM ports on windows or TTY devices will be used by cgminer as it
 communicates directly with them via USB so it is normal for them to not exist or
@@ -119,6 +120,11 @@ They are recognised with the name ANT
 BITMINE A1 devices
 
 Bitmine A1 devices need the --enable-bitmine_A1 compile option set.
+
+
+Rockminer R-Box
+
+Rockminer R-Box devices need the --enable-icarus compile option set.
 
 ---
 GETTING STARTED WITH USB ASICS
@@ -240,6 +246,7 @@ ASIC SPECIFIC COMMANDS
 --minion-overheat   Enable directly halting any chip when the status exceeds 100C
 --minion-temp <arg> Set minion chip temperature threshold, single value or comma list, range 120-160 (default: 135C)
 --nfu-bits <arg>    Set nanofury bits for overclocking, range 32-63 (default: 50)
+--rock-freq <arg>   Set RockMiner frequency in MHz, range 125-500 (default: 270)
 
 
 ANTMINER S1 DEVICES
@@ -629,6 +636,13 @@ max_chip: [debug/testing] limit chip chain
 Set 0 for fields you want to keep untouched to default, e.g.
 --bitmine-a1-options 0:0:400
 to only set SPI clock to 400kHz
+
+
+Rockminer R-Box Devices
+
+--rock-freq <arg>   Set RockMiner frequency in MHz, range 125-500 (default: 270)
+
+Note that only a limited range is likely to be accepted (usually 200-290)
 
 ---
 
