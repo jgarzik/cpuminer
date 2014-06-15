@@ -234,6 +234,7 @@ Options for both config file and command line:
 --quiet|-q          Disable logging output, display status and errors
 --quota|-U <arg>    quota;URL combination for server with load-balance strategy quotas
 --real-quiet        Disable all output
+--rock-freq <arg>   Set RockMiner frequency in MHz, range 125-500 (default: 270)
 --rotate <arg>      Change multipool strategy from failover to regularly rotate at N minutes (default: 0)
 --round-robin       Change multipool strategy from failover to round robin on failure
 --scan-time|-s <arg> Upper bound on time spent scanning current work, in seconds (default: -1)
@@ -285,6 +286,7 @@ ASIC only options:
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
 --bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
 --bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
+--bitmine-a1-options <ref_clk>:<sys_clk>:<spi_clk>:<max_chip>
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
 --bxm-bits <arg>    Set BXM bits for overclocking (default: 50)
 --hfa-hash-clock <arg> Set hashfast clock speed (default: 550)
@@ -295,6 +297,7 @@ ASIC only options:
 --hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
 --hfa-temp-target <arg> Set the hashfast target temperature (0 to disable) (default: 88)
 --klondike-options <arg> Set klondike options clock:temptarget
+--rock-freq <arg>   Set RockMiner frequency in MHz, range 125-500 (default: 270)
 
 See ASIC-README for more information regarding these.
 
@@ -310,7 +313,8 @@ Cgminer should automatically find all of your Avalon ASIC, BFL ASIC, BitForce
 FPGAs, Icarus bitstream FPGAs, Klondike ASIC, ASICMINER usb block erupters,
 KnC ASICs, BaB ASICs, Hashfast ASICs, ModMiner FPGAs, BPMC/BGMC BF1 USB ASICs,
 Bi*fury USB ASICs, Onestring miner USB ASICs, Hexfury USB ASICs, Nanofury USB
-ASICs, Antminer U1/U2/U2+ USB ASICs, Cointerra devices and BFx2 USB ASICs.
+ASICs, Antminer U1/U2/U2+ USB ASICs, Cointerra devices, BFx2 USB ASICs and
+Rockminer R-Box USB ASICs.
 
 ---
 

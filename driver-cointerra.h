@@ -61,6 +61,7 @@
 #define CTA_RECV_MSG            7
 #define CTA_RECV_RDONE		8
 #define CTA_RECV_STATDEBUG	10
+#define CTA_RECV_IRSTAT  	11
 
 /* Sent message types */
 #define CTA_SEND_UNUSED		0
@@ -129,6 +130,18 @@
 #define CTA_STAT_PS_TEMP1	51
 #define CTA_STAT_PS_TEMP2	53
 
+#define CTA_IRSTAT_CHANNEL  3
+#define CTA_IRSTAT_VIN  4
+#define CTA_IRSTAT_IIN  6
+#define CTA_IRSTAT_VOUT 8
+#define CTA_IRSTAT_IOUT 10
+#define CTA_IRSTAT_TEMP1  12
+#define CTA_IRSTAT_TEMP2  14
+#define CTA_IRSTAT_POUT 16
+#define CTA_IRSTAT_PIN  18
+#define CTA_IRSTAT_EFF  20
+#define CTA_IRSTAT_STATUS 22
+
 
 #define CTA_CORES		8
 #define CTA_PUMPS		2
@@ -181,6 +194,7 @@ struct cointerra_info {
 	/* Status debug data */
 	uint16_t underruns;
 	uint16_t hw_errors[CTA_CORES];
+	uint16_t fmatch_errors[CTA_CORES];
 
 	/* Running total from debug messages */
 	int tot_underruns;
@@ -219,6 +233,19 @@ struct cointerra_info {
 	pthread_cond_t wake_cond;
 	pthread_t read_thr;
 	cgsem_t reset_sem;
+
+	uint16_t irstat_vin[CTA_CORES];
+	uint16_t irstat_iin[CTA_CORES];
+	uint16_t irstat_vout[CTA_CORES];
+	uint16_t irstat_iout[CTA_CORES];
+	uint16_t irstat_temp1[CTA_CORES];
+	uint16_t irstat_temp2[CTA_CORES];
+	uint16_t irstat_pout[CTA_CORES];
+	uint16_t irstat_pin[CTA_CORES];
+	uint16_t irstat_efficiency[CTA_CORES];
+	uint16_t irstat_status[CTA_CORES];
+
+	uint64_t old_hashes[16 * 2];
 };
 
 #endif /* COINTERRA_H */

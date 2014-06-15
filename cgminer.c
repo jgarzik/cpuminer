@@ -208,6 +208,7 @@ static bool no_work;
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 float opt_anu_freq = 200;
+float opt_rock_freq = 270;
 #endif
 bool opt_worktime;
 #ifdef USE_AVALON
@@ -1062,7 +1063,7 @@ static char *set_null(const char __maybe_unused *arg)
 static struct opt_table opt_config_table[] = {
 #ifdef USE_ICARUS
 	OPT_WITH_ARG("--anu-freq",
-		     set_float_125_to_500, &opt_show_intval, &opt_anu_freq,
+		     set_float_125_to_500, &opt_show_floatval, &opt_anu_freq,
 		     "Set AntminerU1 frequency in MHz, range 125-500"),
 #endif
 	OPT_WITH_ARG("--api-allow",
@@ -1416,6 +1417,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--retry-pause",
 		     set_null, NULL, &opt_set_null,
 		     opt_hidden),
+#ifdef USE_ICARUS
+	OPT_WITH_ARG("--rock-freq",
+		     set_float_125_to_500, &opt_show_floatval, &opt_rock_freq,
+		     "Set RockMiner frequency in MHz, range 125-500"),
+#endif
 	OPT_WITH_ARG("--rotate",
 		     set_rotate, NULL, &opt_set_null,
 		     "Change multipool strategy from failover to regularly rotate at N minutes"),
@@ -3006,13 +3012,18 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 				reason[reasonLen + 2] = ')'; reason[reasonLen + 3] = '\0';
 				memcpy(disposition + 7, reasontmp, reasonLen);
 				disposition[6] = ':'; disposition[reasonLen + 7] = '\0';
-			} else if (work->stratum && err && json_is_array(err)) {
-				json_t *reason_val = json_array_get(err, 1);
-				char *reason_str;
+			} else if (work->stratum && err) {
+				if (json_is_array(err)) {
+					json_t *reason_val = json_array_get(err, 1);
+					char *reason_str;
 
-				if (reason_val && json_is_string(reason_val)) {
-					reason_str = (char *)json_string_value(reason_val);
-					snprintf(reason, 31, " (%s)", reason_str);
+					if (reason_val && json_is_string(reason_val)) {
+						reason_str = (char *)json_string_value(reason_val);
+						snprintf(reason, 31, " (%s)", reason_str);
+					}
+				} else if (json_is_string(err)) {
+					const char *s = json_string_value(err);
+					snprintf(reason, 31, " (%s)", s);
 				}
 			}
 
@@ -6656,7 +6667,7 @@ retry_stratum:
 		}
 		applog(LOG_DEBUG, "FAILED to retrieve work from pool %u %s",
 		       pool->pool_no, pool->rpc_url);
-		if (!pinging)
+		if (!pinging && !pool->idle)
 			applog(LOG_WARNING, "Pool %u slow/down or URL or credentials invalid", pool->pool_no);
 	}
 out:
@@ -8634,10 +8645,12 @@ retry:
 		if (unlikely(first_pool))
 			applog(LOG_NOTICE, "Switching to pool %d %s - first alive pool", pool->pool_no, pool->rpc_url);
 
+		pool_tclear(pool, &pool->idle);
 		pool_resus(pool);
 		switch_pools(NULL);
 	} else {
 		pool_died(pool);
+		sleep(5);
 		goto retry;
 	}
 
@@ -9003,6 +9016,20 @@ static void adjust_mostdevs(void)
 	if (total_devices - zombie_devs > most_devices)
 		most_devices = total_devices - zombie_devs;
 }
+
+#ifdef USE_ICARUS
+bool icarus_get_device_id(struct cgpu_info *cgpu)
+{
+	static struct _cgpu_devid_counter *devids = NULL;
+	struct _cgpu_devid_counter *d;
+
+	HASH_FIND_STR(devids, cgpu->drv->name, d);
+	if (d)
+		return (d->lastid + 1);
+	else
+		return 0;
+}
+#endif
 
 bool add_cgpu(struct cgpu_info *cgpu)
 {

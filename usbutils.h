@@ -157,6 +157,7 @@ enum sub_ident {
 	IDENT_HFA,
 	IDENT_ICA,
 	IDENT_KLN,
+	IDENT_LIN,
 	IDENT_LLT,
 	IDENT_MMQ,
 	IDENT_NFU,

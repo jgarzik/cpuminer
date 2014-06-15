@@ -11,7 +11,6 @@
 
 #include "miner.h"
 #include "driver-cointerra.h"
-#include <math.h>
 
 static const char *cointerra_hdr = "ZZ";
 
@@ -355,7 +354,7 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 			/* Debugging, remove me */
 			swab256(rhash, work->hash);
 			__bin2hex(outhash, rhash, 8);
-			applog(LOG_DEBUG, "submit work %s 0x%04x 0x%08x %d 0x%08x",
+			applog(LOG_WARNING, "submit work %s 0x%04x 0x%08x %d 0x%08x",
 			       outhash, retwork, mcu_tag, timestamp_offset, nonce);
 		}
 
@@ -392,9 +391,16 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 			mutex_unlock(&info->lock);
 		} else {
 			char sendbuf[CTA_MSG_SIZE];
+			uint8_t asic, core, coreno;
+			asic = u8_from_msg(buf, CTA_MCU_ASIC);
+			core = u8_from_msg(buf, CTA_MCU_CORE);
+			coreno = asic * 4 + core;
+			inc_hw_errors(thr);
 
-			applog(LOG_DEBUG, "%s %d: Notify bad match work",
+			applog(LOG_WARNING, "%s %d: Notify bad match work",
 			       cointerra->drv->name, cointerra->device_id);
+			if (coreno < CTA_CORES)
+				info->fmatch_errors[coreno]++;
 			if (opt_debug) {
 				uint64_t sdiff = share_diff(work);
 				unsigned char midstate[32], wdata[12];
@@ -418,12 +424,12 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 
 			/* Tell the device we got a false match */
 			cta_gen_message(sendbuf, CTA_SEND_FMATCH);
-			memcpy(sendbuf + 3, buf, CTA_MSG_SIZE - 3);
+			memcpy(sendbuf + 3, buf + 3, CTA_MSG_SIZE - 3);
 			cta_send_msg(cointerra, sendbuf);
 		}
 		free_work(work);
 	} else {
-		applog(LOG_INFO, "%s %d: Matching work id 0x%X %d not found", cointerra->drv->name,
+		applog(LOG_WARNING, "%s %d: Matching work id 0x%X %d not found", cointerra->drv->name,
 		       cointerra->device_id, retwork, __LINE__);
 		inc_hw_errors(thr);
 
@@ -440,10 +446,12 @@ static void cta_parse_wdone(struct thr_info *thr, struct cgpu_info *cointerra,
 	struct work *work = take_work_by_id(cointerra, retwork);
 	uint64_t hashes;
 
-	if (likely(work))
+	if (likely(work)) {
 		free_work(work);
-	else {
-		applog(LOG_INFO, "%s %d: Done work not found id 0x%X %d",
+		applog(LOG_DEBUG, "%s %d: Done work found id 0x%X %d",
+		       cointerra->drv->name, cointerra->device_id, retwork, __LINE__);
+	} else {
+		applog(LOG_WARNING, "%s %d: Done work not found id 0x%X %d",
 		       cointerra->drv->name, cointerra->device_id, retwork, __LINE__);
 		inc_hw_errors(thr);
 	}
@@ -519,6 +527,27 @@ static void cta_parse_statset(struct cointerra_info *info, char *buf)
 	mutex_unlock(&info->lock);
 }
 
+static void cta_parse_irstat(struct cointerra_info *info, char *buf)
+{
+	uint8_t channel = u8_from_msg(buf,CTA_IRSTAT_CHANNEL);
+
+	if (channel >= CTA_CORES)
+		return;
+
+	mutex_lock(&info->lock);
+	info->irstat_vin[channel] = hu16_from_msg(buf,CTA_IRSTAT_VIN);
+	info->irstat_iin[channel] = hu16_from_msg(buf,CTA_IRSTAT_IIN);
+	info->irstat_vout[channel] = hu16_from_msg(buf,CTA_IRSTAT_VOUT);
+	info->irstat_iout[channel] = hu16_from_msg(buf,CTA_IRSTAT_IOUT);
+	info->irstat_temp1[channel] = hu16_from_msg(buf,CTA_IRSTAT_TEMP1);
+	info->irstat_temp2[channel] = hu16_from_msg(buf,CTA_IRSTAT_TEMP2);
+	info->irstat_pout[channel] = hu16_from_msg(buf,CTA_IRSTAT_POUT);
+	info->irstat_pin[channel] = hu16_from_msg(buf,CTA_IRSTAT_PIN);
+	info->irstat_efficiency[channel] = hu16_from_msg(buf,CTA_IRSTAT_EFF);
+	info->irstat_status[channel] = hu16_from_msg(buf,CTA_IRSTAT_STATUS);
+	mutex_unlock(&info->lock);
+}
+
 static void cta_parse_info(struct cgpu_info *cointerra, struct cointerra_info *info,
 			   char *buf)
 {
@@ -557,8 +586,6 @@ static void cta_parse_rdone(struct cgpu_info *cointerra, struct cointerra_info *
 	diffbits = buf[CTA_RESET_DIFF];
 	wdone = hu64_from_msg(buf, CTA_WDONE_NONCES);
 
-	applog(LOG_INFO, "%s %d: Reset done type %u message %u diffbits %"PRIu64" done received",
-	       cointerra->drv->name, cointerra->device_id, reset_type, diffbits, wdone);
 	if (wdone) {
 		applog(LOG_INFO, "%s %d: Reset done type %u message %u diffbits %"PRIu64" done received",
 			cointerra->drv->name, cointerra->device_id, reset_type, diffbits, wdone);
@@ -623,9 +650,29 @@ static void cta_parse_debug(struct cointerra_info *info, char *buf)
 	}
 }
 
+static int verify_checksum(char *buf)
+{
+	unsigned char checksum = 0;
+	unsigned char i;
+
+	for (i = 0; i < 63; i++)
+		checksum += buf[i];
+
+	return (checksum == buf[63]);
+}
+
 static void cta_parse_msg(struct thr_info *thr, struct cgpu_info *cointerra,
 			  struct cointerra_info *info, char *buf)
 {
+		if ((buf[CTA_MSG_TYPE] != CTA_RECV_MATCH)&&
+		    (buf[CTA_MSG_TYPE] != CTA_RECV_WDONE)) {
+			if (unlikely(verify_checksum(buf) == 0)) {
+				inc_hw_errors(thr);
+				applog(LOG_WARNING, "%s %d: checksum bad",cointerra->drv->name,cointerra->device_id);
+				return;
+			}
+		}
+
 	switch (buf[CTA_MSG_TYPE]) {
 		default:
 		case CTA_RECV_UNUSED:
@@ -667,6 +714,9 @@ static void cta_parse_msg(struct thr_info *thr, struct cgpu_info *cointerra,
 			break;
 		case CTA_RECV_STATDEBUG:
 			cta_parse_debug(info, buf);
+			break;
+		case CTA_RECV_IRSTAT:
+			cta_parse_irstat(info, buf);
 			break;
 	}
 }
@@ -953,10 +1003,14 @@ static void cta_send_corehashes(struct cgpu_info *cointerra, struct cointerra_in
 	int i, offset;
 
 	for (i = 0; i < CTA_CORES; i++) {
-		k[i] = (double)info->tot_core_hashes[i] / ((double)32 * (double)0x100000000ull);
+		k[i] = (double)info->tot_core_hashes[i];
+#if 0
+		k[i] /= ((double)32 * (double)0x100000000ull);
 		k[i] = sqrt(k[i]) + 1;
 		k[i] *= k[i];
-		k[i] = k[i] * 32 * ((double)0x100000000ull / (double)1000000000) / corehash_time;
+		k[i] = k[i] * 32 * ((double)0x100000000ull );
+#endif
+		k[i] /= ((double)1000000000 * corehash_time);
 		core_ghs[i] = k[i];
 	}
 	cta_gen_message(buf, CTA_SEND_COREHASHRATE);
@@ -974,6 +1028,7 @@ static int64_t cta_scanwork(struct thr_info *thr)
 	struct cointerra_info *info = cointerra->device_data;
 	double corehash_time;
 	struct timeval now;
+	uint32_t runtime;
 	int64_t hashes;
 
 	applog(LOG_DEBUG, "%s %d: cta_scanwork %d", cointerra->drv->name, cointerra->device_id,__LINE__);
@@ -1038,6 +1093,9 @@ static int64_t cta_scanwork(struct thr_info *thr)
 	hashes = info->share_hashes;
 	info->tot_share_hashes += info->share_hashes;
 	info->tot_calc_hashes += info->hashes;
+	runtime = cgpu_runtime(thr->cgpu);
+	runtime /= 30;
+	info->old_hashes[runtime % 32] = info->tot_calc_hashes;
 	info->hashes = info->share_hashes = 0;
 	mutex_unlock(&info->lock);
 
@@ -1069,11 +1127,15 @@ static void cta_shutdown(struct thr_info *thr)
 static void cta_zero_stats(struct cgpu_info *cointerra)
 {
 	struct cointerra_info *info = cointerra->device_data;
+	int i;
 
 	info->tot_calc_hashes = 0;
 	info->tot_reset_hashes = info->tot_hashes;
 	info->tot_share_hashes = 0;
 	cta_zero_corehashes(info);
+
+	for (i = 0; i < 16 * 2; i++)
+		info->old_hashes[i] = 0;
 }
 
 static int bits_set(char v)
@@ -1095,6 +1157,7 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 	char bitmaphex[36];
 	uint64_t ghs, val;
 	char buf[64];
+	uint32_t runtime = cgpu_runtime(cgpu);
 
 	/* Info data */
 	root = api_add_uint16(root, "HW Revision", &info->hwrev, false);
@@ -1166,6 +1229,14 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 	root = api_add_uint64(root, "Calc hashrate", &ghs, true);
 	ghs = (info->tot_hashes - info->tot_reset_hashes) / dev_runtime;
 	root = api_add_uint64(root, "Hashrate", &ghs, true);
+	//root = api_add_uint64(root, "cgminer 15m Hashrate", &cgpu->rolling15, true);
+	// get runtime in 30 second steps
+	runtime = runtime / 30;
+	// store the current hashes
+	info->old_hashes[runtime%32] = info->tot_calc_hashes;
+	// calc the 15 minute average hashrate
+	ghs = (info->old_hashes[(runtime+31)%32] - info->old_hashes[(runtime+1)%32])/(15*60);
+	root = api_add_uint64(root, "15m Hashrate", &ghs, true);
 	ghs = info->tot_share_hashes / dev_runtime;
 	root = api_add_uint64(root, "Share hashrate", &ghs, true);
 	root = api_add_uint64(root, "Total calc hashes", &info->tot_calc_hashes, false);
@@ -1209,13 +1280,63 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 	}
 	root = api_add_uint8(root, "AV", &info->autovoltage, false);
 	root = api_add_uint8(root, "Power Supply Percent", &info->current_ps_percent, false);
-	root = api_add_uint16(root, "Power Used", &info->power_used, false);
-	root = api_add_uint16(root, "IOUT", &info->power_used, false);
-	root = api_add_uint16(root, "VOUT", &info->power_voltage, false);
-	root = api_add_uint16(root, "IIN", &info->ipower_used, false);
-	root = api_add_uint16(root, "VIN", &info->ipower_voltage, false);
-	root = api_add_uint16(root, "PSTemp1", &info->power_temps[0], false);
-	root = api_add_uint16(root, "PSTemp2", &info->power_temps[1], false);
+	//if (info->power_used != 0) {
+	{
+		double value = info->power_used/100.0;
+
+		value *= (info->power_voltage/100.0);
+		root = api_add_double(root, "Power Used", &value, true);
+	}
+		root = api_add_uint16(root, "IOUT", &info->power_used, false);
+		root = api_add_uint16(root, "VOUT", &info->power_voltage, false);
+		root = api_add_uint16(root, "IIN", &info->ipower_used, false);
+		root = api_add_uint16(root, "VIN", &info->ipower_voltage, false);
+		root = api_add_uint16(root, "PSTemp1", &info->power_temps[0], false);
+		root = api_add_uint16(root, "PSTemp2", &info->power_temps[1], false);
+	//}
+
+	for (core = 0; core < CTA_CORES; core++) {
+		char name[20];
+		char str[20];
+		double value;
+
+		sprintf(name,"IRVIN%d",core+1);
+		value = info->irstat_vin[core]/100.0;
+		root = api_add_double(root,name,&value,true);
+		sprintf(name,"IRIIN%d",core+1);
+		value = info->irstat_iin[core]/100.0;
+		root = api_add_double(root,name,&value,true);
+		sprintf(name,"IRVOUT%d",core+1);
+		value = info->irstat_vout[core]/100.0;
+		root = api_add_double(root,name,&value,true);
+		sprintf(name,"IRIOUT%d",core+1);
+		value = info->irstat_iout[core]/100.0;
+		root = api_add_double(root,name,&value,true);
+		sprintf(name,"IRTEMP1_%d",core+1);
+		value = info->irstat_temp1[core]/100.0;
+		root = api_add_double(root,name,&value,true);
+		sprintf(name,"IRTEMP2_%d",core+1);
+		value = info->irstat_temp2[core]/100.0;
+		root = api_add_double(root,name,&value,true);
+		sprintf(name,"IRPOUT%d",core+1);
+		value = info->irstat_pout[core]/100.0;
+		root = api_add_double(root,name,&value,true);
+		sprintf(name,"IRPIN%d",core+1);
+		value = info->irstat_pin[core]/100.0;
+		root = api_add_double(root,name,&value,true);
+		sprintf(name,"IREFFICIENCY%d",core+1);
+		value = info->irstat_efficiency[core]/100.0;
+		root = api_add_double(root,name,&value,true);
+		sprintf(name,"IRSTATUS%d",core+1);
+		//root = api_add_uint16(root,name,&info->irstat_status[core],false);
+		sprintf(str,"0x%04X",info->irstat_status[core]);
+			root = api_add_string(root, name, str, true);
+	}
+
+	for (i = 0; i < CTA_CORES; i++) {
+		sprintf(buf, "CoreFmatch%d", i);
+		root = api_add_uint16(root, buf, &info->fmatch_errors[i], false);
+	}
 
 	return root;
 }
@@ -1252,5 +1373,5 @@ struct device_drv cointerra_drv = {
 	.get_statline_before = cta_statline_before,
 	.thread_shutdown = cta_shutdown,
 	.zero_stats = cta_zero_stats,
-	.max_diff = 32, // Set it below the actual limit to check nonces
+	.max_diff = 64, // Set it below the actual limit to check nonces
 };
