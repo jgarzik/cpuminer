@@ -1,3 +1,17 @@
+Version 4.4.0 - 16th June 2014
+
+- Tidy unused rockminer variables
+- Tidy rockminer defines
+- Make rockminer driver compatible with other icarus drivers being present
+- Import basic rbox driver
+- minion - add optional (on) GPIO chip selection
+- Clear the pool idle flag in the pool test thread
+- CoreFmatch in cointerra should be a uint16
+- Display error message if we receive one on share rejects
+- Allow zero length strings to be passed to valid_hex
+- delete unused roundl definition
+
+
 Version 4.3.5 - 10th June 2014
 
 - Cointerra driver updates.
