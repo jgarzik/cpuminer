@@ -261,7 +261,7 @@ ASIC SPECIFIC COMMANDS
 --hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)
 --hfa-name <arg>    Set a unique name for a single hashfast device specified with --usb or the first device found
 --hfa-noshed        Disable hashfast dynamic core disabling feature
---hfa-options <arg> Set hashfast options name:clock (comma separated)
+--hfa-options <arg> Set hashfast options name:clock or name:clock@voltage (comma separated)
 --hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
 --hfa-temp-target <arg> Set the hashfast target temperature (0 to disable) (default: 88)
 --hro-freq          Set the hashratio clock frequency (default: 280)
@@ -668,20 +668,22 @@ If you wished to name the second device Slug you would add the commands:
 Newer firmwares on hashfast devices dynamically disable cores that generate
 invalid data. This command will disable this feature where possible.
 
---hfa-options <arg> Set hashfast options name:clock (comma separated)
+--hfa-options <arg> Set hashfast options name:clock or clock@voltage (comma separated)
 
 This command allows you to set options for each discrete hashfast device by
 its name (if the firmware has naming support, i.e. version 0.3+). Currently
-this takes only one option, the clock speed, although future options may be
-added.
+this takes as option the clock speed alone or clock speed and voltage, 
+although future options may be added.
 e.g.:
---hfa-options "rabbit:650,turtle:550"
+--hfa-options "rabbit:650,turtle:550@800"
 
-Would set a device named rabbit to clock speed 650 and the one named turtle to
-550. Starting the device at a speed where it is most stable will give more
-reliable hashrates long term and prevent it interacting with other devices,
-rather than depending on the clockdown feature in cgminer.
+Would set a device named rabbit to clock speed 650 MHz using default voltage
+and the one named turtle to 550 MHz using a voltage of 800 mv. Starting the
+device at a speed where it is most stable will give more reliable hashrates
+long term and prevent it interacting with other devices, rather than depending
+on the clockdown feature in cgminer.
 
+Note: Setting voltage cause a board reset and hotplug event on cgminer startup.
 
 Other undocumented hashfast command line options are for development purposes
 only at this stage and serve no useful purpose to end users.
