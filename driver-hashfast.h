@@ -45,6 +45,7 @@ char *opt_hfa_options;
 #define HFA_FAN_MIN 5
 #define HFA_VOLTAGE_MAX 1000
 #define HFA_VOLTAGE_MIN 500
+#define HFA_MAGIC_SETTINGS_VALUE 0x42AA
 
 // # Factory Operation Codes
 #define OP_SETTINGS             55      // Read or write settings
@@ -152,7 +153,6 @@ struct hashfast_info {
 	int last_die_adjusted;
 	int clock_offset;
 	int hash_voltage;                           // Hash voltage to use, in mV
-	bool set_voltage_needed;
 
 	pthread_t read_thr;
 	time_t last_restart;
