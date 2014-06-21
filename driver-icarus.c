@@ -1076,6 +1076,16 @@ void rock_print_work_data(struct ICARUS_WORK *p_workdata)
 
 bool icarus_get_device_id(struct cgpu_info *cgpu);
 
+static void icarus_clear(struct cgpu_info *icarus, struct ICARUS_INFO *info)
+{
+	char buf[512];
+	int amt;
+
+	do {
+		usb_read_ii_timeout(icarus, info->intinfo, buf, 512, &amt, 100, C_GETRESULTS);
+	} while (amt > 0);
+}
+
 static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	int this_option_offset = ++option_offset;
@@ -1158,6 +1168,7 @@ cmr2_retry:
 	tries = 2;
 	ok = false;
 	while (!ok && tries-- > 0) {
+		icarus_clear(icarus, info);
 		icarus_initialise(icarus, baud);
 
 		if (info->ident == IDENT_ANU && !set_anu_freq(icarus, info)) {
@@ -1190,7 +1201,7 @@ cmr2_retry:
 			info->nonce_size = ANT_READ_SIZE;
 			info->Hs = ANTMINERUSB_HASH_TIME;
 			icarus->drv->name = "ANU";
-			applog(LOG_DEBUG, "%s %i: Detected Antminer U1, changing nonce size to %d",
+			applog(LOG_DEBUG, "%s %i: Detected Antminer U1/2, changing nonce size to %d",
 			       icarus->drv->name, icarus->device_id, ANT_READ_SIZE);
 		}
 
