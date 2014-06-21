@@ -30,11 +30,12 @@
 	defined(USE_HASHFAST) || defined(USE_BITFURY) || defined(USE_KLONDIKE) || \
 	defined(USE_KNC) || defined(USE_BAB) || defined(USE_DRILLBIT) || \
 	defined(USE_MINION) || defined(USE_COINTERRA) || defined(USE_BITMINE_A1) || \
-	defined(USE_ANT_S1) || defined(USE_ANT_S2) || defined(USE_SPONDOOLIES)
+	defined(USE_ANT_S1) || defined(USE_ANT_S2) || defined(USE_SPONDOOLIES) || \
+	defined(USE_ICARUS)
 #define HAVE_AN_ASIC 1
 #endif
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER)
+#if defined(USE_BITFORCE) || defined(USE_MODMINER)
 #define HAVE_AN_FPGA 1
 #endif
 
