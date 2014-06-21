@@ -411,11 +411,12 @@ struct hf_settings_data {
 
 static bool hfa_set_voltages(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
+	uint16_t magic = 0x42AA;
 	struct hf_settings_data op_settings_data;
 
 	op_settings_data.revision = 1;
 	op_settings_data.ref_frequency = 25;
-	op_settings_data.magic = HFA_MAGIC_SETTINGS_VALUE;
+	op_settings_data.magic = magic;
 
 	op_settings_data.frequency0 = info->hash_clock_rate;
 	op_settings_data.voltage0 = info->hash_voltage;
@@ -426,8 +427,7 @@ static bool hfa_set_voltages(struct cgpu_info *hashfast, struct hashfast_info *i
 	op_settings_data.frequency3 = info->hash_clock_rate;
 	op_settings_data.voltage3 = info->hash_voltage;
 
-	hfa_send_generic_frame(hashfast, OP_SETTINGS, 0x00, 0x01, HFA_MAGIC_SETTINGS_VALUE,
-		(uint8_t *)&op_settings_data, sizeof(op_settings_data));
+	hfa_send_generic_frame(hashfast, OP_SETTINGS, 0x00, 0x01, magic, (uint8_t *)&op_settings_data, sizeof(op_settings_data));
 	// reset the board once to switch to new voltage settings
 	hfa_send_generic_frame(hashfast, OP_POWER, 0xff, 0x00, 0x1, NULL, 0);
 	hfa_send_generic_frame(hashfast, OP_POWER, 0xff, 0x00, 0x2, NULL, 0);
@@ -762,6 +762,7 @@ static void hfa_check_options(struct hashfast_info *info)
 						break;
 					}
 					info->hash_voltage = lval;
+					info->set_voltage_needed = true;
 				}
 				break;
 		}
@@ -1255,35 +1256,6 @@ static void hfa_parse_notice(struct cgpu_info *hashfast, struct hf_header *h)
 	applog(LOG_NOTICE, "%s %s NOTICE: %s", hashfast->drv->name, hashfast->unique_id, d->message);
 }
 
-static void hfa_parse_settings(struct cgpu_info *hashfast, struct hf_header *h)
-{
-	struct hashfast_info *info = hashfast->device_data;
-	struct hf_settings_data *op_settings_data = (struct hf_settings_data *)(h + 1);
-
-	// Check if packet size, revision and magic are matching
-	if ((h->data_length * 4 == sizeof(struct hf_settings_data)) &&
-	    (h->core_address == 0) &&
-	    (op_settings_data->revision == 1) &&
-	    (op_settings_data->magic == HFA_MAGIC_SETTINGS_VALUE))
-	{
-		applog(LOG_NOTICE, "%s: Device settings (%dMHz@%dmV,%dMHz@%dmV,%dMHz@%dmV,%dMHz@%dmV)", hashfast->drv->name,
-			op_settings_data->frequency0, op_settings_data->voltage0,
-			op_settings_data->frequency1, op_settings_data->voltage1,
-			op_settings_data->frequency2, op_settings_data->voltage2,
-			op_settings_data->frequency3, op_settings_data->voltage3);
-		// Set voltage only when current voltage values are different
-		if ((info->hash_voltage != 0) &&
-		    ((op_settings_data->voltage0 != info->hash_voltage) ||
-		     (op_settings_data->voltage1 != info->hash_voltage) ||
-		     (op_settings_data->voltage2 != info->hash_voltage) ||
-		     (op_settings_data->voltage3 != info->hash_voltage))) {
-			applog(LOG_NOTICE, "%s: Setting default clock and voltage to %dMHz@%dmV",
-				hashfast->drv->name, info->hash_clock_rate, info->hash_voltage);
-			hfa_set_voltages(hashfast, info);
-		}
-	}
-}
-
 static void *hfa_read(void *arg)
 {
 	struct thr_info *thr = (struct thr_info *)arg;
@@ -1327,9 +1299,6 @@ static void *hfa_read(void *arg)
 				break;
 			case OP_USB_NOTICE:
 				hfa_parse_notice(hashfast, h);
-				break;
-			case OP_SETTINGS:
-				hfa_parse_settings(hashfast, h);
 				break;
 			case OP_POWER:
 			case OP_PING:
@@ -1428,8 +1397,12 @@ static bool hfa_init(struct thr_info *thr)
 		}
 	}
 
-	// Read current device settings
-	hfa_send_generic_frame(hashfast, OP_SETTINGS, 0x00, 0x00, HFA_MAGIC_SETTINGS_VALUE, NULL, 0);
+	if (info->set_voltage_needed) {
+		applog(LOG_NOTICE, "%s: Set default clock and voltage to %dMHz@%dmV",
+			hashfast->drv->name, info->hash_clock_rate, info->hash_voltage);
+		hfa_set_voltages(hashfast, info);
+		info->set_voltage_needed = false;
+	}
 
 	mutex_init(&info->lock);
 	mutex_init(&info->rlock);
