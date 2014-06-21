@@ -181,30 +181,6 @@ retry:
 	return true;
 }
 
-static bool hfa_send_generic_frame(struct cgpu_info *hashfast, uint8_t opcode, uint8_t chip_address,
-				   uint8_t core_address, uint16_t hdata, uint8_t *data, int len)
-{
-	uint8_t packet[256];
-	struct hf_header *p = (struct hf_header *)packet;
-	int tx_length, ret, amount;
-
-	p->preamble = HF_PREAMBLE;
-	p->operation_code = opcode;
-	p->chip_address = chip_address;
-	p->core_address = core_address;
-	p->hdata = htole16(hdata);
-	p->data_length = len / 4;
-	p->crc8 = hfa_crc8(packet);
-
-	if (len)
-		memcpy(&packet[sizeof(struct hf_header)], data, len);
-	tx_length = sizeof(struct hf_header) + len;
-
-	ret = usb_write(hashfast, (char *)packet, tx_length, &amount, C_NULL);
-
-	return ((ret >= 0) && (amount == tx_length));
-}
-
 static bool hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, uint16_t hdata,
 			   uint8_t *data, int len)
 {
@@ -392,47 +368,6 @@ static void hfa_choose_opname(struct cgpu_info *hashfast, struct hashfast_info *
 		sprintf(info->op_name, "%lx", (long unsigned int)usecs);
 	}
 	hfa_write_opname(hashfast, info);
-}
-
-// Generic setting header
-struct hf_settings_data {
-	uint8_t revision;
-	uint8_t ref_frequency;
-	uint16_t magic;
-	uint16_t frequency0;
-	uint16_t voltage0;
-	uint16_t frequency1;
-	uint16_t voltage1;
-	uint16_t frequency2;
-	uint16_t voltage2;
-	uint16_t frequency3;
-	uint16_t voltage3;
-} __attribute__((packed,aligned(4)));
-
-static bool hfa_set_voltages(struct cgpu_info *hashfast, struct hashfast_info *info)
-{
-	uint16_t magic = 0x42AA;
-	struct hf_settings_data op_settings_data;
-
-	op_settings_data.revision = 1;
-	op_settings_data.ref_frequency = 25;
-	op_settings_data.magic = magic;
-
-	op_settings_data.frequency0 = info->hash_clock_rate;
-	op_settings_data.voltage0 = info->hash_voltage;
-	op_settings_data.frequency1 = info->hash_clock_rate;
-	op_settings_data.voltage1 = info->hash_voltage;
-	op_settings_data.frequency2 = info->hash_clock_rate;
-	op_settings_data.voltage2 = info->hash_voltage;
-	op_settings_data.frequency3 = info->hash_clock_rate;
-	op_settings_data.voltage3 = info->hash_voltage;
-
-	hfa_send_generic_frame(hashfast, OP_SETTINGS, 0x00, 0x01, magic, (uint8_t *)&op_settings_data, sizeof(op_settings_data));
-	// reset the board once to switch to new voltage settings
-	hfa_send_generic_frame(hashfast, OP_POWER, 0xff, 0x00, 0x1, NULL, 0);
-	hfa_send_generic_frame(hashfast, OP_POWER, 0xff, 0x00, 0x2, NULL, 0);
-
-	return true;
 }
 
 static bool hfa_send_shutdown(struct cgpu_info *hashfast);
@@ -710,7 +645,7 @@ static void hfa_set_clock(struct cgpu_info *hashfast, struct hashfast_info *info
  * to be added in the future. */
 static void hfa_check_options(struct hashfast_info *info)
 {
-	char *p, *options, *found = NULL, *marker;
+	char *p, *options, *found = NULL;
 	int maxlen, option = 0;
 
 	if (!opt_hfa_options)
@@ -753,17 +688,6 @@ static void hfa_check_options(struct hashfast_info *info)
 					break;
 				}
 				info->hash_clock_rate = lval;
-				marker = strchr(p,'@');
-				if (marker != NULL) {
-					lval = strtol(marker+1, NULL, 10);
-					if (lval < HFA_VOLTAGE_MIN || lval > HFA_VOLTAGE_MAX) {
-						applog(LOG_ERR, "Invalid core voltage %ld set with hashfast option for %s",
-						       lval, info->op_name);
-						break;
-					}
-					info->hash_voltage = lval;
-					info->set_voltage_needed = true;
-				}
 				break;
 		}
 	}
@@ -1300,7 +1224,6 @@ static void *hfa_read(void *arg)
 			case OP_USB_NOTICE:
 				hfa_parse_notice(hashfast, h);
 				break;
-			case OP_POWER:
 			case OP_PING:
 				/* Do nothing */
 				break;
@@ -1397,13 +1320,6 @@ static bool hfa_init(struct thr_info *thr)
 		}
 	}
 
-	if (info->set_voltage_needed) {
-		applog(LOG_NOTICE, "%s: Set default clock and voltage to %dMHz@%dmV",
-			hashfast->drv->name, info->hash_clock_rate, info->hash_voltage);
-		hfa_set_voltages(hashfast, info);
-		info->set_voltage_needed = false;
-	}
-
 	mutex_init(&info->lock);
 	mutex_init(&info->rlock);
 	if (pthread_create(&info->read_thr, NULL, hfa_read, (void *)thr))
@@ -1423,7 +1339,7 @@ out:
 		hashfast->device_data = NULL;
 		usb_nodev(hashfast);
 	}
-
+		
 	return ret;
 }
 
