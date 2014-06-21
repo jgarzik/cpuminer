@@ -1951,12 +1951,7 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 	free(tmp);
 	mutex_unlock(&pool->stratum_lock);
 
-	if (!restart_stratum(pool)) {
-		pool_failed(pool);
-		return false;
-	}
-
-	return true;
+	return restart_stratum(pool);
 }
 
 static bool send_version(struct pool *pool, json_t *val)
@@ -2668,13 +2663,21 @@ out:
 
 bool restart_stratum(struct pool *pool)
 {
+	bool ret = false;
+
 	if (pool->stratum_active)
 		suspend_stratum(pool);
 	if (!initiate_stratum(pool))
-		return false;
+		goto out;
 	if (!auth_stratum(pool))
-		return false;
-	return true;
+		goto out;
+	ret = true;
+out:
+	if (!ret)
+		pool_died(pool);
+	else
+		stratum_resumed(pool);
+	return ret;
 }
 
 void dev_error(struct cgpu_info *dev, enum dev_reason reason)
