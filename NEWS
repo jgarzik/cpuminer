@@ -4,8 +4,6 @@ Version 4.4.1 - 21st June 2014
 - Clear usb reads on each pass through icarus detect to hopefully prevent false
 positives for detecting rboxes
 - Clean up pool failure and failover code for stratum
-- Set hashfast voltage settings only when really needed
-- Hashfast voltage support
 
 
 Version 4.4.0 - 16th June 2014
