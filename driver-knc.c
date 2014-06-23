@@ -560,6 +560,7 @@ static struct api_data *knc_api_stats(struct cgpu_info *cgpu)
 				errors += die->core[core].errors;
 				completed += die->core[core].completed;
 			}
+			coremap[die->cores] = '\0';
 			knc_api_die_string("coremap", coremap);
 			knc_api_die_int("errors", errors);
 			knc_api_die_int("shares", shares);
