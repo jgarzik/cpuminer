@@ -35,7 +35,7 @@ static void minion_detect(__maybe_unused bool hotplug)
 #define MINION_ROCKCHIP 0
 
 // The code is always in - this just decides if it does it
-static bool minreread = true;
+static bool minreread = false;
 
 /*
  * Use pins for board selection
@@ -1048,10 +1048,18 @@ static void init_pins(struct minion_info *minioninfo)
 	}
 }
 
+#define EXTRA_LOG_IO 0
+#if EXTRA_LOG_IO
+static int ioc = 0;
+#endif
+
 static int __do_ioctl(struct minion_info *minioninfo, int pin, uint8_t *obuf, uint32_t osiz, uint8_t *rbuf, uint32_t rsiz, MINION_FFL_ARGS)
 {
 	struct spi_ioc_transfer tran;
 	int ret;
+#if EXTRA_LOG_IO
+	int myioc;
+#endif
 #if MINION_SHOW_IO
 	char dataw[DATA_ALL], datar[DATA_ALL];
 #endif
@@ -1116,6 +1124,9 @@ static int __do_ioctl(struct minion_info *minioninfo, int pin, uint8_t *obuf, ui
 	}
 	IO_STAT_NOW(&sta);
 	ret = ioctl(minioninfo->spifd, SPI_IOC_MESSAGE(1), (void *)&tran);
+#if EXTRA_LOG_IO
+	myioc = ioc++;
+#endif
 	IO_STAT_NOW(&fin);
 	if (usepins) {
 		MINION_PIN_AFTER;
@@ -1143,7 +1154,37 @@ static int __do_ioctl(struct minion_info *minioninfo, int pin, uint8_t *obuf, ui
 
 	display_ioctl(ret, osiz, (uint8_t *)(&dataw[DATA_OFF]), rsiz, (uint8_t *)(&datar[DATA_OFF]));
 #endif
-
+#if EXTRA_LOG_IO
+	if (obuf[1] == READ_ADDR(MINION_RES_PEEK) ||
+	    obuf[1] == READ_ADDR(MINION_RES_DATA) ||
+	    obuf[1] == READ_ADDR(MINION_SYS_FIFO_STA)) {
+		char *uf1, *uf2, c;
+		uf1 = bin2hex(obuf, DATA_SIZ);
+		uf2 = bin2hex(rbuf, (size_t)ret);
+		switch (obuf[1]) {
+			case READ_ADDR(MINION_RES_PEEK):
+				c = 'P';
+				break;
+			case READ_ADDR(MINION_RES_DATA):
+				c = 'D';
+				break;
+			case READ_ADDR(MINION_SYS_FIFO_STA):
+				c = 'F';
+				break;
+		}
+		applog(LOG_WARNING, "*** seq %d cmd %c %s rep %.8s %s",
+				    myioc, c, uf1, uf2, uf2+8);
+		free(uf2);
+		free(uf1);
+	}
+	if (obuf[1] == WRITE_ADDR(MINION_QUE_0)) {
+		char *uf;
+		uf = bin2hex(obuf, osiz);
+		applog(LOG_WARNING, "*** seq %d work %s",
+				    myioc, uf);
+		free(uf);
+	}
+#endif
 	return ret;
 }
 
@@ -2102,6 +2143,8 @@ static void minion_detect(bool hotplug)
 
 	minioninfo->initialised = true;
 
+	dupalloc(minioncgpu, 10);
+
 	return;
 
 cleanup:
@@ -2758,6 +2801,7 @@ repeek:
 enum nonce_state {
 	NONCE_GOOD_NONCE,
 	NONCE_NO_NONCE,
+	NONCE_DUP_NONCE,
 	NONCE_BAD_NONCE,
 	NONCE_BAD_WORK,
 	NONCE_NO_WORK,
@@ -2934,6 +2978,14 @@ retry:
 
 	redo = false;
 retest:
+	if (isdupnonce(minioncgpu, DATAW(item)->work, nonce)) {
+		applog(LOG_WARNING, " ... nonce %02x%02x%02x%02x chip %d core %d task 0x%04x",
+				    (nonce & 0xff), ((nonce >> 8) & 0xff),
+				    ((nonce >> 16) & 0xff), ((nonce >> 24) & 0xff),
+				    chip, core, task_id);
+		return NONCE_DUP_NONCE;
+	}
+
 	if (test_nonce(DATAW(item)->work, nonce)) {
 //applog(MINTASK_LOG, "%s%i: Valid Nonce chip %d core %d task 0x%04x nonce 0x%08x", minioncgpu->drv->name, minioncgpu->device_id, chip, core, task_id, nonce);
 		submit_tested_work(thr, DATAW(item)->work);
