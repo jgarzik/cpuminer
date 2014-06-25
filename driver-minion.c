@@ -742,6 +742,7 @@ struct minion_info {
 	uint64_t nonces_recovered[MINION_CHIPS];
 	struct timeval last_reset[MINION_CHIPS];
 	double do_reset[MINION_CHIPS];
+	bool flag_reset[MINION_CHIPS];
 
 	// Work items
 	K_LIST *wfree_list;
@@ -2165,6 +2166,44 @@ cleanup:
 unalloc:
 	free(minioninfo);
 	free(minioncgpu);
+}
+
+static char *minion_set(struct cgpu_info *minioncgpu, char *option, char *setting, char *replybuf)
+{
+	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
+	int chip;
+
+	if (strcasecmp(option, "help") == 0) {
+		sprintf(replybuf, "reset: chip 0-%d",
+				  minioninfo->chips - 1);
+		return replybuf;
+	}
+
+	if (strcasecmp(option, "reset") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing chip to reset");
+			return replybuf;
+		}
+
+		chip = atoi(setting);
+		if (chip < 0 || chip >= minioninfo->chips) {
+			sprintf(replybuf, "invalid reset: chip '%s' valid range 0-%d",
+					  setting,
+					  minioninfo->chips);
+			return replybuf;
+		}
+
+		if (!minioninfo->has_chip[chip]) {
+			sprintf(replybuf, "unable to reset chip %d - chip disabled",
+					  chip);
+			return replybuf;
+		}
+		minioninfo->flag_reset[chip] = true;
+		return NULL;
+	}
+
+	sprintf(replybuf, "Unknown option: %s", option);
+	return replybuf;
 }
 
 static void minion_identify(__maybe_unused struct cgpu_info *minioncgpu)
@@ -3787,10 +3826,24 @@ static void chip_report(struct cgpu_info *minioncgpu)
 					minioninfo->do_reset[chip] = 0.0;
 					memcpy(&(minioninfo->last_reset[chip]), &now, sizeof(now));
 					init_chip(minioncgpu, minioninfo, chip);
+					minioninfo->flag_reset[chip] = false;
 				}
 			}
 		}
 		memcpy(&(minioninfo->chip_chk), &now, sizeof(now));
+	}
+
+	for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
+		if (minioninfo->has_chip[chip]) {
+			if (minioninfo->flag_reset[chip]) {
+				applog(LOG_WARNING, "%s%d: Chip %d flagged - resetting ...",
+						    minioncgpu->drv->name, minioncgpu->device_id,
+						    chip);
+				memcpy(&(minioninfo->last_reset[chip]), &now, sizeof(now));
+				init_chip(minioncgpu, minioninfo, chip);
+				minioninfo->flag_reset[chip] = false;
+			}
+		}
 	}
 }
 
@@ -4178,6 +4231,7 @@ struct device_drv minion_drv = {
 #ifdef LINUX
 	.get_api_stats = minion_api_stats,
 	.get_statline_before = minion_get_statline_before,
+	.set_device = minion_set,
 	.identify_device = minion_identify,
 	.thread_prepare = minion_thread_prepare,
 	.hash_work = hash_queued_work,
