@@ -366,7 +366,10 @@ static uint32_t minion_freq[] = {
 	0x210074	// 14 = 1400Mhz
 };
 
+// When hash rate falls below this in the 5min av, reset it
 #define MINION_RESET_PERCENT 75.0
+// After the above reset, delay sending work for:
+#define MINION_RESET_DELAY_s 0.088
 
 #define STA_TEMP(_sta) ((uint16_t)((_sta)[3] & 0x1f))
 #define STA_CORES(_sta) ((uint16_t)((_sta)[2]))
@@ -704,6 +707,7 @@ struct minion_info {
 	uint64_t chip_good[MINION_CHIPS];
 	uint64_t chip_bad[MINION_CHIPS];
 	uint64_t chip_err[MINION_CHIPS];
+	uint64_t chip_dup[MINION_CHIPS];
 	uint64_t core_good[MINION_CHIPS][MINION_CORES+1];
 	uint64_t core_bad[MINION_CHIPS][MINION_CORES+1];
 
@@ -1356,6 +1360,13 @@ static void init_chip(struct cgpu_info *minioncgpu, struct minion_info *minionin
 	reply = build_cmd(minioncgpu, minioninfo,
 			  chip, WRITE_ADDR(MINION_SYS_TEMP_CTL),
 			  rbuf, 0, data);
+
+	// Discard chip history (if there is any)
+	if (minioninfo->hfree_list) {
+		K_WLOCK(minioninfo->hfree_list);
+		k_list_transfer_to_head(minioninfo->hchip_list[chip], minioninfo->hfree_list);
+		K_WUNLOCK(minioninfo->hfree_list);
+	}
 }
 
 static void enable_chip_cores(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, int chip)
@@ -2977,16 +2988,18 @@ retry:
 
 	redo = false;
 retest:
-	if (isdupnonce(minioncgpu, DATAW(item)->work, nonce)) {
-		applog(LOG_WARNING, " ... nonce %02x%02x%02x%02x chip %d core %d task 0x%04x",
-				    (nonce & 0xff), ((nonce >> 8) & 0xff),
-				    ((nonce >> 16) & 0xff), ((nonce >> 24) & 0xff),
-				    chip, core, task_id);
-		return NONCE_DUP_NONCE;
-	}
-
 	if (test_nonce(DATAW(item)->work, nonce)) {
+		if (isdupnonce(minioncgpu, DATAW(item)->work, nonce)) {
+			minioninfo->chip_dup[chip]++;
+			applog(LOG_WARNING, " ... nonce %02x%02x%02x%02x chip %d core %d task 0x%04x",
+					    (nonce & 0xff), ((nonce >> 8) & 0xff),
+					    ((nonce >> 16) & 0xff), ((nonce >> 24) & 0xff),
+					    chip, core, task_id);
+			return NONCE_DUP_NONCE;
+		}
+
 //applog(MINTASK_LOG, "%s%i: Valid Nonce chip %d core %d task 0x%04x nonce 0x%08x", minioncgpu->drv->name, minioncgpu->device_id, chip, core, task_id, nonce);
+//
 		submit_tested_work(thr, DATAW(item)->work);
 
 		if (redo)
@@ -3382,6 +3395,13 @@ static void minion_do_work(struct cgpu_info *minioncgpu)
 
 		for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
 			if (minioninfo->has_chip[chip] && !minioninfo->chip_status[chip].overheat) {
+				struct timeval now;
+				double howlong;
+				cgtime(&now);
+				howlong = tdiff(&now, &(minioninfo->last_reset[chip]));
+				if (howlong < MINION_RESET_DELAY_s)
+					continue;
+
 				int tries = 0;
 				while (tries++ < 4) {
 					cmd = 0;
@@ -3502,7 +3522,7 @@ static void minion_do_work(struct cgpu_info *minioncgpu)
 											   minioncgpu->device_id,
 											   DATAW(item)->task_id, chip);
 								} else {
-									applog(LOG_ERR, "%s%i: chip %d non-urgent hi "
+									applog(LOG_DEBUG, "%s%i: chip %d non-urgent hi "
 											   "empty work list (count=%d)",
 											   minioncgpu->drv->name,
 											   minioncgpu->device_id,
@@ -3761,7 +3781,7 @@ static void chip_report(struct cgpu_info *minioncgpu)
 		for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
 			if (minioninfo->has_chip[chip]) {
 				if (minioninfo->do_reset[chip] > 1.0) {
-					applog(LOG_WARNING, "%s%d: Chip %d down to threshold %.2fGHs - resetting ...",
+					applog(LOG_WARNING, "%s%d: Chip %d below threshold %.2fGHs - resetting ...",
 							    minioncgpu->drv->name, minioncgpu->device_id,
 							    chip, minioninfo->do_reset[chip]);
 					minioninfo->do_reset[chip] = 0.0;
@@ -4141,7 +4161,9 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 	root = api_add_string(root, "Last Int", minioninfo->last_interrupt, true);
 	root = api_add_hex32(root, "Next TaskID", &(minioninfo->next_task_id), true);
 
-	root = api_add_elapsed(root, "Elapsed", &(total_secs), true);
+	uint64_t checked, dups;
+	dupcounters(minioncgpu, &checked, &dups);
+	root = api_add_uint64(root, "Dups", &dups, true);
 
 	return root;
 }
