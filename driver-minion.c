@@ -498,6 +498,7 @@ typedef struct witem {
 	bool stale; // if stale, don't decrement que/chipwork when discarded
 	bool rolled;
 	int errors; // uncertain since the error could mean task_id is wrong
+	struct timeval created; // when work was generated
 } WITEM;
 
 #define ALLOC_TITEMS 256
@@ -671,6 +672,9 @@ typedef struct iostat {
 #define IO_STAT_STORE(_sta, _fin, _lsta, _lfin, _tsd, _buf, _siz, _reply, _ioc)
 #endif
 
+static double time_bands[] = { 0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0 };
+#define TIME_BANDS ((int)(sizeof(time_bands)/sizeof(double)))
+
 struct minion_info {
 	struct thr_info spiw_thr;
 	struct thr_info spir_thr;
@@ -747,8 +751,12 @@ struct minion_info {
 	// Work items
 	K_LIST *wfree_list;
 	K_STORE *wwork_list;
+	K_STORE *wstale_list;
 	K_STORE *wque_list[MINION_CHIPS];
 	K_STORE *wchip_list[MINION_CHIPS];
+	uint64_t wwork_flushed;
+	uint64_t wque_flushed;
+	uint64_t wchip_staled;
 
 	// Task list
 	K_LIST *tfree_list;
@@ -783,6 +791,20 @@ struct minion_info {
 	IOSTAT iostats[0x200];
 #endif
 
+	// Stats on how long work is waiting to move from wwork_list to wque_list
+	uint64_t que_work;
+	double que_time;
+	double que_min;
+	double que_max;
+	uint64_t que_bands[TIME_BANDS+1];
+
+	// From wwork_list to txrx
+	uint64_t wt_work;
+	double wt_time;
+	double wt_min;
+	double wt_max;
+	uint64_t wt_bands[TIME_BANDS+1];
+
 	bool initialised;
 };
 
@@ -802,6 +824,7 @@ static void ready_work(struct cgpu_info *minioncgpu, struct work *work, bool rol
 	DATAW(item)->urgent = false;
 	DATAW(item)->rolled = rolled;
 	DATAW(item)->errors = 0;
+	cgtime(&(DATAW(item)->created));
 
 	k_add_head(minioninfo->wwork_list, item);
 
@@ -2130,6 +2153,7 @@ static void minion_detect(bool hotplug)
 
 	minioninfo->wfree_list = k_new_list("Work", sizeof(WITEM), ALLOC_WITEMS, LIMIT_WITEMS, true);
 	minioninfo->wwork_list = k_new_store(minioninfo->wfree_list);
+	minioninfo->wstale_list = k_new_store(minioninfo->wfree_list);
 	// Initialise them all in case we later decide to enable chips
 	for (i = 0; i < (int)MINION_CHIPS; i++) {
 		minioninfo->wque_list[i] = k_new_store(minioninfo->wfree_list);
@@ -2258,6 +2282,9 @@ static void *minion_spi_write(void *userdata)
 		if (item) {
 			bool do_txrx = true;
 			bool store_reply = true;
+			struct timeval now;
+			double howlong;
+			int i;
 
 			titem = DATAT(item);
 
@@ -2294,6 +2321,23 @@ static void *minion_spi_write(void *userdata)
 			}
 
 			if (do_txrx) {
+				cgtime(&now);
+				howlong = tdiff(&now, &(DATAW(titem->witem)->created));
+				minioninfo->wt_work++;
+				minioninfo->wt_time += howlong;
+				if (minioninfo->wt_min == 0 || minioninfo->wt_min > howlong)
+					minioninfo->wt_min = howlong;
+				else if (minioninfo->wt_max < howlong)
+					minioninfo->wt_max = howlong;
+				for (i = 0; i < TIME_BANDS; i++) {
+					if (howlong < time_bands[i]) {
+						minioninfo->wt_bands[i]++;
+						break;
+					}
+				}
+				if (i >= TIME_BANDS)
+					minioninfo->wt_bands[TIME_BANDS]++;
+
 				minion_txrx(titem);
 
 				int chip = titem->chip;
@@ -2374,6 +2418,7 @@ static void *minion_spi_write(void *userdata)
 							}
 							minioninfo->chip_status[chip].chipwork = 0;
 							minioninfo->chip_status[chip].realwork = 0;
+							minioninfo->wchip_staled += cnt;
 #if MINION_SHOW_IO
 							applog(IOCTRL_LOG, "RSTN chip %d (cnt=%d) cw0=%u rw0=%u qw=%u",
 									   chip, cnt,
@@ -3133,7 +3178,7 @@ static void *minion_results(void *userdata)
 static void minion_flush_work(struct cgpu_info *minioncgpu)
 {
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
-	K_ITEM *stale_unused_work, *prev_unused, *task, *prev_task, *witem;
+	K_ITEM *prev_unused, *task, *prev_task, *witem;
 	int i;
 
 	if (minioninfo->initialised == false)
@@ -3146,12 +3191,8 @@ static void minion_flush_work(struct cgpu_info *minioncgpu)
 	K_WLOCK(minioninfo->wwork_list);
 
 	// Simply remove the whole unused wwork_list
-	stale_unused_work = minioninfo->wwork_list->tail;
-	if (stale_unused_work) {
-		minioninfo->wwork_list->head = NULL;
-		minioninfo->wwork_list->tail = NULL;
-		minioninfo->wwork_list->count = 0;
-	}
+	k_list_transfer_to_head(minioninfo->wwork_list, minioninfo->wstale_list);
+	minioninfo->wwork_flushed += minioninfo->wstale_list->count;
 
 	// TODO: flush/work tasks should have a block sequence number so this task removal code
 	// might be better implemented in minion_spi_write where each work task would
@@ -3178,6 +3219,11 @@ static void minion_flush_work(struct cgpu_info *minioncgpu)
 #endif
 			witem = DATAT(task)->witem;
 			k_unlink_item(minioninfo->wque_list[DATAT(task)->chip], witem);
+			minioninfo->wque_flushed++;
+			if (DATAW(witem)->rolled)
+				free_work(DATAW(witem)->work);
+			else
+				work_completed(minioncgpu, DATAW(witem)->work);
 			k_free_head(minioninfo->wfree_list, witem);
 			k_unlink_item(minioninfo->task_list, task);
 			k_free_head(minioninfo->tfree_list, task);
@@ -3210,9 +3256,9 @@ static void minion_flush_work(struct cgpu_info *minioncgpu)
 	// TODO: send a signal to force getting and sending new work - needs cgsem_wait in the sending thread
 
 	// TODO: should we use this thread to do the following work?
-	if (stale_unused_work) {
+	if (minioninfo->wstale_list->count) {
 		// mark complete all stale unused work (oldest first)
-		prev_unused = stale_unused_work;
+		prev_unused = minioninfo->wstale_list->tail;
 		while (prev_unused) {
 			if (DATAW(prev_unused)->rolled)
 				free_work(DATAW(prev_unused)->work);
@@ -3221,13 +3267,9 @@ static void minion_flush_work(struct cgpu_info *minioncgpu)
 			prev_unused = prev_unused->prev;
 		}
 
-		// put the items back in the wfree_list (oldest first)
+		// put them back in the wfree_list
 		K_WLOCK(minioninfo->wfree_list);
-		while (stale_unused_work) {
-			prev_unused = stale_unused_work->prev;
-			k_free_head(minioninfo->wfree_list, stale_unused_work);
-			stale_unused_work = prev_unused;
-		}
+		k_list_transfer_to_head(minioninfo->wstale_list, minioninfo->wfree_list);
 		K_WUNLOCK(minioninfo->wfree_list);
 	}
 }
@@ -3386,10 +3428,31 @@ static void new_work_task(struct cgpu_info *minioncgpu, K_ITEM *witem, int chip,
 static K_ITEM *next_work(struct minion_info *minioninfo)
 {
 	K_ITEM *item;
+	struct timeval now;
+	double howlong;
+	int i;
 
 	K_WLOCK(minioninfo->wwork_list);
 	item = k_unlink_tail(minioninfo->wwork_list);
 	K_WUNLOCK(minioninfo->wwork_list);
+	if (item) {
+		cgtime(&now);
+		howlong = tdiff(&now, &(DATAW(item)->created));
+		minioninfo->que_work++;
+		minioninfo->que_time += howlong;
+		if (minioninfo->que_min == 0 || minioninfo->que_min > howlong)
+			minioninfo->que_min = howlong;
+		else if (minioninfo->que_max < howlong)
+			minioninfo->que_max = howlong;
+		for (i = 0; i < TIME_BANDS; i++) {
+			if (howlong < time_bands[i]) {
+				minioninfo->que_bands[i]++;
+				break;
+			}
+		}
+		if (i >= TIME_BANDS)
+			minioninfo->que_bands[TIME_BANDS]++;
+	}
 
 	return item;
 }
@@ -3662,7 +3725,7 @@ static bool minion_queue_full(struct cgpu_info *minioncgpu)
 {
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	struct work *work, *usework;
-	int count, need, roll, roll_limit;
+	int count, totneed, need, roll, roll_limit, chip;
 	bool ret, rolled;
 
 	if (minioninfo->initialised == false) {
@@ -3672,12 +3735,23 @@ static bool minion_queue_full(struct cgpu_info *minioncgpu)
 
 	K_RLOCK(minioninfo->wwork_list);
 	count = minioninfo->wwork_list->count;
+	totneed = 0;
+	for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
+		if (minioninfo->has_chip[chip] &&
+		    !minioninfo->chip_status[chip].overheat) {
+			totneed += MINION_QUE_HIGH;
+			totneed -= minioninfo->chip_status[chip].quework;
+			totneed -= minioninfo->chip_status[chip].realwork;
+			// One for the pot :)
+			totneed++;
+		}
+	}
 	K_RUNLOCK(minioninfo->wwork_list);
 
-	if (count >= (MINION_QUE_HIGH * minioninfo->chips))
+	if (count >= totneed)
 		ret = true;
 	else {
-		need = (MINION_QUE_HIGH * minioninfo->chips) - count;
+		need = totneed - count;
 		work = get_queued(minioncgpu);
 		if (work) {
 			roll_limit = work->drv_rolllimit;
@@ -4148,8 +4222,11 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 	root = api_add_int(root, "WFree Total", &(minioninfo->wfree_list->total), true);
 	root = api_add_int(root, "WFree Count", &(minioninfo->wfree_list->count), true);
 	root = api_add_int(root, "WWork Count", &(minioninfo->wwork_list->count), true);
+	root = api_add_uint64(root, "WWork Flushed", &(minioninfo->wwork_flushed), true);
 	root = api_add_int(root, "WQue Count", &que_work, true);
+	root = api_add_uint64(root, "WQue Flushed", &(minioninfo->wque_flushed), true);
 	root = api_add_int(root, "WChip Count", &chip_work, true);
+	root = api_add_uint64(root, "WChip Stale", &(minioninfo->wchip_staled), true);
 
 	root = api_add_int(root, "TFree Total", &(minioninfo->tfree_list->total), true);
 	root = api_add_int(root, "TFree Count", &(minioninfo->tfree_list->count), true);
@@ -4214,6 +4291,43 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 	root = api_add_uint64(root, "Cmd Ints", &(minioninfo->command_interrupts), true);
 	root = api_add_string(root, "Last Int", minioninfo->last_interrupt, true);
 	root = api_add_hex32(root, "Next TaskID", &(minioninfo->next_task_id), true);
+
+	double avg;
+	root = api_add_uint64(root, "ToQue", &(minioninfo->que_work), true);
+	if (minioninfo->que_work)
+		avg = minioninfo->que_time / (double)(minioninfo->que_work);
+	else
+		avg = 0;
+	root = api_add_double(root, "Que Avg", &avg, true);
+	root = api_add_double(root, "Que Min", &(minioninfo->que_min), true);
+	root = api_add_double(root, "Que Max", &(minioninfo->que_max), true);
+	data[0] = '\0';
+	for (i = 0; i <= TIME_BANDS; i++) {
+		snprintf(buf, sizeof(buf),
+				"%s%"PRIu64,
+				i == 0 ? "" : "/",
+				minioninfo->que_bands[i]);
+		strcat(data, buf);
+	}
+	root = api_add_string(root, "Que Bands", data, true);
+
+	root = api_add_uint64(root, "ToTxRx", &(minioninfo->wt_work), true);
+	if (minioninfo->wt_work)
+		avg = minioninfo->wt_time / (double)(minioninfo->wt_work);
+	else
+		avg = 0;
+	root = api_add_double(root, "TxRx Avg", &avg, true);
+	root = api_add_double(root, "TxRx Min", &(minioninfo->wt_min), true);
+	root = api_add_double(root, "TxRx Max", &(minioninfo->wt_max), true);
+	data[0] = '\0';
+	for (i = 0; i <= TIME_BANDS; i++) {
+		snprintf(buf, sizeof(buf),
+				"%s%"PRIu64,
+				i == 0 ? "" : "/",
+				minioninfo->wt_bands[i]);
+		strcat(data, buf);
+	}
+	root = api_add_string(root, "TxRx Bands", data, true);
 
 	uint64_t checked, dups;
 	dupcounters(minioncgpu, &checked, &dups);
