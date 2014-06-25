@@ -1558,6 +1558,7 @@ extern struct api_data *api_add_percent(struct api_data *root, char *name, doubl
 extern struct api_data *api_add_avg(struct api_data *root, char *name, float *data, bool copy_data);
 
 extern void dupalloc(struct cgpu_info *cgpu, int timelimit);
+extern void dupcounters(struct cgpu_info *cgpu, uint64_t *checked, uint64_t *dups);
 extern bool isdupnonce(struct cgpu_info *cgpu, struct work *work, uint32_t nonce);
 
 #endif /* __MINER_H__ */

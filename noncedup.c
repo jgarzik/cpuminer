@@ -24,7 +24,7 @@ struct dupdata {
 	K_LIST *nfree_list;
 	K_STORE *nonce_list;
 	uint64_t checked;
-	uint64_t dup;
+	uint64_t dups;
 };
 
 void dupalloc(struct cgpu_info *cgpu, int timelimit)
@@ -40,6 +40,19 @@ void dupalloc(struct cgpu_info *cgpu, int timelimit)
 	dup->nonce_list = k_new_store(dup->nfree_list);
 
 	cgpu->dup_data = dup;
+}
+
+void dupcounters(struct cgpu_info *cgpu, uint64_t *checked, uint64_t *dups)
+{
+	struct dupdata *dup = (struct dupdata *)(cgpu->dup_data);
+
+	if (!dup) {
+		*checked = 0;
+		*dups = 0;
+	} else {
+		*checked = dup->checked;
+		*dups = dup->dups;
+	}
 }
 
 bool isdupnonce(struct cgpu_info *cgpu, struct work *work, uint32_t nonce)
@@ -80,7 +93,7 @@ bool isdupnonce(struct cgpu_info *cgpu, struct work *work, uint32_t nonce)
 	K_WUNLOCK(dup->nfree_list);
 
 	if (!unique)
-		dup->dup++;
+		dup->dups++;
 
 	return !unique;
 }
