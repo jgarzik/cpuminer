@@ -233,6 +233,7 @@ static void knc_core_failure(struct knc_core_state *core)
 {
 	core->errors++;
 	core->errors_now++;
+	core->die->knc->errors++;
 	if (knc_core_disabled(core))
 		return;
 	if (core->errors_now > CORE_ERROR_LIMIT) {
@@ -353,6 +354,7 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 	core->workslot[1].slot = slot;
 	core->generation = knc->generation;
 	core->works++;
+	core->die->knc->works++;
 
 	timeradd(&now, &core_submit_interval, &core->hold_work_until);
 	timeradd(&now, &core_timeout_interval, &core->timeout);
@@ -484,7 +486,11 @@ static void knc_zero_stats(struct cgpu_info *cgpu)
 	int core;
 	struct knc_state *knc = cgpu->device_data;
 	for (core = 0; core < knc->cores; core++) {
+		knc->shares = 0;
 		knc->completed = 0;
+		knc->works = 0;
+		knc->errors = 0;
+		knc->core[core].works = 0;
 		knc->core[core].errors = 0;
 		knc->core[core].shares = 0;
 		knc->core[core].completed = 0;
@@ -552,7 +558,6 @@ static struct api_data *knc_api_stats(struct cgpu_info *cgpu)
 			uint64_t completed = 0;
 			char coremap[die->cores+1];
 
-			/* core map */
 			for (core = 0; core < die->cores; core++) {
 				coremap[core] = knc_core_disabled(&die->core[core]) ? '0' : '1';
 				works += die->core[core].works;
@@ -561,11 +566,11 @@ static struct api_data *knc_api_stats(struct cgpu_info *cgpu)
 				completed += die->core[core].completed;
 			}
 			coremap[die->cores] = '\0';
-			knc_api_die_string("coremap", coremap);
 			knc_api_die_int("errors", errors);
 			knc_api_die_int("shares", shares);
 			knc_api_die_int("works", works);
 			knc_api_die_int("completed", completed);
+			knc_api_die_string("coremap", coremap);
 		}
 	}
 
