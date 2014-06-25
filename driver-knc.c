@@ -150,10 +150,11 @@ static void *knc_spi(void *thr_data)
 {
 	struct cgpu_info *cgpu = thr_data;
 	struct knc_state *knc = cgpu->device_data;
-	static int buffer = 0;
+	int buffer = 0;
 	
 	pthread_mutex_lock(&knc->spi_qlock);
 	while (!cgpu->shutdown) {
+		int this_buffer = buffer;
 		while (knc->spi_buffer[buffer].state != KNC_SPI_PENDING && !cgpu->shutdown)
 			pthread_cond_wait(&knc->spi_qcond, &knc->spi_qlock);
 		pthread_mutex_unlock(&knc->spi_qlock);
@@ -162,12 +163,13 @@ static void *knc_spi(void *thr_data)
 
 		knc_trnsp_transfer(knc->ctx, knc->spi_buffer[buffer].txbuf, knc->spi_buffer[buffer].rxbuf, knc->spi_buffer[buffer].size);
 
-		pthread_mutex_lock(&knc->spi_qlock);
-		knc->spi_buffer[knc->send_buffer].state = KNC_SPI_DONE;
-		pthread_cond_signal(&knc->spi_qcond);
 		buffer += 1;
 		if (buffer >= KNC_SPI_BUFFERS)
 			buffer = 0;
+
+		pthread_mutex_lock(&knc->spi_qlock);
+		knc->spi_buffer[this_buffer].state = KNC_SPI_DONE;
+		pthread_cond_signal(&knc->spi_qcond);
 	}
 	pthread_mutex_unlock(&knc->spi_qlock);
 	return NULL;
