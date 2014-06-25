@@ -360,7 +360,7 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 	return 0;
 
 error:
-	applog(LOG_NOTICE, "KnC: %d.%d.%d Failed to setwork (%d)",
+	applog(LOG_INFO, "KnC: %d.%d.%d Failed to setwork (%d)",
 			core->die->channel, core->die->die, core->core, core->errors_now);
 	if (core->generation != ~0) {
 		core->generation = ~0;	/* Flush it, We are likely out of sync */
@@ -398,7 +398,7 @@ static int knc_core_get_report(struct thr_info *thr, struct knc_core_state *core
 	}
 
 error:
-	applog(LOG_NOTICE, "KnC: Failed to scan work report");
+	applog(LOG_INFO, "KnC: Failed to scan work report");
 	knc_core_failure(core);
 	return -1;
 }
