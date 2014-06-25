@@ -303,6 +303,12 @@ void knc_prepare_neptune_message(int request_length, const uint8_t *request, uin
     PUT_ULONG_BE(crc, buffer, 0);
 }
 
+int knc_transfer_length(int request_length, int response_length)
+{
+	/* FPGA control, request header, request body/response, CRC(4), ACK(1), EXTRA(3) */
+	return 2 + MAX(request_length, 4 + response_length ) + 4 + 1 + 3;
+}
+
 int knc_prepare_transfer(uint8_t *txbuf, int offset, int size, int channel, int request_length, const uint8_t *request, int response_length)
 {
 	/* FPGA control, request header, request body/response, CRC(4), ACK(1), EXTRA(3) */
@@ -318,13 +324,15 @@ int knc_prepare_transfer(uint8_t *txbuf, int offset, int size, int channel, int 
 	txbuf[1] = (msglen * 8);
 	knc_prepare_neptune_message(request_length, request, txbuf+2);
 
-	return len;
+	return offset + len;
 }
 
-int knc_verify_response(uint8_t *rxbuf, int len, int response_length)
+/* request_length = 0 disables communication checks, i.e. Jupiter protocol */
+int knc_decode_response(uint8_t *rxbuf, int request_length, uint8_t **response, int response_length)
 {
     int ret = 0;
-    if (response_length > 0) {
+    int len = knc_transfer_length(request_length, response_length);
+    if (request_length > 0 && response_length > 0) {
         uint32_t crc, recv_crc;
 	crc = crc32(0, Z_NULL, 0);
         crc = crc32(crc, rxbuf + 2 + 4, response_length);
@@ -332,7 +340,19 @@ int knc_verify_response(uint8_t *rxbuf, int len, int response_length)
 	if (crc != recv_crc)
                 ret |= KNC_ERR_CRC;
     }
-    uint8_t ack = rxbuf[len - 4]; /* 2 + MAX(4 + response_length, request_length) + 4; */
+
+    if (response) {
+	if (response_length > 0) {
+	    *response = rxbuf + 2 + 4;
+	} else {
+	    *response = NULL;
+	}
+    }
+      
+    if (response_length == 0)
+	return 0;
+
+    uint8_t ack = rxbuf[len - 4];
 
     if ((ack & KNC_ASIC_ACK_MASK) != KNC_ASIC_ACK_MATCH)
         ret |= KNC_ERR_ACK;
@@ -345,19 +365,18 @@ int knc_verify_response(uint8_t *rxbuf, int len, int response_length)
 
 int knc_syncronous_transfer(void *ctx, int channel, int request_length, const uint8_t *request, int response_length, uint8_t *response)
 {
-    /* FPGA control, request header, request body/response, CRC(4), ACK(1), EXTRA(3) */
-    int msglen = MAX(request_length, 4 + response_length ) + 4 + 1 + 3;
-    int len = 2 + msglen;
+    int len = knc_transfer_length(request_length, response_length);
     uint8_t txbuf[len];
     uint8_t rxbuf[len];
     memset(txbuf, 0, len);
     knc_prepare_transfer(txbuf, 0, len, channel, request_length, request, response_length);
     knc_trnsp_transfer(ctx, txbuf, rxbuf, len);
 
-    if (response_length > 0)
-	memcpy(response, rxbuf + 2 + 4, response_length);
-
-    return knc_verify_response(rxbuf, len, response_length);
+    uint8_t *response_buf;
+    int rc = knc_decode_response(rxbuf, request_length, &response_buf, response_length);
+    if (response)
+	memcpy(response, response_buf, response_length);
+    return rc;
 }
 
 int knc_decode_info(uint8_t *response, struct knc_die_info *die_info)
