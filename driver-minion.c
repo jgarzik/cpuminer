@@ -3432,7 +3432,7 @@ static void minion_do_work(struct cgpu_info *minioncgpu)
 								K_WLOCK(minioninfo->wchip_list[chip]);
 								minioninfo->chip_status[chip].realwork = cmd;
 								K_WUNLOCK(minioninfo->wchip_list[chip]);
-								if (cmd < 10 || cmd >= MINION_QUE_HIGH) {
+								if (cmd <= MINION_QUE_LOW || cmd >= MINION_QUE_HIGH) {
 									applog(LOG_DEBUG, "%s%i: Chip %d fifo cmd %d",
 											  minioncgpu->drv->name,
 											  minioncgpu->device_id,
@@ -4085,11 +4085,12 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 	}
 
 	que_work = chip_work = 0;
-	for (chip = 0; chip <= max_chip; chip++)
+	for (chip = 0; chip <= max_chip; chip++) {
 		if (minioninfo->has_chip[chip]) {
-			que_work += minioninfo->wchip_list[chip]->count;
+			que_work += minioninfo->wque_list[chip]->count;
 			chip_work += minioninfo->wchip_list[chip]->count;
 		}
+	}
 
 	root = api_add_int(root, "WFree Total", &(minioninfo->wfree_list->total), true);
 	root = api_add_int(root, "WFree Count", &(minioninfo->wfree_list->count), true);
