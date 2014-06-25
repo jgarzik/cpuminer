@@ -499,6 +499,7 @@ typedef struct witem {
 	bool rolled;
 	int errors; // uncertain since the error could mean task_id is wrong
 	struct timeval created; // when work was generated
+	struct timeval txrx; // when work was sent to the chip
 } WITEM;
 
 #define ALLOC_TITEMS 256
@@ -2433,6 +2434,7 @@ static void *minion_spi_write(void *userdata)
 						K_WLOCK(minioninfo->wchip_list[chip]);
 						k_unlink_item(minioninfo->wque_list[chip], titem->witem);
 						k_add_head(minioninfo->wchip_list[chip], titem->witem);
+						cgtime(&(DATAW(titem->witem)->txrx));
 						minioninfo->chip_status[chip].quework--;
 						minioninfo->chip_status[chip].chipwork++;
 #if MINION_SHOW_IO
@@ -2908,69 +2910,58 @@ static void cleanup_older(struct cgpu_info *minioncgpu, int chip, K_ITEM *item, 
 	K_ITEM *tail;
 //	bool errs;
 
-	/*
-	 * remove older work items (no_nonce means this 'item' has finished also)
-	 */
-	if (item->next || no_nonce) {
-		K_WLOCK(minioninfo->wchip_list[chip]);
-		tail = minioninfo->wchip_list[chip]->tail;
-		while (tail && tail != item) {
-			k_unlink_item(minioninfo->wchip_list[chip], tail);
-			if (!(DATAW(tail)->stale)) {
-				minioninfo->chip_status[chip].chipwork--;
+	/* remove older (txrx date) work items
+	   no_nonce means this 'item' has finished also */
+	tail = minioninfo->wchip_list[chip]->tail;
+	while (tail && (tdiff(&(DATAW(tail)->txrx), &(DATAW(item)->txrx)) > 0)) {
+		k_unlink_item(minioninfo->wchip_list[chip], tail);
+		if (!(DATAW(tail)->stale)) {
+			minioninfo->chip_status[chip].chipwork--;
 #if MINION_SHOW_IO
-				applog(IOCTRL_LOG, "COld chip %d cw-1=%u rw=%u qw=%u",
-						   chip,
-						   minioninfo->chip_status[chip].chipwork,
-						   minioninfo->chip_status[chip].realwork,
-						   minioninfo->chip_status[chip].quework);
-#endif
-/*
-				// If it had no valid work (only errors) then it won't have been cleaned up
-				errs = (DATAW(tail)->errors > 0);
-				applog(errs ? LOG_DEBUG : LOG_ERR,
-				applog(LOG_ERR,
-					"%s%i: discarded old task 0x%04x chip %d no reply errs=%d",
-					minioncgpu->drv->name, minioncgpu->device_id,
-					DATAW(tail)->task_id, chip, DATAW(tail)->errors);
-*/
-			}
-			K_WUNLOCK(minioninfo->wchip_list[chip]);
-			applog(MINION_LOG, "%s%i: marking complete - old task 0x%04x chip %d",
-					   minioncgpu->drv->name, minioncgpu->device_id,
-					   DATAW(tail)->task_id, chip);
-			if (DATAW(tail)->rolled)
-				free_work(DATAW(tail)->work);
-			else
-				work_completed(minioncgpu, DATAW(tail)->work);
-			K_WLOCK(minioninfo->wchip_list[chip]);
-			k_free_head(minioninfo->wfree_list, tail);
-			tail = minioninfo->wchip_list[chip]->tail;
-		}
-		if (no_nonce) {
-			k_unlink_item(minioninfo->wchip_list[chip], item);
-			if (!(DATAW(item)->stale)) {
-				minioninfo->chip_status[chip].chipwork--;
-#if MINION_SHOW_IO
-			applog(IOCTRL_LOG, "CONoN chip %d cw-1=%u rw=%u qw=%u",
+			applog(IOCTRL_LOG, "COld chip %d cw-1=%u rw=%u qw=%u",
 					   chip,
 					   minioninfo->chip_status[chip].chipwork,
 					   minioninfo->chip_status[chip].realwork,
 					   minioninfo->chip_status[chip].quework);
 #endif
-			}
-			K_WUNLOCK(minioninfo->wchip_list[chip]);
-			applog(MINION_LOG, "%s%i: marking complete - no_nonce task 0x%04x chip %d",
-					   minioncgpu->drv->name, minioncgpu->device_id,
-					   DATAW(item)->task_id, chip);
-			if (DATAW(item)->rolled)
-				free_work(DATAW(item)->work);
-			else
-				work_completed(minioncgpu, DATAW(item)->work);
-			K_WLOCK(minioninfo->wchip_list[chip]);
-			k_free_head(minioninfo->wfree_list, item);
+/*
+			// If it had no valid work (only errors) then it won't have been cleaned up
+			errs = (DATAW(tail)->errors > 0);
+			applog(errs ? LOG_DEBUG : LOG_ERR,
+			applog(LOG_ERR,
+				"%s%i: discarded old task 0x%04x chip %d no reply errs=%d",
+				minioncgpu->drv->name, minioncgpu->device_id,
+				DATAW(tail)->task_id, chip, DATAW(tail)->errors);
+*/
 		}
-		K_WUNLOCK(minioninfo->wchip_list[chip]);
+		applog(MINION_LOG, "%s%i: marking complete - old task 0x%04x chip %d",
+				   minioncgpu->drv->name, minioncgpu->device_id,
+				   DATAW(tail)->task_id, chip);
+		if (DATAW(tail)->rolled)
+			free_work(DATAW(tail)->work);
+		else
+			work_completed(minioncgpu, DATAW(tail)->work);
+		k_free_head(minioninfo->wfree_list, tail);
+		tail = minioninfo->wchip_list[chip]->tail;
+	}
+	if (no_nonce) {
+		if (!(DATAW(item)->stale)) {
+			minioninfo->chip_status[chip].chipwork--;
+#if MINION_SHOW_IO
+		applog(IOCTRL_LOG, "CONoN chip %d cw-1=%u rw=%u qw=%u",
+				   chip,
+				   minioninfo->chip_status[chip].chipwork,
+				   minioninfo->chip_status[chip].realwork,
+				   minioninfo->chip_status[chip].quework);
+#endif
+		}
+		applog(MINION_LOG, "%s%i: marking complete - no_nonce task 0x%04x chip %d",
+				   minioncgpu->drv->name, minioncgpu->device_id,
+				   DATAW(item)->task_id, chip);
+		if (DATAW(item)->rolled)
+			free_work(DATAW(item)->work);
+		else
+			work_completed(minioncgpu, DATAW(item)->work);
 	}
 }
 
@@ -3010,11 +3001,11 @@ static enum nonce_state oknonce(struct thr_info *thr, struct cgpu_info *minioncg
 
 	redo = false;
 retry:
-	K_RLOCK(minioninfo->wchip_list[chip]);
+	K_WLOCK(minioninfo->wchip_list[chip]);
 	item = minioninfo->wchip_list[chip]->tail;
 
 	if (!item) {
-		K_RUNLOCK(minioninfo->wchip_list[chip]);
+		K_WUNLOCK(minioninfo->wchip_list[chip]);
 		minioninfo->spi_errors++;
 		minioninfo->res_spi_errors[chip]++;
 		minioninfo->res_err_count[chip]++;
@@ -3036,8 +3027,9 @@ retry:
 		item = item->prev;
 	}
 	max_task_id = DATAW(minioninfo->wchip_list[chip]->head)->task_id;
-	K_RUNLOCK(minioninfo->wchip_list[chip]);
-
+	if (item)
+		k_unlink_item(minioninfo->wchip_list[chip], item);
+	K_WUNLOCK(minioninfo->wchip_list[chip]);
 
 	if (!item) {
 		if (another && task_id != task_id2) {
@@ -3064,7 +3056,10 @@ retry:
 		minioninfo->tasks_recovered[chip]++;
 
 	if (no_nonce) {
+		K_WLOCK(minioninfo->wchip_list[chip]);
 		cleanup_older(minioncgpu, chip, item, no_nonce);
+		k_free_head(minioninfo->wfree_list, item);
+		K_WUNLOCK(minioninfo->wchip_list[chip]);
 		return NONCE_NO_NONCE;
 	}
 
@@ -3098,8 +3093,11 @@ retest:
 		mutex_unlock(&(minioninfo->nonce_lock));
 		minioninfo->ok_nonces++;
 
+		K_WLOCK(minioninfo->wchip_list[chip]);
 		cleanup_older(minioncgpu, chip, item, no_nonce);
+		K_WUNLOCK(minioninfo->wchip_list[chip]);
 
+		// add to history and remove old history
 		int chip_tmp;
 		cgtime(&now);
 		K_WLOCK(minioninfo->hfree_list);
