@@ -91,11 +91,14 @@ struct knc_die {
 	struct knc_core_state *core;
 };
 
+#define MAX_SPI_SIZE		(65536)
+#define MAX_SPI_RESPONSES	(MAX_SPI_SIZE / (2 + 4 + 1 + 1 + 1 + 4))
+#define MAX_SPI_MESSAGE		(128)
+#define KNC_SPI_BUFFERS		(2)
 struct knc_state {
 	struct cgpu_info *cgpu;
 	void *ctx;
 	int generation;    /* work/block generation, incremented on each flush invalidating older works */
-	int channel[MAX_ASICS];
 	int dies;
 	struct knc_die die[MAX_ASICS*DIES_PER_ASIC];
 	int cores;
@@ -108,12 +111,85 @@ struct knc_state {
 	uint64_t errors;		/* Hardware & communication errors */
 	struct timeval next_error_interval;
 	/* End of statistics */
+	/* SPI communications thread */
+	pthread_mutex_t spi_qlock;	/* SPI queue status lock */
+	struct thr_info spi_thr;	/* SPI I/O thread */
+	pthread_cond_t spi_qcond;	/* SPI queue change wakeup */
+	struct knc_spi_buffer {
+		enum {
+			KNC_SPI_IDLE=0,
+			KNC_SPI_PENDING,
+			KNC_SPI_DONE
+		} state;
+		int size;
+		uint8_t txbuf[MAX_SPI_SIZE];
+		uint8_t rxbuf[MAX_SPI_SIZE];
+		int responses;
+		struct knc_spi_response {
+			int len;	/* 0 on Jupiter, no CRC check */
+			int response_length;
+			int coreid;
+			int type;
+			int data;
+			int offset;
+		} response_info[MAX_SPI_RESPONSES];
+	} spi_buffer[KNC_SPI_BUFFERS];
+	int send_buffer;
+	int read_buffer;
+	/* end SPI thread */
+	
+	/* Do not add anything below here!! core[] must be last */
 	struct knc_core_state core[];
 };
 
 int opt_knc_device_idx = 0;
 int opt_knc_device_bus = -1;
 char *knc_log_file = NULL;
+
+static void *knc_spi(void *thr_data)
+{
+	struct cgpu_info *cgpu = thr_data;
+	struct knc_state *knc = cgpu->device_data;
+	static int buffer = 0;
+	
+	pthread_mutex_lock(&knc->spi_qlock);
+	while (!cgpu->shutdown) {
+		while (knc->spi_buffer[buffer].state != KNC_SPI_PENDING && !cgpu->shutdown)
+			pthread_cond_wait(&knc->spi_qcond, &knc->spi_qlock);
+		pthread_mutex_unlock(&knc->spi_qlock);
+		if (cgpu->shutdown)
+			return NULL;
+
+		knc_trnsp_transfer(knc->ctx, knc->spi_buffer[buffer].txbuf, knc->spi_buffer[buffer].rxbuf, knc->spi_buffer[buffer].size);
+
+		pthread_mutex_lock(&knc->spi_qlock);
+		knc->spi_buffer[knc->send_buffer].state = KNC_SPI_DONE;
+		pthread_cond_signal(&knc->spi_qcond);
+		buffer += 1;
+		if (buffer >= KNC_SPI_BUFFERS)
+			buffer = 0;
+	}
+	pthread_mutex_unlock(&knc->spi_qlock);
+	return NULL;
+}
+
+static void knc_spi_flush(struct knc_state *knc)
+{
+	struct knc_spi_buffer *buffer = &knc->spi_buffer[knc->send_buffer];
+	if (buffer->state == KNC_SPI_IDLE && buffer->size > 0) {
+		pthread_mutex_lock(&knc->spi_qlock);
+		buffer->state = KNC_SPI_PENDING;
+		pthread_cond_signal(&knc->spi_qcond);
+		knc->send_buffer += 1;
+		if (knc->send_buffer >= KNC_SPI_BUFFERS)
+			knc->send_buffer = 0;
+		buffer = &knc->spi_buffer[knc->send_buffer];
+		/* Block for SPI to finish a transfer if all buffers are busy */
+		while (buffer->state == KNC_SPI_PENDING)
+			pthread_cond_wait(&knc->spi_qcond, &knc->spi_qlock);
+		pthread_mutex_unlock(&knc->spi_qlock);
+	}
+}
 
 static bool knc_detect_one(void *ctx)
 {
@@ -160,7 +236,6 @@ static bool knc_detect_one(void *ctx)
 	for (channel = 0; channel < MAX_ASICS; channel++) {
 		for (die = 0; die < DIES_PER_ASIC; die++) {
 			if (die_info[channel][die].cores) {
-				knc->channel[channel] = 1;
 				knc->die[dies].channel = channel;
 				knc->die[dies].die = die;
 				knc->die[dies].version = die_info[channel][die].version;
@@ -188,6 +263,16 @@ static bool knc_detect_one(void *ctx)
 
 	cgpu->device_data = knc;
 
+	pthread_mutex_init(&knc->spi_qlock, NULL);
+	pthread_cond_init(&knc->spi_qcond, NULL);
+	if (thr_info_create(&knc->spi_thr, NULL, knc_spi, (void *)cgpu)) {
+		applog(LOG_ERR, "%s%i: SPI thread create failed",
+			cgpu->drv->name, cgpu->device_id);
+		free(cgpu);
+		free(knc);
+		return false;
+	}
+	
 	add_cgpu(cgpu);
 
 	return true;
@@ -222,6 +307,7 @@ static int knc_core_disabled(struct knc_core_state *core)
 
 static int knc_core_next_slot(struct knc_core_state *core)
 {
+	/* Avoid lot #0 and #15. #0 is "no work assigned" and #15 is seen on bad cores */
 	int slot = core->last_slot + 1;
 	if (slot >= 15)
 		slot = 1;
@@ -308,7 +394,35 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 	return 0;
 }
 
-static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core, struct work *work, bool clean)
+static void knc_spi_process_responses(struct thr_info *thr)
+{
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct knc_state *knc = cgpu->device_data;
+	struct knc_spi_buffer *buffer = &knc->spi_buffer[knc->read_buffer];
+	while (buffer->state == KNC_SPI_DONE) {
+		int i;
+		for (i = 0; i < buffer->responses; i++) {
+			struct knc_spi_response *response_info = &buffer->response_info[i];
+			uint8_t *rxbuf = &buffer->rxbuf[response_info->offset];
+			struct knc_core_state *core = &knc->core[response_info->coreid];
+			int status = knc_verify_response(rxbuf, response_info->len, response_info->response_length);
+#if NOT_YET
+			if (status & KNC_ERR_MASK)
+				knc_core_response_error(core, response_info->len);
+#endif
+			knc_core_process_report(thr, core, rxbuf);
+		}
+
+		buffer->state = KNC_SPI_IDLE;
+		knc->read_buffer += 1;
+		if (knc->read_buffer >= KNC_SPI_BUFFERS)
+			knc->read_buffer = 0;
+		buffer = &knc->spi_buffer[knc->read_buffer];
+	}
+
+}
+
+static int knc_core_send_work(struct thr_info *thr, int coreid, struct knc_core_state *core, struct work *work, bool clean)
 {
 	struct knc_state *knc = core->die->knc;
 	struct cgpu_info *cgpu = knc->cgpu;
@@ -373,7 +487,7 @@ error:
 	return -1;
 }
 
-static int knc_core_get_report(struct thr_info *thr, struct knc_core_state *core)
+static int knc_core_get_report(struct thr_info *thr, int coreid, struct knc_core_state *core)
 {
 	struct knc_state *knc = core->die->knc;
 	struct cgpu_info *cgpu = knc->cgpu;
@@ -455,9 +569,9 @@ static int64_t knc_scanwork(struct thr_info *thr)
 		}
 		if (knc_core_need_work(core)) {
 			struct work *work = get_work(thr, thr->id);
-			knc_core_send_work(thr, core, work, clean);
+			knc_core_send_work(thr, i, core, work, clean);
 		} else {
-			knc_core_get_report(thr, core);
+			knc_core_get_report(thr, i, core);
 		}
 	}
 	if (knc->startup)
