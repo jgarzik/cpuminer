@@ -60,7 +60,7 @@ struct knc_core_state {
 	struct {
 		int slot;
 		struct work *work;
-	} workslot[WORKS_PER_CORE];
+	} workslot[WORKS_PER_CORE]; 	/* active, next */
 	struct {
 		int slot;
 		uint32_t nonce;
@@ -126,11 +126,14 @@ struct knc_state {
 		uint8_t rxbuf[MAX_SPI_SIZE];
 		int responses;
 		struct knc_spi_response {
-			int len;	/* 0 on Jupiter, no CRC check */
+			int request_length;
 			int response_length;
-			int coreid;
-			int type;
-			int data;
+			enum {
+				KNC_MESSAGE_UNKNOWN = 0,
+				KNC_MESSAGE_REPORT,
+				KNC_MESSAGE_INFO
+			} type;
+			uint32_t data;
 			int offset;
 		} response_info[MAX_SPI_RESPONSES];
 	} spi_buffer[KNC_SPI_BUFFERS];
@@ -175,8 +178,12 @@ static void *knc_spi(void *thr_data)
 	return NULL;
 }
 
-static void knc_spi_flush(struct knc_state *knc)
+static void knc_spi_process_responses(struct thr_info *thr);
+
+static void knc_spi_flush(struct thr_info *thr)
 {
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct knc_state *knc = cgpu->device_data;
 	struct knc_spi_buffer *buffer = &knc->spi_buffer[knc->send_buffer];
 	if (buffer->state == KNC_SPI_IDLE && buffer->size > 0) {
 		pthread_mutex_lock(&knc->spi_qlock);
@@ -191,6 +198,27 @@ static void knc_spi_flush(struct knc_state *knc)
 			pthread_cond_wait(&knc->spi_qcond, &knc->spi_qlock);
 		pthread_mutex_unlock(&knc->spi_qlock);
 	}
+        knc_spi_process_responses(thr);
+}
+
+static void knc_transfer(struct thr_info *thr, int channel, int request_length, uint8_t *request, int response_length, int response_type, uint32_t data)
+{
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct knc_state *knc = cgpu->device_data;
+	struct knc_spi_buffer *buffer = &knc->spi_buffer[knc->send_buffer];
+	/* FPGA control, request header, request body/response, CRC(4), ACK(1), EXTRA(3) */
+	int msglen = 2 + MAX(request_length, 4 + response_length ) + 4 + 1 + 3;
+	if (buffer->size + msglen > MAX_SPI_SIZE || buffer->responses >= MAX_SPI_RESPONSES) {
+		knc_spi_flush(thr);
+		buffer = &knc->spi_buffer[knc->send_buffer];
+	}
+	struct knc_spi_response *response_info = &buffer->response_info[buffer->responses];
+	buffer->responses++;
+	response_info->offset = buffer->size;
+	response_info->type = response_type;
+	response_info->request_length = request_length;
+	response_info->response_length = response_length;
+	buffer->size = knc_prepare_transfer(buffer->txbuf, buffer->size, MAX_SPI_SIZE, channel, request_length, request, response_length);
 }
 
 static bool knc_detect_one(void *ctx)
@@ -406,16 +434,21 @@ static void knc_spi_process_responses(struct thr_info *thr)
 		for (i = 0; i < buffer->responses; i++) {
 			struct knc_spi_response *response_info = &buffer->response_info[i];
 			uint8_t *rxbuf = &buffer->rxbuf[response_info->offset];
-			struct knc_core_state *core = &knc->core[response_info->coreid];
-			int status = knc_verify_response(rxbuf, response_info->len, response_info->response_length);
+			int status = knc_decode_response(rxbuf, response_info->request_length, &rxbuf, response_info->response_length);
+			switch(response_info->type) {
+			case KNC_MESSAGE_REPORT:
+				knc_core_process_report(thr, &knc->core[response_info->data], rxbuf);
+				break;
+			}
 #if NOT_YET
 			if (status & KNC_ERR_MASK)
 				knc_core_response_error(core, response_info->len);
 #endif
-			knc_core_process_report(thr, core, rxbuf);
 		}
 
 		buffer->state = KNC_SPI_IDLE;
+		buffer->responses = 0;
+		buffer->size = 0;
 		knc->read_buffer += 1;
 		if (knc->read_buffer >= KNC_SPI_BUFFERS)
 			knc->read_buffer = 0;
