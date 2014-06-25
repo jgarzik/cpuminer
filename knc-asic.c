@@ -50,6 +50,25 @@
 #define ASIC_VERSION_JUPITER            0xa001
 #define ASIC_VERSION_NEPTUNE            0xa002
 
+/* Control Commands
+ *
+ * SPI command on channel. 1-
+ *   1'b1 3'channel 12'msglen_in_bits SPI message data
+ * Sends the supplied message on selected SPI bus
+ *
+ * Communication test
+ *   16'h1 16'x
+ * Simple test of SPI communication
+ *
+ * LED control
+ *   4'h1 4'red 4'green 4'blue
+ * Sets led colour
+ *
+ * Clock frequency
+ *   4'h2 12'msglen_in_bits 4'channel 4'die 16'MHz 512'x
+ * Configures the hashing clock rate
+ */
+
 /* ASIC Command structure
  * command      8 bits
  * chip         8 bits
@@ -306,6 +325,7 @@ void knc_prepare_neptune_message(int request_length, const uint8_t *request, uin
 
 int knc_prepare_transfer(uint8_t *txbuf, int offset, int size, int channel, int request_length, const uint8_t *request, int response_length)
 {
+	/* FPGA control, request header, request body/response, CRC(4), ACK(1), EXTRA(3) */
         int msglen = MAX(request_length, 4 + response_length ) + 4 + 1 + 3;
         int len = 2 + msglen;
 	txbuf += offset;
@@ -321,7 +341,7 @@ int knc_prepare_transfer(uint8_t *txbuf, int offset, int size, int channel, int 
 	return len;
 }
 
-int knc_process_reply(uint8_t *rxbuf, int len, uint8_t *response, int response_length)
+int knc_verify_response(uint8_t *rxbuf, int len, int response_length)
 {
     int ret = 0;
     if (response_length > 0) {
@@ -331,7 +351,6 @@ int knc_process_reply(uint8_t *rxbuf, int len, uint8_t *response, int response_l
 	recv_crc = GET_ULONG_BE(rxbuf + 2 + 4, response_length);
 	if (crc != recv_crc)
                 ret |= KNC_ERR_CRC;
-	memcpy(response, rxbuf + 2 + 4, response_length);
     }
     uint8_t ack = rxbuf[len - 4]; /* 2 + MAX(4 + response_length, request_length) + 4; */
 
@@ -355,8 +374,10 @@ int knc_syncronous_transfer(void *ctx, int channel, int request_length, const ui
     knc_prepare_transfer(txbuf, 0, len, channel, request_length, request, response_length);
     knc_trnsp_transfer(ctx, txbuf, rxbuf, len);
 
-    return knc_process_reply(rxbuf, len, response, response_length);
+    if (response_length > 0)
+	memcpy(response, rxbuf + 2 + 4, response_length);
 
+    return knc_verify_response(rxbuf, len, response_length);
 }
 
 int knc_detect_die(void *ctx, int channel, int die, struct knc_die_info *die_info)

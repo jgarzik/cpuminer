@@ -25,7 +25,10 @@ void knc_prepare_neptune_message(int request_length, const uint8_t *request, uin
 #define KNC_ERR_CRC     (1<<1)
 #define KNC_ERR_ACK     (1<<2)
 #define KNC_ERR_CRCACK  (1<<3)
+#define KNC_ERR_MASK	(~(KNC_ACCEPTED))
 
+int knc_prepare_transfer(uint8_t *txbuf, int offset, int size, int channel, int request_length, const uint8_t *request, int response_length);
+int knc_verify_response(uint8_t *rxbuf, int len, int response_length);
 int knc_syncronous_transfer(void *ctx, int channel, int request_length, const uint8_t *request, int response_length, uint8_t *response);
 
 int knc_detect_die(void *ctx, int channel, int die, struct knc_die_info *die_info);
