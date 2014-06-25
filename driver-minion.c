@@ -58,7 +58,6 @@ static bool usepins = false;
 #define BCM2835_GPIO_FSEL_OUTPUT 0b001
 #define BCM2835_GPIO_FSEL_MASK   0b111
 
-
 #define BCM2835_PIN_HIGH 0x1
 #define BCM2835_PIN_LOW 0x0
 
@@ -217,7 +216,7 @@ static struct minion_select_pins {
 				RSTN_CTL_SPI_SW_RSTN | \
 				RSTN_CTL_SHA_MGR_RESET)
 
-// LP
+// Block change
 #define SYS_RSTN_CTL_FLUSH (RSTN_CTL_RESET_CORES | \
 				RSTN_CTL_SPI_SW_RSTN | \
 				RSTN_CTL_FLUSH_CMD_QUEUE)
@@ -367,7 +366,7 @@ static uint32_t minion_freq[] = {
 	0x210074	// 14 = 1400Mhz
 };
 
-#define MINION_RESET_PERCENT 50.0
+#define MINION_RESET_PERCENT 75.0
 
 #define STA_TEMP(_sta) ((uint16_t)((_sta)[3] & 0x1f))
 #define STA_CORES(_sta) ((uint16_t)((_sta)[2]))
