@@ -221,6 +221,7 @@ static void knc_transfer(struct thr_info *thr, int channel, int request_length, 
 	response_info->type = response_type;
 	response_info->request_length = request_length;
 	response_info->response_length = response_length;
+	response_info->data = data;
 	buffer->size = knc_prepare_transfer(buffer->txbuf, buffer->size, MAX_SPI_SIZE, channel, request_length, request, response_length);
 }
 
