@@ -62,10 +62,7 @@ struct knc_core_state {
 		int slot;
 		struct work *work;
 	} workslot[WORKS_PER_CORE]; 	/* active, next */
-	struct {
-		int slot;
-		uint32_t nonce;
-	} seen_nonces[5];
+	struct knc_report report;
 	struct {
 		int slot;
 		uint32_t nonce;
@@ -390,31 +387,23 @@ static int knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *co
 	}
 }
 
-static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *core, uint8_t *report)
+static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *core, uint8_t *response)
 {
-	int n_nonces = core->die->version == KNC_VERSION_NEPTUNE ? 5 : 1;
-	struct {
-		int slot;
-		uint32_t nonce;
-	} nonces[5];
+	struct knc_report *report = &core->report;
+	knc_decode_report(response, report, core->die->version);
+
 	int n;
-	for (n = 0; n < n_nonces; n++) {
-		int slot = report[1+1+0+(1+4)*n]&0x0f;
-		uint32_t nonce = report[1+1+1+(1+4)*n] << 24 |
-				report[1+1+2+(1+4)*n] << 16 |
-				report[1+1+3+(1+4)*n] << 8 |
-				report[1+1+4+(1+4)*n] << 0;
-		if (core->last_nonce.slot == slot && core->last_nonce.nonce == nonce)
+	for (n = 0; n < KNC_NONCES_PER_REPORT; n++) {
+		if (report->nonce[n].slot < 0)
 			break;
-		nonces[n].slot = slot;
-		nonces[n].nonce = nonce;
+		if (core->last_nonce.slot == report->nonce[n].slot && core->last_nonce.nonce == report->nonce[n].nonce)
+			break;
 	}
 	while(n-- > 0) {
-		knc_core_handle_nonce(thr, core, nonces[n].slot, nonces[n].nonce);
+		knc_core_handle_nonce(thr, core, report->nonce[n].slot, report->nonce[n].nonce);
 	}
 
-	int active_slot = report[2] >> 4;
-	if (active_slot && core->workslot[1].slot == active_slot) {
+	if (report->active_slot && core->workslot[1].slot == report->active_slot) {
 		/* Core switched to next work */
 		if (core->workslot[0].work) {
 			core->die->knc->completed++;
