@@ -181,9 +181,9 @@ static void *knc_spi(void *thr_data)
 	return NULL;
 }
 
-static void knc_spi_process_responses(struct thr_info *thr);
+static void knc_process_responses(struct thr_info *thr);
 
-static void knc_spi_flush(struct thr_info *thr)
+static void knc_flush(struct thr_info *thr)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct knc_state *knc = cgpu->device_data;
@@ -201,7 +201,7 @@ static void knc_spi_flush(struct thr_info *thr)
 			pthread_cond_wait(&knc->spi_qcond, &knc->spi_qlock);
 		pthread_mutex_unlock(&knc->spi_qlock);
 	}
-        knc_spi_process_responses(thr);
+        knc_process_responses(thr);
 }
 
 static void knc_transfer(struct thr_info *thr, int channel, int request_length, uint8_t *request, int response_length, int response_type, uint32_t data)
@@ -212,7 +212,7 @@ static void knc_transfer(struct thr_info *thr, int channel, int request_length, 
 	/* FPGA control, request header, request body/response, CRC(4), ACK(1), EXTRA(3) */
 	int msglen = 2 + MAX(request_length, 4 + response_length ) + 4 + 1 + 3;
 	if (buffer->size + msglen > MAX_SPI_SIZE || buffer->responses >= MAX_SPI_RESPONSES) {
-		knc_spi_flush(thr);
+		knc_flush(thr);
 		buffer = &knc->spi_buffer[knc->send_buffer];
 	}
 	struct knc_spi_response *response_info = &buffer->response_info[buffer->responses];
@@ -428,7 +428,7 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 	return 0;
 }
 
-static void knc_spi_process_responses(struct thr_info *thr)
+static void knc_process_responses(struct thr_info *thr)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct knc_state *knc = cgpu->device_data;
@@ -566,6 +566,8 @@ static int64_t knc_scanwork(struct thr_info *thr)
 
 	int i;
 
+        knc_process_responses(thr);
+
 	if (timercmp(&knc->next_error_interval, &now, >)) {
 		/* Reset hw error limiter every check interval */
 		timeradd(&now, &core_check_interval, &knc->next_error_interval);
@@ -607,6 +609,8 @@ static int64_t knc_scanwork(struct thr_info *thr)
 
 	if (knc->scan_adjust_core < knc->cores)
 		knc->scan_adjust_core++;
+
+	knc_flush(thr);
 
 	return (int64_t)(knc->KNC_COUNT_UNIT - last_count) * 0x100000000UL;
 }
