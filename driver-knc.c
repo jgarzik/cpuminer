@@ -56,6 +56,7 @@ struct knc_die;
 struct knc_core_state {
 	int generation;
 	int core;
+	int coreid;
 	struct knc_die *die;
 	struct {
 		int slot;
@@ -129,9 +130,11 @@ struct knc_state {
 			int request_length;
 			int response_length;
 			enum {
-				KNC_MESSAGE_UNKNOWN = 0,
-				KNC_MESSAGE_REPORT,
-				KNC_MESSAGE_INFO
+				KNC_UNKNOWN = 0,
+				KNC_NO_RESPONSE,
+				KNC_SETWORK,
+				KNC_REPORT,
+				KNC_INFO
 			} type;
 			uint32_t data;
 			int offset;
@@ -279,10 +282,11 @@ static bool knc_detect_one(void *ctx)
 				cores += knc->die[dies].cores;
 				pcore += knc->die[dies].cores;
 				dies++;
-				
 			}
 		}
 	}
+	for (core = 0; core < cores; core++)
+		knc->core[core].coreid = core;
 	knc->dies = dies;
 	knc->cores = cores;
 	knc->startup = 2;
@@ -436,7 +440,8 @@ static void knc_spi_process_responses(struct thr_info *thr)
 			uint8_t *rxbuf = &buffer->rxbuf[response_info->offset];
 			int status = knc_decode_response(rxbuf, response_info->request_length, &rxbuf, response_info->response_length);
 			switch(response_info->type) {
-			case KNC_MESSAGE_REPORT:
+			case KNC_REPORT:
+			case KNC_SETWORK:
 				knc_core_process_report(thr, &knc->core[response_info->data], rxbuf);
 				break;
 			}
@@ -457,7 +462,7 @@ static void knc_spi_process_responses(struct thr_info *thr)
 
 }
 
-static int knc_core_send_work(struct thr_info *thr, int coreid, struct knc_core_state *core, struct work *work, bool clean)
+static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core, struct work *work, bool clean)
 {
 	struct knc_state *knc = core->die->knc;
 	struct cgpu_info *cgpu = knc->cgpu;
@@ -465,7 +470,6 @@ static int knc_core_send_work(struct thr_info *thr, int coreid, struct knc_core_
 	uint8_t request[request_length];
 	int response_length = 1 + 1 + (1 + 4) * 5;
 	uint8_t response[response_length];
-	int status;
 
 	int slot = knc_core_next_slot(core);
 	if (slot < 0)
@@ -480,20 +484,15 @@ static int knc_core_send_work(struct thr_info *thr, int coreid, struct knc_core_
 		if (clean) {
 			/* Double halt to get rid of any previous queued work */
 			request_length = knc_prepare_jupiter_halt(request, core->die->die, core->core);
-			knc_syncronous_transfer(knc->ctx, core->die->channel, request_length, request, 0, NULL);
-			knc_syncronous_transfer(knc->ctx, core->die->channel, request_length, request, 0, NULL);
+			knc_transfer(thr, core->die->channel, request_length, request, 0, KNC_NO_RESPONSE, 0);
+			knc_transfer(thr, core->die->channel, request_length, request, 0, KNC_NO_RESPONSE, 0);
 		}
 		request_length = knc_prepare_jupiter_setwork(request, core->die->die, core->core, slot, work);
-		knc_syncronous_transfer(knc->ctx, core->die->channel, request_length, request, 0, NULL);
+		knc_transfer(thr, core->die->channel, request_length, request, 0, KNC_NO_RESPONSE, 0);
 		break;
 	case KNC_VERSION_NEPTUNE:
 		request_length = knc_prepare_neptune_setwork(request, core->die->die, core->core, slot, work, clean);
-		status = knc_syncronous_transfer(knc->ctx, core->die->channel, request_length, request, response_length, response);
-		if (status != KNC_ACCEPTED) {
-			applog(LOG_INFO, "KnC: Communication error %x", status);
-			goto error;
-		}
-		knc_core_process_report(thr, core, response);
+		knc_transfer(thr, core->die->channel, request_length, request, response_length, KNC_SETWORK, core->coreid);
 		break;
 	default:
 		goto error;
@@ -522,7 +521,7 @@ error:
 	return -1;
 }
 
-static int knc_core_get_report(struct thr_info *thr, int coreid, struct knc_core_state *core)
+static int knc_core_request_report(struct thr_info *thr, struct knc_core_state *core)
 {
 	struct knc_state *knc = core->die->knc;
 	struct cgpu_info *cgpu = knc->cgpu;
@@ -530,21 +529,15 @@ static int knc_core_get_report(struct thr_info *thr, int coreid, struct knc_core
 	uint8_t request[request_length];
 	int response_length = 1 + 1 + (1 + 4) * 5;
 	uint8_t response[response_length];
-	int status;
 
 	request_length = knc_prepare_report(request, core->die->die, core->core);
 
 	switch(core->die->version) {
 	case KNC_VERSION_JUPITER:
 		response_length = 1 + 1 + (1 + 4);
-		knc_syncronous_transfer(knc->ctx, core->die->channel, request_length, request, response_length, response);
-		knc_core_process_report(thr, core, response);
-		return 0;
+		knc_transfer(thr, core->die->channel, request_length, request, response_length, KNC_REPORT, core->coreid); return 0;
 	case KNC_VERSION_NEPTUNE:
-		status = knc_syncronous_transfer(knc->ctx, core->die->channel, request_length, request, response_length, response);
-		if (status != 0)
-		    break;
-		knc_core_process_report(thr, core, response);
+		knc_transfer(thr, core->die->channel, request_length, request, response_length, KNC_REPORT, core->coreid);
 		return 0;
 	}
 
@@ -604,9 +597,9 @@ static int64_t knc_scanwork(struct thr_info *thr)
 		}
 		if (knc_core_need_work(core)) {
 			struct work *work = get_work(thr, thr->id);
-			knc_core_send_work(thr, i, core, work, clean);
+			knc_core_send_work(thr, core, work, clean);
 		} else {
-			knc_core_get_report(thr, i, core);
+			knc_core_request_report(thr, core);
 		}
 	}
 	if (knc->startup)
