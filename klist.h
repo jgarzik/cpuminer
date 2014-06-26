@@ -76,6 +76,10 @@ extern void _k_add_head(K_LIST *list, K_ITEM *item, KLIST_FFL_ARGS);
 #define k_free_head(__list, __item) _k_add_head(__list, __item, KLIST_FFL_HERE)
 extern void _k_add_tail(K_LIST *list, K_ITEM *item, KLIST_FFL_ARGS);
 #define k_add_tail(_list, _item) _k_add_tail(_list, _item, KLIST_FFL_HERE)
+extern void _k_insert_before(K_LIST *list, K_ITEM *item, K_ITEM *before, KLIST_FFL_ARGS);
+#define k_insert_before(_list, _item, _before) _k_insert_before(_list, _item, _before, KLIST_FFL_HERE)
+extern void _k_insert_after(K_LIST *list, K_ITEM *item, K_ITEM *after, KLIST_FFL_ARGS);
+#define k_insert_after(_list, _item, _after) _k_insert_after(_list, _item, _after, KLIST_FFL_HERE)
 extern void _k_unlink_item(K_LIST *list, K_ITEM *item, KLIST_FFL_ARGS);
 #define k_unlink_item(_list, _item) _k_unlink_item(_list, _item, KLIST_FFL_HERE)
 void _k_list_transfer_to_head(K_LIST *from, K_LIST *to, KLIST_FFL_ARGS);
