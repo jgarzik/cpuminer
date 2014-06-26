@@ -3097,6 +3097,7 @@ retry:
 	redo = false;
 retest:
 	if (test_nonce(DATAW(item)->work, nonce)) {
+/*
 		if (isdupnonce(minioncgpu, DATAW(item)->work, nonce)) {
 			minioninfo->chip_dup[chip]++;
 			applog(LOG_WARNING, " ... nonce %02x%02x%02x%02x chip %d core %d task 0x%04x",
@@ -3108,7 +3109,7 @@ retest:
 			K_WUNLOCK(minioninfo->wchip_list[chip]);
 			return NONCE_DUP_NONCE;
 		}
-
+*/
 //applog(MINTASK_LOG, "%s%i: Valid Nonce chip %d core %d task 0x%04x nonce 0x%08x", minioncgpu->drv->name, minioncgpu->device_id, chip, core, task_id, nonce);
 //
 		submit_tested_work(thr, DATAW(item)->work);
