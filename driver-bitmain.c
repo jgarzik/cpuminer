@@ -921,7 +921,7 @@ static int bitmain_parse_rxnonce(const uint8_t * data, int datalen, struct bitma
 static int bitmain_read(struct cgpu_info *bitmain, unsigned char *buf,
 		       size_t bufsize, int timeout, int ep)
 {
-	struct bitmain_info *info = bitmain->device_data;
+	__maybe_unused struct bitmain_info *info = bitmain->device_data;
 	int readlen = 0, err = 0;
 
 	if (bitmain == NULL || buf == NULL || bufsize <= 0) {
@@ -936,16 +936,18 @@ static int bitmain_read(struct cgpu_info *bitmain, unsigned char *buf,
 		applog(LOG_DEBUG, "%s%i: Get %s() got readlen %d err %d",
 				  bitmain->drv->name, bitmain->device_id,
 				  __func__, readlen, err);
-	} else
+	}
+#ifdef USE_ANT_S2
+	else
 		readlen = read(info->device_fd, buf, bufsize);
-
+#endif
 	return readlen;
 }
 
 static int bitmain_write(struct cgpu_info *bitmain, char *buf, ssize_t len, int ep)
 {
-	struct bitmain_info *info = bitmain->device_data;
-	int err, amount, sent;
+	__maybe_unused struct bitmain_info *info = bitmain->device_data;
+	int err, amount, __maybe_unused sent;
 
 	if (is_usb) {
 		err = usb_write(bitmain, buf, len, &amount, ep);
@@ -964,7 +966,9 @@ static int bitmain_write(struct cgpu_info *bitmain, char *buf, ssize_t len, int 
 					amount, (int)len);
 			return BTM_SEND_ERROR;
 		}
-	} else {
+	}
+#ifdef USE_ANT_S2
+	else {
 		sent = 0;
 
 		while (sent < len) {
@@ -977,7 +981,7 @@ static int bitmain_write(struct cgpu_info *bitmain, char *buf, ssize_t len, int 
 			sent += amount;
 		}
 	}
-
+#endif
 	return BTM_SEND_OK;
 }
 
@@ -1316,8 +1320,8 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 						applog(LOG_ERR, "%s%d: %s() Work not found for id (%"PRIu32")"
 								" (min=%"PRIu32" max=%"PRIu32" count=%d)",
 								bitmain->drv->name, bitmain->device_id,
-								__func__, rxnoncedata.nonces[j].work_id.
-								min, max);
+								__func__, rxnoncedata.nonces[j].work_id,
+								min, max, count);
 					}
 				}
 				mutex_lock(&info->qlock);
