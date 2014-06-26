@@ -1,5 +1,5 @@
 /*
- * cgminer driver for KnCminer Neptune devices
+ * library for KnCminer devices
  *
  * Copyright 2014 KnCminer
  *
@@ -83,7 +83,12 @@
  *
  * cores        16 bits
  * version      16 bits
- * reserved     64 bits         (Neptune)
+ * reserved     60 bits         (Neptune)
+ * die_status    4 bits		(Neptune)
+ *               1' pll_locked
+ *               1' hash_reset_n	1 if cores have been reset since last report
+ *               1' pll_reset_n		1 if PLL have been reset since last report
+ *               1' pll_power_down
  * core_status  cores * 2 bits  (Neptune) rounded up to bytes
  *                              1' want_work 
  *				1' has_report (unreliable)
@@ -387,6 +392,10 @@ int knc_decode_info(uint8_t *response, struct knc_die_info *die_info)
 		die_info->version = KNC_VERSION_JUPITER;
 		die_info->cores = cores_in_die;
 		memset(die_info->want_work, -1, cores_in_die);
+		die_info->pll_power_down = -1;
+		die_info->pll_reset_n = -1;
+		die_info->hash_reset_n = -1;
+		die_info->pll_locked = -1;
 		return 0;
 	} else if (version == KNC_ASIC_VERSION_NEPTUNE && cores_in_die <= KNC_MAX_CORES_PER_DIE) {
 		die_info->version = KNC_VERSION_NEPTUNE;
@@ -394,10 +403,59 @@ int knc_decode_info(uint8_t *response, struct knc_die_info *die_info)
 		int core;
 		for (core = 0; core < cores_in_die; core++)
 			die_info->want_work[core] = ((response[12 + core/4] >> ((3-(core % 4)) * 2)) >> 1) & 1;
+		int die_status = response[11] & 0xf;
+		die_info->pll_power_down = (die_status >> 0) & 1;
+		die_info->pll_reset_n = (die_status >> 1) & 1;
+		die_info->hash_reset_n = (die_status >> 2) & 1;
+		die_info->pll_locked = (die_status >> 3) & 1;
 		return 0;
 	} else {
 		return -1;
 	}
+}
+
+int knc_decode_report(uint8_t *response, struct knc_report *report, int version)
+{
+/*
+ * reserved     2 bits
+ * next_state   1 bit   next work state loaded
+ * state        1 bit   hashing  (0 on Jupiter)
+ * next_slot    4 bit   slot id of next work state (0 on Jupiter)
+ * progress     8 bits  upper 8 bits of nonce counter
+ * active_slot  4 bits  slot id of current work state
+ * nonce_slot   4 bits  slot id of found nonce
+ * nonce        32 bits
+ * 
+ * reserved     4 bits
+ * nonce_slot   4 bits
+ * nonce        32 bits
+ */
+	report->next_state = (response[0] >> 6) & 1;
+	if (version != KNC_VERSION_JUPITER) {
+		report->state = (response[0] >> 5) & 1;
+		report->next_slot = response[0] & ((1<<4)-1);
+	} else {
+		report->state = -1;
+		report->next_slot = -1;
+	}
+	report->progress = (uint32_t)response[1] << 24;
+	report->active_slot = (response[2] >> 4) & ((1<<4)-1);
+	int n;
+	int n_nonces = version == KNC_VERSION_JUPITER ? 1 : 5;
+	for (n = 0; n < n_nonces; n++) {
+		report->nonce[n].slot = response[2+n*5] & ((1<<4)-1);
+		report->nonce[n].nonce =
+				(uint32_t)response[3+n*5] << 24 |
+				(uint32_t)response[4+n*5] << 16 |
+				(uint32_t)response[5+n*5] << 8 |
+				(uint32_t)response[6+n*5] << 0 |
+				0;
+	}
+	for (; n < KNC_NONCES_PER_REPORT; n++) {
+		report->nonce[n].slot = -1;
+		report->nonce[n].nonce = 0;
+	}
+	return 0;
 }
 
 int knc_detect_die(void *ctx, int channel, int die, struct knc_die_info *die_info)

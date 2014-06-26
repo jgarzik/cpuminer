@@ -33,6 +33,24 @@ struct knc_die_info {
 	} version;
 	char want_work[KNC_MAX_CORES_PER_DIE];
 	int cores;
+	int pll_locked;
+	int hash_reset_n;
+	int pll_reset_n;
+	int pll_power_down;
+};
+
+#define KNC_NONCES_PER_REPORT 5
+
+struct knc_report {
+	int next_state;
+	int state;
+	int next_slot;
+	int active_slot;
+	uint32_t progress;
+	struct {
+		int slot;
+		uint32_t nonce;
+	} nonce[KNC_NONCES_PER_REPORT];
 };
 
 int knc_prepare_report(uint8_t *request, int die, int core);
@@ -42,6 +60,7 @@ int knc_prepare_jupiter_halt(uint8_t *request, int die, int core);
 int knc_prepare_neptune_halt(uint8_t *request, int die, int core);
 
 int knc_decode_info(uint8_t *response, struct knc_die_info *die_info);
+int knc_decode_report(uint8_t *response, struct knc_report *report, int version);
 
 void knc_prepare_neptune_message(int request_length, const uint8_t *request, uint8_t *buffer);
 
