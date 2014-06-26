@@ -92,7 +92,7 @@ struct knc_die {
 	struct knc_core_state *core;
 };
 
-#define MAX_SPI_SIZE		(65536)
+#define MAX_SPI_SIZE		(4096)
 #define MAX_SPI_RESPONSES	(MAX_SPI_SIZE / (2 + 4 + 1 + 1 + 1 + 4))
 #define MAX_SPI_MESSAGE		(128)
 #define KNC_SPI_BUFFERS		(2)
