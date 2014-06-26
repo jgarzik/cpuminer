@@ -29,7 +29,7 @@
 #define MAX_ASICS               6
 #define DIES_PER_ASIC           4
 #define MAX_CORES_PER_DIE       360
-#define WORKS_PER_CORE          2
+#define WORKS_PER_CORE          3
 
 #define CORE_ERROR_LIMIT	30
 #define CORE_ERROR_INTERVAL	30
@@ -137,6 +137,7 @@ struct knc_state {
 				KNC_INFO
 			} type;
 			uint32_t data;
+			uint32_t data2;
 			int offset;
 		} response_info[MAX_SPI_RESPONSES];
 	} spi_buffer[KNC_SPI_BUFFERS];
@@ -204,7 +205,7 @@ static void knc_flush(struct thr_info *thr)
         knc_process_responses(thr);
 }
 
-static void knc_transfer(struct thr_info *thr, int channel, int request_length, uint8_t *request, int response_length, int response_type, uint32_t data)
+static void knc_transfer(struct thr_info *thr, int channel, int request_length, uint8_t *request, int response_length, int response_type, uint32_t data, uint32_t data2)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct knc_state *knc = cgpu->device_data;
@@ -332,7 +333,7 @@ static int knc_core_hold_work(struct knc_core_state *core)
 
 static int knc_core_need_work(struct knc_core_state *core)
 {
-	return !knc_core_hold_work(core) && !core->workslot[1].work;
+	return !knc_core_hold_work(core) && !core->workslot[1].work && !core->workslot[2].work;
 }
 
 static int knc_core_disabled(struct knc_core_state *core)
@@ -485,15 +486,15 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 		if (clean) {
 			/* Double halt to get rid of any previous queued work */
 			request_length = knc_prepare_jupiter_halt(request, core->die->die, core->core);
-			knc_transfer(thr, core->die->channel, request_length, request, 0, KNC_NO_RESPONSE, 0);
-			knc_transfer(thr, core->die->channel, request_length, request, 0, KNC_NO_RESPONSE, 0);
+			knc_transfer(thr, core->die->channel, request_length, request, 0, KNC_NO_RESPONSE, 0, 0);
+			knc_transfer(thr, core->die->channel, request_length, request, 0, KNC_NO_RESPONSE, 0, 0);
 		}
 		request_length = knc_prepare_jupiter_setwork(request, core->die->die, core->core, slot, work);
-		knc_transfer(thr, core->die->channel, request_length, request, 0, KNC_NO_RESPONSE, 0);
+		knc_transfer(thr, core->die->channel, request_length, request, 0, KNC_NO_RESPONSE, 0, 0);
 		break;
 	case KNC_VERSION_NEPTUNE:
 		request_length = knc_prepare_neptune_setwork(request, core->die->die, core->core, slot, work, clean);
-		knc_transfer(thr, core->die->channel, request_length, request, response_length, KNC_SETWORK, core->coreid);
+		knc_transfer(thr, core->die->channel, request_length, request, response_length, KNC_SETWORK, core->coreid, slot);
 		break;
 	default:
 		goto error;
@@ -536,9 +537,9 @@ static int knc_core_request_report(struct thr_info *thr, struct knc_core_state *
 	switch(core->die->version) {
 	case KNC_VERSION_JUPITER:
 		response_length = 1 + 1 + (1 + 4);
-		knc_transfer(thr, core->die->channel, request_length, request, response_length, KNC_REPORT, core->coreid); return 0;
+		knc_transfer(thr, core->die->channel, request_length, request, response_length, KNC_REPORT, core->coreid, 0); return 0;
 	case KNC_VERSION_NEPTUNE:
-		knc_transfer(thr, core->die->channel, request_length, request, response_length, KNC_REPORT, core->coreid);
+		knc_transfer(thr, core->die->channel, request_length, request, response_length, KNC_REPORT, core->coreid, 0);
 		return 0;
 	}
 
