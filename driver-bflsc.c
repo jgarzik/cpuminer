@@ -1676,7 +1676,7 @@ out:
 static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 {
 	int created, queued = 0, create, i, offset;
-	struct work *base_work, *work, **works[20];
+	struct work *base_work, *work, *works[10];
 	char *buf, *field, *ptr;
 	bool sent, ret = false;
 	uint16_t *streamlen;
@@ -1687,7 +1687,7 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 			  2 + // StreamLength
 			  1 + // Signature
 			  1 + // JobsInArray
-			  JP_ARRAYSIZE * 20 +// Array of up to 20 Job Structs
+			  JP_ARRAYSIZE * 10 +// Array of up to 10 Job Structs
 			  1 // EndOfWrapper
 			  );
 
@@ -1699,16 +1699,16 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 		return ret;
 	created = 1;
 
-	create = 19;
+	create = 9;
 	if (base_work->drv_rolllimit < create)
 		create = base_work->drv_rolllimit;
 
-	*works[0] = base_work;
+	works[0] = base_work;
 	for (i = 1; i <= create ; i++) {
 		created++;
 		work = make_clone(base_work);
 		roll_work(base_work);
-		*works[i] = work;
+		works[i] = work;
 	}
 
 	memcpy(job_pack, "WX", 2);
@@ -1716,11 +1716,11 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 	*streamlen = created * JP_ARRAYSIZE + 7;
 	job_pack[JP_SIGNATURE] = 0xc1;
 	job_pack[JP_JOBSINARRY] = created;
-	offset = JP_JOBSARRY + i * JP_ARRAYSIZE;
+	offset = JP_JOBSARRY;
 
 	/* Create the maximum number of work items we can queue by nrolling one */
 	for (i = 0; i < created; i++) {
-		work = *works[i];
+		work = works[i];
 		memcpy(job_pack + offset, work->midstate, MIDSTATE_BYTES);
 		offset += MIDSTATE_BYTES;
 		memcpy(job_pack + offset, work->data + MERKLE_OFFSET, MERKLE_BYTES);
@@ -1748,12 +1748,13 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 		goto out;
 	}
 
+	ptr = alloca(strlen(buf));
 	if (sscanf(buf, "OK:QUEUED %d:%s", &queued, ptr) != 2) {
 		applog(LOG_WARNING, "%s%d: Failed to parse queue response %s",
 		       bflsc->drv->name, bflsc->device_id, buf);
 		goto out;
 	}
-	if (queued < 1 || queued > 20) {
+	if (queued < 1 || queued > 10) {
 		applog(LOG_WARNING, "%s%d: Invalid queued count %d",
 		       bflsc->drv->name, bflsc->device_id, queued);
 		queued = 0;
@@ -1762,7 +1763,7 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 	for (i = 0; i < queued; i++) {
 		unsigned int uid;
 
-		work = *works[i];
+		work = works[i];
 		field = strsep(&ptr, ",");
 		if (!field) {
 			applog(LOG_WARNING, "%s%d: Ran out of queued IDs after %d of %d",
@@ -1779,7 +1780,7 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 		ret = true;
 out:
 	for (i = queued; i < created; i++) {
-		work = *works[i];
+		work = works[i];
 		if (!i)
 			work_completed(bflsc, work);
 		else
