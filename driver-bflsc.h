@@ -319,15 +319,18 @@ struct SaveString {
 #define BAL_WORK_TIME 143.17
 // 4.5GH/s Jalapeno
 #define BAJ_WORK_TIME 954.44
+#define BMA_WORK_TIME 35 // ???
 
 // Defaults (slightly over half the work time) but ensure none are above 100
 // SCAN_TIME - delay after sending work
 // RES_TIME - delay between checking for results
 #define BAM_SCAN_TIME 20
+#define BMA_SCAN_TIME 50
 #define BAS_SCAN_TIME 360
 #define BAL_SCAN_TIME 720
 #define BAJ_SCAN_TIME 1000
 #define BFLSC_RES_TIME 100
+#define BMA_RES_TIME 50
 #define BFLSC_MAX_SLEEP 2000
 
 #define BAJ_LATENCY LATENCY_STD

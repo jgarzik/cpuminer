@@ -865,8 +865,12 @@ reinit:
 		}
 	}
 
-	if (usb_ident(bflsc) == IDENT_BMA)
+	if (usb_ident(bflsc) == IDENT_BMA) {
 		bflsc->drv->queue_full = &bflsc28_queue_full;
+		sc_info->scan_sleep_time = BMA_SCAN_TIME;
+		sc_info->default_ms_work = BMA_WORK_TIME;
+		sc_info->results_sleep_time = BMA_RES_TIME;
+	}
 
 	if (latency != bflsc->usbdev->found->latency) {
 		bflsc->usbdev->found->latency = latency;
