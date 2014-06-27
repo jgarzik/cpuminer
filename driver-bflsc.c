@@ -759,7 +759,7 @@ reinit:
 	}
 	buf[amount] = '\0';
 
-	if (unlikely(!strstr(buf, BFLSC_BFLSC))) {
+	if (unlikely(!strstr(buf, BFLSC_BFLSC) && !strstr(buf, BFLSC_BFLSC28))) {
 		applog(LOG_DEBUG, "%s detect (%s) found an FPGA '%s' ignoring",
 			bflsc->drv->dname, bflsc->device_path, buf);
 		goto unshin;

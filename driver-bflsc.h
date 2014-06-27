@@ -247,6 +247,7 @@ struct SaveString {
 // Replies
 #define BFLSC_IDENTITY "BitFORCE SC"
 #define BFLSC_BFLSC "SHA256 SC"
+#define BFLSC_BFLSC28 "SC-28nm"
 
 #define BFLSC_OK "OK\n"
 #define BFLSC_OK_LEN (sizeof(BFLSC_OK)-1)
