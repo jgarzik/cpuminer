@@ -133,8 +133,8 @@ struct knc_state {
 				KNC_REPORT,
 				KNC_INFO
 			} type;
+			struct knc_core_state *core;
 			uint32_t data;
-			uint32_t data2;
 			int offset;
 		} response_info[MAX_SPI_RESPONSES];
 	} spi_buffer[KNC_SPI_BUFFERS];
@@ -202,7 +202,7 @@ static void knc_flush(struct thr_info *thr)
         knc_process_responses(thr);
 }
 
-static void knc_transfer(struct thr_info *thr, int channel, int request_length, uint8_t *request, int response_length, int response_type, uint32_t data, uint32_t data2)
+static void knc_transfer(struct thr_info *thr, struct knc_core_state *core, int request_length, uint8_t *request, int response_length, int response_type, uint32_t data)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct knc_state *knc = cgpu->device_data;
@@ -219,8 +219,9 @@ static void knc_transfer(struct thr_info *thr, int channel, int request_length, 
 	response_info->type = response_type;
 	response_info->request_length = request_length;
 	response_info->response_length = response_length;
+	response_info->core = core;
 	response_info->data = data;
-	buffer->size = knc_prepare_transfer(buffer->txbuf, buffer->size, MAX_SPI_SIZE, channel, request_length, request, response_length);
+	buffer->size = knc_prepare_transfer(buffer->txbuf, buffer->size, MAX_SPI_SIZE, core->die->channel, request_length, request, response_length);
 }
 
 static bool knc_detect_one(void *ctx)
@@ -430,16 +431,19 @@ static void knc_process_responses(struct thr_info *thr)
 			struct knc_spi_response *response_info = &buffer->response_info[i];
 			uint8_t *rxbuf = &buffer->rxbuf[response_info->offset];
 			int status = knc_decode_response(rxbuf, response_info->request_length, &rxbuf, response_info->response_length);
+			if (response_info->type == KNC_SETWORK)
+				status ^= KNC_ACCEPTED;
+			if (response_info->core->die->version != KNC_VERSION_JUPITER && status != 0) {
+				applog(LOG_ERR, "KnC: Communication error (%x)", status);
+				knc_core_failure(response_info->core);
+			}
 			switch(response_info->type) {
 			case KNC_REPORT:
 			case KNC_SETWORK:
-				knc_core_process_report(thr, &knc->core[response_info->data], rxbuf);
+				/* Should we care about failed SETWORK explicit? Or simply handle it by next state not loaded indication in reports?  */
+				knc_core_process_report(thr, response_info->core, rxbuf);
 				break;
 			}
-#if NOT_YET
-			if (status & KNC_ERR_MASK)
-				knc_core_response_error(core, response_info->len);
-#endif
 		}
 
 		buffer->state = KNC_SPI_IDLE;
@@ -475,15 +479,15 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 		if (clean) {
 			/* Double halt to get rid of any previous queued work */
 			request_length = knc_prepare_jupiter_halt(request, core->die->die, core->core);
-			knc_transfer(thr, core->die->channel, request_length, request, 0, KNC_NO_RESPONSE, 0, 0);
-			knc_transfer(thr, core->die->channel, request_length, request, 0, KNC_NO_RESPONSE, 0, 0);
+			knc_transfer(thr, core, request_length, request, 0, KNC_NO_RESPONSE, 0);
+			knc_transfer(thr, core, request_length, request, 0, KNC_NO_RESPONSE, 0);
 		}
 		request_length = knc_prepare_jupiter_setwork(request, core->die->die, core->core, slot, work);
-		knc_transfer(thr, core->die->channel, request_length, request, 0, KNC_NO_RESPONSE, 0, 0);
+		knc_transfer(thr, core, request_length, request, 0, KNC_NO_RESPONSE, 0);
 		break;
 	case KNC_VERSION_NEPTUNE:
 		request_length = knc_prepare_neptune_setwork(request, core->die->die, core->core, slot, work, clean);
-		knc_transfer(thr, core->die->channel, request_length, request, response_length, KNC_SETWORK, core->coreid, slot);
+		knc_transfer(thr, core, request_length, request, response_length, KNC_SETWORK, slot);
 		break;
 	default:
 		goto error;
@@ -526,9 +530,10 @@ static int knc_core_request_report(struct thr_info *thr, struct knc_core_state *
 	switch(core->die->version) {
 	case KNC_VERSION_JUPITER:
 		response_length = 1 + 1 + (1 + 4);
-		knc_transfer(thr, core->die->channel, request_length, request, response_length, KNC_REPORT, core->coreid, 0); return 0;
+		knc_transfer(thr, core, request_length, request, response_length, KNC_REPORT, 0);
+		return 0;
 	case KNC_VERSION_NEPTUNE:
-		knc_transfer(thr, core->die->channel, request_length, request, response_length, KNC_REPORT, core->coreid, 0);
+		knc_transfer(thr, core, request_length, request, response_length, KNC_REPORT, 0);
 		return 0;
 	}
 
