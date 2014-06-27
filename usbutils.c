@@ -107,14 +107,13 @@ static cgtimer_t usb11_cgt;
 static struct list_head ut_list;
 
 #ifdef USE_BFLSC
-// N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
-static struct usb_epinfo bas_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
+static struct usb_epinfo bflsc_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	512,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	512,	EPO(2), 0, 0 }
 };
 
-static struct usb_intinfo bas_ints[] = {
-	USB_EPS(0, bas_epinfos)
+static struct usb_intinfo bflsc_ints[] = {
+	USB_EPS(0, bflsc_epinfos)
 };
 #endif
 
@@ -382,7 +381,7 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.timeout = BFLSC_TIMEOUT_MS,
 		.latency = LATENCY_STD,
-		INTINFO(bas_ints) },
+		INTINFO(bflsc_ints) },
 	{
 		.drv = DRIVER_bflsc,
 		.name = "BMA",
@@ -394,7 +393,7 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.timeout = BFLSC_TIMEOUT_MS,
 		.latency = LATENCY_STD,
-		INTINFO(bas_ints) },
+		INTINFO(bflsc_ints) },
 #endif
 #ifdef USE_BITFORCE
 	{
