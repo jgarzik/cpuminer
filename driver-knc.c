@@ -62,6 +62,7 @@ struct knc_core_state {
 		int slot;
 		struct work *work;
 	} workslot[WORKS_PER_CORE]; 	/* active, next */
+	int transfer_stamp;
 	struct knc_report report;
 	struct {
 		int slot;
@@ -140,6 +141,8 @@ struct knc_state {
 	} spi_buffer[KNC_SPI_BUFFERS];
 	int send_buffer;
 	int read_buffer;
+	int send_buffer_count;
+	int read_buffer_count;
 	/* end SPI thread */
 	
 	/* Do not add anything below here!! core[] must be last */
@@ -191,6 +194,7 @@ static void knc_flush(struct thr_info *thr)
 		buffer->state = KNC_SPI_PENDING;
 		pthread_cond_signal(&knc->spi_qcond);
 		knc->send_buffer += 1;
+		knc->send_buffer_count += 1;
 		if (knc->send_buffer >= KNC_SPI_BUFFERS)
 			knc->send_buffer = 0;
 		buffer = &knc->spi_buffer[knc->send_buffer];
@@ -222,6 +226,17 @@ static void knc_transfer(struct thr_info *thr, struct knc_core_state *core, int 
 	response_info->core = core;
 	response_info->data = data;
 	buffer->size = knc_prepare_transfer(buffer->txbuf, buffer->size, MAX_SPI_SIZE, core->die->channel, request_length, request, response_length);
+}
+
+static int knc_transfer_stamp(struct knc_state *knc)
+{
+	return knc->send_buffer_count;
+}
+
+static int knc_transfer_completed(struct knc_state *knc, int stamp)
+{
+	/* signed delta math, counter wrap OK */
+	return (knc->read_buffer_count - stamp) >= 0;
 }
 
 static bool knc_detect_one(void *ctx)
@@ -404,7 +419,7 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 		knc_core_handle_nonce(thr, core, report->nonce[n].slot, report->nonce[n].nonce);
 	}
 
-	if (report->active_slot && core->workslot[1].slot == report->active_slot) {
+	if (report->active_slot && core->workslot[0].slot != report->active_slot) {
 		/* Core switched to next work */
 		if (core->workslot[0].work) {
 			core->die->knc->completed++;
@@ -414,7 +429,30 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 		}
 		core->workslot[0] = core->workslot[1];
 		core->workslot[1].work = NULL;
-		core->workslot[1].slot = 0;
+		core->workslot[1].slot = -1;
+
+		/* or did it switch directly to pending work? */
+		if (report->active_slot == core->workslot[2].slot) {
+			if (core->workslot[0].work)
+				free_work(core->workslot[0].work);
+			core->workslot[0] = core->workslot[2];
+			core->workslot[2].work = NULL;
+			core->workslot[2].slot = -1;
+		}
+	}
+
+	if (report->next_state && core->workslot[2].slot > 0 && (core->workslot[2].slot == report->next_slot  || report->next_slot == -1)) {
+		/* core accepted next work */
+		if (core->workslot[1].work)
+			free_work(core->workslot[1].work);
+		core->workslot[1] = core->workslot[2];
+		core->workslot[2].work = NULL;
+	}
+
+	if (core->workslot[2].work && knc_transfer_completed(core->die->knc, core->transfer_stamp)) {
+		applog(LOG_INFO, "KnC: Setwork failed on core %d.%d.%d?", core->die->channel, core->die->die, core->core);
+		free_work(core->workslot[2].work);
+		core->workslot[2].slot = -1;
 	}
 
 	return 0;
@@ -430,18 +468,19 @@ static void knc_process_responses(struct thr_info *thr)
 		for (i = 0; i < buffer->responses; i++) {
 			struct knc_spi_response *response_info = &buffer->response_info[i];
 			uint8_t *rxbuf = &buffer->rxbuf[response_info->offset];
+			struct knc_core_state *core = response_info->core;
 			int status = knc_decode_response(rxbuf, response_info->request_length, &rxbuf, response_info->response_length);
 			if (response_info->type == KNC_SETWORK)
 				status ^= KNC_ACCEPTED;
-			if (response_info->core->die->version != KNC_VERSION_JUPITER && status != 0) {
-				applog(LOG_ERR, "KnC: Communication error (%x)", status);
-				knc_core_failure(response_info->core);
+			if (core->die->version != KNC_VERSION_JUPITER && status != 0) {
+				applog(LOG_ERR, "KnC %d.%d.%d: Communication error (%x / %d)", core->die->channel, core->die->die, core->core, status, i);
+				knc_core_failure(core);
 			}
 			switch(response_info->type) {
 			case KNC_REPORT:
 			case KNC_SETWORK:
 				/* Should we care about failed SETWORK explicit? Or simply handle it by next state not loaded indication in reports?  */
-				knc_core_process_report(thr, response_info->core, rxbuf);
+				knc_core_process_report(thr, core, rxbuf);
 				break;
 			}
 		}
@@ -450,6 +489,7 @@ static void knc_process_responses(struct thr_info *thr)
 		buffer->responses = 0;
 		buffer->size = 0;
 		knc->read_buffer += 1;
+		knc->read_buffer_count += 1;
 		if (knc->read_buffer >= KNC_SPI_BUFFERS)
 			knc->read_buffer = 0;
 		buffer = &knc->spi_buffer[knc->read_buffer];
@@ -498,6 +538,7 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 	core->generation = knc->generation;
 	core->works++;
 	core->die->knc->works++;
+	core->transfer_stamp = knc_transfer_stamp(knc);
 
 	timeradd(&now, &core_submit_interval, &core->hold_work_until);
 	timeradd(&now, &core_timeout_interval, &core->timeout);
@@ -583,16 +624,14 @@ static int64_t knc_scanwork(struct thr_info *thr)
 			for (slot = 0; slot < WORKS_PER_CORE; slot ++) {
 				if (core->workslot[slot].work)
 					free_work(core->workslot[slot].work);
+				core->workslot[slot].slot = -1;
 			}
 			core->hold_work_until = now;
 		}
 		if (knc_core_disabled(core))
 			continue;
-		if (i == knc->scan_adjust_core) {
-			/* TODO: Do a forced submit to even out work generation over time.
-			 * but don't forget scheduled works until the new one gets active
-			 */
-		}
+		if (i == knc->scan_adjust_core)
+			clean = true;
 		if (knc_core_need_work(core)) {
 			struct work *work = get_work(thr, thr->id);
 			knc_core_send_work(thr, core, work, clean);
