@@ -1,12 +1,14 @@
 /*
  * Copyright 2013 Andrew Smith
- * Copyright 2013 Con Kolivas
+ * Copyright 2013-2014 Con Kolivas
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation; either version 3 of the License, or (at your option)
  * any later version.  See COPYING for more details.
  */
+
+#include "config.h"
 
 #include <float.h>
 #include <limits.h>
@@ -17,8 +19,6 @@
 #include <strings.h>
 #include <sys/time.h>
 #include <unistd.h>
-
-#include "config.h"
 
 #ifdef WIN32
 #include <windows.h>
@@ -629,7 +629,7 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 			sc_dev.firmware = strdup(fields[0]);
 			sc_info->driver_version = drv_ver(bflsc, sc_dev.firmware);
 		}
-		else if (strstr(firstname, BFLSC_DI_ENGINES)) {
+		else if (strcasestr(firstname, BFLSC_DI_ENGINES)) {
 			sc_dev.engines = atoi(fields[0]);
 			if (sc_dev.engines < 1) {
 				tmp = str_text(items[i]);

@@ -147,6 +147,7 @@ enum sub_ident {
 	IDENT_BF1,
 	IDENT_BFL,
 	IDENT_BLT,
+	IDENT_BMA,
 	IDENT_BTB,
 	IDENT_BXF,
 	IDENT_BXM,

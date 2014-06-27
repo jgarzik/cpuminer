@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
  * Copyright 2013 Andrew Smith
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -307,6 +307,7 @@ struct SaveString {
 #define BFLSC_SINGLE "BAS"
 #define BFLSC_LITTLESINGLE "BAL"
 #define BFLSC_JALAPENO "BAJ"
+#define BFLSC_MONARCH "BMA"
 
 // Default expected time for a nonce range
 // - thus no need to check until this + last time work was found
