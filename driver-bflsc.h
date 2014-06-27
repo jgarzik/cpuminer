@@ -116,6 +116,12 @@ struct bflsc_dev {
 
 #define QUE_MAX_RESULTS 8
 
+struct bflsc_work {
+	UT_hash_handle hh;
+	int id;
+	struct work *work;
+};
+
 struct bflsc_info {
 	enum driver_version driver_version;
 	pthread_rwlock_t stat_lock;
@@ -144,6 +150,8 @@ struct bflsc_info {
 	int flush_size;
 	// count of given size, [+2] is for any > QUE_MAX_RESULTS
 	uint64_t result_size[QUE_MAX_RESULTS+2];
+
+	struct bflsc_work *bworks;
 };
 
 #define BFLSC_XLINKHDR '@'

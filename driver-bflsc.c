@@ -27,6 +27,7 @@
 #include "compat.h"
 #include "miner.h"
 #include "usbutils.h"
+#include "uthash.h"
 #include "driver-bflsc.h"
 
 int opt_bflsc_overheat = BFLSC_TEMP_OVERHEAT;
@@ -1679,6 +1680,7 @@ out:
 
 static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 {
+	struct bflsc_info *sc_info = bflsc->device_data;
 	int created, queued = 0, create, i, offset;
 	struct work *base_work, *work, *works[10];
 	char *buf, *field, *ptr;
@@ -1765,6 +1767,7 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 		goto out;
 	}
 	for (i = 0; i < queued; i++) {
+		struct bflsc_work *bwork, *oldbwork;
 		unsigned int uid;
 
 		work = works[i];
@@ -1776,9 +1779,19 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 			goto out;
 		}
 		sscanf(field, "%04x", &uid);
-		/* FIXME: Do something useful with this uid */
-		applog(LOG_WARNING, "%s%d: Got work uid %u",
-		       bflsc->drv->name, bflsc->device_id, uid);
+		bwork = malloc(sizeof(struct bflsc_work));
+		bwork->id = uid;
+		bwork->work = work;
+
+		wr_lock(&bflsc->qlock);
+		HASH_REPLACE_INT(sc_info->bworks, id, bwork, oldbwork);
+		if (oldbwork) {
+			__work_completed(bflsc, oldbwork->work);
+			free(oldbwork);
+		}
+		if (i > 0)
+			__add_queued(bflsc, work);
+		wr_unlock(&bflsc->qlock);
 	}
 	if (queued < created)
 		ret = true;
