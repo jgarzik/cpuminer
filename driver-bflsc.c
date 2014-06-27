@@ -206,9 +206,10 @@ static bool isokerr(int err, char *buf, int amount)
 	if (err < 0 || amount < (int)BFLSC_OK_LEN)
 		return false;
 	else {
-		if (strstr(buf, BFLSC_ANERR))
+		if (strstr(buf, BFLSC_ANERR)) {
+			applog(LOG_INFO, "BFLSC not ok err: %s", buf);
 			return false;
-		else
+		} else
 			return true;
 	}
 }
@@ -688,6 +689,8 @@ ne:
 	return ok;
 }
 
+static bool bflsc28_queue_full(struct cgpu_info *bflsc);
+
 static struct cgpu_info *bflsc_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct bflsc_info *sc_info = NULL;
@@ -861,6 +864,9 @@ reinit:
 			latency = BAL_LATENCY;
 		}
 	}
+
+	if (usb_ident(bflsc) == IDENT_BMA)
+		bflsc->drv->queue_full = &bflsc28_queue_full;
 
 	if (latency != bflsc->usbdev->found->latency) {
 		bflsc->usbdev->found->latency = latency;
@@ -1657,6 +1663,128 @@ re_send:
 out:
 	if (unlikely(!ret))
 		work_completed(bflsc, work);
+	return ret;
+}
+
+#define JP_COMMAND 0
+#define JP_STREAMLENGTH 2
+#define JP_SIGNATURE 4
+#define JP_JOBSINARRY 5
+#define JP_JOBSARRY 6
+#define JP_ARRAYSIZE 45
+
+static bool bflsc28_queue_full(struct cgpu_info *bflsc)
+{
+	int created, queued = 0, create, i, offset;
+	struct work *base_work, *work, **works[20];
+	char *buf, *field, *ptr;
+	bool sent, ret = false;
+	uint16_t *streamlen;
+	uint8_t *job_pack;
+	int err, amount;
+
+	job_pack = alloca(2 + // Command
+			  2 + // StreamLength
+			  1 + // Signature
+			  1 + // JobsInArray
+			  JP_ARRAYSIZE * 20 +// Array of up to 20 Job Structs
+			  1 // EndOfWrapper
+			  );
+
+	if (bflsc->usbinfo.nodev)
+		return true;
+
+	base_work = get_queued(bflsc);
+	if (unlikely(!base_work))
+		return ret;
+	created = 1;
+
+	create = 19;
+	if (base_work->drv_rolllimit < create)
+		create = base_work->drv_rolllimit;
+
+	*works[0] = base_work;
+	for (i = 1; i <= create ; i++) {
+		created++;
+		work = make_clone(base_work);
+		roll_work(base_work);
+		*works[i] = work;
+	}
+
+	memcpy(job_pack, "WX", 2);
+	streamlen = (uint16_t *)&job_pack[JP_STREAMLENGTH];
+	*streamlen = created * JP_ARRAYSIZE + 7;
+	job_pack[JP_SIGNATURE] = 0xc1;
+	job_pack[JP_JOBSINARRY] = created;
+	offset = JP_JOBSARRY + i * JP_ARRAYSIZE;
+
+	/* Create the maximum number of work items we can queue by nrolling one */
+	for (i = 0; i < created; i++) {
+		work = *works[i];
+		memcpy(job_pack + offset, work->midstate, MIDSTATE_BYTES);
+		offset += MIDSTATE_BYTES;
+		memcpy(job_pack + offset, work->data + MERKLE_OFFSET, MERKLE_BYTES);
+		offset += MERKLE_BYTES;
+		job_pack[offset] = 0xaa; // EndOfBlock signature
+		offset++;
+	}
+	job_pack[offset++] = 0xfe; // EndOfWrapper
+
+	buf = alloca(BFLSC_BUFSIZ + 1);
+	mutex_lock(&bflsc->device_mutex);
+	err = send_recv_ss(bflsc, 0, &sent, &amount, (char *)job_pack, offset,
+			   C_REQUESTQUEJOB, buf, BFLSC_BUFSIZ, C_REQUESTQUEJOBSTATUS, READ_NL);
+	mutex_unlock(&bflsc->device_mutex);
+
+	if (!isokerr(err, buf, amount)) {
+		if (!strncasecmp(buf, "ERR:QUEUE FULL", 14)) {
+			applog(LOG_DEBUG, "%s%d: Queue full",
+			       bflsc->drv->name, bflsc->device_id);
+			ret = true;
+		} else {
+			applog(LOG_WARNING, "%s%d: Queue response not ok %s",
+			 bflsc->drv->name, bflsc->device_id, buf);
+		}
+		goto out;
+	}
+
+	if (sscanf(buf, "OK:QUEUED %d:%s", &queued, ptr) != 2) {
+		applog(LOG_WARNING, "%s%d: Failed to parse queue response %s",
+		       bflsc->drv->name, bflsc->device_id, buf);
+		goto out;
+	}
+	if (queued < 1 || queued > 20) {
+		applog(LOG_WARNING, "%s%d: Invalid queued count %d",
+		       bflsc->drv->name, bflsc->device_id, queued);
+		queued = 0;
+		goto out;
+	}
+	for (i = 0; i < queued; i++) {
+		unsigned int uid;
+
+		work = *works[i];
+		field = strsep(&ptr, ",");
+		if (!field) {
+			applog(LOG_WARNING, "%s%d: Ran out of queued IDs after %d of %d",
+			       bflsc->drv->name, bflsc->device_id, i, queued);
+			queued = i - 1;
+			goto out;
+		}
+		sscanf(field, "%04x", &uid);
+		/* FIXME: Do something useful with this uid */
+		applog(LOG_WARNING, "%s%d: Got work uid %u",
+		       bflsc->drv->name, bflsc->device_id, uid);
+	}
+	if (queued < created)
+		ret = true;
+out:
+	for (i = queued; i < created; i++) {
+		work = *works[i];
+		if (!i)
+			work_completed(bflsc, work);
+		else
+			discard_work(work);
+	}
 	return ret;
 }
 
