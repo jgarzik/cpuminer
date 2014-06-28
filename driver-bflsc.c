@@ -1375,7 +1375,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	free_work(work);
 }
 
-static int process_results(struct cgpu_info *bflsc, int dev, char *pbuf, int *nonces)
+static int process_results(struct cgpu_info *bflsc, int dev, char *pbuf, int *nonces, int *in_process)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	char **items, *firstname, **fields, *lf;
@@ -1385,12 +1385,16 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *pbuf, int *no
 	bool res;
 
 	*nonces = 0;
+	*in_process = 0;
 
 	xlinkstr(xlink, sizeof(xlink), dev, sc_info);
 
-	buf = strdup(pbuf);
+	buf = strdupa(pbuf);
+	if (!strncasecmp(buf, "INPROCESS", 9)) {
+		tmp = strsep(&buf, "\n");
+		sscanf(tmp, "INPROCESS:%d", in_process);
+	}
 	res = tolines(bflsc, dev, buf, &lines, &items, C_GETRESULTS);
-	free(buf);
 	if (!res || lines < 1) {
 		tmp = str_text(pbuf);
 		applogsiz(LOG_ERR, BFLSC_APPLOGSIZ,
@@ -1489,6 +1493,7 @@ static void *bflsc_get_results(void *userdata)
 
 	while (sc_info->shutdown == false) {
 		cgtimer_t ts_start;
+		int in_process;
 
 		if (bflsc->usbinfo.nodev)
 			return NULL;
@@ -1520,13 +1525,16 @@ static void *bflsc_get_results(void *userdata)
 		if (err < 0 || (!readok && amount != BFLSC_QRES_LEN) || (readok && amount < 1)) {
 			// TODO: do what else?
 		} else {
-			que = process_results(bflsc, dev, buf, &nonces);
+			que = process_results(bflsc, dev, buf, &nonces, &in_process);
 			sc_info->not_first_work = true; // in case it failed processing it
 			if (que > 0)
 				cgtime(&(sc_info->sc_devs[dev].last_dev_result));
 			if (nonces > 0)
 				cgtime(&(sc_info->sc_devs[dev].last_nonce_result));
 
+			/* There are more results queued so do not sleep */
+			if (in_process)
+				continue;
 			// TODO: if not getting results ... reinit?
 		}
 
