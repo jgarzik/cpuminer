@@ -1730,10 +1730,14 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 	if (bflsc->usbinfo.nodev)
 		return true;
 
-	base_work = get_queued(bflsc);
+	wr_lock(&bflsc->qlock);
+	base_work = __get_queued(bflsc);
+	if (likely(base_work))
+		__work_completed(bflsc, base_work);
+	wr_unlock(&bflsc->qlock);
+
 	if (unlikely(!base_work))
 		return ret;
-	work_completed(bflsc, base_work);
 	created = 1;
 
 	create = 9;

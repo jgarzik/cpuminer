@@ -7492,14 +7492,10 @@ void __add_queued(struct cgpu_info *cgpu, struct work *work)
 	HASH_ADD_INT(cgpu->queued_work, id, work);
 }
 
-/* This function is for retrieving one work item from the unqueued pointer and
- * adding it to the hashtable of queued work. Code using this function must be
- * able to handle NULL as a return which implies there is no work available. */
-struct work *get_queued(struct cgpu_info *cgpu)
+struct work *__get_queued(struct cgpu_info *cgpu)
 {
 	struct work *work = NULL;
 
-	wr_lock(&cgpu->qlock);
 	if (cgpu->unqueued_work) {
 		work = cgpu->unqueued_work;
 		if (unlikely(stale_work(work, false))) {
@@ -7509,6 +7505,19 @@ struct work *get_queued(struct cgpu_info *cgpu)
 			__add_queued(cgpu, work);
 		cgpu->unqueued_work = NULL;
 	}
+
+	return work;
+}
+
+/* This function is for retrieving one work item from the unqueued pointer and
+ * adding it to the hashtable of queued work. Code using this function must be
+ * able to handle NULL as a return which implies there is no work available. */
+struct work *get_queued(struct cgpu_info *cgpu)
+{
+	struct work *work;
+
+	wr_lock(&cgpu->qlock);
+	work = __get_queued(cgpu);
 	wr_unlock(&cgpu->qlock);
 
 	return work;

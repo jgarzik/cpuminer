@@ -1431,6 +1431,7 @@ extern int share_work_tdiff(struct cgpu_info *cgpu);
 extern struct work *get_work(struct thr_info *thr, const int thr_id);
 extern void __add_queued(struct cgpu_info *cgpu, struct work *work);
 extern struct work *get_queued(struct cgpu_info *cgpu);
+extern struct work *__get_queued(struct cgpu_info *cgpu);
 extern void add_queued(struct cgpu_info *cgpu, struct work *work);
 extern struct work *get_queue_work(struct thr_info *thr, struct cgpu_info *cgpu, int thr_id);
 extern struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
