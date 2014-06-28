@@ -1276,7 +1276,6 @@ struct work *bflsc_work_by_uid(struct cgpu_info *bflsc, struct bflsc_info *sc_in
 		HASH_DEL(sc_info->bworks, bwork);
 		work = bwork->work;
 		free(bwork);
-		__work_completed(bflsc, work);
 	}
 	wr_unlock(&bflsc->qlock);
 
@@ -1415,13 +1414,8 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *pbuf, int *no
 	xlinkstr(xlink, sizeof(xlink), dev, sc_info);
 
 	buf = strdupa(pbuf);
-	if (!strncasecmp(buf, "INPROCESS", 9)) {
-		tmp = strsep(&buf, "\n");
-		if (likely(buf)) {
-			sscanf(tmp, "INPROCESS:%d", in_process);
-			strcpy(pbuf, buf);
-		}
-	}
+	if (!strncmp(buf, "INPROCESS", 9))
+		sscanf(buf, "INPROCESS:%d\n%s", in_process, pbuf);
 	res = tolines(bflsc, dev, buf, &lines, &items, C_GETRESULTS);
 	if (!res || lines < 1) {
 		tmp = str_text(pbuf);
@@ -1739,6 +1733,7 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 	base_work = get_queued(bflsc);
 	if (unlikely(!base_work))
 		return ret;
+	work_completed(bflsc, base_work);
 	created = 1;
 
 	create = 9;
@@ -1815,18 +1810,16 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 			goto out;
 		}
 		sscanf(field, "%04x", &uid);
-		bwork = malloc(sizeof(struct bflsc_work));
+		bwork = calloc(sizeof(struct bflsc_work), 1);
 		bwork->id = uid;
 		bwork->work = work;
 
 		wr_lock(&bflsc->qlock);
 		HASH_REPLACE_INT(sc_info->bworks, id, bwork, oldbwork);
 		if (oldbwork) {
-			__work_completed(bflsc, oldbwork->work);
+			free_work(oldbwork->work);
 			free(oldbwork);
 		}
-		if (i > 0)
-			__add_queued(bflsc, work);
 		wr_unlock(&bflsc->qlock);
 	}
 	if (queued < created)
@@ -1834,10 +1827,7 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 out:
 	for (i = queued; i < created; i++) {
 		work = works[i];
-		if (!i)
-			work_completed(bflsc, work);
-		else
-			discard_work(work);
+		discard_work(work);
 	}
 	return ret;
 }
