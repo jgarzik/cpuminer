@@ -1417,7 +1417,10 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *pbuf, int *no
 	buf = strdupa(pbuf);
 	if (!strncasecmp(buf, "INPROCESS", 9)) {
 		tmp = strsep(&buf, "\n");
-		sscanf(tmp, "INPROCESS:%d", in_process);
+		if (likely(buf)) {
+			sscanf(tmp, "INPROCESS:%d", in_process);
+			strcpy(pbuf, buf);
+		}
 	}
 	res = tolines(bflsc, dev, buf, &lines, &items, C_GETRESULTS);
 	if (!res || lines < 1) {
