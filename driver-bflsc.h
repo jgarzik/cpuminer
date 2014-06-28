@@ -183,6 +183,9 @@ struct QueueJobStructure {
 #define QUE_MIDSTATE 0
 #define QUE_BLOCKDATA 1
 
+#define QUE_UID 0
+#define QUE_CC 1
+
 #define QUE_NONCECOUNT_V1 2
 #define QUE_FLD_MIN_V1 3
 #define QUE_FLD_MAX_V1 (QUE_MAX_RESULTS+QUE_FLD_MIN_V1)

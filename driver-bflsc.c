@@ -1265,10 +1265,27 @@ static void inc_bflsc_nonces(struct bflsc_info *info, int8_t core)
 		info->core_nonces[core]++;
 }
 
+struct work *bflsc_work_by_uid(struct cgpu_info *bflsc, struct bflsc_info *sc_info, int id)
+{
+	struct bflsc_work *bwork;
+	struct work *work = NULL;
+
+	wr_lock(&bflsc->qlock);
+	HASH_FIND_INT(sc_info->bworks, &id, bwork);
+	if (likely(bwork)) {
+		HASH_DEL(sc_info->bworks, bwork);
+		work = bwork->work;
+		free(bwork);
+		__work_completed(bflsc, work);
+	}
+	wr_unlock(&bflsc->qlock);
+
+	return work;
+}
+
 static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *data, int count, char **fields, int *nonces)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
-	char midstate[MIDSTATE_BYTES], blockdata[MERKLE_BYTES];
 	struct thr_info *thr = bflsc->thr[0];
 	struct work *work;
 	int8_t core = -1;
@@ -1312,18 +1329,26 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 		inc_bflsc_errors(thr, sc_info, core);
 	}
 
-	memset(midstate, 0, MIDSTATE_BYTES);
-	memset(blockdata, 0, MERKLE_BYTES);
-	if (!hex2bin((unsigned char *)midstate, fields[QUE_MIDSTATE], MIDSTATE_BYTES) ||
-	    !hex2bin((unsigned char *)blockdata, fields[QUE_BLOCKDATA], MERKLE_BYTES)) {
-		applog(LOG_INFO, "%s%i:%s Failed to convert binary data to hex result - ignored",
-		       bflsc->drv->name, bflsc->device_id, xlink);
-		inc_bflsc_errors(thr, sc_info, core);
-		return;
-	}
+	if (usb_ident(bflsc) == IDENT_BMA) {
+		int uid;
 
-	work = take_queued_work_bymidstate(bflsc, midstate, MIDSTATE_BYTES,
-					   blockdata, MERKLE_OFFSET, MERKLE_BYTES);
+		if (sscanf(fields[QUE_UID], "%04x", &uid) == 1)
+			work = bflsc_work_by_uid(bflsc, sc_info, uid);
+		/* FIXME: Read the QUE_CC field and store stats per cortex */
+	} else {
+		char midstate[MIDSTATE_BYTES] = {}, blockdata[MERKLE_BYTES] = {};
+
+		if (!hex2bin((unsigned char *)midstate, fields[QUE_MIDSTATE], MIDSTATE_BYTES) ||
+		    !hex2bin((unsigned char *)blockdata, fields[QUE_BLOCKDATA], MERKLE_BYTES)) {
+			applog(LOG_INFO, "%s%i:%s Failed to convert binary data to hex result - ignored",
+			       bflsc->drv->name, bflsc->device_id, xlink);
+			inc_bflsc_errors(thr, sc_info, core);
+			return;
+		}
+
+		work = take_queued_work_bymidstate(bflsc, midstate, MIDSTATE_BYTES,
+						blockdata, MERKLE_OFFSET, MERKLE_BYTES);
+	}
 	if (!work) {
 		if (sc_info->not_first_work) {
 			applog(LOG_INFO, "%s%i:%s failed to find nonce work - can't be processed - ignored",
