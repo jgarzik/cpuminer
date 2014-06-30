@@ -1137,7 +1137,7 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 	res = breakdown(ALLCOLON, temp_buf, &count, &firstname, &fields, &lf);
 	if (lf)
 		*lf = '\0';
-	if (!res || count != 2 || !lf) {
+	if (!res || count < 2 || !lf) {
 		tmp = str_text(temp_buf);
 		applog(LOG_WARNING, "%s%i: Invalid%s temp reply: '%s'",
 				bflsc->drv->name, bflsc->device_id, xlink, tmp);
@@ -1953,7 +1953,7 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 	}
 
 	waited = restart_wait(thr, sc_info->scan_sleep_time);
-	if (waited == ETIMEDOUT) {
+	if (waited == ETIMEDOUT && usb_ident(bflsc) != IDENT_BMA) {
 		unsigned int old_sleep_time, new_sleep_time = 0;
 		int min_queued = sc_info->que_size;
 		/* Only adjust the scan_sleep_time if we did not receive a
