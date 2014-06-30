@@ -422,6 +422,8 @@ int knc_decode_response(uint8_t *rxbuf, int request_length, uint8_t **response, 
         ret |= KNC_ERR_CRCACK;
     if ((ack & KNC_ASIC_ACK_ACCEPT))
         ret |= KNC_ACCEPTED;
+    if (ret && memcmp(&rxbuf[len-4], "\377\377\377\377", 4) == 0)
+	ret = KNC_ERR_UNAVAIL;
     return ret;
 }
 

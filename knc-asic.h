@@ -68,7 +68,9 @@ void knc_prepare_neptune_message(int request_length, const uint8_t *request, uin
 #define KNC_ERR_CRC     (1<<1)
 #define KNC_ERR_ACK     (1<<2)
 #define KNC_ERR_CRCACK  (1<<3)
+#define KNC_ERR_UNAVAIL (1<<4)
 #define KNC_ERR_MASK	(~(KNC_ACCEPTED))
+#define KNC_IS_ERROR(x) (((x) & KNC_ERR_MASK) != 0)
 
 int knc_prepare_transfer(uint8_t *txbuf, int offset, int size, int channel, int request_length, const uint8_t *request, int response_length);
 int knc_decode_response(uint8_t *rxbuf, int request_length, uint8_t **response, int response_length);
