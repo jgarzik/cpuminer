@@ -226,24 +226,24 @@ static inline int fsync (int fd)
  * listed driver. */
 #define FPGA_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(bitforce) \
-	DRIVER_ADD_COMMAND(icarus) \
 	DRIVER_ADD_COMMAND(modminer)
 
 #define ASIC_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
+	DRIVER_ADD_COMMAND(ants1) \
+	DRIVER_ADD_COMMAND(ants2) \
+	DRIVER_ADD_COMMAND(avalon2) \
+	DRIVER_ADD_COMMAND(avalon) \
 	DRIVER_ADD_COMMAND(bflsc) \
 	DRIVER_ADD_COMMAND(bitfury) \
 	DRIVER_ADD_COMMAND(cointerra) \
 	DRIVER_ADD_COMMAND(hashfast) \
+	DRIVER_ADD_COMMAND(icarus) \
 	DRIVER_ADD_COMMAND(klondike) \
 	DRIVER_ADD_COMMAND(knc) \
 	DRIVER_ADD_COMMAND(bitmineA1) \
 	DRIVER_ADD_COMMAND(drillbit) \
 	DRIVER_ADD_COMMAND(bab) \
 	DRIVER_ADD_COMMAND(minion) \
-	DRIVER_ADD_COMMAND(ants1) \
-	DRIVER_ADD_COMMAND(ants2) \
-	DRIVER_ADD_COMMAND(avalon2) \
-	DRIVER_ADD_COMMAND(avalon) \
 	DRIVER_ADD_COMMAND(spondoolies)
 
 #define DRIVER_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
@@ -1465,7 +1465,8 @@ extern bool log_curses_only(int prio, const char *datetime, const char *str);
 extern void clear_logwin(void);
 extern void logwin_update(void);
 extern bool pool_tclear(struct pool *pool, bool *var);
-extern void pool_failed(struct pool *pool);
+extern void stratum_resumed(struct pool *pool);
+extern void pool_died(struct pool *pool);
 extern struct thread_q *tq_new(void);
 extern void tq_free(struct thread_q *tq);
 extern bool tq_push(struct thread_q *tq, void *data);

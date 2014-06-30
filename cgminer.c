@@ -1900,7 +1900,6 @@ static void update_gbt(struct pool *pool)
 		if (rc) {
 			applog(LOG_DEBUG, "Successfully retrieved and updated GBT from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
-			cgtime(&pool->tv_idle);
 			if (pool == current_pool())
 				opt_work_update = true;
 		} else {
@@ -4212,17 +4211,7 @@ struct work *copy_work_noffset(struct work *base_work, int noffset)
 	return work;
 }
 
-void pool_failed(struct pool *pool)
-{
-	if (!pool_tset(pool, &pool->idle)) {
-		cgtime(&pool->tv_idle);
-		if (pool == current_pool()) {
-			switch_pools(NULL);
-		}
-	}
-}
-
-static void pool_died(struct pool *pool)
+void pool_died(struct pool *pool)
 {
 	if (!pool_tset(pool, &pool->idle)) {
 		cgtime(&pool->tv_idle);
@@ -6116,10 +6105,8 @@ static void wait_lpcurrent(struct pool *pool);
 static void pool_resus(struct pool *pool);
 static void gen_stratum_work(struct pool *pool, struct work *work);
 
-static void stratum_resumed(struct pool *pool)
+void stratum_resumed(struct pool *pool)
 {
-	if (!pool->stratum_notify)
-		return;
 	if (pool_tclear(pool, &pool->idle)) {
 		applog(LOG_INFO, "Stratum connection to pool %d resumed", pool->pool_no);
 		pool_resus(pool);
@@ -6169,14 +6156,10 @@ static void *stratum_rthread(void *userdata)
 			clear_pool_work(pool);
 
 			wait_lpcurrent(pool);
-			if (!restart_stratum(pool)) {
-				pool_died(pool);
-				while (!restart_stratum(pool)) {
-					pool_failed(pool);
-					if (pool->removed)
-						goto out;
-					cgsleep_ms(30000);
-				}
+			while (!restart_stratum(pool)) {
+				if (pool->removed)
+					goto out;
+				cgsleep_ms(30000);
 			}
 		}
 
@@ -6208,17 +6191,11 @@ static void *stratum_rthread(void *userdata)
 			if (pool == current_pool())
 				restart_threads();
 
-			if (restart_stratum(pool))
-				continue;
-
-			pool_died(pool);
 			while (!restart_stratum(pool)) {
-				pool_failed(pool);
 				if (pool->removed)
 					goto out;
 				cgsleep_ms(30000);
 			}
-			stratum_resumed(pool);
 			continue;
 		}
 
@@ -6619,7 +6596,6 @@ retry_stratum:
 			total_getworks++;
 			pool->getwork_requested++;
 			ret = true;
-			cgtime(&pool->tv_idle);
 		} else {
 			applog(LOG_DEBUG, "Successfully retrieved but FAILED to decipher work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
@@ -8256,9 +8232,10 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 
 			/* Test pool is idle once every minute */
 			if (pool->idle && now.tv_sec - pool->tv_idle.tv_sec > 30) {
-				cgtime(&pool->tv_idle);
 				if (pool_active(pool, true) && pool_tclear(pool, &pool->idle))
 					pool_resus(pool);
+				else
+					cgtime(&pool->tv_idle);
 			}
 
 			/* Only switch pools if the failback pool has been
@@ -8645,7 +8622,6 @@ retry:
 		if (unlikely(first_pool))
 			applog(LOG_NOTICE, "Switching to pool %d %s - first alive pool", pool->pool_no, pool->rpc_url);
 
-		pool_tclear(pool, &pool->idle);
 		pool_resus(pool);
 		switch_pools(NULL);
 	} else {
