@@ -29,7 +29,7 @@
 #define MAX_ASICS               6
 #define DIES_PER_ASIC           4
 #define MAX_CORES_PER_DIE       360
-#define WORKS_PER_CORE          2
+#define WORKS_PER_CORE          3
 
 #define CORE_ERROR_LIMIT	30
 #define CORE_ERROR_INTERVAL	30
@@ -56,15 +56,14 @@ struct knc_die;
 struct knc_core_state {
 	int generation;
 	int core;
+	int coreid;
 	struct knc_die *die;
 	struct {
 		int slot;
 		struct work *work;
-	} workslot[WORKS_PER_CORE];
-	struct {
-		int slot;
-		uint32_t nonce;
-	} seen_nonces[5];
+	} workslot[WORKS_PER_CORE]; 	/* active, next */
+	int transfer_stamp;
+	struct knc_report report;
 	struct {
 		int slot;
 		uint32_t nonce;
@@ -91,11 +90,14 @@ struct knc_die {
 	struct knc_core_state *core;
 };
 
+#define MAX_SPI_SIZE		(4096)
+#define MAX_SPI_RESPONSES	(MAX_SPI_SIZE / (2 + 4 + 1 + 1 + 1 + 4))
+#define MAX_SPI_MESSAGE		(128)
+#define KNC_SPI_BUFFERS		(2)
 struct knc_state {
 	struct cgpu_info *cgpu;
 	void *ctx;
 	int generation;    /* work/block generation, incremented on each flush invalidating older works */
-	int channel[MAX_ASICS];
 	int dies;
 	struct knc_die die[MAX_ASICS*DIES_PER_ASIC];
 	int cores;
@@ -108,12 +110,134 @@ struct knc_state {
 	uint64_t errors;		/* Hardware & communication errors */
 	struct timeval next_error_interval;
 	/* End of statistics */
+	/* SPI communications thread */
+	pthread_mutex_t spi_qlock;	/* SPI queue status lock */
+	struct thr_info spi_thr;	/* SPI I/O thread */
+	pthread_cond_t spi_qcond;	/* SPI queue change wakeup */
+	struct knc_spi_buffer {
+		enum {
+			KNC_SPI_IDLE=0,
+			KNC_SPI_PENDING,
+			KNC_SPI_DONE
+		} state;
+		int size;
+		uint8_t txbuf[MAX_SPI_SIZE];
+		uint8_t rxbuf[MAX_SPI_SIZE];
+		int responses;
+		struct knc_spi_response {
+			int request_length;
+			int response_length;
+			enum {
+				KNC_UNKNOWN = 0,
+				KNC_NO_RESPONSE,
+				KNC_SETWORK,
+				KNC_REPORT,
+				KNC_INFO
+			} type;
+			struct knc_core_state *core;
+			uint32_t data;
+			int offset;
+		} response_info[MAX_SPI_RESPONSES];
+	} spi_buffer[KNC_SPI_BUFFERS];
+	int send_buffer;
+	int read_buffer;
+	int send_buffer_count;
+	int read_buffer_count;
+	/* end SPI thread */
+	
+	/* Do not add anything below here!! core[] must be last */
 	struct knc_core_state core[];
 };
 
 int opt_knc_device_idx = 0;
 int opt_knc_device_bus = -1;
 char *knc_log_file = NULL;
+
+static void *knc_spi(void *thr_data)
+{
+	struct cgpu_info *cgpu = thr_data;
+	struct knc_state *knc = cgpu->device_data;
+	int buffer = 0;
+	
+	pthread_mutex_lock(&knc->spi_qlock);
+	while (!cgpu->shutdown) {
+		int this_buffer = buffer;
+		while (knc->spi_buffer[buffer].state != KNC_SPI_PENDING && !cgpu->shutdown)
+			pthread_cond_wait(&knc->spi_qcond, &knc->spi_qlock);
+		pthread_mutex_unlock(&knc->spi_qlock);
+		if (cgpu->shutdown)
+			return NULL;
+
+		knc_trnsp_transfer(knc->ctx, knc->spi_buffer[buffer].txbuf, knc->spi_buffer[buffer].rxbuf, knc->spi_buffer[buffer].size);
+
+		buffer += 1;
+		if (buffer >= KNC_SPI_BUFFERS)
+			buffer = 0;
+
+		pthread_mutex_lock(&knc->spi_qlock);
+		knc->spi_buffer[this_buffer].state = KNC_SPI_DONE;
+		pthread_cond_signal(&knc->spi_qcond);
+	}
+	pthread_mutex_unlock(&knc->spi_qlock);
+	return NULL;
+}
+
+static void knc_process_responses(struct thr_info *thr);
+
+static void knc_flush(struct thr_info *thr)
+{
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct knc_state *knc = cgpu->device_data;
+	struct knc_spi_buffer *buffer = &knc->spi_buffer[knc->send_buffer];
+	if (buffer->state == KNC_SPI_IDLE && buffer->size > 0) {
+		pthread_mutex_lock(&knc->spi_qlock);
+		buffer->state = KNC_SPI_PENDING;
+		pthread_cond_signal(&knc->spi_qcond);
+		knc->send_buffer += 1;
+		knc->send_buffer_count += 1;
+		if (knc->send_buffer >= KNC_SPI_BUFFERS)
+			knc->send_buffer = 0;
+		buffer = &knc->spi_buffer[knc->send_buffer];
+		/* Block for SPI to finish a transfer if all buffers are busy */
+		while (buffer->state == KNC_SPI_PENDING)
+			pthread_cond_wait(&knc->spi_qcond, &knc->spi_qlock);
+		pthread_mutex_unlock(&knc->spi_qlock);
+	}
+        knc_process_responses(thr);
+}
+
+static void knc_transfer(struct thr_info *thr, struct knc_core_state *core, int request_length, uint8_t *request, int response_length, int response_type, uint32_t data)
+{
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct knc_state *knc = cgpu->device_data;
+	struct knc_spi_buffer *buffer = &knc->spi_buffer[knc->send_buffer];
+	/* FPGA control, request header, request body/response, CRC(4), ACK(1), EXTRA(3) */
+	int msglen = 2 + MAX(request_length, 4 + response_length ) + 4 + 1 + 3;
+	if (buffer->size + msglen > MAX_SPI_SIZE || buffer->responses >= MAX_SPI_RESPONSES) {
+		knc_flush(thr);
+		buffer = &knc->spi_buffer[knc->send_buffer];
+	}
+	struct knc_spi_response *response_info = &buffer->response_info[buffer->responses];
+	buffer->responses++;
+	response_info->offset = buffer->size;
+	response_info->type = response_type;
+	response_info->request_length = request_length;
+	response_info->response_length = response_length;
+	response_info->core = core;
+	response_info->data = data;
+	buffer->size = knc_prepare_transfer(buffer->txbuf, buffer->size, MAX_SPI_SIZE, core->die->channel, request_length, request, response_length);
+}
+
+static int knc_transfer_stamp(struct knc_state *knc)
+{
+	return knc->send_buffer_count;
+}
+
+static int knc_transfer_completed(struct knc_state *knc, int stamp)
+{
+	/* signed delta math, counter wrap OK */
+	return (int)(knc->read_buffer_count - stamp) >= 1;
+}
 
 static bool knc_detect_one(void *ctx)
 {
@@ -160,7 +284,6 @@ static bool knc_detect_one(void *ctx)
 	for (channel = 0; channel < MAX_ASICS; channel++) {
 		for (die = 0; die < DIES_PER_ASIC; die++) {
 			if (die_info[channel][die].cores) {
-				knc->channel[channel] = 1;
 				knc->die[dies].channel = channel;
 				knc->die[dies].die = die;
 				knc->die[dies].version = die_info[channel][die].version;
@@ -174,10 +297,11 @@ static bool knc_detect_one(void *ctx)
 				cores += knc->die[dies].cores;
 				pcore += knc->die[dies].cores;
 				dies++;
-				
 			}
 		}
 	}
+	for (core = 0; core < cores; core++)
+		knc->core[core].coreid = core;
 	knc->dies = dies;
 	knc->cores = cores;
 	knc->startup = 2;
@@ -188,6 +312,16 @@ static bool knc_detect_one(void *ctx)
 
 	cgpu->device_data = knc;
 
+	pthread_mutex_init(&knc->spi_qlock, NULL);
+	pthread_cond_init(&knc->spi_qcond, NULL);
+	if (thr_info_create(&knc->spi_thr, NULL, knc_spi, (void *)cgpu)) {
+		applog(LOG_ERR, "%s%i: SPI thread create failed",
+			cgpu->drv->name, cgpu->device_id);
+		free(cgpu);
+		free(knc);
+		return false;
+	}
+	
 	add_cgpu(cgpu);
 
 	return true;
@@ -210,9 +344,19 @@ static int knc_core_hold_work(struct knc_core_state *core)
 	return timercmp(&core->hold_work_until, &now, >);
 }
 
+static int knc_core_has_work(struct knc_core_state *core)
+{
+	int i;
+	for (i = 0; i < WORKS_PER_CORE; i++) {
+		if (core->workslot[i].slot > 0)
+			return true;
+	}
+	return false;
+}
+
 static int knc_core_need_work(struct knc_core_state *core)
 {
-	return !knc_core_hold_work(core) && !core->workslot[1].work;
+	return !knc_core_hold_work(core) && !core->workslot[1].work && !core->workslot[2].work;
 }
 
 static int knc_core_disabled(struct knc_core_state *core)
@@ -220,12 +364,35 @@ static int knc_core_disabled(struct knc_core_state *core)
 	return timercmp(&core->disabled_until, &now, >);
 }
 
-static int knc_core_next_slot(struct knc_core_state *core)
+static int _knc_core_next_slot(struct knc_core_state *core)
 {
+	/* Avoid slot #0 and #15. #0 is "no work assigned" and #15 is seen on bad cores */
 	int slot = core->last_slot + 1;
 	if (slot >= 15)
 		slot = 1;
 	core->last_slot = slot;
+	return slot;
+}
+
+static bool knc_core_slot_busy(struct knc_core_state *core, int slot)
+{
+	if (slot == core->report.active_slot)
+		return true;
+	if (slot == core->report.next_slot)
+		return true;
+	int i;
+	for (i = 0; i < WORKS_PER_CORE; i++) {
+		if (slot == core->workslot[i].slot)
+			return true;
+	}
+	return false;
+}
+
+static int knc_core_next_slot(struct knc_core_state *core)
+{
+	int slot;
+	do slot = _knc_core_next_slot(core);
+	while (knc_core_slot_busy(core, slot));
 	return slot;
 }
 
@@ -259,6 +426,8 @@ static int knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *co
 				/* Good share */
 				core->shares++;
 				core->die->knc->shares++;
+				/* This core is useful. Ignore any errors */
+				core->errors_now = 0;
 			} else {
 				applog(LOG_INFO, "KnC: %d.%d.%d hwerror nonce %08x", core->die->channel, core->die->die, core->core, nonce);
 				/* Bad share */
@@ -268,31 +437,27 @@ static int knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *co
 	}
 }
 
-static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *core, uint8_t *report)
+static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *core, uint8_t *response)
 {
-	int n_nonces = core->die->version == KNC_VERSION_NEPTUNE ? 5 : 1;
-	struct {
-		int slot;
-		uint32_t nonce;
-	} nonces[5];
+	struct knc_report *report = &core->report;
+	knc_decode_report(response, report, core->die->version);
+	bool had_event = false;
+
+	applog(LOG_DEBUG, "KnC %d.%d.%d: Process report %d %d(%d) / %d %d %d", core->die->channel, core->die->die, core->core, report->active_slot, report->next_slot, report->next_state, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 	int n;
-	for (n = 0; n < n_nonces; n++) {
-		int slot = report[1+1+0+(1+4)*n]&0x0f;
-		uint32_t nonce = report[1+1+1+(1+4)*n] << 24 |
-				report[1+1+2+(1+4)*n] << 16 |
-				report[1+1+3+(1+4)*n] << 8 |
-				report[1+1+4+(1+4)*n] << 0;
-		if (core->last_nonce.slot == slot && core->last_nonce.nonce == nonce)
+	for (n = 0; n < KNC_NONCES_PER_REPORT; n++) {
+		if (report->nonce[n].slot < 0)
 			break;
-		nonces[n].slot = slot;
-		nonces[n].nonce = nonce;
+		if (core->last_nonce.slot == report->nonce[n].slot && core->last_nonce.nonce == report->nonce[n].nonce)
+			break;
 	}
 	while(n-- > 0) {
-		knc_core_handle_nonce(thr, core, nonces[n].slot, nonces[n].nonce);
+		knc_core_handle_nonce(thr, core, report->nonce[n].slot, report->nonce[n].nonce);
 	}
 
-	int active_slot = report[2] >> 4;
-	if (active_slot && core->workslot[1].slot == active_slot) {
+	if (report->active_slot && core->workslot[0].slot != report->active_slot) {
+		had_event = true;
+		applog(LOG_INFO, "KnC: New work on %d.%d.%d, %d %d / %d %d %d", core->die->channel, core->die->die, core->core, report->active_slot, report->next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 		/* Core switched to next work */
 		if (core->workslot[0].work) {
 			core->die->knc->completed++;
@@ -302,10 +467,86 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 		}
 		core->workslot[0] = core->workslot[1];
 		core->workslot[1].work = NULL;
-		core->workslot[1].slot = 0;
+		core->workslot[1].slot = -1;
+
+		/* or did it switch directly to pending work? */
+		if (report->active_slot == core->workslot[2].slot) {
+			applog(LOG_INFO, "KnC: New work on %d.%d.%d, %d %d %d %d (pending)", core->die->channel, core->die->die, core->core, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+			if (core->workslot[0].work)
+				free_work(core->workslot[0].work);
+			core->workslot[0] = core->workslot[2];
+			core->workslot[2].work = NULL;
+			core->workslot[2].slot = -1;
+		}
 	}
 
+	if (report->next_state && core->workslot[2].slot > 0 && (core->workslot[2].slot == report->next_slot  || report->next_slot == -1)) {
+		had_event = true;
+		applog(LOG_INFO, "KnC: Accepted work on %d.%d.%d, %d %d %d %d (pending)", core->die->channel, core->die->die, core->core, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+		/* core accepted next work */
+		if (core->workslot[1].work)
+			free_work(core->workslot[1].work);
+		core->workslot[1] = core->workslot[2];
+		core->workslot[2].work = NULL;
+		core->workslot[2].slot = -1;
+	}
+
+	if (core->workslot[2].work && knc_transfer_completed(core->die->knc, core->transfer_stamp)) {
+		had_event = true;
+		applog(LOG_INFO, "KnC: Setwork failed on core %d.%d.%d?", core->die->channel, core->die->die, core->core);
+		free_work(core->workslot[2].work);
+		core->workslot[2].slot = -1;
+	}
+
+	if (had_event)
+		applog(LOG_INFO, "KnC: Exit report on %d.%d.%d, %d %d / %d %d %d", core->die->channel, core->die->die, core->core, report->active_slot, report->next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+
 	return 0;
+}
+
+static void knc_process_responses(struct thr_info *thr)
+{
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct knc_state *knc = cgpu->device_data;
+	struct knc_spi_buffer *buffer = &knc->spi_buffer[knc->read_buffer];
+	while (buffer->state == KNC_SPI_DONE) {
+		int i;
+		for (i = 0; i < buffer->responses; i++) {
+			struct knc_spi_response *response_info = &buffer->response_info[i];
+			uint8_t *rxbuf = &buffer->rxbuf[response_info->offset];
+			struct knc_core_state *core = response_info->core;
+			int status = knc_decode_response(rxbuf, response_info->request_length, &rxbuf, response_info->response_length);
+			/* Invert KNC_ACCEPTED to simplify logics below */
+			if (response_info->type == KNC_SETWORK && !KNC_IS_ERROR(status))
+				status ^= KNC_ACCEPTED;
+			if (core->die->version != KNC_VERSION_JUPITER && status != 0) {
+				applog(LOG_ERR, "KnC %d.%d.%d: Communication error (%x / %d)", core->die->channel, core->die->die, core->core, status, i);
+				if (status == KNC_ACCEPTED && core->generation != ~0) {
+					/* Core refused our work vector. Likely out of sync. Reset it */
+					core->timeout = now;
+				} else {
+					knc_core_failure(core);
+				}
+			}
+			switch(response_info->type) {
+			case KNC_REPORT:
+			case KNC_SETWORK:
+				/* Should we care about failed SETWORK explicit? Or simply handle it by next state not loaded indication in reports?  */
+				knc_core_process_report(thr, core, rxbuf);
+				break;
+			}
+		}
+
+		buffer->state = KNC_SPI_IDLE;
+		buffer->responses = 0;
+		buffer->size = 0;
+		knc->read_buffer += 1;
+		knc->read_buffer_count += 1;
+		if (knc->read_buffer >= KNC_SPI_BUFFERS)
+			knc->read_buffer = 0;
+		buffer = &knc->spi_buffer[knc->read_buffer];
+	}
+
 }
 
 static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core, struct work *work, bool clean)
@@ -316,13 +557,12 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 	uint8_t request[request_length];
 	int response_length = 1 + 1 + (1 + 4) * 5;
 	uint8_t response[response_length];
-	int status;
 
 	int slot = knc_core_next_slot(core);
 	if (slot < 0)
 		goto error;
 
-	applog(LOG_INFO, "KnC setwork%s %d.%d.%d slot %x", clean ? " CLEAN" : "", core->die->channel, core->die->die, core->core, slot);
+	applog(LOG_INFO, "KnC setwork%s  %d.%d.%d = %d, %d %d / %d %d %d", clean ? " CLEAN" : "", core->die->channel, core->die->die, core->core, slot, core->report.active_slot, core->report.next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 	if (!clean && !knc_core_need_work(core))
 		goto error;
 
@@ -331,30 +571,25 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 		if (clean) {
 			/* Double halt to get rid of any previous queued work */
 			request_length = knc_prepare_jupiter_halt(request, core->die->die, core->core);
-			knc_syncronous_transfer(knc->ctx, core->die->channel, request_length, request, 0, NULL);
-			knc_syncronous_transfer(knc->ctx, core->die->channel, request_length, request, 0, NULL);
+			knc_transfer(thr, core, request_length, request, 0, KNC_NO_RESPONSE, 0);
+			knc_transfer(thr, core, request_length, request, 0, KNC_NO_RESPONSE, 0);
 		}
 		request_length = knc_prepare_jupiter_setwork(request, core->die->die, core->core, slot, work);
-		knc_syncronous_transfer(knc->ctx, core->die->channel, request_length, request, 0, NULL);
+		knc_transfer(thr, core, request_length, request, 0, KNC_NO_RESPONSE, 0);
 		break;
 	case KNC_VERSION_NEPTUNE:
 		request_length = knc_prepare_neptune_setwork(request, core->die->die, core->core, slot, work, clean);
-		status = knc_syncronous_transfer(knc->ctx, core->die->channel, request_length, request, response_length, response);
-		if (status != KNC_ACCEPTED) {
-			applog(LOG_INFO, "KnC: Communication error %x", status);
-			goto error;
-		}
-		knc_core_process_report(thr, core, response);
+		knc_transfer(thr, core, request_length, request, response_length, KNC_SETWORK, slot);
 		break;
 	default:
 		goto error;
 	}
 
-	core->workslot[1].work = work;
-	core->workslot[1].slot = slot;
-	core->generation = knc->generation;
+	core->workslot[2].work = work;
+	core->workslot[2].slot = slot;
 	core->works++;
 	core->die->knc->works++;
+	core->transfer_stamp = knc_transfer_stamp(knc);
 
 	timeradd(&now, &core_submit_interval, &core->hold_work_until);
 	timeradd(&now, &core_timeout_interval, &core->timeout);
@@ -364,16 +599,12 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 error:
 	applog(LOG_INFO, "KnC: %d.%d.%d Failed to setwork (%d)",
 			core->die->channel, core->die->die, core->core, core->errors_now);
-	if (core->generation != ~0) {
-		core->generation = ~0;	/* Flush it, We are likely out of sync */
-	} else {
-		knc_core_failure(core);
-	}
+	knc_core_failure(core);
 	free_work(work);
 	return -1;
 }
 
-static int knc_core_get_report(struct thr_info *thr, struct knc_core_state *core)
+static int knc_core_request_report(struct thr_info *thr, struct knc_core_state *core)
 {
 	struct knc_state *knc = core->die->knc;
 	struct cgpu_info *cgpu = knc->cgpu;
@@ -381,21 +612,18 @@ static int knc_core_get_report(struct thr_info *thr, struct knc_core_state *core
 	uint8_t request[request_length];
 	int response_length = 1 + 1 + (1 + 4) * 5;
 	uint8_t response[response_length];
-	int status;
+
+	applog(LOG_DEBUG, "KnC: %d.%d.%d Request report", core->die->channel, core->die->die, core->core);
 
 	request_length = knc_prepare_report(request, core->die->die, core->core);
 
 	switch(core->die->version) {
 	case KNC_VERSION_JUPITER:
 		response_length = 1 + 1 + (1 + 4);
-		knc_syncronous_transfer(knc->ctx, core->die->channel, request_length, request, response_length, response);
-		knc_core_process_report(thr, core, response);
+		knc_transfer(thr, core, request_length, request, response_length, KNC_REPORT, 0);
 		return 0;
 	case KNC_VERSION_NEPTUNE:
-		status = knc_syncronous_transfer(knc->ctx, core->die->channel, request_length, request, response_length, response);
-		if (status != 0)
-		    break;
-		knc_core_process_report(thr, core, response);
+		knc_transfer(thr, core, request_length, request, response_length, KNC_REPORT, 0);
 		return 0;
 	}
 
@@ -424,6 +652,8 @@ static int64_t knc_scanwork(struct thr_info *thr)
 
 	int i;
 
+        knc_process_responses(thr);
+
 	if (timercmp(&knc->next_error_interval, &now, >)) {
 		/* Reset hw error limiter every check interval */
 		timeradd(&now, &core_check_interval, &knc->next_error_interval);
@@ -436,35 +666,43 @@ static int64_t knc_scanwork(struct thr_info *thr)
 	for (i = 0; i < knc->cores; i++) {
 		bool clean = false;
 		struct knc_core_state *core = &knc->core[i];
-		if (core->generation != knc->generation || timercmp(&core->timeout, &now, <)) {
+		if (core->generation != knc->generation) {
+			applog(LOG_INFO, "KnC %d.%d.%d flush gen=%d/%d", core->die->channel, core->die->die, core->core, core->generation, knc->generation);
 			/* clean set state, forget everything */
-			clean = true;
 			int slot;
 			for (slot = 0; slot < WORKS_PER_CORE; slot ++) {
 				if (core->workslot[slot].work)
 					free_work(core->workslot[slot].work);
+				core->workslot[slot].slot = -1;
 			}
 			core->hold_work_until = now;
+			core->generation = knc->generation;
+		} else if (timercmp(&core->timeout, &now, <=) && (core->workslot[0].slot > 0 || core->workslot[1].slot > 0 || core->workslot[2].slot > 0)) {
+			applog(LOG_ERR, "KnC %d.%d.%d timeout", core->die->channel, core->die->die, core->core, core->generation, knc->generation);
+			clean = true;
 		}
+		if (!knc_core_has_work(core))
+			clean = true;
+		if (core->workslot[0].slot < 0 && core->workslot[1].slot < 0 && core->workslot[2].slot < 0)
+			clean = true;
 		if (knc_core_disabled(core))
 			continue;
-		if (i == knc->scan_adjust_core) {
-			/* TODO: Do a forced submit to even out work generation over time.
-			 * but don't forget scheduled works until the new one gets active
-			 */
-		}
-		if (knc_core_need_work(core)) {
+		if (i == knc->scan_adjust_core)
+			clean = true;
+		if ((knc_core_need_work(core) || clean) && !knc->startup) {
 			struct work *work = get_work(thr, thr->id);
 			knc_core_send_work(thr, core, work, clean);
 		} else {
-			knc_core_get_report(thr, core);
+			knc_core_request_report(thr, core);
 		}
 	}
+	/* knc->startup delays initial work submission until we have had chance to query all cores on their current status, to avoid slot number collisions with earlier run */
 	if (knc->startup)
 		knc->startup--;
-
-	if (knc->scan_adjust_core < knc->cores)
+	else if (knc->scan_adjust_core < knc->cores)
 		knc->scan_adjust_core++;
+
+	knc_flush(thr);
 
 	return (int64_t)(knc->KNC_COUNT_UNIT - last_count) * 0x100000000UL;
 }
@@ -476,7 +714,7 @@ static void knc_flush_work(struct cgpu_info *cgpu)
 	applog(LOG_INFO, "KnC running flushwork");
 
 	knc->generation++;
-	knc->scan_adjust_core=0;
+	knc->scan_adjust_core=-knc->cores;
 	if (!knc->generation)
 		knc->generation++;
 }
