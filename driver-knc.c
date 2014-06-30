@@ -236,7 +236,7 @@ static int knc_transfer_stamp(struct knc_state *knc)
 static int knc_transfer_completed(struct knc_state *knc, int stamp)
 {
 	/* signed delta math, counter wrap OK */
-	return (knc->read_buffer_count - stamp) >= 0;
+	return (int)(knc->read_buffer_count - stamp) >= 1;
 }
 
 static bool knc_detect_one(void *ctx)
@@ -344,6 +344,16 @@ static int knc_core_hold_work(struct knc_core_state *core)
 	return timercmp(&core->hold_work_until, &now, >);
 }
 
+static int knc_core_has_work(struct knc_core_state *core)
+{
+	int i;
+	for (i = 0; i < WORKS_PER_CORE; i++) {
+		if (core->workslot[i].slot > 0)
+			return true;
+	}
+	return false;
+}
+
 static int knc_core_need_work(struct knc_core_state *core)
 {
 	return !knc_core_hold_work(core) && !core->workslot[1].work && !core->workslot[2].work;
@@ -354,13 +364,35 @@ static int knc_core_disabled(struct knc_core_state *core)
 	return timercmp(&core->disabled_until, &now, >);
 }
 
-static int knc_core_next_slot(struct knc_core_state *core)
+static int _knc_core_next_slot(struct knc_core_state *core)
 {
-	/* Avoid lot #0 and #15. #0 is "no work assigned" and #15 is seen on bad cores */
+	/* Avoid slot #0 and #15. #0 is "no work assigned" and #15 is seen on bad cores */
 	int slot = core->last_slot + 1;
 	if (slot >= 15)
 		slot = 1;
 	core->last_slot = slot;
+	return slot;
+}
+
+static bool knc_core_slot_busy(struct knc_core_state *core, int slot)
+{
+	if (slot == core->report.active_slot)
+		return true;
+	if (slot == core->report.next_slot)
+		return true;
+	int i;
+	for (i = 0; i < WORKS_PER_CORE; i++) {
+		if (slot == core->workslot[i].slot)
+			return true;
+	}
+	return false;
+}
+
+static int knc_core_next_slot(struct knc_core_state *core)
+{
+	int slot;
+	do slot = _knc_core_next_slot(core);
+	while (knc_core_slot_busy(core, slot));
 	return slot;
 }
 
@@ -394,6 +426,8 @@ static int knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *co
 				/* Good share */
 				core->shares++;
 				core->die->knc->shares++;
+				/* This core is useful. Ignore any errors */
+				core->errors_now = 0;
 			} else {
 				applog(LOG_INFO, "KnC: %d.%d.%d hwerror nonce %08x", core->die->channel, core->die->die, core->core, nonce);
 				/* Bad share */
@@ -407,7 +441,9 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 {
 	struct knc_report *report = &core->report;
 	knc_decode_report(response, report, core->die->version);
+	bool had_event = false;
 
+	applog(LOG_DEBUG, "KnC %d.%d.%d: Process report %d %d(%d) / %d %d %d", core->die->channel, core->die->die, core->core, report->active_slot, report->next_slot, report->next_state, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 	int n;
 	for (n = 0; n < KNC_NONCES_PER_REPORT; n++) {
 		if (report->nonce[n].slot < 0)
@@ -420,6 +456,8 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 	}
 
 	if (report->active_slot && core->workslot[0].slot != report->active_slot) {
+		had_event = true;
+		applog(LOG_INFO, "KnC: New work on %d.%d.%d, %d %d / %d %d %d", core->die->channel, core->die->die, core->core, report->active_slot, report->next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 		/* Core switched to next work */
 		if (core->workslot[0].work) {
 			core->die->knc->completed++;
@@ -433,6 +471,7 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 
 		/* or did it switch directly to pending work? */
 		if (report->active_slot == core->workslot[2].slot) {
+			applog(LOG_INFO, "KnC: New work on %d.%d.%d, %d %d %d %d (pending)", core->die->channel, core->die->die, core->core, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 			if (core->workslot[0].work)
 				free_work(core->workslot[0].work);
 			core->workslot[0] = core->workslot[2];
@@ -442,18 +481,25 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 	}
 
 	if (report->next_state && core->workslot[2].slot > 0 && (core->workslot[2].slot == report->next_slot  || report->next_slot == -1)) {
+		had_event = true;
+		applog(LOG_INFO, "KnC: Accepted work on %d.%d.%d, %d %d %d %d (pending)", core->die->channel, core->die->die, core->core, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 		/* core accepted next work */
 		if (core->workslot[1].work)
 			free_work(core->workslot[1].work);
 		core->workslot[1] = core->workslot[2];
 		core->workslot[2].work = NULL;
+		core->workslot[2].slot = -1;
 	}
 
 	if (core->workslot[2].work && knc_transfer_completed(core->die->knc, core->transfer_stamp)) {
+		had_event = true;
 		applog(LOG_INFO, "KnC: Setwork failed on core %d.%d.%d?", core->die->channel, core->die->die, core->core);
 		free_work(core->workslot[2].work);
 		core->workslot[2].slot = -1;
 	}
+
+	if (had_event)
+		applog(LOG_INFO, "KnC: Exit report on %d.%d.%d, %d %d / %d %d %d", core->die->channel, core->die->die, core->core, report->active_slot, report->next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 
 	return 0;
 }
@@ -470,11 +516,17 @@ static void knc_process_responses(struct thr_info *thr)
 			uint8_t *rxbuf = &buffer->rxbuf[response_info->offset];
 			struct knc_core_state *core = response_info->core;
 			int status = knc_decode_response(rxbuf, response_info->request_length, &rxbuf, response_info->response_length);
-			if (response_info->type == KNC_SETWORK)
+			/* Invert KNC_ACCEPTED to simplify logics below */
+			if (response_info->type == KNC_SETWORK && !KNC_IS_ERROR(status))
 				status ^= KNC_ACCEPTED;
 			if (core->die->version != KNC_VERSION_JUPITER && status != 0) {
 				applog(LOG_ERR, "KnC %d.%d.%d: Communication error (%x / %d)", core->die->channel, core->die->die, core->core, status, i);
-				knc_core_failure(core);
+				if (status == KNC_ACCEPTED && core->generation != ~0) {
+					/* Core refused our work vector. Likely out of sync. Reset it */
+					core->timeout = now;
+				} else {
+					knc_core_failure(core);
+				}
 			}
 			switch(response_info->type) {
 			case KNC_REPORT:
@@ -510,7 +562,7 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 	if (slot < 0)
 		goto error;
 
-	applog(LOG_INFO, "KnC setwork%s %d.%d.%d slot %x", clean ? " CLEAN" : "", core->die->channel, core->die->die, core->core, slot);
+	applog(LOG_INFO, "KnC setwork%s  %d.%d.%d = %d, %d %d / %d %d %d", clean ? " CLEAN" : "", core->die->channel, core->die->die, core->core, slot, core->report.active_slot, core->report.next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 	if (!clean && !knc_core_need_work(core))
 		goto error;
 
@@ -533,9 +585,8 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 		goto error;
 	}
 
-	core->workslot[1].work = work;
-	core->workslot[1].slot = slot;
-	core->generation = knc->generation;
+	core->workslot[2].work = work;
+	core->workslot[2].slot = slot;
 	core->works++;
 	core->die->knc->works++;
 	core->transfer_stamp = knc_transfer_stamp(knc);
@@ -548,11 +599,7 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 error:
 	applog(LOG_INFO, "KnC: %d.%d.%d Failed to setwork (%d)",
 			core->die->channel, core->die->die, core->core, core->errors_now);
-	if (core->generation != ~0) {
-		core->generation = ~0;	/* Flush it, We are likely out of sync */
-	} else {
-		knc_core_failure(core);
-	}
+	knc_core_failure(core);
 	free_work(work);
 	return -1;
 }
@@ -565,6 +612,8 @@ static int knc_core_request_report(struct thr_info *thr, struct knc_core_state *
 	uint8_t request[request_length];
 	int response_length = 1 + 1 + (1 + 4) * 5;
 	uint8_t response[response_length];
+
+	applog(LOG_DEBUG, "KnC: %d.%d.%d Request report", core->die->channel, core->die->die, core->core);
 
 	request_length = knc_prepare_report(request, core->die->die, core->core);
 
@@ -617,9 +666,9 @@ static int64_t knc_scanwork(struct thr_info *thr)
 	for (i = 0; i < knc->cores; i++) {
 		bool clean = false;
 		struct knc_core_state *core = &knc->core[i];
-		if (core->generation != knc->generation || timercmp(&core->timeout, &now, <)) {
+		if (core->generation != knc->generation) {
+			applog(LOG_INFO, "KnC %d.%d.%d flush gen=%d/%d", core->die->channel, core->die->die, core->core, core->generation, knc->generation);
 			/* clean set state, forget everything */
-			clean = true;
 			int slot;
 			for (slot = 0; slot < WORKS_PER_CORE; slot ++) {
 				if (core->workslot[slot].work)
@@ -627,22 +676,30 @@ static int64_t knc_scanwork(struct thr_info *thr)
 				core->workslot[slot].slot = -1;
 			}
 			core->hold_work_until = now;
+			core->generation = knc->generation;
+		} else if (timercmp(&core->timeout, &now, <=) && (core->workslot[0].slot > 0 || core->workslot[1].slot > 0 || core->workslot[2].slot > 0)) {
+			applog(LOG_ERR, "KnC %d.%d.%d timeout", core->die->channel, core->die->die, core->core, core->generation, knc->generation);
+			clean = true;
 		}
+		if (!knc_core_has_work(core))
+			clean = true;
+		if (core->workslot[0].slot < 0 && core->workslot[1].slot < 0 && core->workslot[2].slot < 0)
+			clean = true;
 		if (knc_core_disabled(core))
 			continue;
 		if (i == knc->scan_adjust_core)
 			clean = true;
-		if (knc_core_need_work(core)) {
+		if ((knc_core_need_work(core) || clean) && !knc->startup) {
 			struct work *work = get_work(thr, thr->id);
 			knc_core_send_work(thr, core, work, clean);
 		} else {
 			knc_core_request_report(thr, core);
 		}
 	}
+	/* knc->startup delays initial work submission until we have had chance to query all cores on their current status, to avoid slot number collisions with earlier run */
 	if (knc->startup)
 		knc->startup--;
-
-	if (knc->scan_adjust_core < knc->cores)
+	else if (knc->scan_adjust_core < knc->cores)
 		knc->scan_adjust_core++;
 
 	knc_flush(thr);
@@ -657,7 +714,7 @@ static void knc_flush_work(struct cgpu_info *cgpu)
 	applog(LOG_INFO, "KnC running flushwork");
 
 	knc->generation++;
-	knc->scan_adjust_core=0;
+	knc->scan_adjust_core=-knc->cores;
 	if (!knc->generation)
 		knc->generation++;
 }
