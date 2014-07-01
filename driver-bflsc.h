@@ -156,6 +156,11 @@ struct bflsc_info {
 	struct bflsc_work *bworks;
 	uint64_t cortex_nonces[0x80];
 	uint64_t cortex_hw[0x80];
+
+	int volt_next;
+	bool volt_next_stat;
+	int clock_next;
+	bool clock_next_stat;
 };
 
 #define BFLSC_XLINKHDR '@'

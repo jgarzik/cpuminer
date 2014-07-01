@@ -443,6 +443,7 @@ The list of requests - a (*) means it requires privileged access - and replies:
                                AVA+BTB opt=freq val=256 to 1024 - chip frequency
                                BTB opt=millivolts val=1000 to 1400 - corevoltage
                                MBA opt=reset val=0 to chipcount - reset a chip
+                               BMA opt=volt val=0-9 opt=clock val=0-15
 
  lcd           LCD            An all-in-one short status summary of the miner
                               e.g. Elapsed,GHS av,GHS 5m,GHS 5s,Temp,

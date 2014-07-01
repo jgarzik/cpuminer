@@ -987,6 +987,70 @@ static void bflsc_flush_work(struct cgpu_info *bflsc)
 		flush_one_dev(bflsc, dev);
 }
 
+static void bflsc_set_volt(struct cgpu_info *bflsc, int dev)
+{
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
+	char buf[BFLSC_BUFSIZ+1];
+	char msg[16];
+	int err, amount;
+	bool sent;
+
+	// Device is gone
+	if (bflsc->usbinfo.nodev)
+		return;
+
+	snprintf(msg, sizeof(msg), "V%dX", sc_info->volt_next);
+
+	mutex_lock(&bflsc->device_mutex);
+
+	err = send_recv_ss(bflsc, dev, &sent, &amount,
+				msg, strlen(msg), C_SETVOLT,
+				buf, sizeof(buf)-1, C_REPLYSETVOLT, READ_NL);
+	mutex_unlock(&(bflsc->device_mutex));
+
+	if (!sent)
+		bflsc_applog(bflsc, dev, C_SETVOLT, amount, err);
+	else {
+		// Don't care
+	}
+
+	sc_info->volt_next_stat = false;
+
+	return;
+}
+
+static void bflsc_set_clock(struct cgpu_info *bflsc, int dev)
+{
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
+	char buf[BFLSC_BUFSIZ+1];
+	char msg[16];
+	int err, amount;
+	bool sent;
+
+	// Device is gone
+	if (bflsc->usbinfo.nodev)
+		return;
+
+	snprintf(msg, sizeof(msg), "F%dX", sc_info->clock_next);
+
+	mutex_lock(&bflsc->device_mutex);
+
+	err = send_recv_ss(bflsc, dev, &sent, &amount,
+				msg, strlen(msg), C_SETCLOCK,
+				buf, sizeof(buf)-1, C_REPLYSETCLOCK, READ_NL);
+	mutex_unlock(&(bflsc->device_mutex));
+
+	if (!sent)
+		bflsc_applog(bflsc, dev, C_SETCLOCK, amount, err);
+	else {
+		// Don't care
+	}
+
+	sc_info->clock_next_stat = false;
+
+	return;
+}
+
 static void bflsc_flash_led(struct cgpu_info *bflsc, int dev)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
@@ -1074,6 +1138,14 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 		applog(LOG_ERR, "%s%i: temp invalid xlink device %d - limit %d",
 			bflsc->drv->name, bflsc->device_id, dev, sc_info->sc_count - 1);
 		return false;
+	}
+
+	if (sc_info->volt_next_stat || sc_info->clock_next_stat) {
+		if (sc_info->volt_next_stat)
+			bflsc_set_volt(bflsc, dev);
+		if (sc_info->clock_next_stat)
+			bflsc_set_clock(bflsc, dev);
+		return true;
 	}
 
 	// Flash instead of Temp
@@ -2087,6 +2159,61 @@ static bool bflsc_get_stats(struct cgpu_info *bflsc)
 	return allok;
 }
 
+static char *bflsc_set(struct cgpu_info *bflsc, char *option, char *setting, char *replybuf)
+{
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
+	int val;
+
+	if (sc_info->ident != IDENT_BMA) {
+		strcpy(replybuf, "no set options available");
+		return replybuf;
+	}
+
+	if (strcasecmp(option, "help") == 0) {
+		sprintf(replybuf, "volt: range 0-9 clock: range 0-15");
+		return replybuf;
+	}
+
+	if (strcasecmp(option, "volt") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing volt setting");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < 0 || val > 9) {
+			sprintf(replybuf, "invalid volt: '%s' valid range 0-9",
+					  setting);
+		}
+
+		sc_info->volt_next = val;
+		sc_info->volt_next_stat = true;
+
+		return NULL;
+	}
+
+	if (strcasecmp(option, "clock") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing clock setting");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < 0 || val > 15) {
+			sprintf(replybuf, "invalid clock: '%s' valid range 0-15",
+					  setting);
+		}
+
+		sc_info->clock_next = val;
+		sc_info->clock_next_stat = true;
+
+		return NULL;
+	}
+
+	sprintf(replybuf, "Unknown option: %s", option);
+	return replybuf;
+}
+
 static void bflsc_identify(struct cgpu_info *bflsc)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
@@ -2225,6 +2352,7 @@ struct device_drv bflsc_drv = {
 	.get_api_stats = bflsc_api_stats,
 	.get_statline_before = get_bflsc_statline_before,
 	.get_stats = bflsc_get_stats,
+	.set_device = bflsc_set,
 	.identify_device = bflsc_identify,
 	.thread_prepare = bflsc_thread_prepare,
 	.thread_init = bflsc_thread_init,
