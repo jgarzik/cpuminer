@@ -663,6 +663,8 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 		}
 		else if (strstr(firstname, BFLSC_DI_CHIPS))
 			sc_dev.chips = strdup(fields[0]);
+		else if (strstr(firstname, BFLSC28_DI_ASICS))
+			sc_dev.chips = strdup(fields[0]);
 
 		freebreakdown(&count, &firstname, &fields);
 	}
