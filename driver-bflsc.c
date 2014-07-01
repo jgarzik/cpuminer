@@ -1031,7 +1031,7 @@ static void bflsc_set_clock(struct cgpu_info *bflsc, int dev)
 	if (bflsc->usbinfo.nodev)
 		return;
 
-	snprintf(msg, sizeof(msg), "F%dX", sc_info->clock_next);
+	snprintf(msg, sizeof(msg), "F%XX", sc_info->clock_next);
 
 	mutex_lock(&bflsc->device_mutex);
 
