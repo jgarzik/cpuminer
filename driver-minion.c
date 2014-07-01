@@ -3033,6 +3033,7 @@ static enum nonce_state oknonce(struct thr_info *thr, struct cgpu_info *minioncg
 	struct timeval now;
 	K_ITEM *item, *tail;
 	uint32_t min_task_id, max_task_id;
+	uint64_t chip_good;
 	bool redo;
 
 	// if the chip has been disabled - but we don't do that - so not possible (yet)
@@ -3148,7 +3149,7 @@ retest:
 		if (redo)
 			minioninfo->nonces_recovered[chip]++;
 
-		minioninfo->chip_good[chip]++;
+		chip_good = ++(minioninfo->chip_good[chip]);
 		minioninfo->core_good[chip][core]++;
 		DATA_WORK(item)->nonces++;
 
@@ -3178,6 +3179,12 @@ retest:
 			}
 		}
 		K_WUNLOCK(minioninfo->hfree_list);
+
+		// Reset the chip after 8 nonces found
+		if (chip_good == 8) {
+			memcpy(&(minioninfo->last_reset[chip]), &now, sizeof(now));
+			init_chip(minioncgpu, minioninfo, chip);
+		}
 
 		return NONCE_GOOD_NONCE;
 	}
