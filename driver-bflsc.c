@@ -866,7 +866,8 @@ reinit:
 		}
 	}
 
-	if (usb_ident(bflsc) == IDENT_BMA) {
+	sc_info->ident = usb_ident(bflsc);
+	if (sc_info->ident == IDENT_BMA) {
 		bflsc->drv->queue_full = &bflsc28_queue_full;
 		sc_info->scan_sleep_time = BMA_SCAN_TIME;
 		sc_info->default_ms_work = BMA_WORK_TIME;
@@ -1249,8 +1250,13 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 
 static void inc_core_errors(struct bflsc_info *info, int8_t core)
 {
-	if (core >= 0 && core < 16)
-		info->core_hw[core]++;
+	if (info->ident == IDENT_BMA) {
+		if (core >= 0)
+			info->cortex_hw[core]++;
+	} else {
+		if (core >= 0 && core < 16)
+			info->core_hw[core]++;
+	}
 }
 
 static void inc_bflsc_errors(struct thr_info *thr, struct bflsc_info *info, int8_t core)
@@ -1261,8 +1267,13 @@ static void inc_bflsc_errors(struct thr_info *thr, struct bflsc_info *info, int8
 
 static void inc_bflsc_nonces(struct bflsc_info *info, int8_t core)
 {
-	if (core >= 0 && core < 16)
-		info->core_nonces[core]++;
+	if (info->ident == IDENT_BMA) {
+		if (core >= 0)
+			info->cortex_nonces[core]++;
+	} else {
+		if (core >= 0 && core < 16)
+			info->core_nonces[core]++;
+	}
 }
 
 struct work *bflsc_work_by_uid(struct cgpu_info *bflsc, struct bflsc_info *sc_info, int id)
@@ -1303,7 +1314,12 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 		return;
 	}
 
-	if (sc_info->que_noncecount != QUE_NONCECOUNT_V1) {
+	if (sc_info->ident == IDENT_BMA) {
+		unsigned int ucore;
+
+		if (sscanf(fields[QUE_CC], "%x", &ucore) == 1)
+			core = ucore;
+	} else if (sc_info->que_noncecount != QUE_NONCECOUNT_V1) {
 		unsigned int ucore;
 
 		if (sscanf(fields[QUE_CHIP_V2], "%x", &ucore) == 1)
@@ -1328,12 +1344,11 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 		inc_bflsc_errors(thr, sc_info, core);
 	}
 
-	if (usb_ident(bflsc) == IDENT_BMA) {
+	if (sc_info->ident == IDENT_BMA) {
 		int uid;
 
 		if (sscanf(fields[QUE_UID], "%04x", &uid) == 1)
 			work = bflsc_work_by_uid(bflsc, sc_info, uid);
-		/* FIXME: Read the QUE_CC field and store stats per cortex */
 	} else {
 		char midstate[MIDSTATE_BYTES] = {}, blockdata[MERKLE_BYTES] = {};
 
@@ -1825,6 +1840,7 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 			free(oldbwork);
 		}
 		wr_unlock(&bflsc->qlock);
+		sc_info->sc_devs[0].work_queued++;
 	}
 	if (queued < created)
 		ret = true;
@@ -1953,7 +1969,7 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 	}
 
 	waited = restart_wait(thr, sc_info->scan_sleep_time);
-	if (waited == ETIMEDOUT && usb_ident(bflsc) != IDENT_BMA) {
+	if (waited == ETIMEDOUT && sc_info->ident != IDENT_BMA) {
 		unsigned int old_sleep_time, new_sleep_time = 0;
 		int min_queued = sc_info->que_size;
 		/* Only adjust the scan_sleep_time if we did not receive a
@@ -2097,8 +2113,10 @@ static struct api_data *bflsc_api_stats(struct cgpu_info *bflsc)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct api_data *root = NULL;
+	char data[4096];
 	char buf[256];
-	int i;
+	int i, j, off;
+	size_t len;
 
 //if no x-link ... etc
 	rd_lock(&(sc_info->stat_lock));
@@ -2146,14 +2164,51 @@ else a whole lot of something like these ... etc
 	root = api_add_volts(root, "X-%d-Vcc2", &(sc_info->vcc2), false);
 	root = api_add_volts(root, "X-%d-Vmain", &(sc_info->vmain), false);
 */
-	if (sc_info->que_noncecount != QUE_NONCECOUNT_V1) {
+	if (sc_info->ident == IDENT_BMA) {
+		for (i = 0; i < 128; i += 16) {
+			data[0] = '\0';
+			off = 0;
+			for (j = 0; j < 16; j++) {
+				len = snprintf(data+off, sizeof(data)-off,
+						"%s%"PRIu64,
+						j > 0 ? " " : "",
+						sc_info->cortex_nonces[i+j]);
+				if (len >= (sizeof(data)-off))
+					off = sizeof(data)-1;
+				else {
+					if (len > 0)
+						off += len;
+				}
+			}
+			sprintf(buf, "Cortex %02x-%02x Nonces", i, i+15);
+			root = api_add_string(root, buf, data, true);
+		}
+		for (i = 0; i < 128; i += 16) {
+			data[0] = '\0';
+			off = 0;
+			for (j = 0; j < 16; j++) {
+				len = snprintf(data+off, sizeof(data)-off,
+						"%s%"PRIu64,
+						j > 0 ? " " : "",
+						sc_info->cortex_hw[i+j]);
+				if (len >= (sizeof(data)-off))
+					off = sizeof(data)-1;
+				else {
+					if (len > 0)
+						off += len;
+				}
+			}
+			sprintf(buf, "Cortex %02x-%02x HW Errors", i, i+15);
+			root = api_add_string(root, buf, data, true);
+		}
+	} else if (sc_info->que_noncecount != QUE_NONCECOUNT_V1) {
 		for (i = 0; i < 16; i++) {
 			sprintf(buf, "Core%d Nonces", i);
-			root = api_add_int(root, buf, &sc_info->core_nonces[i], false);
+			root = api_add_uint64(root, buf, &sc_info->core_nonces[i], false);
 		}
 		for (i = 0; i < 16; i++) {
 			sprintf(buf, "Core%d HW Errors", i);
-			root = api_add_int(root, buf, &sc_info->core_hw[i], false);
+			root = api_add_uint64(root, buf, &sc_info->core_hw[i], false);
 		}
 	}
 

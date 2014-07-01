@@ -123,6 +123,7 @@ struct bflsc_work {
 };
 
 struct bflsc_info {
+	enum sub_ident ident;
 	enum driver_version driver_version;
 	pthread_rwlock_t stat_lock;
 	struct thr_info results_thr;
@@ -145,13 +146,15 @@ struct bflsc_info {
 	int que_noncecount;
 	int que_fld_min;
 	int que_fld_max;
-	int core_nonces[17];
-	int core_hw[17];
+	uint64_t core_nonces[17];
+	uint64_t core_hw[17];
 	int flush_size;
 	// count of given size, [+2] is for any > QUE_MAX_RESULTS
 	uint64_t result_size[QUE_MAX_RESULTS+2];
 
 	struct bflsc_work *bworks;
+	uint64_t cortex_nonces[0x80];
+	uint64_t cortex_hw[0x80];
 };
 
 #define BFLSC_XLINKHDR '@'
