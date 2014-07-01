@@ -35,7 +35,7 @@
 #define CORE_ERROR_INTERVAL	30
 #define CORE_ERROR_DISABLE_TIME	5*60
 #define CORE_SUBMIT_MIN_TIME	2
-#define CORE_TIMEOUT		10
+#define CORE_TIMEOUT		20
 
 static struct timeval now;
 static const struct timeval core_check_interval = {
@@ -93,7 +93,8 @@ struct knc_die {
 #define MAX_SPI_SIZE		(4096)
 #define MAX_SPI_RESPONSES	(MAX_SPI_SIZE / (2 + 4 + 1 + 1 + 1 + 4))
 #define MAX_SPI_MESSAGE		(128)
-#define KNC_SPI_BUFFERS		(2)
+#define KNC_SPI_BUFFERS		(3)
+
 struct knc_state {
 	struct cgpu_info *cgpu;
 	void *ctx;
@@ -199,10 +200,44 @@ static void knc_flush(struct thr_info *thr)
 			knc->send_buffer = 0;
 		buffer = &knc->spi_buffer[knc->send_buffer];
 		/* Block for SPI to finish a transfer if all buffers are busy */
-		while (buffer->state == KNC_SPI_PENDING)
+		while (buffer->state == KNC_SPI_PENDING) {
+			applog(LOG_DEBUG, "KnC: SPI buffer full (%d), waiting for SPI thread", buffer->responses);
 			pthread_cond_wait(&knc->spi_qcond, &knc->spi_qlock);
+		}
 		pthread_mutex_unlock(&knc->spi_qlock);
 	}
+        knc_process_responses(thr);
+}
+
+static void knc_sync(struct thr_info *thr)
+{
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct knc_state *knc = cgpu->device_data;
+	struct knc_spi_buffer *buffer = &knc->spi_buffer[knc->send_buffer];
+	int sent = 0;
+	pthread_mutex_lock(&knc->spi_qlock);
+	if (buffer->state == KNC_SPI_IDLE && buffer->size > 0) {
+		buffer->state = KNC_SPI_PENDING;
+		pthread_cond_signal(&knc->spi_qcond);
+		knc->send_buffer += 1;
+		knc->send_buffer_count += 1;
+		if (knc->send_buffer >= KNC_SPI_BUFFERS)
+			knc->send_buffer = 0;
+		sent = 1;
+	}
+	int prev_buffer = knc->send_buffer - 1;
+	if (prev_buffer < 0)
+		prev_buffer = KNC_SPI_BUFFERS - 1;
+	buffer = &knc->spi_buffer[prev_buffer];
+	while (buffer->state == KNC_SPI_PENDING)
+		pthread_cond_wait(&knc->spi_qcond, &knc->spi_qlock);
+	pthread_mutex_unlock(&knc->spi_qlock);
+
+	int pending = knc->send_buffer - knc->read_buffer;
+	if (pending <= 0)
+		pending += KNC_SPI_BUFFERS;
+	pending -= 1 - sent;
+	applog(LOG_INFO, "KnC: sync %d pending buffers", pending);
         knc_process_responses(thr);
 }
 
@@ -214,6 +249,7 @@ static void knc_transfer(struct thr_info *thr, struct knc_core_state *core, int 
 	/* FPGA control, request header, request body/response, CRC(4), ACK(1), EXTRA(3) */
 	int msglen = 2 + MAX(request_length, 4 + response_length ) + 4 + 1 + 3;
 	if (buffer->size + msglen > MAX_SPI_SIZE || buffer->responses >= MAX_SPI_RESPONSES) {
+		applog(LOG_INFO, "KnC: SPI buffer sent, %d messages %d bytes", buffer->responses, buffer->size);
 		knc_flush(thr);
 		buffer = &knc->spi_buffer[knc->send_buffer];
 	}
@@ -521,12 +557,11 @@ static void knc_process_responses(struct thr_info *thr)
 				status ^= KNC_ACCEPTED;
 			if (core->die->version != KNC_VERSION_JUPITER && status != 0) {
 				applog(LOG_ERR, "KnC %d.%d.%d: Communication error (%x / %d)", core->die->channel, core->die->die, core->core, status, i);
-				if (status == KNC_ACCEPTED && core->generation != ~0) {
+				if (status == KNC_ACCEPTED) {
 					/* Core refused our work vector. Likely out of sync. Reset it */
 					core->timeout = now;
-				} else {
-					knc_core_failure(core);
 				}
+				knc_core_failure(core);
 			}
 			switch(response_info->type) {
 			case KNC_REPORT:
@@ -546,7 +581,6 @@ static void knc_process_responses(struct thr_info *thr)
 			knc->read_buffer = 0;
 		buffer = &knc->spi_buffer[knc->read_buffer];
 	}
-
 }
 
 static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core, struct work *work, bool clean)
@@ -652,7 +686,7 @@ static int64_t knc_scanwork(struct thr_info *thr)
 
 	int i;
 
-        knc_process_responses(thr);
+	knc_process_responses(thr);
 
 	if (timercmp(&knc->next_error_interval, &now, >)) {
 		/* Reset hw error limiter every check interval */
@@ -666,6 +700,8 @@ static int64_t knc_scanwork(struct thr_info *thr)
 	for (i = 0; i < knc->cores; i++) {
 		bool clean = false;
 		struct knc_core_state *core = &knc->core[i];
+		if (knc_core_disabled(core))
+			continue;
 		if (core->generation != knc->generation) {
 			applog(LOG_INFO, "KnC %d.%d.%d flush gen=%d/%d", core->die->channel, core->die->die, core->core, core->generation, knc->generation);
 			/* clean set state, forget everything */
@@ -685,8 +721,6 @@ static int64_t knc_scanwork(struct thr_info *thr)
 			clean = true;
 		if (core->workslot[0].slot < 0 && core->workslot[1].slot < 0 && core->workslot[2].slot < 0)
 			clean = true;
-		if (knc_core_disabled(core))
-			continue;
 		if (i == knc->scan_adjust_core)
 			clean = true;
 		if ((knc_core_need_work(core) || clean) && !knc->startup) {
