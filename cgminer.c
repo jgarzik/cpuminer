@@ -1123,15 +1123,18 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_CBARG("--avalon2-freq",
 		     set_avalon2_freq, NULL, &opt_set_avalon2_freq,
 		     "Set frequency range for Avalon2, single value or range"),
-	OPT_WITH_CBARG("--avalon2-fan",
-		     set_avalon2_fan, NULL, &opt_set_avalon2_fan,
-		     "Set Avalon2 target fan speed"),
 	OPT_WITH_CBARG("--avalon2-voltage",
 		     set_avalon2_voltage, NULL, &opt_set_avalon2_voltage,
 		     "Set Avalon2 core voltage, in millivolts"),
+	OPT_WITH_CBARG("--avalon2-fan",
+		     set_avalon2_fan, NULL, &opt_set_avalon2_fan,
+		     "Set Avalon2 target fan speed"),
 	OPT_WITH_ARG("--avalon2-cutoff",
 		     set_int_0_to_100, opt_show_intval, &opt_avalon2_overheat,
 		     "Set Avalon2 overheat cut off temperature"),
+	OPT_WITHOUT_ARG("--avalon2-fixed-speed",
+		     set_avalon2_fixed_speed, &opt_avalon2_fan_fixed,
+		     "Set Avalon2 fan to fixed speed"),
 #endif
 #ifdef USE_BAB
 	OPT_WITH_ARG("--bab-options",
@@ -6796,16 +6799,27 @@ void set_target(unsigned char *dest_target, double diff)
 }
 
 #ifdef USE_AVALON2
-void submit_nonce2_nonce(struct thr_info *thr, uint32_t pool_no, uint32_t nonce2, uint32_t nonce)
+void submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool,
+			 uint32_t nonce2, uint32_t nonce)
 {
+	const int thr_id = thr->id;
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct device_drv *drv = cgpu->drv;
-
-	struct pool *pool = pools[pool_no];
 	struct work *work = make_work();
 
+	cg_wlock(&pool->data_lock);
 	pool->nonce2 = nonce2;
+	cg_wunlock(&pool->data_lock);
+
 	gen_stratum_work(pool, work);
+	work->pool = real_pool;
+
+	work->thr_id = thr_id;
+	work->work_block = work_block;
+	work->pool->works++;
+
+	work->mined = true;
+	work->device_diff = MIN(cgpu->drv->max_diff, work->work_difficulty);
 
 	submit_nonce(thr, work, nonce);
 	free_work(work);

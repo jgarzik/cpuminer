@@ -21,8 +21,6 @@
 #define AVA2_RESET_FAULT_DECISECONDS	10
 #define AVA2_IO_SPEED		115200
 
-#define AVA2_DEFAULT_MINERS	10
-#define AVA2_AVA3_MINERS	5
 #define AVA2_DEFAULT_MODULARS	4
 
 #define AVA2_PWM_MAX	0x3FF
@@ -30,15 +28,23 @@
 #define AVA2_DEFAULT_FAN_MIN	0
 #define AVA2_DEFAULT_FAN_MAX	100
 
-#define AVA2_DEFAULT_VOLTAGE	10000 /* V * 10000 */
+#define AVALON2_TEMP_OVERHEAT	88
+
 #define AVA2_DEFAULT_VOLTAGE_MIN	6000
 #define AVA2_DEFAULT_VOLTAGE_MAX	11000
 
-#define AVA2_DEFAULT_FREQUENCY	1500 /* In MH/s */
 #define AVA2_DEFAULT_FREQUENCY_MIN	300
 #define AVA2_DEFAULT_FREQUENCY_MAX	2000
 
-#define AVALON2_TEMP_OVERHEAT	88
+/* Avalon2 default values */
+#define AVA2_DEFAULT_MINERS	10
+#define AVA2_DEFAULT_VOLTAGE	10000 /* v * 10000 */
+#define AVA2_DEFAULT_FREQUENCY	1500 /* In MHs */
+
+/* Avalon3 default values */
+#define AVA2_AVA3_MINERS	5
+#define AVA2_AVA3_VOLTAGE	6625 /* 0.6625v */
+#define AVA2_AVA3_FREQUENCY	400  /* MHz * 11.8 = MHs: 400MHz means ~4.7GHs */
 
 /* Avalon2 protocol package type */
 #define AVA2_H1	'A'
@@ -80,6 +86,11 @@
 #define AVA2_ID_AVA3		3233
 #define AVA2_ID_AVAX		3200
 
+enum avalon2_fan_fixed {
+	FAN_FIXED,
+	FAN_AUTO,
+};
+
 struct avalon2_pkg {
 	uint8_t head[2];
 	uint8_t type;
@@ -91,8 +102,18 @@ struct avalon2_pkg {
 #define avalon2_ret avalon2_pkg
 
 struct avalon2_info {
+	int first;
+	struct timeval last_stratum;
+
 	int fd;
 	int baud;
+
+	int pool_no;
+
+	int modulars[AVA2_DEFAULT_MODULARS];
+	char mm_version[AVA2_DEFAULT_MODULARS][16];
+	int dev_type[AVA2_DEFAULT_MODULARS];
+	bool enable[AVA2_DEFAULT_MODULARS];
 
 	int set_frequency;
 	int set_voltage;
@@ -102,30 +123,19 @@ struct avalon2_info {
 	int power_good[AVA2_DEFAULT_MODULARS];
 
 	int fan_pwm;
+	int temp_max;
 
 	int fan[2 * AVA2_DEFAULT_MODULARS];
 	int temp[2 * AVA2_DEFAULT_MODULARS];
 
-	int temp_max;
-	int temp_history_count;
-	int temp_history_index;
-	int temp_sum;
-	int temp_old;
-
-	bool first;
-	bool new_stratum;
-
-	int pool_no;
-	int diff;
-
 	int local_works[AVA2_DEFAULT_MODULARS];
 	int hw_works[AVA2_DEFAULT_MODULARS];
-	int matching_work[AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS];
+
 	int local_work[AVA2_DEFAULT_MODULARS];
 	int hw_work[AVA2_DEFAULT_MODULARS];
+	int matching_work[AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS];
 
-	int modulars[AVA2_DEFAULT_MODULARS];
-	char mm_version[AVA2_DEFAULT_MODULARS][16];
+	int led_red[AVA2_DEFAULT_MODULARS];
 };
 
 #define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))
@@ -145,7 +155,8 @@ struct avalon2_info {
 extern char *set_avalon2_fan(char *arg);
 extern char *set_avalon2_freq(char *arg);
 extern char *set_avalon2_voltage(char *arg);
+extern char *set_avalon2_fixed_speed(enum avalon2_fan_fixed *f);
+extern enum avalon2_fan_fixed opt_avalon2_fan_fixed;
 extern int opt_avalon2_overheat;
-
 #endif /* USE_AVALON2 */
 #endif	/* _AVALON2_H_ */
