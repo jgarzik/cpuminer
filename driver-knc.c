@@ -36,6 +36,7 @@
 #define CORE_ERROR_DISABLE_TIME	5*60
 #define CORE_SUBMIT_MIN_TIME	2
 #define CORE_TIMEOUT		20
+#define SCAN_ADJUST_RANGE	32
 
 static struct timeval now;
 static const struct timeval core_check_interval = {
@@ -102,7 +103,7 @@ struct knc_state {
 	int dies;
 	struct knc_die die[MAX_ASICS*DIES_PER_ASIC];
 	int cores;
-	int scan_adjust_core;
+	int scan_adjust;
 	int startup;
 	/* Statistics */
 	uint64_t shares;		/* diff1 shares reported by hardware */
@@ -721,7 +722,7 @@ static int64_t knc_scanwork(struct thr_info *thr)
 			clean = true;
 		if (core->workslot[0].slot < 0 && core->workslot[1].slot < 0 && core->workslot[2].slot < 0)
 			clean = true;
-		if (i == knc->scan_adjust_core)
+		if (i % SCAN_ADJUST_RANGE == knc->scan_adjust)
 			clean = true;
 		if ((knc_core_need_work(core) || clean) && !knc->startup) {
 			struct work *work = get_work(thr, thr->id);
@@ -733,8 +734,8 @@ static int64_t knc_scanwork(struct thr_info *thr)
 	/* knc->startup delays initial work submission until we have had chance to query all cores on their current status, to avoid slot number collisions with earlier run */
 	if (knc->startup)
 		knc->startup--;
-	else if (knc->scan_adjust_core < knc->cores)
-		knc->scan_adjust_core++;
+	else if (knc->scan_adjust < SCAN_ADJUST_RANGE)
+		knc->scan_adjust++;
 
 	knc_flush(thr);
 
@@ -748,7 +749,7 @@ static void knc_flush_work(struct cgpu_info *cgpu)
 	applog(LOG_INFO, "KnC running flushwork");
 
 	knc->generation++;
-	knc->scan_adjust_core=-knc->cores;
+	knc->scan_adjust=0;
 	if (!knc->generation)
 		knc->generation++;
 }
