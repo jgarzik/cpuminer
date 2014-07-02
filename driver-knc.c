@@ -78,6 +78,7 @@ struct knc_core_state {
 	struct timeval disabled_until;
 	struct timeval hold_work_until;
 	struct timeval timeout;
+	bool inuse;
 };
 
 struct knc_state;
@@ -560,7 +561,7 @@ static void knc_process_responses(struct thr_info *thr)
 				applog(LOG_ERR, "KnC %d.%d.%d: Communication error (%x / %d)", core->die->channel, core->die->die, core->core, status, i);
 				if (status == KNC_ACCEPTED) {
 					/* Core refused our work vector. Likely out of sync. Reset it */
-					core->timeout = now;
+					core->inuse = false;
 				}
 				knc_core_failure(core);
 			}
@@ -625,6 +626,7 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 	core->works++;
 	core->die->knc->works++;
 	core->transfer_stamp = knc_transfer_stamp(knc);
+	core->inuse = true;
 
 	timeradd(&now, &core_submit_interval, &core->hold_work_until);
 	timeradd(&now, &core_timeout_interval, &core->timeout);
@@ -699,8 +701,8 @@ static int64_t knc_scanwork(struct thr_info *thr)
 	}
 
 	for (i = 0; i < knc->cores; i++) {
-		bool clean = false;
 		struct knc_core_state *core = &knc->core[i];
+		bool clean = !core->inuse;
 		if (knc_core_disabled(core))
 			continue;
 		if (core->generation != knc->generation) {
