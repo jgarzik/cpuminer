@@ -1424,7 +1424,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 
 		memset(nonce_bin, 0, sizeof(nonce_bin));
 		ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, NULL, 100);
-		applog(LOG_ERR, "Rockminer nonce_bin: %02x %02x %02x %02x %02x %02x %02x %02x",
+		applog(LOG_DEBUG, "Rockminer nonce_bin: %02x %02x %02x %02x %02x %02x %02x %02x",
 				  nonce_bin[0], nonce_bin[1], nonce_bin[2], nonce_bin[3],
 				  nonce_bin[4], nonce_bin[5], nonce_bin[6], nonce_bin[7]);
 		if (ret != ICA_NONCE_OK) {
