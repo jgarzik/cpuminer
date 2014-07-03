@@ -2111,7 +2111,7 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 	memset(hashbin, 0, 32);
 	binleft = binlen / 32;
 	if (pool->transactions) {
-		int len = 1, ofs = 0;
+		int len = 0, ofs = 0;
 		const char *txn;
 
 		for (i = 0; i < pool->transactions; i++) {
