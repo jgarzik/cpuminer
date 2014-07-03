@@ -1438,10 +1438,10 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 			case RM_PRODUCT_T1:
 				newname = "LIR"; // Rocketbox
 				info->rmdev.product_id = ROCKMINER_T1;
-				info->rmdev.chip_max = 24;
+				info->rmdev.chip_max = 12;
 				info->rmdev.min_frq = 200;
-				info->rmdev.def_frq = 280;
-				info->rmdev.max_frq = 320;
+				info->rmdev.def_frq = 300;
+				info->rmdev.max_frq = 400;
 				break;
 			case RM_PRODUCT_T2: // what's this?
 				newname = "LIX";
@@ -1457,7 +1457,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 				info->rmdev.chip_max = 4;
 				info->rmdev.min_frq = 200;
 				info->rmdev.def_frq = 270;
-				info->rmdev.max_frq = 290;
+				info->rmdev.max_frq = 400;
 				break;
 			default:
 				continue;
