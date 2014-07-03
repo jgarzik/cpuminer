@@ -1671,6 +1671,125 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 	return;
 }
 
+static void process_history(struct cgpu_info *icarus, struct ICARUS_INFO *info, uint32_t nonce,
+			    uint64_t hash_count, struct timeval *elapsed, struct timeval *tv_start)
+{
+	struct ICARUS_HISTORY *history0, *history;
+	struct timeval tv_history_start, tv_history_finish;
+	int count;
+	double Hs, W, fullnonce;
+	int read_time, i;
+	bool limited;
+	uint32_t values;
+	int64_t hash_count_range;
+	double Ti, Xi;
+
+	// Ignore possible end condition values ...
+	// TODO: set limitations on calculated values depending on the device
+	// to avoid crap values caused by CPU/Task Switching/Swapping/etc
+	if ((nonce & info->nonce_mask) <= END_CONDITION ||
+	    (nonce & info->nonce_mask) >= (info->nonce_mask & ~END_CONDITION))
+		return;
+
+	cgtime(&tv_history_start);
+
+	history0 = &(info->history[0]);
+
+	if (history0->values == 0)
+		timeradd(tv_start, &history_sec, &(history0->finish));
+
+	Ti = (double)(elapsed->tv_sec)
+		+ ((double)(elapsed->tv_usec))/((double)1000000)
+		- ((double)ICARUS_READ_TIME(info->baud));
+	Xi = (double)hash_count;
+	history0->sumXiTi += Xi * Ti;
+	history0->sumXi += Xi;
+	history0->sumTi += Ti;
+	history0->sumXi2 += Xi * Xi;
+
+	history0->values++;
+
+	if (history0->hash_count_max < hash_count)
+		history0->hash_count_max = hash_count;
+	if (history0->hash_count_min > hash_count || history0->hash_count_min == 0)
+		history0->hash_count_min = hash_count;
+
+	if (history0->values >= info->min_data_count
+	&&  timercmp(tv_start, &(history0->finish), >)) {
+		for (i = INFO_HISTORY; i > 0; i--)
+			memcpy(&(info->history[i]),
+				&(info->history[i-1]),
+				sizeof(struct ICARUS_HISTORY));
+
+		// Initialise history0 to zero for summary calculation
+		memset(history0, 0, sizeof(struct ICARUS_HISTORY));
+
+		// We just completed a history data set
+		// So now recalc read_time based on the whole history thus we will
+		// initially get more accurate until it completes INFO_HISTORY
+		// total data sets
+		count = 0;
+		for (i = 1 ; i <= INFO_HISTORY; i++) {
+			history = &(info->history[i]);
+			if (history->values >= MIN_DATA_COUNT) {
+				count++;
+
+				history0->sumXiTi += history->sumXiTi;
+				history0->sumXi += history->sumXi;
+				history0->sumTi += history->sumTi;
+				history0->sumXi2 += history->sumXi2;
+				history0->values += history->values;
+
+				if (history0->hash_count_max < history->hash_count_max)
+					history0->hash_count_max = history->hash_count_max;
+				if (history0->hash_count_min > history->hash_count_min || history0->hash_count_min == 0)
+					history0->hash_count_min = history->hash_count_min;
+			}
+		}
+
+		// All history data
+		Hs = (history0->values*history0->sumXiTi - history0->sumXi*history0->sumTi)
+			/ (history0->values*history0->sumXi2 - history0->sumXi*history0->sumXi);
+		W = history0->sumTi/history0->values - Hs*history0->sumXi/history0->values;
+		hash_count_range = history0->hash_count_max - history0->hash_count_min;
+		values = history0->values;
+
+		// Initialise history0 to zero for next data set
+		memset(history0, 0, sizeof(struct ICARUS_HISTORY));
+
+		fullnonce = W + Hs * (((double)0xffffffff) + 1);
+		read_time = SECTOMS(fullnonce) - ICARUS_READ_REDUCE;
+		if (info->read_time_limit > 0 && read_time > info->read_time_limit) {
+			read_time = info->read_time_limit;
+			limited = true;
+		} else
+			limited = false;
+
+		info->Hs = Hs;
+		info->read_time = read_time;
+
+		info->fullnonce = fullnonce;
+		info->count = count;
+		info->W = W;
+		info->values = values;
+		info->hash_count_range = hash_count_range;
+
+		if (info->min_data_count < MAX_MIN_DATA_COUNT)
+			info->min_data_count *= 2;
+		else if (info->timing_mode == MODE_SHORT)
+			info->do_icarus_timing = false;
+
+		applog(LOG_WARNING, "%s%d Re-estimate: Hs=%e W=%e read_time=%dms%s fullnonce=%.3fs",
+				icarus->drv->name, icarus->device_id, Hs, W, read_time,
+				limited ? " (limited)" : "", fullnonce);
+	}
+	info->history_count++;
+	cgtime(&tv_history_finish);
+
+	timersub(&tv_history_finish, &tv_history_start, &tv_history_finish);
+	timeradd(&tv_history_finish, &(info->history_time), &(info->history_time));
+}
+
 static int64_t icarus_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
@@ -1682,20 +1801,10 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	uint32_t nonce;
 	int64_t hash_count = 0;
 	struct timeval tv_start, tv_finish, elapsed;
-	struct timeval tv_history_start, tv_history_finish;
-	double Ti, Xi;
-	int curr_hw_errors, i;
+	int curr_hw_errors;
 	bool was_hw_error;
 	struct work *work;
-
-	struct ICARUS_HISTORY *history0, *history;
-	int count;
-	double Hs, W, fullnonce;
-	int read_time;
-	bool limited;
 	int64_t estimate_hashes;
-	uint32_t values;
-	int64_t hash_count_range;
 
 	if (unlikely(share_work_tdiff(icarus) > info->fail_time)) {
 		if (info->failing) {
@@ -1814,111 +1923,8 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 			nonce, (long unsigned int)hash_count,
 			(long)elapsed.tv_sec, (long)elapsed.tv_usec);
 
-	// Ignore possible end condition values ... and hw errors
-	// TODO: set limitations on calculated values depending on the device
-	// to avoid crap values caused by CPU/Task Switching/Swapping/etc
-	if (info->do_icarus_timing
-	&&  !was_hw_error
-	&&  ((nonce & info->nonce_mask) > END_CONDITION)
-	&&  ((nonce & info->nonce_mask) < (info->nonce_mask & ~END_CONDITION))) {
-		cgtime(&tv_history_start);
-
-		history0 = &(info->history[0]);
-
-		if (history0->values == 0)
-			timeradd(&tv_start, &history_sec, &(history0->finish));
-
-		Ti = (double)(elapsed.tv_sec)
-			+ ((double)(elapsed.tv_usec))/((double)1000000)
-			- ((double)ICARUS_READ_TIME(info->baud));
-		Xi = (double)hash_count;
-		history0->sumXiTi += Xi * Ti;
-		history0->sumXi += Xi;
-		history0->sumTi += Ti;
-		history0->sumXi2 += Xi * Xi;
-
-		history0->values++;
-
-		if (history0->hash_count_max < hash_count)
-			history0->hash_count_max = hash_count;
-		if (history0->hash_count_min > hash_count || history0->hash_count_min == 0)
-			history0->hash_count_min = hash_count;
-
-		if (history0->values >= info->min_data_count
-		&&  timercmp(&tv_start, &(history0->finish), >)) {
-			for (i = INFO_HISTORY; i > 0; i--)
-				memcpy(&(info->history[i]),
-					&(info->history[i-1]),
-					sizeof(struct ICARUS_HISTORY));
-
-			// Initialise history0 to zero for summary calculation
-			memset(history0, 0, sizeof(struct ICARUS_HISTORY));
-
-			// We just completed a history data set
-			// So now recalc read_time based on the whole history thus we will
-			// initially get more accurate until it completes INFO_HISTORY
-			// total data sets
-			count = 0;
-			for (i = 1 ; i <= INFO_HISTORY; i++) {
-				history = &(info->history[i]);
-				if (history->values >= MIN_DATA_COUNT) {
-					count++;
-
-					history0->sumXiTi += history->sumXiTi;
-					history0->sumXi += history->sumXi;
-					history0->sumTi += history->sumTi;
-					history0->sumXi2 += history->sumXi2;
-					history0->values += history->values;
-
-					if (history0->hash_count_max < history->hash_count_max)
-						history0->hash_count_max = history->hash_count_max;
-					if (history0->hash_count_min > history->hash_count_min || history0->hash_count_min == 0)
-						history0->hash_count_min = history->hash_count_min;
-				}
-			}
-
-			// All history data
-			Hs = (history0->values*history0->sumXiTi - history0->sumXi*history0->sumTi)
-				/ (history0->values*history0->sumXi2 - history0->sumXi*history0->sumXi);
-			W = history0->sumTi/history0->values - Hs*history0->sumXi/history0->values;
-			hash_count_range = history0->hash_count_max - history0->hash_count_min;
-			values = history0->values;
-			
-			// Initialise history0 to zero for next data set
-			memset(history0, 0, sizeof(struct ICARUS_HISTORY));
-
-			fullnonce = W + Hs * (((double)0xffffffff) + 1);
-			read_time = SECTOMS(fullnonce) - ICARUS_READ_REDUCE;
-			if (info->read_time_limit > 0 && read_time > info->read_time_limit) {
-				read_time = info->read_time_limit;
-				limited = true;
-			} else
-				limited = false;
-
-			info->Hs = Hs;
-			info->read_time = read_time;
-
-			info->fullnonce = fullnonce;
-			info->count = count;
-			info->W = W;
-			info->values = values;
-			info->hash_count_range = hash_count_range;
-
-			if (info->min_data_count < MAX_MIN_DATA_COUNT)
-				info->min_data_count *= 2;
-			else if (info->timing_mode == MODE_SHORT)
-				info->do_icarus_timing = false;
-
-			applog(LOG_WARNING, "%s%d Re-estimate: Hs=%e W=%e read_time=%dms%s fullnonce=%.3fs",
-					icarus->drv->name, icarus->device_id, Hs, W, read_time,
-					limited ? " (limited)" : "", fullnonce);
-		}
-		info->history_count++;
-		cgtime(&tv_history_finish);
-
-		timersub(&tv_history_finish, &tv_history_start, &tv_history_finish);
-		timeradd(&tv_history_finish, &(info->history_time), &(info->history_time));
-	}
+	if (info->do_icarus_timing && !was_hw_error)
+		process_history(icarus, info, nonce, hash_count, &elapsed, &tv_start);
 out:
 	free_work(work);
 
