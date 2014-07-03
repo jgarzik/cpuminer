@@ -201,8 +201,15 @@ static const char *MODE_UNKNOWN_STR = "unknown";
 #define	RM_PRODUCT_T2		0x80
 #define	RM_PRODUCT_TEST		0xC0
 
+#if (NONCE_CORRECTION_TIMES == 9)
+static int32_t rbox_corr_values[] = {0, 1, -1, 2, -2, 3, -3, 4, -4};
+#endif
+#if (NONCE_CORRECTION_TIMES == 3)
+static int32_t rbox_corr_values[] = {0, 1, -1};
+#endif
+
 typedef enum {
-	NONCE_DATA1_OFFSET= 0,
+	NONCE_DATA1_OFFSET = 0,
 	NONCE_DATA2_OFFSET,
 	NONCE_DATA3_OFFSET,
 	NONCE_DATA4_OFFSET,
@@ -214,12 +221,12 @@ typedef enum {
 } NONCE_OFFSET;
 
 typedef enum {
-	NONCE_DATA_CMD= 0,
+	NONCE_DATA_CMD = 0,
 	NONCE_TASK_COMPLETE_CMD,
 	NONCE_GET_TASK_CMD,
 } NONCE_COMMAND;
 
-typedef struct NONCE_DATA {
+typedef struct nonce_data {
 	int chip_no;
 	unsigned int task_no ;
 	unsigned char work_state;
@@ -302,6 +309,12 @@ struct ICARUS_INFO {
 
 	ROCKMINER_DEVICE_INFO rmdev;
 	struct work *g_work[MAX_CHIP_NUM][MAX_WORK_BUFFER_SIZE];
+	char rock_init[64];
+	uint64_t nonces_checked;
+	uint64_t nonces_correction_times;
+	uint64_t nonces_correction_tests;
+	uint64_t nonces_fail;
+	uint64_t nonces_correction[NONCE_CORRECTION_TIMES];
 };
 
 #define ICARUS_MIDSTATE_SIZE 32
@@ -1030,7 +1043,7 @@ static void rock_init_last_received_task_complete_time(struct ICARUS_INFO *info)
 
 	if (opt_rock_freq < info->rmdev.min_frq ||
 	    opt_rock_freq > info->rmdev.max_frq)
-		opt_rock_freq =info->rmdev.def_frq;
+		opt_rock_freq = info->rmdev.def_frq;
 
 	for (i = 0; i < MAX_CHIP_NUM; ++i) {
 		info->rmdev.chip[i].last_received_task_complete_time = time(NULL);
@@ -1325,14 +1338,6 @@ shin:
 
 static int64_t rock_scanwork(struct thr_info *thr);
 
-static bool rock_prepare(struct thr_info *thr)
-{
-	struct cgpu_info *icarus = thr->cgpu;
-
-	icarus->drv->name = "LIN";
-	return true;
-}
-
 static void rock_statline_before(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
 {
 	if (cgpu->temp)
@@ -1366,14 +1371,9 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 	int ret, err, amount, tries;
 	bool ok;
 	int correction_times = 0;
-#if (NONCE_CORRECTION_TIMES == 9)
-	int32_t correction_value[] = {0, 1, -1, 2, -2, 3, -3, 4, -4};
-#endif
-#if (NONCE_CORRECTION_TIMES == 3)
-	int32_t correction_value[] = {0, 1, -1};
-#endif
 	NONCE_DATA nonce_data;
 	uint32_t nonce;
+	char *newname = NULL;
 
 	if ((sizeof(workdata) << 1) != (sizeof(golden_ob) - 1))
 		quithere(1, "Data and golden_ob sizes don't match");
@@ -1412,7 +1412,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 		applog(LOG_DEBUG, "tries: %d", tries);
 		workdata.unused[ICARUS_UNUSED_SIZE - 3] = opt_rock_freq/10 - 1;
 		workdata.unused[ICARUS_UNUSED_SIZE - 2] = (MAX_TRIES-1-tries);
-		info->rmdev.detect_chip_no ++;
+		info->rmdev.detect_chip_no++;
 		if (info->rmdev.detect_chip_no >= MAX_TRIES)
 			info->rmdev.detect_chip_no = 0;
 		//g_detect_chip_no = (g_detect_chip_no + 1) & MAX_CHIP_NUM;
@@ -1424,6 +1424,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 
 		memset(nonce_bin, 0, sizeof(nonce_bin));
 		ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, NULL, 100);
+
 		applog(LOG_DEBUG, "Rockminer nonce_bin: %02x %02x %02x %02x %02x %02x %02x %02x",
 				  nonce_bin[0], nonce_bin[1], nonce_bin[2], nonce_bin[3],
 				  nonce_bin[4], nonce_bin[5], nonce_bin[6], nonce_bin[7]);
@@ -1432,8 +1433,10 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 			continue;
 		}
 
+		newname = NULL;
 		switch (nonce_bin[NONCE_CHIP_NO_OFFSET] & RM_PRODUCT_MASK) {
 			case RM_PRODUCT_T1:
+				newname = "LIR"; // Rocketbox
 				info->rmdev.product_id = ROCKMINER_T1;
 				info->rmdev.chip_max = 24;
 				info->rmdev.min_frq = 200;
@@ -1441,6 +1444,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 				info->rmdev.max_frq = 320;
 				break;
 			case RM_PRODUCT_T2: // what's this?
+				newname = "LIX";
 				info->rmdev.product_id = ROCKMINER_T2;
 				info->rmdev.chip_max = 16;
 				info->rmdev.min_frq = 200;
@@ -1448,6 +1452,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 				info->rmdev.max_frq = 400;
 				break;
 			case RM_PRODUCT_RBOX:
+				newname = "LIN"; // R-Box
 				info->rmdev.product_id = ROCKMINER_RBOX;
 				info->rmdev.chip_max = 4;
 				info->rmdev.min_frq = 200;
@@ -1458,7 +1463,10 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 				continue;
 		}
 
-		nonce_data.chip_no = nonce_bin[NONCE_CHIP_NO_OFFSET]&RM_CHIP_MASK;
+		snprintf(info->rock_init, sizeof(info->rock_init), "%02x %02x %02x %02x",
+				  nonce_bin[4], nonce_bin[5], nonce_bin[6], nonce_bin[7]);
+
+		nonce_data.chip_no = nonce_bin[NONCE_CHIP_NO_OFFSET] & RM_CHIP_MASK;
 		if (nonce_data.chip_no >= info->rmdev.chip_max)
 			nonce_data.chip_no = 0;
 
@@ -1467,7 +1475,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 			applog(LOG_DEBUG, "complete g_detect_chip_no: %d", info->rmdev.detect_chip_no);
 			workdata.unused[ICARUS_UNUSED_SIZE - 3] = opt_rock_freq/10 - 1;
 			workdata.unused[ICARUS_UNUSED_SIZE - 2] =  info->rmdev.detect_chip_no;
-			info->rmdev.detect_chip_no ++;
+			info->rmdev.detect_chip_no++;
 			if (info->rmdev.detect_chip_no >= MAX_TRIES)
 				info->rmdev.detect_chip_no = 0;
 
@@ -1485,7 +1493,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 		correction_times = 0;
 		while (correction_times < NONCE_CORRECTION_TIMES) {
 			nonce_hex = bin2hex(nonce_bin, 4);
-			if (golden_nonce_val == nonce + correction_value[correction_times]) {
+			if (golden_nonce_val == nonce + rbox_corr_values[correction_times]) {
 				memset(&(info->g_work[0]), 0, sizeof(info->g_work));
 				rock_init_last_received_task_complete_time(info);
 
@@ -1512,6 +1520,12 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 	if (!ok)
 		goto unshin;
 
+	if (newname) {
+		if (!icarus->drv->copy)
+			icarus->drv = copy_drv(icarus->drv);
+		icarus->drv->name = newname;
+	}
+
 	applog(LOG_DEBUG, "Icarus Detect: Test succeeded at %s: got %s",
 		          icarus->device_path, golden_nonce);
 
@@ -1521,7 +1535,6 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 
 	icarus->drv->scanwork = rock_scanwork;
 	icarus->drv->dname = "Rockminer";
-	icarus->drv->thread_prepare = &rock_prepare;
 	icarus->drv->get_statline_before = &rock_statline_before;
 
 	applog(LOG_INFO, "%s%d: Found at %s",
@@ -1620,8 +1633,8 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 	memcpy(&(workdata.midstate), work->midstate, ICARUS_MIDSTATE_SIZE);
 	memcpy(&(workdata.work), work->data + ICARUS_WORK_DATA_OFFSET, ICARUS_WORK_SIZE);
 	workdata.unused[ICARUS_UNUSED_SIZE - 4] = 0xaa;
-	if (info->rmdev.chip[chip_no].freq > (info->rmdev.max_frq / 10 -1) || 
-	    info->rmdev.chip[chip_no].freq < (info->rmdev.min_frq / 10 - 1))
+	if (info->rmdev.chip[chip_no].freq > (info->rmdev.max_frq/10 - 1) || 
+	    info->rmdev.chip[chip_no].freq < (info->rmdev.min_frq/10 - 1))
 		rock_init_last_received_task_complete_time(info);
 
 	workdata.unused[ICARUS_UNUSED_SIZE - 3] = info->rmdev.chip[chip_no].freq; //icarus->freq/10 - 1; ;
@@ -1924,12 +1937,6 @@ static int64_t rock_scanwork(struct thr_info *thr)
 	struct work *work = NULL;
 	int64_t estimate_hashes;
 	int correction_times = 0;
-#if (NONCE_CORRECTION_TIMES == 9)
-	int32_t correction_value[] = {0, 1, -1, 2, -2, 3, -3, 4, -4};
-#endif
-#if (NONCE_CORRECTION_TIMES == 3)
-	int32_t correction_value[] = {0, 1, -1};
-#endif
 	NONCE_DATA nonce_data;
 
 	int chip_no = 0;
@@ -2045,8 +2052,15 @@ static int64_t rock_scanwork(struct thr_info *thr)
 	}
 
 	correction_times = 0;
+	info->nonces_checked++;
 	while (correction_times < NONCE_CORRECTION_TIMES) {
-		if (submit_nonce(thr, work, nonce + correction_value[correction_times])) {
+		if (correction_times > 0) {
+			info->nonces_correction_tests++;
+			if (correction_times == 1)
+				info->nonces_correction_times++;
+		}
+		if (submit_nonce(thr, work, nonce + rbox_corr_values[correction_times])) {
+			info->nonces_correction[correction_times]++;
 			hash_count++;
 			info->failing = false;
 			applog(LOG_DEBUG, "Rockminer nonce :::OK:::");
@@ -2058,6 +2072,8 @@ static int64_t rock_scanwork(struct thr_info *thr)
 		}
 		correction_times++;
 	}
+	if (correction_times >= NONCE_CORRECTION_TIMES)
+		info->nonces_fail++;
 
 	hash_count = (hash_count * info->nonce_mask);
 
@@ -2078,6 +2094,10 @@ static struct api_data *icarus_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(cgpu->device_data);
+	char data[4096];
+	int i, off;
+	size_t len;
+	float avg;
 
 	// Warning, access to these is not locked - but we don't really
 	// care since hashing performance is way more important than
@@ -2100,6 +2120,39 @@ static struct api_data *icarus_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "baud", &(info->baud), false);
 	root = api_add_int(root, "work_division", &(info->work_division), false);
 	root = api_add_int(root, "fpga_count", &(info->fpga_count), false);
+
+	if (info->ident == IDENT_LIN) {
+		root = api_add_string(root, "rock_init", info->rock_init, false);
+		root = api_add_uint8(root, "rock_chips", &(info->rmdev.detect_chip_no), false);
+		root = api_add_uint8(root, "rock_chip_max", &(info->rmdev.chip_max), false);
+		root = api_add_uint8(root, "rock_prod_id", &(info->rmdev.product_id), false);
+		root = api_add_avg(root, "rock_min_freq", &(info->rmdev.min_frq), false);
+		root = api_add_avg(root, "rock_max_freq", &(info->rmdev.max_frq), false);
+		root = api_add_uint64(root, "rock_check", &(info->nonces_checked), false);
+		root = api_add_uint64(root, "rock_corr", &(info->nonces_correction_times), false);
+		root = api_add_uint64(root, "rock_corr_tests", &(info->nonces_correction_tests), false);
+		root = api_add_uint64(root, "rock_corr_fail", &(info->nonces_fail), false);
+		if (info->nonces_checked <= 0)
+			avg = 0;
+		else
+			avg = (float)(info->nonces_correction_tests) / (float)(info->nonces_checked);
+		root = api_add_avg(root, "rock_corr_avg", &avg, true);
+		data[0] = '\0';
+		off = 0;
+		for (i = 0; i < NONCE_CORRECTION_TIMES; i++) {
+			len = snprintf(data+off, sizeof(data)-off,
+						"%s%"PRIu64,
+						i > 0 ? "/" : "",
+						info->nonces_correction[i]);
+			if (len >= (sizeof(data)-off))
+				off = sizeof(data)-1;
+			else {
+				if (len > 0)
+					off += len;
+			}
+		}
+		root = api_add_string(root, "rock_corr_finds", data, true);
+	}
 
 	return root;
 }
