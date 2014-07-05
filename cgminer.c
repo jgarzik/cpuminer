@@ -250,6 +250,7 @@ int opt_minion_chipreport;
 char *opt_minion_cores;
 char *opt_minion_freq;
 bool opt_minion_idlecount;
+bool opt_minion_noautofreq;
 bool opt_minion_overheat;
 char *opt_minion_temp;
 #endif
@@ -1357,6 +1358,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--minion-idlecount",
 		     opt_set_bool, &opt_minion_idlecount,
 		     "Report when IdleCount is >0 or changes"),
+	OPT_WITHOUT_ARG("--minion-noautofreq",
+		     opt_set_bool, &opt_minion_noautofreq,
+		     "Disable automatic frequency adjustment"),
 	OPT_WITHOUT_ARG("--minion-overheat",
 		     opt_set_bool, &opt_minion_overheat,
 		     "Enable directly halting any chip when the status exceeds 100C"),

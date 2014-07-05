@@ -342,9 +342,10 @@ struct minion_header {
 #define MINION_CHIP_SIG_SHIFT4 (((MINION_CHIP_SIG & 0xffff0000) >> 16) & 0x0000ffff)
 
 #define MINION_FREQ_MIN 100
-#define MINION_FREQ_DEF 1000
+#define MINION_FREQ_DEF 1200
 #define MINION_FREQ_MAX 1400
 #define MINION_FREQ_FACTOR 100
+#define MINION_FREQ_RESET_STEP MINION_FREQ_FACTOR
 #define MINION_FREQ_FACTOR_MIN 1
 #define MINION_FREQ_FACTOR_MAX 14
 
@@ -561,11 +562,18 @@ typedef struct hist_item {
 
 // How much history to keep (5min)
 #define MINION_HISTORY_s 300
-// History required to decide a reset
-#define MINION_RESET_s 120
+// History required to decide a reset at MINION_FREQ_DEF Mhz
+// For other freq = MINION_RESET_s * MINION_FREQ_DEF / freq
+#define MINION_RESET_s 10
+// How many times to reset before changing Freq
+#define MINION_RESET_COUNT 6
 
 #if (MINION_RESET_s > MINION_HISTORY_s)
 #error "MINION_RESET_s can't be greater than MINION_HISTORY_s"
+#endif
+
+#if ((MINION_RESET_s * MINION_FREQ_DEF / MINION_FREQ_MIN ) > MINION_HISTORY_s)
+#error "FREQ_MIN can't require more than MINION_HISTORY_s"
 #endif
 
 // History must be always generated for the reset check
@@ -576,8 +584,9 @@ typedef struct perf_item {
 	double elapsed;
 	uint64_t nonces;
 	uint32_t freq;
+	double ghs;
 	struct timeval when;
-} PREF_ITEM;
+} PERF_ITEM;
 
 #define ALLOC_PERF_ITEMS 128
 #define LIMIT_PERF_ITEMS 0
@@ -586,7 +595,7 @@ typedef struct perf_item {
 #define DATA_TASK(_item) ((TASK_ITEM *)(_item->data))
 #define DATA_RES(_item) ((RES_ITEM *)(_item->data))
 #define DATA_HIST(_item) ((HIST_ITEM *)(_item->data))
-#define DATA_PERF(_item) ((PREF_ITEM *)(_item->data))
+#define DATA_PERF(_item) ((PERF_ITEM *)(_item->data))
 
 // Set this to 1 to enable iostats processing
 // N.B. it slows down mining
@@ -804,6 +813,10 @@ struct minion_info {
 	struct timeval chip_chk;
 	struct timeval chip_rpt;
 	double history_ghs[MINION_CHIPS];
+	// Point in history for MINION_RESET_s
+	int reset_time[MINION_CHIPS];
+	K_ITEM *reset_mark[MINION_CHIPS];
+	int reset_count[MINION_CHIPS];
 
 	// Performance history
 	K_LIST *pfree_list;
@@ -1419,8 +1432,13 @@ static void init_chip(struct cgpu_info *minioncgpu, struct minion_info *minionin
 	if (minioninfo->hfree_list) {
 		K_WLOCK(minioninfo->hfree_list);
 		k_list_transfer_to_head(minioninfo->hchip_list[chip], minioninfo->hfree_list);
+		minioninfo->reset_mark[chip] = NULL;
+		minioninfo->reset_count[chip] = 0;
 		K_WUNLOCK(minioninfo->hfree_list);
 	}
+
+	minioninfo->reset_time[chip] = (int)((float)(MINION_RESET_s * MINION_FREQ_DEF) /
+							minioninfo->init_freq[chip]);
 }
 
 static void enable_chip_cores(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, int chip)
@@ -2206,6 +2224,11 @@ static void minion_detect(bool hotplug)
 					    ALLOC_HIST_ITEMS, LIMIT_HIST_ITEMS, true);
 	for (i = 0; i < (int)MINION_CHIPS; i++)
 		minioninfo->hchip_list[i] = k_new_store(minioninfo->hfree_list);
+
+	minioninfo->pfree_list = k_new_list("Performance", sizeof(PERF_ITEM),
+					    ALLOC_PERF_ITEMS, LIMIT_PERF_ITEMS, true);
+	for (i = 0; i < (int)MINION_CHIPS; i++)
+		minioninfo->p_list[i] = k_new_store(minioninfo->pfree_list);
 
 	cgsem_init(&(minioninfo->task_ready));
 	cgsem_init(&(minioninfo->nonce_ready));
@@ -3163,19 +3186,36 @@ retest:
 		restorework(minioninfo, chip, item);
 		K_WUNLOCK(minioninfo->wchip_list[chip]);
 
-		// add to history and remove old history
+		// add to history and remove old history and keep track of the reset mark
 		int chip_tmp;
 		cgtime(&now);
 		K_WLOCK(minioninfo->hfree_list);
 		item = k_unlink_head(minioninfo->hfree_list);
 		memcpy(&(DATA_HIST(item)->when), when, sizeof(*when));
 		k_add_head(minioninfo->hchip_list[chip], item);
+		if (minioninfo->reset_mark[chip])
+			minioninfo->reset_count[chip]++;
+
+		// N.B. this also corrects each reset_mark/reset_count within each hchip_list
 		for (chip_tmp = 0; chip_tmp < (int)MINION_CHIPS; chip_tmp++) {
 			tail = minioninfo->hchip_list[chip_tmp]->tail;
 			while (tail && tdiff(&(DATA_HIST(tail)->when), &now) > MINION_HISTORY_s) {
+				if (minioninfo->reset_mark[chip] == tail) {
+					minioninfo->reset_mark[chip] = tail->prev;
+					minioninfo->reset_count[chip]--;
+				}
 				tail = k_unlink_tail(minioninfo->hchip_list[chip_tmp]);
 				k_add_head(minioninfo->hfree_list, item);
 				tail = minioninfo->hchip_list[chip_tmp]->tail;
+			}
+			if (!(minioninfo->reset_mark[chip])) {
+				minioninfo->reset_mark[chip] = minioninfo->hchip_list[chip]->tail;
+				minioninfo->reset_count[chip] = minioninfo->hchip_list[chip]->count;
+			}
+			tail = minioninfo->reset_mark[chip];
+			while (tail && tdiff(&(DATA_HIST(tail)->when), &now) > minioninfo->reset_time[chip]) {
+				tail = minioninfo->reset_mark[chip] = tail->prev;
+				minioninfo->reset_count[chip]--;
 			}
 		}
 		K_WUNLOCK(minioninfo->hfree_list);
@@ -3894,7 +3934,8 @@ static void chip_report(struct cgpu_info *minioncgpu)
 	char buf[512];
 	char res_err_msg[2];
 	size_t len;
-	double ghs, expect, howlong;
+	double elapsed, ghs, expect, howlong;
+	K_ITEM *pitem;
 	int msdiff;
 	int chip;
 	int res_err_count;
@@ -3948,49 +3989,110 @@ static void chip_report(struct cgpu_info *minioncgpu)
 	}
 
 	msdiff = ms_tdiff(&now, &(minioninfo->chip_chk));
-	if (total_secs >= MINION_HISTORY_s && msdiff >= (minioninfo->history_gen * 1000)) {
+	if (total_secs >= MINION_RESET_s && msdiff >= (minioninfo->history_gen * 1000)) {
 		K_RLOCK(minioninfo->hfree_list);
 		for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
 			if (minioninfo->has_chip[chip]) {
-				if (minioninfo->hchip_list[chip]->count < 2)
+				if (!minioninfo->reset_mark[chip] ||
+				    minioninfo->reset_count[chip] < 2) {
+					elapsed = 0.0;
 					ghs = 0.0;
-				else {
-					ghs = 0xffffffffull * (minioninfo->hchip_list[chip]->count - 1);
+				} else {
+					// 'now' includes that it may have stopped getting nonces
+					elapsed = tdiff(&now, &(DATA_HIST(minioninfo->reset_mark[chip])->when));
+					ghs = 0xffffffffull * (minioninfo->reset_count[chip] - 1);
 					ghs /= 1000000000.0;
-					ghs /= tdiff(&now, &(DATA_HIST(minioninfo->hchip_list[chip]->tail)->when));
+					ghs /= elapsed;
 				}
 				expect = (double)(minioninfo->init_freq[chip]) *
 					 MINION_RESET_PERCENT / 1000.0;
 				howlong = tdiff(&now, &(minioninfo->last_reset[chip]));
-				if (ghs <= expect && howlong >= MINION_HISTORY_s)
+				if (ghs <= expect && howlong >= minioninfo->reset_time[chip]) {
 					minioninfo->do_reset[chip] = expect;
+
+					// TODO: expire old items
+					// For now - no lock required since no other code accesses it
+					pitem = k_unlink_head(minioninfo->pfree_list);
+					DATA_PERF(pitem)->elapsed = elapsed;
+					DATA_PERF(pitem)->nonces = minioninfo->reset_count[chip] - 1;
+					DATA_PERF(pitem)->freq = minioninfo->init_freq[chip];
+					DATA_PERF(pitem)->ghs = ghs;
+					memcpy(&(DATA_PERF(pitem)->when), &now, sizeof(now));
+					k_add_head(minioninfo->p_list[chip], pitem);
+				}
 				minioninfo->history_ghs[chip] = ghs;
 			}
 		}
 		K_RUNLOCK(minioninfo->hfree_list);
 
-		for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
-			if (minioninfo->has_chip[chip]) {
-				if (minioninfo->do_reset[chip] > 1.0) {
-					applog(LOG_WARNING, "%s%d: Chip %d below threshold %.2fGHs - resetting ...",
-							    minioncgpu->drv->name, minioncgpu->device_id,
-							    chip, minioninfo->do_reset[chip]);
-					minioninfo->do_reset[chip] = 0.0;
-					memcpy(&(minioninfo->last_reset[chip]), &now, sizeof(now));
-					init_chip(minioncgpu, minioninfo, chip);
-					minioninfo->flag_reset[chip] = false;
-				}
-			}
-		}
 		memcpy(&(minioninfo->chip_chk), &now, sizeof(now));
 	}
 
 	for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
 		if (minioninfo->has_chip[chip]) {
-			if (minioninfo->flag_reset[chip]) {
-				applog(LOG_WARNING, "%s%d: Chip %d flagged - resetting ...",
-						    minioncgpu->drv->name, minioncgpu->device_id,
-						    chip);
+			if (minioninfo->do_reset[chip] > 1.0 ||
+			    minioninfo->flag_reset[chip]) {
+				bool std_reset = true;
+				int curr_freq = minioninfo->init_freq[chip];
+				int new_freq = 0.0;
+				int count;
+
+				// Adjust frequency down?
+				if (!opt_minion_noautofreq &&
+				    minioninfo->p_list[chip]->count >= MINION_RESET_COUNT) {
+					pitem = minioninfo->p_list[chip]->head;
+					count = 1;
+					while (pitem && pitem->next && count++ < MINION_RESET_COUNT) {
+						if (DATA_PERF(pitem)->freq != DATA_PERF(pitem->next)->freq)
+							break;
+						if (count >= MINION_RESET_COUNT) {
+							new_freq = minioninfo->init_freq[chip] -
+									MINION_FREQ_RESET_STEP;
+							if (new_freq < MINION_FREQ_MIN)
+								new_freq = MINION_FREQ_MIN;
+							if (minioninfo->init_freq[chip] != new_freq) {
+								minioninfo->init_freq[chip] = new_freq;
+								std_reset = false;
+							}
+							break;
+ 						} else
+							pitem = pitem->next;
+					}
+				}
+
+				if (std_reset) {
+					if (minioninfo->do_reset[chip] > 1.0) {
+						applog(LOG_WARNING, "%s%d: Chip %d %dMHz threshold "
+								    "%.2fGHs - resetting",
+								    minioncgpu->drv->name,
+								    minioncgpu->device_id,
+								    chip, curr_freq,
+								    minioninfo->do_reset[chip]);
+					} else {
+						applog(LOG_WARNING, "%s%d: Chip %d %dMhz flagged - "
+								    "resetting",
+								    minioncgpu->drv->name,
+								    minioncgpu->device_id,
+								    chip, curr_freq);
+					}
+				} else {
+					if (minioninfo->do_reset[chip] > 1.0) {
+						applog(LOG_WARNING, "%s%d: Chip %d %dMHz threshold "
+								    "%.2fGHs - resetting to %dMhz",
+								    minioncgpu->drv->name,
+								    minioncgpu->device_id,
+								    chip, curr_freq,
+								    minioninfo->do_reset[chip],
+								    new_freq);
+					} else {
+						applog(LOG_WARNING, "%s%d: Chip %d %dMhz flagged - "
+								    "resetting to %dMHz",
+								    minioncgpu->drv->name,
+								    minioncgpu->device_id,
+								    chip, curr_freq, new_freq);
+					}
+				}
+				minioninfo->do_reset[chip] = 0.0;
 				memcpy(&(minioninfo->last_reset[chip]), &now, sizeof(now));
 				init_chip(minioncgpu, minioninfo, chip);
 				minioninfo->flag_reset[chip] = false;
@@ -4179,6 +4281,8 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 
 	double his = MINION_HISTORY_s;
 	root = api_add_double(root, "History length", &his, true);
+	his = MINION_RESET_s;
+	root = api_add_double(root, "Default reset length", &his, true);
 
 	for (i = 0; i <= max_chip; i += CHIPS_PER_STAT) {
 		to = i + CHIPS_PER_STAT - 1;
