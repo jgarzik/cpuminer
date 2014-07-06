@@ -9340,6 +9340,10 @@ int main(int argc, char *argv[])
 			strcpy(pool->rpc_url, "Benchmark");
 		pool->rpc_user = pool->rpc_url;
 		pool->rpc_pass = pool->rpc_url;
+		pool->rpc_userpass = pool->rpc_url;
+		pool->sockaddr_url = pool->rpc_url;
+		strncpy(pool->diff, "?", sizeof(pool->diff)-1);
+		pool->diff[sizeof(pool->diff)-1] = '\0';
 		enable_pool(pool);
 		pool->idle = false;
 		successful_connect = true;
