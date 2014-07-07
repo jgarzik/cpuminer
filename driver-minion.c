@@ -67,8 +67,11 @@ static int minion_memory_addr = BCM2835_GPIO_BASE;
 #define MINION_SPI_BUS 0
 #define MINION_SPI_CHIP 0
 
-//#define MINION_SPI_SPEED 2000000
+#if MINION_ROCKCHIP == 0
 #define MINION_SPI_SPEED 8000000
+#else
+#define MINION_SPI_SPEED 500000
+#endif
 #define MINION_SPI_BUFSIZ 1024
 
 static struct minion_select_pins {
@@ -709,6 +712,7 @@ static double time_bands[] = { 0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0 };
 #define TIME_BANDS ((int)(sizeof(time_bands)/sizeof(double)))
 
 struct minion_info {
+	struct thr_info *thr;
 	struct thr_info spiw_thr;
 	struct thr_info spir_thr;
 	struct thr_info res_thr;
@@ -1120,11 +1124,14 @@ static void init_pins(struct minion_info *minioninfo)
 
 #define EXTRA_LOG_IO 0
 
-static int __do_ioctl(struct minion_info *minioninfo, int pin, uint8_t *obuf,
-		      uint32_t osiz, uint8_t *rbuf, uint32_t rsiz,
-		      uint64_t *ioseq, MINION_FFL_ARGS)
+static bool minion_init_spi(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, int bus, int chip, bool reset);
+
+static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minioninfo,
+		      int pin, uint8_t *obuf, uint32_t osiz, uint8_t *rbuf,
+		      uint32_t rsiz, uint64_t *ioseq, MINION_FFL_ARGS)
 {
 	struct spi_ioc_transfer tran;
+	bool fail = false;
 	int ret;
 #if MINION_SHOW_IO
 	char dataw[DATA_ALL], datar[DATA_ALL];
@@ -1197,11 +1204,30 @@ static int __do_ioctl(struct minion_info *minioninfo, int pin, uint8_t *obuf,
 		// Pin back high after I/O
 		set_pin(minioninfo, pin, true);
 	}
+	if (ret >= 0 && rbuf[0] == 0xff && rbuf[ret-1] == 0xff &&
+	    obuf[1] == READ_ADDR(MINION_RES_DATA)) {
+		int i;
+		fail = true;
+		for (i = 1; i < ret-2; i++) {
+			if (rbuf[i] != 0xff) {
+				fail = false;
+				break;
+			}
+		}
+		if (fail)
+			minion_init_spi(minioncgpu, minioninfo, 0, 0, true);
+	}
 	mutex_unlock(&(minioninfo->spi_lock));
 	IO_STAT_NOW(&lfin);
 	IO_STAT_NOW(&tsd);
 
 	IO_STAT_STORE(&sta, &fin, &lsta, &lfin, &tsd, obuf, osiz, ret, 1);
+
+	if (fail) {
+		applog(LOG_ERR, "%s%d: ioctl %"PRIu64" returned all 0xff - resetting",
+				minioncgpu->drv->name, minioncgpu->device_id,
+				*ioseq);
+	}
 
 #if MINION_SHOW_IO
 	if (ret > 0) {
@@ -1254,7 +1280,7 @@ static int __do_ioctl(struct minion_info *minioninfo, int pin, uint8_t *obuf,
 
 #if 1
 #define do_ioctl(_pin, _obuf, _osiz, _rbuf, _rsiz, _ioseq) \
-		__do_ioctl(minioninfo, _pin, _obuf, _osiz, _rbuf, \
+		__do_ioctl(minioncgpu, minioninfo, _pin, _obuf, _osiz, _rbuf, \
 			   _rsiz, _ioseq, MINION_FFL_HERE)
 #else
 #define do_ioctl(_pin, _obuf, _osiz, _rbuf, _rsiz, _ioseq) \
@@ -1273,9 +1299,9 @@ static int _do_ioctl(struct minion_info *minioninfo, int pin, uint8_t *obuf, uin
 	head->reg = READ_ADDR(MINION_SYS_FIFO_STA);
 	SET_HEAD_SIZ(head, DATA_SIZ);
 	siz = HSIZE() + DATA_SIZ;
-	__do_ioctl(minioninfo, pin, buf1, siz, buf2, MINION_CORE_SIZ, ioseq, MINION_FFL_PASS);
+	__do_ioctl(minioncgpu, minioninfo, pin, buf1, siz, buf2, MINION_CORE_SIZ, ioseq, MINION_FFL_PASS);
 
-	return __do_ioctl(minioninfo, pin, obuf, osiz, rbuf, rsiz, ioseq, MINION_FFL_PASS);
+	return __do_ioctl(minioncgpu, minioninfo, pin, obuf, osiz, rbuf, rsiz, ioseq, MINION_FFL_PASS);
 }
 #endif
 
@@ -1713,32 +1739,41 @@ static struct {
 	{ -1, -1 }
 };
 
-static bool minion_init_spi(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, int bus, int chip)
+static bool minion_init_spi(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, int bus, int chip, bool reset)
 {
 	int i, err, data;
 	char buf[64];
 
-	for (i = 0; minion_modules[i]; i++) {
-		snprintf(buf, sizeof(buf), "modprobe %s", minion_modules[i]);
-		err = system(buf);
-		if (err) {
-			applog(LOG_ERR, "%s: failed to modprobe %s (%d) - you need to be root?",
+	if (reset) {
+		// TODO: maybe slow it down?
+		close(minioninfo->spifd);
+		cgsleep_ms(100);
+		minioninfo->spifd = open(minioncgpu->device_path, O_RDWR);
+		if (minioninfo->spifd < 0)
+			goto bad_out;
+	} else {
+		for (i = 0; minion_modules[i]; i++) {
+			snprintf(buf, sizeof(buf), "modprobe %s", minion_modules[i]);
+			err = system(buf);
+			if (err) {
+				applog(LOG_ERR, "%s: failed to modprobe %s (%d) - you need to be root?",
+						minioncgpu->drv->dname,
+						minion_modules[i], err);
+				goto bad_out;
+			}
+		}
+
+		snprintf(buf, sizeof(buf), "/dev/spidev%d.%d", bus, chip);
+		minioninfo->spifd = open(buf, O_RDWR);
+		if (minioninfo->spifd < 0) {
+			applog(LOG_ERR, "%s: failed to open spidev (%d)",
 					minioncgpu->drv->dname,
-					minion_modules[i], err);
+					errno);
 			goto bad_out;
 		}
-	}
 
-	snprintf(buf, sizeof(buf), "/dev/spidev%d.%d", bus, chip);
-	minioninfo->spifd = open(buf, O_RDWR);
-	if (minioninfo->spifd < 0) {
-		applog(LOG_ERR, "%s: failed to open spidev (%d)",
-				minioncgpu->drv->dname,
-				errno);
-		goto bad_out;
+		minioncgpu->device_path = strdup(buf);
 	}
-
-	minioncgpu->device_path = strdup(buf);
 
 	for (i = 0; minion_ioc[i].value != -1; i++) {
 		data = minion_ioc[i].value;
@@ -2150,7 +2185,7 @@ static void minion_detect(bool hotplug)
 		quithere(1, "Failed to calloc minioninfo");
 	minioncgpu->device_data = (void *)minioninfo;
 
-	if (!minion_init_spi(minioncgpu, minioninfo, MINION_SPI_BUS, MINION_SPI_CHIP))
+	if (!minion_init_spi(minioncgpu, minioninfo, MINION_SPI_BUS, MINION_SPI_CHIP, false))
 		goto unalloc;
 
 #if ENABLE_INT_NONO
@@ -3254,7 +3289,7 @@ static void *minion_results(void *userdata)
 {
 	struct cgpu_info *minioncgpu = (struct cgpu_info *)userdata;
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
-	struct thr_info *thr = minioncgpu->thr[0];
+	struct thr_info *thr;
 	int chip, core;
 	uint32_t task_id;
 	uint32_t nonce;
@@ -3274,6 +3309,8 @@ static void *minion_results(void *userdata)
 		}
 		cgsleep_ms(3);
 	}
+
+	thr = minioninfo->thr;
 
 	while (minioncgpu->shutdown == false) {
 		if (!oldest_nonce(minioncgpu, &chip, &core, &task_id, &nonce,
@@ -3785,6 +3822,7 @@ static bool minion_thread_prepare(struct thr_info *thr)
 	struct cgpu_info *minioncgpu = thr->cgpu;
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 
+	minioninfo->thr = thr;
 	/*
 	 * SPI/ioctl write thread
 	 */
