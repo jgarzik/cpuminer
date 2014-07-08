@@ -1078,6 +1078,7 @@ extern pthread_mutex_t console_lock;
 extern cglock_t ch_lock;
 extern pthread_rwlock_t mining_thr_lock;
 extern pthread_rwlock_t devices_lock;
+extern pthread_mutex_t getaddr_lock;
 
 extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
