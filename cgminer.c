@@ -306,7 +306,6 @@ static pthread_mutex_t sshare_lock;
 pthread_rwlock_t netacc_lock;
 pthread_rwlock_t mining_thr_lock;
 pthread_rwlock_t devices_lock;
-pthread_mutex_t getaddr_lock;
 
 static pthread_mutex_t lp_lock;
 static pthread_cond_t lp_cond;
@@ -9262,7 +9261,6 @@ int main(int argc, char *argv[])
 	rwlock_init(&netacc_lock);
 	rwlock_init(&mining_thr_lock);
 	rwlock_init(&devices_lock);
-	mutex_init(&getaddr_lock);
 
 	mutex_init(&lp_lock);
 	if (unlikely(pthread_cond_init(&lp_cond, NULL)))
