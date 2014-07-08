@@ -1243,7 +1243,6 @@ struct pool {
 	/* Stratum variables */
 	char *stratum_url;
 	char *stratum_port;
-	struct addrinfo stratum_hints;
 	SOCKETTYPE sock;
 	char *sockbuf;
 	size_t sockbuf_size;

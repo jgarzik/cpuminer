@@ -2349,7 +2349,7 @@ static bool sock_connecting(void)
 }
 static bool setup_stratum_socket(struct pool *pool)
 {
-	struct addrinfo servinfobase, *servinfo, *hints, *p;
+	struct addrinfo *servinfo, hints, *p;
 	char *sockaddr_url, *sockaddr_port;
 	int sockd, ret;
 
@@ -2360,11 +2360,9 @@ static bool setup_stratum_socket(struct pool *pool)
 	pool->sock = 0;
 	mutex_unlock(&pool->stratum_lock);
 
-	hints = &pool->stratum_hints;
-	memset(hints, 0, sizeof(struct addrinfo));
-	hints->ai_family = AF_UNSPEC;
-	hints->ai_socktype = SOCK_STREAM;
-	servinfo = &servinfobase;
+	memset(&hints, 0, sizeof(struct addrinfo));
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
 
 	if (!pool->rpc_proxy && opt_socks_proxy) {
 		pool->rpc_proxy = opt_socks_proxy;
@@ -2380,7 +2378,7 @@ static bool setup_stratum_socket(struct pool *pool)
 		sockaddr_port = pool->stratum_port;
 	}
 	mutex_lock(&getaddr_lock);
-	ret = getaddrinfo(sockaddr_url, sockaddr_port, hints, &servinfo);
+	ret = getaddrinfo(sockaddr_url, sockaddr_port, &hints, &servinfo);
 	mutex_unlock(&getaddr_lock);
 	if (ret != 0) {
 		if (!pool->probed) {
