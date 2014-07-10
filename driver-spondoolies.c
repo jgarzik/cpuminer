@@ -185,8 +185,9 @@ static struct api_data *spondoolies_api_stats(struct cgpu_info *cgpu)
 	struct api_data *root = NULL;
 
 	root = api_add_int(root, "ASICs total rate", &a->temp_rate, false);
-	root = api_add_int(root, "Temparature rear", &a->rear_temp, false);
 	root = api_add_int(root, "Temparature front", &a->front_temp, false);
+	root = api_add_int(root, "Temparature rear top", &a->rear_temp_top, false);
+	root = api_add_int(root, "Temparature rear bot", &a->rear_temp_bot, false);
 
 	return root;
 }
@@ -330,18 +331,18 @@ static void spond_poll_stats(struct cgpu_info *spond, struct spond_adapter *a)
 
 	if (!fp) {
 		applog(LOG_DEBUG, "SPOND unable to open mg_rate_temp");
-		a->temp_rate = a->rear_temp = a->front_temp = 0;
+		a->temp_rate = a->front_temp = a->rear_temp_top = a->rear_temp_bot = 0;
 	} else {
-		int ret = fscanf(fp, "%d %d %d", &a->temp_rate, &a->rear_temp, &a->front_temp);
+		int ret = fscanf(fp, "%d %d %d %d", &a->temp_rate,  &a->front_temp , &a->rear_temp_top , &a->rear_temp_bot);
 
-		if (ret != 3)
-			a->temp_rate = a->rear_temp = a->front_temp = 0;
+		if (ret != 4)
+			a->temp_rate = a->front_temp = a->rear_temp_top = a->rear_temp_bot = 0;
 		fclose(fp);
 	}
-	applog(LOG_DEBUG, "SPOND poll_stats rate: %d rear: %d front: %d",
-	       a->temp_rate, a->rear_temp, a->front_temp);
+	applog(LOG_DEBUG, "SPOND poll_stats rate: %d front: %d rear(T/B): %d/%d",
+	       a->temp_rate, a->front_temp , a->rear_temp_top, a->rear_temp_bot);
 	/* Use the rear temperature as the dev temperature for now */
-	spond->temp = a->rear_temp;
+	spond->temp = (a->rear_temp_top + a->rear_temp_bot)/2;
 }
 
 // Return completed work to submit_nonce() and work_completed() 
