@@ -1757,7 +1757,7 @@ static bool minion_init_spi(struct cgpu_info *minioncgpu, struct minion_info *mi
 	if (reset) {
 		// TODO: maybe slow it down?
 		close(minioninfo->spifd);
-		cgsleep_ms(100);
+		cgsleep_ms(opt_minion_spireset);
 		minioninfo->spifd = open(minioncgpu->device_path, O_RDWR);
 		if (minioninfo->spifd < 0)
 			goto bad_out;
@@ -2303,7 +2303,8 @@ static char *minion_set(struct cgpu_info *minioncgpu, char *option, char *settin
 
 	if (strcasecmp(option, "help") == 0) {
 		sprintf(replybuf, "reset: chip 0-%d freq: 0-%d:%d-%d "
-				  "ledcount: 0-100 ledlimit: 0-200",
+				  "ledcount: 0-100 ledlimit: 0-200 "
+				  "spireset: 0-9999",
 				  minioninfo->chips - 1,
 				  minioninfo->chips - 1,
 				  MINION_FREQ_MIN, MINION_FREQ_MAX);
@@ -2412,6 +2413,23 @@ static char *minion_set(struct cgpu_info *minioncgpu, char *option, char *settin
 		}
 
 		opt_minion_ledlimit = val;
+		return NULL;
+	}
+
+	if (strcasecmp(option, "spireset") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing spireset value");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < 0 || val > 9999) {
+			sprintf(replybuf, "invalid spireset: ms '%s' valid range 0-9999",
+					  setting);
+			return replybuf;
+		}
+
+		opt_minion_spireset = val;
 		return NULL;
 	}
 

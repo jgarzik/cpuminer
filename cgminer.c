@@ -254,6 +254,7 @@ int opt_minion_ledcount;
 int opt_minion_ledlimit = 90;
 bool opt_minion_noautofreq;
 bool opt_minion_overheat;
+int opt_minion_spireset = 200;
 char *opt_minion_temp;
 #endif
 
@@ -1372,6 +1373,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--minion-overheat",
 		     opt_set_bool, &opt_minion_overheat,
 		     "Enable directly halting any chip when the status exceeds 100C"),
+	OPT_WITH_ARG("--minion-spireset",
+		     set_int_0_to_9999, opt_show_intval, &opt_minion_spireset,
+		     "Sleep time in milliseconds when doing an SPI reset (default: 200)"),
 	OPT_WITH_ARG("--minion-temp",
 		     opt_set_charp, NULL, &opt_minion_temp,
 		     "Set minion chip temperature threshold, single value or comma list, range 120-160 (default: 135C)"),

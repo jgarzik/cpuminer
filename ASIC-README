@@ -248,6 +248,7 @@ ASIC SPECIFIC COMMANDS
 --minion-idlecount  Report when IdleCount is >0 or changes
 --minion-noautofreq Disable automatic frequency adjustment
 --minion-overheat   Enable directly halting any chip when the status exceeds 100C
+--minion-spireset   Sleep time in milliseconds when doing an SPI reset (default: 200)
 --minion-temp <arg> Set minion chip temperature threshold, single value or comma list, range 120-160 (default: 135C)
 --nfu-bits <arg>    Set nanofury bits for overclocking, range 32-63 (default: 50)
 --rock-freq <arg>   Set RockMiner frequency in MHz, range 125-500 (default: 270)
