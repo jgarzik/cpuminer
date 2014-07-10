@@ -1024,6 +1024,8 @@ extern int opt_minion_chipreport;
 extern char *opt_minion_cores;
 extern char *opt_minion_freq;
 extern bool opt_minion_idlecount;
+extern int opt_minion_ledcount;
+extern int opt_minion_ledlimit;
 extern bool opt_minion_noautofreq;
 extern bool opt_minion_overheat;
 extern char *opt_minion_temp;

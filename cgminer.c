@@ -250,6 +250,8 @@ int opt_minion_chipreport;
 char *opt_minion_cores;
 char *opt_minion_freq;
 bool opt_minion_idlecount;
+int opt_minion_ledcount;
+int opt_minion_ledlimit = 90;
 bool opt_minion_noautofreq;
 bool opt_minion_overheat;
 char *opt_minion_temp;
@@ -1351,13 +1353,19 @@ static struct opt_table opt_config_table[] = {
 		     "Seconds to report chip 5min hashrate, range 0-100 (default: 0=disabled)"),
 	OPT_WITH_ARG("--minion-freq",
 		     opt_set_charp, NULL, &opt_minion_freq,
-		     "Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1000)"),
+		     "Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1200)"),
 	OPT_WITH_ARG("--minion-cores",
 		     opt_set_charp, NULL, &opt_minion_cores,
 		     opt_hidden),
 	OPT_WITHOUT_ARG("--minion-idlecount",
 		     opt_set_bool, &opt_minion_idlecount,
 		     "Report when IdleCount is >0 or changes"),
+	OPT_WITH_ARG("--minion-ledcount",
+		     set_int_0_to_100, opt_show_intval, &opt_minion_ledcount,
+		     "Turn off led when more than this many chips below the ledlimit (default: 0)"),
+	OPT_WITH_ARG("--minion-ledlimit",
+		     set_int_0_to_200, opt_show_intval, &opt_minion_ledlimit,
+		     "Turn off led when chips GHs are below this (default: 90)"),
 	OPT_WITHOUT_ARG("--minion-noautofreq",
 		     opt_set_bool, &opt_minion_noautofreq,
 		     "Disable automatic frequency adjustment"),
