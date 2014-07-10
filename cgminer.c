@@ -8227,10 +8227,11 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			if (pool->enabled == POOL_DISABLED)
 				continue;
 
-			/* Don't start testing any pools if the test threads
-			 * from startup are still doing their first attempt. */
+			/* Don't start testing a pool if its test thread
+			 * from startup is still doing its first attempt. */
 			if (unlikely(pool->testing)) {
-				pthread_join(pool->test_thread, NULL);
+				if (pthread_tryjoin_np(pool->test_thread, NULL))
+					continue;
 				pool->testing = false;
 			}
 
