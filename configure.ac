@@ -314,16 +314,29 @@ AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
 
 
 
-spondoolies="no"
+sp10="no"
 
-AC_ARG_ENABLE([spondoolies],
-	[AC_HELP_STRING([--enable-spondoolies],[Compile support for Spondoolies (default disabled)])],
-	[spondoolies=$enableval]
+AC_ARG_ENABLE([sp10],
+	[AC_HELP_STRING([--enable-sp10],[Compile support for Spondoolies SP10 (default disabled)])],
+	[sp10=$enableval]
 	)
-if test "x$spondoolies" = xyes; then
-	AC_DEFINE([USE_SPONDOOLIES], [1], [Defined to 1 if Spondoolies support is wanted])
+if test "x$sp10" = xyes; then
+	AC_DEFINE([USE_SP10], [1], [Defined to 1 if Spondoolies SP10 support is wanted])
 fi
-AM_CONDITIONAL([HAS_SPONDOOLIES], [test x$spondoolies = xyes])
+AM_CONDITIONAL([HAS_SP10], [test x$sp10 = xyes])
+
+
+
+sp30="no"
+
+AC_ARG_ENABLE([sp30],
+	[AC_HELP_STRING([--enable-sp30],[Compile support for Spondoolies SP30 (default disabled)])],
+	[sp30=$enableval]
+	)
+if test "x$sp30" = xyes; then
+	AC_DEFINE([USE_SP30], [1], [Defined to 1 if SP30 support is wanted])
+fi
+AM_CONDITIONAL([HAS_SP30], [test x$sp30 = xyes])
 
 
 curses="auto"
@@ -590,11 +603,19 @@ else
 	echo "  Cointerra.ASICs......: Disabled"
 fi
 
-if test "x$spondoolies" = xyes; then
-	echo "  Spondoolies.ASICs....: Enabled"
+if test "x$sp10" = xyes; then
+	echo "  Spond-sp10.ASICs.....: Enabled"
 else
-	echo "  Spondoolies.ASICs....: Disabled"
+	echo "  Spond-sp10.ASICs.....: Disabled"
 fi
+
+
+if test "x$sp30" = xyes; then
+	echo "  Spond-sp30.ASICs.....: Enabled"
+else
+	echo "  Spond-sp30.ASICs.....: Disabled"
+fi
+
 
 if test "x$bitmine_A1" = xyes; then
 	echo "  Bitmine-A1.ASICs.....: Enabled"
@@ -638,7 +659,7 @@ else
 	echo "  ModMiner.FPGAs.......: Disabled"
 fi
 
-if test "x$avalon$avalon2$bab$bflsc$bitforce$bitfury$hashfast$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$spondoolies" = xnononononononononononononononononono; then
+if test "x$avalon$avalon2$bab$bflsc$bitforce$bitfury$hashfast$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$sp10$sp30" = xnonononononononononononononononononono; then
 	AC_MSG_ERROR([No mining configured in])
 fi
 

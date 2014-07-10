@@ -110,9 +110,15 @@ if HAS_COINTERRA
 cgminer_SOURCES += driver-cointerra.c driver-cointerra.h
 endif
 
-if HAS_SPONDOOLIES
+if HAS_SP10
 cgminer_SOURCES += driver-spondoolies.c driver-spondoolies.h \
 		   mg_proto_parser.c mg_proto_parser.h
+endif
+
+
+if HAS_SP30
+cgminer_SOURCES += driver-spondoolies-sp30.c driver-spondoolies-sp30.h \
+		   mg_proto_parser_sp30.c mg_proto_parser_sp30.h
 endif
 
 if HAS_BAB
