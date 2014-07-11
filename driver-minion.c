@@ -892,7 +892,7 @@ struct minion_info {
 };
 
 #if MINION_ROCKCHIP == 1
-static bool minion_toggle_gpio(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, int gpionum)
+static bool minion_toggle_gpio(struct cgpu_info *minioncgpu, int gpionum)
 {
 	char pindir[64], ena[64], pin[8], dir[64];
 	char gpiointvalue[64];
@@ -974,7 +974,7 @@ static bool minion_toggle_gpio(struct cgpu_info *minioncgpu, struct minion_info 
 	snprintf(gpiointvalue, sizeof(gpiointvalue),
 		 MINION_GPIO_SYS MINION_GPIO_PIN MINION_GPIO_VALUE,
 		 gpionum);
-	fd = open(gpiointvalue, O_WRONLY);
+	int fd = open(gpiointvalue, O_WRONLY);
 	if (fd == -1) {
 		applog(LOG_ERR, "%s: failed7 to access GPIO pin %d (%d)",
 				minioncgpu->drv->dname,
@@ -1407,7 +1407,7 @@ static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minionin
 
 #if MINION_ROCKCHIP == 1
 			if (powercycle)
-				minion_toggle_gpio(minioncgpu, minioninfo, MINION_POWERCYCLE_GPIO);
+				minion_toggle_gpio(minioncgpu, MINION_POWERCYCLE_GPIO);
 #endif
 			minion_init_spi(minioncgpu, minioninfo, 0, 0, true);
 		}
