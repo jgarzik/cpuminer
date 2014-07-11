@@ -1381,7 +1381,7 @@ static struct opt_table opt_config_table[] = {
 		     "Add a delay in microseconds after each SPI I/O"),
 	OPT_WITH_ARG("--minion-spireset",
 		     opt_set_charp, NULL, &opt_minion_spireset,
-		     "SPI regular reset: iNNN for I/O count or sNNN for seconds"),
+		     "SPI regular reset: iNNN for I/O count or sNNN for seconds - 0 means none"),
 	OPT_WITH_ARG("--minion-spisleep",
 		     set_int_0_to_9999, opt_show_intval, &opt_minion_spisleep,
 		     "Sleep time in milliseconds when doing an SPI reset"),

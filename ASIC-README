@@ -249,7 +249,7 @@ ASIC SPECIFIC COMMANDS
 --minion-noautofreq Disable automatic frequency adjustment
 --minion-overheat   Enable directly halting any chip when the status exceeds 100C
 --minion-spidelay   Add a delay in microseconds after each SPI I/O
---minion-spireset   SPI regular reset: iNNN for I/O count or sNNN for seconds
+--minion-spireset   SPI regular reset: iNNN for I/O count or sNNN for seconds - 0 means none
 --minion-spisleep   Sleep time in milliseconds when doing an SPI reset
 --minion-temp <arg> Set minion chip temperature threshold, single value or comma list, range 120-160 (default: 135C)
 --nfu-bits <arg>    Set nanofury bits for overclocking, range 32-63 (default: 50)
