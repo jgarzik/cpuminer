@@ -37,6 +37,17 @@ static void minion_detect(__maybe_unused bool hotplug)
 // The code is always in - this just decides if it does it
 static bool minreread = false;
 
+#if MINION_ROCKCHIP == 1
+#define MINION_POWERCYCLE_GPIO 173
+#define MINION_CHIP_OFF "1"
+#define MINION_CHIP_ON "0"
+#define MINION_CHIP_DELAY 100
+#endif
+
+// Power cycle if the xff_list is full and the tail is less than
+// this long ago
+#define MINION_POWER_TIME 60
+
 /*
  * Use pins for board selection
  * If disabled, it will test chips just as 'pin 0'
@@ -601,7 +612,6 @@ typedef struct perf_item {
 // *** 0xff error history - uses max 20 and rolls over
 typedef struct xff_item {
 	struct timeval when;
-	const char *what;
 } XFF_ITEM;
 
 #define ALLOC_XFF_ITEMS 20
@@ -880,6 +890,122 @@ struct minion_info {
 
 	bool initialised;
 };
+
+#if MINION_ROCKCHIP == 1
+static bool minion_toggle_gpio(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, int gpionum)
+{
+	char pindir[64], ena[64], pin[8], dir[64];
+	char gpiointvalue[64];
+	struct stat st;
+	int file, err;
+	ssize_t ret;
+
+	snprintf(pindir, sizeof(pindir), MINION_GPIO_SYS MINION_GPIO_PIN, gpionum);
+	memset(&st, 0, sizeof(st));
+
+	if (stat(pindir, &st) == 0) { // already exists
+		if (!S_ISDIR(st.st_mode)) {
+			applog(LOG_ERR, "%s: failed1 to enable GPIO pin %d"
+					" - not a directory",
+					minioncgpu->drv->dname, gpionum);
+			return false;
+		}
+	} else {
+		snprintf(ena, sizeof(ena), MINION_GPIO_SYS MINION_GPIO_ENA);
+		file = open(ena, O_WRONLY | O_SYNC);
+		if (file == -1) {
+			applog(LOG_ERR, "%s: failed2 to export GPIO pin %d (%d)"
+					" - you need to be root?",
+					minioncgpu->drv->dname,
+					gpionum, errno);
+			return false;
+		}
+		snprintf(pin, sizeof(pin), MINION_GPIO_ENA_VAL, gpionum);
+		ret = write(file, pin, (size_t)strlen(pin));
+		if (ret != (ssize_t)strlen(pin)) {
+			if (ret < 0)
+				err = errno;
+			else
+				err = (int)ret;
+			close(file);
+			applog(LOG_ERR, "%s: failed3 to export GPIO pin %d (%d:%d)",
+					minioncgpu->drv->dname,
+					gpionum, err, (int)strlen(pin));
+			return false;
+		}
+		close(file);
+
+		// Check again if it exists
+		memset(&st, 0, sizeof(st));
+		if (stat(pindir, &st) != 0) {
+			applog(LOG_ERR, "%s: failed4 to export GPIO pin %d (%d)",
+					minioncgpu->drv->dname,
+					gpionum, errno);
+			return false;
+		}
+	}
+
+	// Set the pin attributes
+	// Direction
+	snprintf(dir, sizeof(dir), MINION_GPIO_SYS MINION_GPIO_PIN MINION_GPIO_DIR, gpionum);
+	file = open(dir, O_WRONLY | O_SYNC);
+	if (file == -1) {
+		applog(LOG_ERR, "%s: failed5 to configure GPIO pin %d (%d)"
+				" - you need to be root?",
+				minioncgpu->drv->dname,
+				gpionum, errno);
+		return false;
+	}
+	ret = write(file, MINION_GPIO_DIR_WRITE, (size_t)strlen(MINION_GPIO_DIR_WRITE));
+	if (ret != (ssize_t)strlen(MINION_GPIO_DIR_READ)) {
+		if (ret < 0)
+			err = errno;
+		else
+			err = (int)ret;
+		close(file);
+		applog(LOG_ERR, "%s: failed6 to configure GPIO pin %d (%d:%d)",
+				minioncgpu->drv->dname, gpionum,
+				err, (int)strlen(MINION_GPIO_DIR_READ));
+		return false;
+	}
+	close(file);
+
+	// Open it
+	snprintf(gpiointvalue, sizeof(gpiointvalue),
+		 MINION_GPIO_SYS MINION_GPIO_PIN MINION_GPIO_VALUE,
+		 gpionum);
+	fd = open(gpiointvalue, O_WRONLY);
+	if (fd == -1) {
+		applog(LOG_ERR, "%s: failed7 to access GPIO pin %d (%d)",
+				minioncgpu->drv->dname,
+				gpionum, errno);
+		return false;
+	}
+
+	ret = write(fd, MINION_CHIP_OFF, sizeof(MINION_CHIP_OFF)-1);
+	if (ret != sizeof(MINION_CHIP_OFF)-1) {
+		close(fd);
+		applog(LOG_ERR, "%s: failed8 to toggle off GPIO pin %d (%d:%d)",
+				minioncgpu->drv->dname,
+				gpionum, (int)ret, errno);
+		return false;
+	}
+
+	cgsleep_ms(MINION_CHIP_DELAY);
+
+	ret = write(fd, MINION_CHIP_ON, sizeof(MINION_CHIP_ON)-1);
+	if (ret != sizeof(MINION_CHIP_OFF)-1) {
+		close(fd);
+		applog(LOG_ERR, "%s: failed9 to toggle on GPIO pin %d (%d:%d)",
+				minioncgpu->drv->dname,
+				gpionum, (int)ret, errno);
+		return false;
+	}
+
+	close(fd);
+	return true;
+}
+#endif
 
 static void ready_work(struct cgpu_info *minioncgpu, struct work *work, bool rolled)
 {
@@ -1160,7 +1286,9 @@ static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minionin
 		      uint32_t rsiz, uint64_t *ioseq, MINION_FFL_ARGS)
 {
 	struct spi_ioc_transfer tran;
-	bool fail = false;
+	bool fail = false, powercycle = false, show = false;
+	double lastshow, total;
+	K_ITEM *xitem;
 	int ret;
 #if MINION_SHOW_IO
 	char dataw[DATA_ALL], datar[DATA_ALL];
@@ -1243,8 +1371,46 @@ static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minionin
 				break;
 			}
 		}
-		if (fail)
+		if (fail) {
+			powercycle = show = false;
+
+			if (minioninfo->xfree_list->count > 0)
+				xitem = k_unlink_head(minioninfo->xfree_list);
+			else
+				xitem = k_unlink_tail(minioninfo->xff_list);
+			cgtime(&(DATA_XFF(xitem)->when));
+			if (!minioninfo->xff_list->head)
+				show = true;
+			else {
+				// xff_list is full
+				if (minioninfo->xfree_list->count == 0) {
+					total = tdiff(&(DATA_XFF(xitem)->when),
+							&(DATA_XFF(minioninfo->xff_list->tail)->when));
+					if (total <= MINION_POWER_TIME) {
+						powercycle = true;
+						// Discard the history
+						k_list_transfer_to_head(minioninfo->xff_list,
+									minioninfo->xfree_list);
+						k_add_head(minioninfo->xfree_list, xitem);
+						xitem = NULL;
+					}
+				}
+
+				if (!powercycle) {
+					lastshow = tdiff(&(DATA_XFF(xitem)->when),
+							 &(DATA_XFF(minioninfo->xff_list->head)->when));
+					show = (lastshow >= 5.0);
+				}
+			}
+			if (xitem)
+				k_add_head(minioninfo->xff_list, xitem);
+
+#if MINION_ROCKCHIP == 1
+			if (powercycle)
+				minion_toggle_gpio(minioncgpu, minioninfo, MINION_POWERCYCLE_GPIO);
+#endif
 			minion_init_spi(minioncgpu, minioninfo, 0, 0, true);
+		}
 	} else if (minioninfo->spi_reset_count) {
 		if (minioninfo->spi_reset_io) {
 			if (*ioseq > 0 && (*ioseq % minioninfo->spi_reset_count) == 0)
@@ -1270,36 +1436,20 @@ static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minionin
 	IO_STAT_STORE(&sta, &fin, &lsta, &lfin, &tsd, obuf, osiz, ret, 1);
 
 	if (fail) {
-		char *what = "unk";
-		K_ITEM *xitem;
-		bool show = false;
-		double lastshow;
-		switch (obuf[1]) {
-			case READ_ADDR(MINION_RES_DATA):
-				what = "nonce";
-				break;
-			case READ_ADDR(MINION_SYS_FIFO_STA):
-				what = "fifo";
-				break;
-		}
-		K_WLOCK(minioninfo->xfree_list);
-		if (minioninfo->xfree_list->count > 0)
-			xitem = k_unlink_head(minioninfo->xfree_list);
-		else
-			xitem = k_unlink_tail(minioninfo->xff_list);
-		DATA_XFF(xitem)->what = what;
-		cgtime(&(DATA_XFF(xitem)->when));
-		if (!minioninfo->xff_list->head)
-			show = true;
-		else {
-			lastshow = tdiff(&(DATA_XFF(xitem)->when),
-					 &(DATA_XFF(minioninfo->xff_list->head)->when));
-			show = (lastshow >= 5.0);
-		}
-		k_add_head(minioninfo->xff_list, xitem);
-		K_WUNLOCK(minioninfo->xfree_list);
-		if (show) {
-			applog(LOG_ERR, "%s%d: ioctl %"PRIu64" %s returned all 0xff - resetting",
+		if (powercycle) {
+			applog(LOG_ERR, "%s%d: power cycling ioctl %"PRIu64,
+					minioncgpu->drv->name, minioncgpu->device_id, *ioseq);
+		} else if (show) {
+			char *what = "unk";
+			switch (obuf[1]) {
+				case READ_ADDR(MINION_RES_DATA):
+					what = "nonce";
+					break;
+				case READ_ADDR(MINION_SYS_FIFO_STA):
+					what = "fifo";
+					break;
+			}
+			applog(LOG_ERR, "%s%d: resetting ioctl %"PRIu64" %s returned all 0xff",
 					minioncgpu->drv->name, minioncgpu->device_id,
 					*ioseq, what);
 		}
