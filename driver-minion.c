@@ -598,11 +598,21 @@ typedef struct perf_item {
 #define ALLOC_PERF_ITEMS 128
 #define LIMIT_PERF_ITEMS 0
 
+// *** 0xff error history - uses max 20 and rolls over
+typedef struct xff_item {
+	struct timeval when;
+	const char *what;
+} XFF_ITEM;
+
+#define ALLOC_XFF_ITEMS 20
+#define LIMIT_XFF_ITEMS 20
+
 #define DATA_WORK(_item) ((WORK_ITEM *)(_item->data))
 #define DATA_TASK(_item) ((TASK_ITEM *)(_item->data))
 #define DATA_RES(_item) ((RES_ITEM *)(_item->data))
 #define DATA_HIST(_item) ((HIST_ITEM *)(_item->data))
 #define DATA_PERF(_item) ((PERF_ITEM *)(_item->data))
+#define DATA_XFF(_item) ((XFF_ITEM *)(_item->data))
 
 // Set this to 1 to enable iostats processing
 // N.B. it slows down mining
@@ -834,6 +844,10 @@ struct minion_info {
 	// Performance history
 	K_LIST *pfree_list;
 	K_STORE *p_list[MINION_CHIPS];
+
+	// 0xff history
+	K_LIST *xfree_list;
+	K_STORE *xff_list;
 
 	// Gets reset to zero each time it is used in reporting
 	int res_err_count[MINION_CHIPS];
@@ -1257,6 +1271,9 @@ static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minionin
 
 	if (fail) {
 		char *what = "unk";
+		K_ITEM *xitem;
+		bool show = false;
+		double lastshow;
 		switch (obuf[1]) {
 			case READ_ADDR(MINION_RES_DATA):
 				what = "nonce";
@@ -1265,9 +1282,27 @@ static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minionin
 				what = "fifo";
 				break;
 		}
-		applog(LOG_ERR, "%s%d: ioctl %"PRIu64" %s returned all 0xff - resetting",
-				minioncgpu->drv->name, minioncgpu->device_id,
-				*ioseq, what);
+		K_WLOCK(minioninfo->xfree_list);
+		if (minioninfo->xfree_list->count > 0)
+			xitem = k_unlink_head(minioninfo->xfree_list);
+		else
+			xitem = k_unlink_tail(minioninfo->xff_list);
+		DATA_XFF(xitem)->what = what;
+		cgtime(&(DATA_XFF(xitem)->when));
+		if (!minioninfo->xff_list->head)
+			show = true;
+		else {
+			lastshow = tdiff(&(DATA_XFF(xitem)->when),
+					 &(DATA_XFF(minioninfo->xff_list->head)->when));
+			show = (lastshow >= 5.0);
+		}
+		k_add_head(minioninfo->xff_list, xitem);
+		K_WUNLOCK(minioninfo->xfree_list);
+		if (show) {
+			applog(LOG_ERR, "%s%d: ioctl %"PRIu64" %s returned all 0xff - resetting",
+					minioncgpu->drv->name, minioncgpu->device_id,
+					*ioseq, what);
+		}
 	}
 
 #if MINION_SHOW_IO
@@ -2334,6 +2369,10 @@ static void minion_detect(bool hotplug)
 	for (i = 0; i < (int)MINION_CHIPS; i++)
 		minioninfo->p_list[i] = k_new_store(minioninfo->pfree_list);
 
+	minioninfo->xfree_list = k_new_list("0xff", sizeof(XFF_ITEM),
+					    ALLOC_XFF_ITEMS, LIMIT_XFF_ITEMS, true);
+	minioninfo->xff_list = k_new_store(minioninfo->xfree_list);
+
 	cgsem_init(&(minioninfo->task_ready));
 	cgsem_init(&(minioninfo->nonce_ready));
 	cgsem_init(&(minioninfo->scan_work));
@@ -2933,19 +2972,20 @@ static void *minion_spi_reply(void *userdata)
 						if (fifo_task.reply < (int)(fifo_task.osiz)) {
 							char *buf = bin2hex((unsigned char *)(&(fifo_task.rbuf[fifo_task.osiz - fifo_task.rsiz])),
 										(int)(fifo_task.rsiz));
-							applog(LOG_ERR, "%s%i: Chip %d Bad fifo reply (%s) size %d, should be %d",
-									minioncgpu->drv->name, minioncgpu->device_id,
-									chip, buf,
-									fifo_task.reply, (int)(fifo_task.osiz));
+							applog(LOG_DEBUG, "%s%i: Chip %d Bad fifo reply (%s) size %d, should be %d",
+									  minioncgpu->drv->name, minioncgpu->device_id,
+									  chip, buf,
+									  fifo_task.reply, (int)(fifo_task.osiz));
 							free(buf);
 							minioninfo->spi_errors++;
 							minioninfo->fifo_spi_errors[chip]++;
 							minioninfo->res_err_count[chip]++;
 						} else {
 							if (fifo_task.reply > (int)(fifo_task.osiz)) {
-								applog(LOG_ERR, "%s%i: Chip %d Unexpected fifo reply size %d, expected only %d",
-										minioncgpu->drv->name, minioncgpu->device_id,
-										chip, fifo_task.reply, (int)(fifo_task.osiz));
+								applog(LOG_DEBUG, "%s%i: Chip %d Unexpected fifo reply size %d, "
+										  "expected only %d",
+										  minioncgpu->drv->name, minioncgpu->device_id,
+										  chip, fifo_task.reply, (int)(fifo_task.osiz));
 							}
 							res = FIFO_RES(fifo_task.rbuf, fifo_task.osiz - fifo_task.rsiz);
 							cmd = FIFO_CMD(fifo_task.rbuf, fifo_task.osiz - fifo_task.rsiz);
@@ -2953,9 +2993,11 @@ static void *minion_spi_reply(void *userdata)
 							if (res <= MINION_QUE_MAX && cmd <= MINION_QUE_MAX)
 								break;
 
-							applog(LOG_ERR, "%s%i: Chip %d Bad fifo reply res %d (max is %d) cmd %d (max is %d)",
-									minioncgpu->drv->name, minioncgpu->device_id,
-									chip, (int)res, MINION_QUE_MAX, (int)cmd, MINION_QUE_MAX);
+							applog(LOG_DEBUG, "%s%i: Chip %d Bad fifo reply res %d (max is %d) "
+									  "cmd %d (max is %d)",
+									  minioncgpu->drv->name, minioncgpu->device_id,
+									  chip, (int)res, MINION_QUE_MAX,
+									  (int)cmd, MINION_QUE_MAX);
 							minioninfo->spi_errors++;
 							minioninfo->fifo_spi_errors[chip]++;
 							minioninfo->res_err_count[chip]++;
