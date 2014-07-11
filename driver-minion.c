@@ -609,13 +609,13 @@ typedef struct perf_item {
 #define ALLOC_PERF_ITEMS 128
 #define LIMIT_PERF_ITEMS 0
 
-// *** 0xff error history - uses max 20 and rolls over
+// *** 0xff error history
 typedef struct xff_item {
-	struct timeval when;
+	time_t when;
 } XFF_ITEM;
 
-#define ALLOC_XFF_ITEMS 20
-#define LIMIT_XFF_ITEMS 20
+#define ALLOC_XFF_ITEMS 100
+#define LIMIT_XFF_ITEMS 100
 
 #define DATA_WORK(_item) ((WORK_ITEM *)(_item->data))
 #define DATA_TASK(_item) ((TASK_ITEM *)(_item->data))
@@ -758,6 +758,7 @@ struct minion_info {
 	bool spi_reset_io;
 	int spi_reset_count;
 	time_t last_spi_reset;
+	uint64_t spi_resets;
 
 	// TODO: need to track disabled chips - done?
 	int chips;
@@ -858,6 +859,11 @@ struct minion_info {
 	// 0xff history
 	K_LIST *xfree_list;
 	K_STORE *xff_list;
+	time_t last_power_cycle;
+	uint64_t power_cycles;
+	time_t last_xff;
+	uint64_t xffs;
+	uint64_t last_displayed_xff;
 
 	// Gets reset to zero each time it is used in reporting
 	int res_err_count[MINION_CHIPS];
@@ -894,6 +900,7 @@ struct minion_info {
 #if MINION_ROCKCHIP == 1
 static bool minion_toggle_gpio(struct cgpu_info *minioncgpu, int gpionum)
 {
+	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	char pindir[64], ena[64], pin[8], dir[64];
 	char gpiointvalue[64];
 	struct stat st;
@@ -956,8 +963,8 @@ static bool minion_toggle_gpio(struct cgpu_info *minioncgpu, int gpionum)
 				gpionum, errno);
 		return false;
 	}
-	ret = write(file, MINION_GPIO_DIR_WRITE, (size_t)strlen(MINION_GPIO_DIR_WRITE));
-	if (ret != (ssize_t)strlen(MINION_GPIO_DIR_READ)) {
+	ret = write(file, MINION_GPIO_DIR_WRITE, sizeof(MINION_GPIO_DIR_WRITE)-1);
+	if (ret != sizeof(MINION_GPIO_DIR_WRITE)-1) {
 		if (ret < 0)
 			err = errno;
 		else
@@ -965,7 +972,7 @@ static bool minion_toggle_gpio(struct cgpu_info *minioncgpu, int gpionum)
 		close(file);
 		applog(LOG_ERR, "%s: failed6 to configure GPIO pin %d (%d:%d)",
 				minioncgpu->drv->dname, gpionum,
-				err, (int)strlen(MINION_GPIO_DIR_READ));
+				err, (int)sizeof(MINION_GPIO_DIR_WRITE)-1);
 		return false;
 	}
 	close(file);
@@ -1003,6 +1010,8 @@ static bool minion_toggle_gpio(struct cgpu_info *minioncgpu, int gpionum)
 	}
 
 	close(fd);
+	minioninfo->last_power_cycle = time(NULL);
+	minioninfo->power_cycles++;
 	return true;
 }
 #endif
@@ -1289,6 +1298,7 @@ static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minionin
 	bool fail = false, powercycle = false, show = false;
 	double lastshow, total;
 	K_ITEM *xitem;
+	time_t now;
 	int ret;
 #if MINION_SHOW_IO
 	char dataw[DATA_ALL], datar[DATA_ALL];
@@ -1361,6 +1371,7 @@ static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minionin
 		// Pin back high after I/O
 		set_pin(minioninfo, pin, true);
 	}
+	now = time(NULL);
 	if (ret >= 0 && rbuf[0] == 0xff && rbuf[ret-1] == 0xff &&
 	    (obuf[1] == READ_ADDR(MINION_RES_DATA) || obuf[1] == READ_ADDR(MINION_SYS_FIFO_STA))) {
 		int i;
@@ -1373,19 +1384,21 @@ static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minionin
 		}
 		if (fail) {
 			powercycle = show = false;
+			minioninfo->xffs++;
+			minioninfo->last_xff = now;
 
 			if (minioninfo->xfree_list->count > 0)
 				xitem = k_unlink_head(minioninfo->xfree_list);
 			else
 				xitem = k_unlink_tail(minioninfo->xff_list);
-			cgtime(&(DATA_XFF(xitem)->when));
+			DATA_XFF(xitem)->when = now;
 			if (!minioninfo->xff_list->head)
 				show = true;
 			else {
 				// xff_list is full
 				if (minioninfo->xfree_list->count == 0) {
-					total = tdiff(&(DATA_XFF(xitem)->when),
-							&(DATA_XFF(minioninfo->xff_list->tail)->when));
+					total = DATA_XFF(xitem)->when -
+						DATA_XFF(minioninfo->xff_list->tail)->when;
 					if (total <= MINION_POWER_TIME) {
 						powercycle = true;
 						// Discard the history
@@ -1397,9 +1410,9 @@ static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minionin
 				}
 
 				if (!powercycle) {
-					lastshow = tdiff(&(DATA_XFF(xitem)->when),
-							 &(DATA_XFF(minioninfo->xff_list->head)->when));
-					show = (lastshow >= 5.0);
+					lastshow = DATA_XFF(xitem)->when -
+						   DATA_XFF(minioninfo->xff_list->head)->when;
+					show = (lastshow >= 5);
 				}
 			}
 			if (xitem)
@@ -1416,14 +1429,12 @@ static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minionin
 			if (*ioseq > 0 && (*ioseq % minioninfo->spi_reset_count) == 0)
 				minion_init_spi(minioncgpu, minioninfo, 0, 0, true);
 		} else {
-			if (minioninfo->last_spi_reset == 0L)
-				minioninfo->last_spi_reset = time(NULL);
+			if (minioninfo->last_spi_reset == 0)
+				minioninfo->last_spi_reset = now;
 			else {
-				time_t now = time(NULL);
-				if ((now - minioninfo->last_spi_reset) >= minioninfo->spi_reset_count) {
-					minioninfo->last_spi_reset = now;
+				if ((now - minioninfo->last_spi_reset) >= minioninfo->spi_reset_count)
 					minion_init_spi(minioncgpu, minioninfo, 0, 0, true);
-				}
+					minioninfo->last_spi_reset = now;
 			}
 		}
 	}
@@ -1437,8 +1448,10 @@ static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minionin
 
 	if (fail) {
 		if (powercycle) {
-			applog(LOG_ERR, "%s%d: power cycling ioctl %"PRIu64,
-					minioncgpu->drv->name, minioncgpu->device_id, *ioseq);
+			applog(LOG_ERR, "%s%d: power cycle ioctl %"PRIu64" (%"PRIu64")",
+					minioncgpu->drv->name, minioncgpu->device_id, *ioseq,
+					minioninfo->xffs - minioninfo->last_displayed_xff);
+			minioninfo->last_displayed_xff = minioninfo->xffs;
 		} else if (show) {
 			char *what = "unk";
 			switch (obuf[1]) {
@@ -1449,9 +1462,10 @@ static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minionin
 					what = "fifo";
 					break;
 			}
-			applog(LOG_ERR, "%s%d: resetting ioctl %"PRIu64" %s returned all 0xff",
+			applog(LOG_ERR, "%s%d: reset ioctl %"PRIu64" %s all 0xff (%"PRIu64")",
 					minioncgpu->drv->name, minioncgpu->device_id,
-					*ioseq, what);
+					*ioseq, what, minioninfo->xffs - minioninfo->last_displayed_xff);
+			minioninfo->last_displayed_xff = minioninfo->xffs;
 		}
 	}
 
@@ -1978,6 +1992,7 @@ static bool minion_init_spi(struct cgpu_info *minioncgpu, struct minion_info *mi
 		minioninfo->spifd = open(minioncgpu->device_path, O_RDWR);
 		if (minioninfo->spifd < 0)
 			goto bad_out;
+		minioninfo->spi_resets++;
 	} else {
 		for (i = 0; minion_modules[i]; i++) {
 			snprintf(buf, sizeof(buf), "modprobe %s", minion_modules[i]);
@@ -4930,6 +4945,22 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 	root = api_add_int(root, "RFree Total", &(minioninfo->rfree_list->total), true);
 	root = api_add_int(root, "RFree Count", &(minioninfo->rfree_list->count), true);
 	root = api_add_int(root, "RNonce Count", &(minioninfo->rnonce_list->count), true);
+
+	root = api_add_int(root, "XFree Count", &(minioninfo->xfree_list->count), true);
+	root = api_add_int(root, "XFF Count", &(minioninfo->xff_list->count), true);
+	root = api_add_uint64(root, "XFFs", &(minioninfo->xffs), true);
+	root = api_add_uint64(root, "SPI Resets", &(minioninfo->spi_resets), true);
+	root = api_add_uint64(root, "Power Cycles", &(minioninfo->power_cycles), true);
+
+	root = api_add_int(root, "Chip Report", &opt_minion_chipreport, true);
+	root = api_add_int(root, "LED Count", &opt_minion_ledcount, true);
+	root = api_add_int(root, "LED Limit", &opt_minion_ledlimit, true);
+	bool b = !opt_minion_noautofreq;
+	root = api_add_bool(root, "Auto Freq", &b, true);
+	root = api_add_int(root, "SPI Delay", &opt_minion_spidelay, true);
+	root = api_add_bool(root, "SPI Reset I/O", &(minioninfo->spi_reset_io), true);
+	root = api_add_int(root, "SPI Reset", &(minioninfo->spi_reset_count), true);
+	root = api_add_int(root, "SPI Reset Sleep", &opt_minion_spisleep, true);
 
 #if DO_IO_STATS
 #define sta_api(_name, _iostat) \
