@@ -254,7 +254,10 @@ int opt_minion_ledcount;
 int opt_minion_ledlimit = 90;
 bool opt_minion_noautofreq;
 bool opt_minion_overheat;
-int opt_minion_spireset = 200;
+int opt_minion_spidelay;
+char *opt_minion_spireset;
+int opt_minion_spisleep = 200;
+int opt_minion_spiusec;
 char *opt_minion_temp;
 #endif
 
@@ -1352,12 +1355,12 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--minion-chipreport",
 		     set_int_0_to_100, opt_show_intval, &opt_minion_chipreport,
 		     "Seconds to report chip 5min hashrate, range 0-100 (default: 0=disabled)"),
-	OPT_WITH_ARG("--minion-freq",
-		     opt_set_charp, NULL, &opt_minion_freq,
-		     "Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1200)"),
 	OPT_WITH_ARG("--minion-cores",
 		     opt_set_charp, NULL, &opt_minion_cores,
 		     opt_hidden),
+	OPT_WITH_ARG("--minion-freq",
+		     opt_set_charp, NULL, &opt_minion_freq,
+		     "Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1200)"),
 	OPT_WITHOUT_ARG("--minion-idlecount",
 		     opt_set_bool, &opt_minion_idlecount,
 		     "Report when IdleCount is >0 or changes"),
@@ -1373,9 +1376,18 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--minion-overheat",
 		     opt_set_bool, &opt_minion_overheat,
 		     "Enable directly halting any chip when the status exceeds 100C"),
+	OPT_WITH_ARG("--minion-spidelay",
+		     set_int_0_to_9999, opt_show_intval, &opt_minion_spidelay,
+		     "Add a delay in microseconds after each SPI I/O"),
 	OPT_WITH_ARG("--minion-spireset",
-		     set_int_0_to_9999, opt_show_intval, &opt_minion_spireset,
-		     "Sleep time in milliseconds when doing an SPI reset (default: 200)"),
+		     opt_set_charp, NULL, &opt_minion_spireset,
+		     "SPI regular reset: iNNN for I/O count or sNNN for seconds"),
+	OPT_WITH_ARG("--minion-spisleep",
+		     set_int_0_to_9999, opt_show_intval, &opt_minion_spisleep,
+		     "Sleep time in milliseconds when doing an SPI reset"),
+	OPT_WITH_ARG("--minion-spiusec",
+		     set_int_0_to_9999, NULL, &opt_minion_spiusec,
+		     opt_hidden),
 	OPT_WITH_ARG("--minion-temp",
 		     opt_set_charp, NULL, &opt_minion_temp,
 		     "Set minion chip temperature threshold, single value or comma list, range 120-160 (default: 135C)"),

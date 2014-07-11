@@ -734,6 +734,11 @@ struct minion_info {
 	char gpiointvalue[64];
 	int gpiointfd;
 
+	// I/O or seconds
+	bool spi_reset_io;
+	int spi_reset_count;
+	time_t last_spi_reset;
+
 	// TODO: need to track disabled chips - done?
 	int chips;
 	bool has_chip[MINION_CHIPS];
@@ -1186,7 +1191,7 @@ static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minionin
 	else
 		return MINION_OVERSIZE_TASK;
 
-	tran.delay_usecs = 0;
+	tran.delay_usecs = opt_minion_spiusec;
 	tran.speed_hz = MINION_SPI_SPEED;
 
 #if MINION_SHOW_IO
@@ -1226,7 +1231,24 @@ static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minionin
 		}
 		if (fail)
 			minion_init_spi(minioncgpu, minioninfo, 0, 0, true);
+	} else if (minioninfo->spi_reset_count) {
+		if (minioninfo->spi_reset_io) {
+			if (*ioseq > 0 && (*ioseq % minioninfo->spi_reset_count) == 0)
+				minion_init_spi(minioncgpu, minioninfo, 0, 0, true);
+		} else {
+			if (minioninfo->last_spi_reset == 0L)
+				minioninfo->last_spi_reset = time(NULL);
+			else {
+				time_t now = time(NULL);
+				if ((now - minioninfo->last_spi_reset) >= minioninfo->spi_reset_count) {
+					minioninfo->last_spi_reset = now;
+					minion_init_spi(minioncgpu, minioninfo, 0, 0, true);
+				}
+			}
+		}
 	}
+	if (opt_minion_spidelay)
+		cgsleep_ms(opt_minion_spidelay);
 	mutex_unlock(&(minioninfo->spi_lock));
 	IO_STAT_NOW(&lfin);
 	IO_STAT_NOW(&tsd);
@@ -1757,7 +1779,8 @@ static bool minion_init_spi(struct cgpu_info *minioncgpu, struct minion_info *mi
 	if (reset) {
 		// TODO: maybe slow it down?
 		close(minioninfo->spifd);
-		cgsleep_ms(opt_minion_spireset);
+		if (opt_minion_spisleep)
+			cgsleep_ms(opt_minion_spisleep);
 		minioninfo->spifd = open(minioncgpu->device_path, O_RDWR);
 		if (minioninfo->spifd < 0)
 			goto bad_out;
@@ -2041,6 +2064,33 @@ static void minion_process_options(struct minion_info *minioninfo)
 	int i, core1, core2;
 	bool cleared;
 
+	if (opt_minion_spireset && *opt_minion_spireset) {
+		bool is_io = true;
+		int val;
+
+		switch (tolower(*opt_minion_spireset)) {
+			case 'i':
+				is_io = true;
+				break;
+			case 's':
+				is_io = false;
+				break;
+			default:
+				applog(LOG_WARNING, "ERR: Invalid SPI reset '%s'",
+						    opt_minion_spireset);
+				goto skip;
+		}
+		val = atoi(opt_minion_spireset+1);
+		if (val < 0 || val > 9999) {
+			applog(LOG_WARNING, "ERR: Invalid SPI reset '%s'",
+					    opt_minion_spireset);
+		} else {
+			minioninfo->spi_reset_io = is_io;
+			minioninfo->spi_reset_count = val;
+			minioninfo->last_spi_reset = time(NULL);
+		}
+	}
+skip:
 	last_freq = MINION_FREQ_DEF;
 	if (opt_minion_freq && *opt_minion_freq) {
 		buf = freq = strdup(opt_minion_freq);
@@ -2295,7 +2345,7 @@ unalloc:
 	free(minioncgpu);
 }
 
-static char *minion_set(struct cgpu_info *minioncgpu, char *option, char *setting, char *replybuf)
+static char *minion_api_set(struct cgpu_info *minioncgpu, char *option, char *setting, char *replybuf)
 {
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	int chip, val;
@@ -2304,7 +2354,8 @@ static char *minion_set(struct cgpu_info *minioncgpu, char *option, char *settin
 	if (strcasecmp(option, "help") == 0) {
 		sprintf(replybuf, "reset: chip 0-%d freq: 0-%d:%d-%d "
 				  "ledcount: 0-100 ledlimit: 0-200 "
-				  "spireset: 0-9999",
+				  "spidelay: 0-9999 spireset i|s0-9999 "
+				  "spisleep: 0-9999",
 				  minioninfo->chips - 1,
 				  minioninfo->chips - 1,
 				  MINION_FREQ_MIN, MINION_FREQ_MAX);
@@ -2416,20 +2467,88 @@ static char *minion_set(struct cgpu_info *minioncgpu, char *option, char *settin
 		return NULL;
 	}
 
-	if (strcasecmp(option, "spireset") == 0) {
+	if (strcasecmp(option, "spidelay") == 0) {
 		if (!setting || !*setting) {
-			sprintf(replybuf, "missing spireset value");
+			sprintf(replybuf, "missing spidelay value");
 			return replybuf;
 		}
 
 		val = atoi(setting);
 		if (val < 0 || val > 9999) {
-			sprintf(replybuf, "invalid spireset: ms '%s' valid range 0-9999",
+			sprintf(replybuf, "invalid spidelay: ms '%s' valid range 0-9999",
 					  setting);
 			return replybuf;
 		}
 
-		opt_minion_spireset = val;
+		opt_minion_spidelay = val;
+		return NULL;
+	}
+
+	if (strcasecmp(option, "spireset") == 0) {
+		bool is_io = true;
+
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing spireset value");
+			return replybuf;
+		}
+
+		switch (tolower(*setting)) {
+			case 'i':
+				is_io = true;
+				break;
+			case 's':
+				is_io = false;
+				break;
+			default:
+				sprintf(replybuf, "invalid spireset: '%s' must start with i or s",
+						  setting);
+				return replybuf;
+		}
+		val = atoi(setting+1);
+		if (val < 0 || val > 9999) {
+			sprintf(replybuf, "invalid spireset: %c '%s' valid range 0-9999",
+					  *setting, setting+1);
+			return replybuf;
+		}
+
+		minioninfo->spi_reset_io = is_io;
+		minioninfo->spi_reset_count = val;
+		minioninfo->last_spi_reset = time(NULL);
+
+		return NULL;
+	}
+
+	if (strcasecmp(option, "spisleep") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing spisleep value");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < 0 || val > 9999) {
+			sprintf(replybuf, "invalid spisleep: ms '%s' valid range 0-9999",
+					  setting);
+			return replybuf;
+		}
+
+		opt_minion_spisleep = val;
+		return NULL;
+	}
+
+	if (strcasecmp(option, "spiusec") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing spiusec value");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < 0 || val > 9999) {
+			sprintf(replybuf, "invalid spiusec: '%s' valid range 0-9999",
+					  setting);
+			return replybuf;
+		}
+
+		opt_minion_spiusec = val;
 		return NULL;
 	}
 
@@ -4719,7 +4838,7 @@ struct device_drv minion_drv = {
 #ifdef LINUX
 	.get_api_stats = minion_api_stats,
 	.get_statline_before = minion_get_statline_before,
-	.set_device = minion_set,
+	.set_device = minion_api_set,
 	.identify_device = minion_identify,
 	.thread_prepare = minion_thread_prepare,
 	.hash_work = hash_queued_work,

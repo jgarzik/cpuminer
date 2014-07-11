@@ -225,7 +225,9 @@ Options for both config file and command line:
 --minion-ledlimit   Turn off led when chips GHs are below this (default: 90)
 --minion-noautofreq Disable automatic frequency adjustment
 --minion-overheat   Enable directly halting any chip when the status exceeds 100C
---minion-spireset   Sleep time in milliseconds when doing an SPI reset (default: 200)
+--minion-spidelay   Add a delay in microseconds after each SPI I/O
+--minion-spireset   SPI regular reset: iNNN for I/O count or sNNN for seconds
+--minion-spisleep   Sleep time in milliseconds when doing an SPI reset
 --minion-temp <arg> Set minion chip temperature threshold, single value or comma list, range 120-160 (default: 135C)
 --monitor|-m <arg>  Use custom pipe cmd for output messages
 --nfu-bits <arg>    Set nanofury bits for overclocking, range 32-63 (default: 50)

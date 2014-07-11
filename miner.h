@@ -1028,7 +1028,10 @@ extern int opt_minion_ledcount;
 extern int opt_minion_ledlimit;
 extern bool opt_minion_noautofreq;
 extern bool opt_minion_overheat;
-extern int opt_minion_spireset;
+extern int opt_minion_spidelay;
+extern char *opt_minion_spireset;
+extern int opt_minion_spisleep;
+extern int opt_minion_spiusec;
 extern char *opt_minion_temp;
 #endif
 #ifdef USE_USBUTILS
