@@ -1220,7 +1220,7 @@ static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minionin
 		set_pin(minioninfo, pin, true);
 	}
 	if (ret >= 0 && rbuf[0] == 0xff && rbuf[ret-1] == 0xff &&
-	    obuf[1] == READ_ADDR(MINION_RES_DATA)) {
+	    (obuf[1] == READ_ADDR(MINION_RES_DATA) || obuf[1] == READ_ADDR(MINION_SYS_FIFO_STA))) {
 		int i;
 		fail = true;
 		for (i = 1; i < ret-2; i++) {
@@ -1256,9 +1256,18 @@ static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minionin
 	IO_STAT_STORE(&sta, &fin, &lsta, &lfin, &tsd, obuf, osiz, ret, 1);
 
 	if (fail) {
-		applog(LOG_ERR, "%s%d: ioctl %"PRIu64" returned all 0xff - resetting",
+		char *what = "unk";
+		switch (obuf[1]) {
+			case READ_ADDR(MINION_RES_DATA):
+				what = "nonce";
+				break;
+			case READ_ADDR(MINION_SYS_FIFO_STA):
+				what = "fifo";
+				break;
+		}
+		applog(LOG_ERR, "%s%d: ioctl %"PRIu64" %s returned all 0xff - resetting",
 				minioncgpu->drv->name, minioncgpu->device_id,
-				*ioseq);
+				*ioseq, what);
 	}
 
 #if MINION_SHOW_IO
