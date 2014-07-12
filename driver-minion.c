@@ -4502,7 +4502,7 @@ static void chip_report(struct cgpu_info *minioncgpu)
 				ghs /= 1000000000.0;
 				ghs /= tdiff(&now, &(DATA_HIST(minioninfo->hchip_list[chip]->tail)->when));
 			}
-			if (minioninfo->chip_status[chip].first_nonce.tv_sec &&
+			if (minioninfo->chip_status[chip].first_nonce.tv_sec == 0L ||
 			    tdiff(&now, &minioninfo->chip_status[chip].first_nonce) < MINION_LED_TEST_TIME) {
 				ghs2_display[0] = '\0';
 				minioninfo->setled[chip] = false;
