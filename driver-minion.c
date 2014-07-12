@@ -1715,6 +1715,8 @@ static void init_chip(struct cgpu_info *minioncgpu, struct minion_info *minionin
 
 	minioninfo->reset_time[chip] = (int)((float)(MINION_RESET_s * MINION_FREQ_DEF) /
 							minioninfo->init_freq[chip]);
+
+	minioninfo->chip_status[chip].first_nonce.tv_sec = 0L;
 }
 
 static void enable_chip_cores(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, int chip)
