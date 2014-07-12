@@ -1017,6 +1017,7 @@ static bool minion_toggle_gpio(struct cgpu_info *minioncgpu, int gpionum)
 	close(fd);
 	minioninfo->last_power_cycle = time(NULL);
 	minioninfo->power_cycles++;
+	// Reset all chip led counters
 	for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
 		if (minioninfo->has_chip[chip])
 			minioninfo->chip_status[chip].first_nonce.tv_sec = 0L;
@@ -2002,7 +2003,7 @@ static bool minion_init_spi(struct cgpu_info *minioncgpu, struct minion_info *mi
 		if (minioninfo->spifd < 0)
 			goto bad_out;
 		minioninfo->spi_resets++;
-		minioninfo->chip_status[chip].first_nonce.tv_sec = 0L;
+//		minioninfo->chip_status[chip].first_nonce.tv_sec = 0L;
 	} else {
 		for (i = 0; minion_modules[i]; i++) {
 			snprintf(buf, sizeof(buf), "modprobe %s", minion_modules[i]);
