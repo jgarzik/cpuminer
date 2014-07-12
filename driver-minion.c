@@ -359,6 +359,9 @@ struct minion_header {
 #define MINION_SPI_LED_ON 0xa5a5
 #define MINION_SPI_LED_OFF 0x0
 
+// Time since first nonce/last reset before turning on the LED
+#define MINION_LED_TEST_TIME 600
+
 #define MINION_FREQ_MIN 100
 #define MINION_FREQ_DEF 1200
 #define MINION_FREQ_MAX 1400
@@ -422,6 +425,8 @@ struct minion_status {
 	uint32_t idle;
 	uint32_t last_rpt_idle;
 	struct timeval idle_rpt;
+	struct timeval first_nonce;
+	uint64_t from_first_good;
 };
 
 #define ENABLE_CORE(_core, _n) ((_core[_n >> 3]) |= (1 << (_n % 8)))
@@ -891,8 +896,8 @@ struct minion_info {
 	double wt_max;
 	uint64_t wt_bands[TIME_BANDS+1];
 
-	bool lednow;
-	bool setled;
+	bool lednow[MINION_CHIPS];
+	bool setled[MINION_CHIPS];
 
 	bool initialised;
 };
@@ -904,7 +909,7 @@ static bool minion_toggle_gpio(struct cgpu_info *minioncgpu, int gpionum)
 	char pindir[64], ena[64], pin[8], dir[64];
 	char gpiointvalue[64];
 	struct stat st;
-	int file, err;
+	int file, err, chip;
 	ssize_t ret;
 
 	snprintf(pindir, sizeof(pindir), MINION_GPIO_SYS MINION_GPIO_PIN, gpionum);
@@ -1012,6 +1017,10 @@ static bool minion_toggle_gpio(struct cgpu_info *minioncgpu, int gpionum)
 	close(fd);
 	minioninfo->last_power_cycle = time(NULL);
 	minioninfo->power_cycles++;
+	for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
+		if (minioninfo->has_chip[chip])
+			minioninfo->chip_status[chip].first_nonce.tv_sec = 0L;
+	}
 	return true;
 }
 #endif
@@ -1993,6 +2002,7 @@ static bool minion_init_spi(struct cgpu_info *minioncgpu, struct minion_info *mi
 		if (minioninfo->spifd < 0)
 			goto bad_out;
 		minioninfo->spi_resets++;
+		minioninfo->chip_status[chip].first_nonce.tv_sec = 0L;
 	} else {
 		for (i = 0; minion_modules[i]; i++) {
 			snprintf(buf, sizeof(buf), "modprobe %s", minion_modules[i]);
@@ -3329,6 +3339,12 @@ repeek:
 									K_WLOCK(minioninfo->rnonce_list);
 									k_add_head(minioninfo->rnonce_list, item);
 									K_WUNLOCK(minioninfo->rnonce_list);
+
+									if (!(minioninfo->chip_status[chip].first_nonce.tv_sec)) {
+										cgtime(&(minioninfo->chip_status[chip].first_nonce));
+										minioninfo->chip_status[chip].from_first_good = 0;
+									}
+
 									cgsem_post(&(minioninfo->nonce_ready));
 								} else {
 									minioninfo->res_err_count[chip]++;
@@ -3659,6 +3675,7 @@ retest:
 			minioninfo->nonces_recovered[chip]++;
 
 		chip_good = ++(minioninfo->chip_good[chip]);
+		minioninfo->chip_status[chip].from_first_good++;
 		minioninfo->core_good[chip][core]++;
 		DATA_WORK(item)->nonces++;
 
@@ -3960,11 +3977,11 @@ static void sys_chip_sta(struct cgpu_info *minioncgpu, int chip)
 				K_WUNLOCK(minioninfo->task_list);
 			}
 
-			if (minioninfo->lednow != minioninfo->setled) {
+			if (minioninfo->lednow[chip] != minioninfo->setled[chip]) {
 				uint32_t led;
 
-				minioninfo->lednow = minioninfo->setled;
-				if (minioninfo->lednow)
+				minioninfo->lednow[chip] = minioninfo->setled[chip];
+				if (minioninfo->lednow[chip])
 					led = MINION_SPI_LED_ON;
 				else
 					led = MINION_SPI_LED_OFF;
@@ -3974,7 +3991,7 @@ static void sys_chip_sta(struct cgpu_info *minioncgpu, int chip)
 				DATA_TASK(item)->tid = ++(minioninfo->next_tid);
 				K_WUNLOCK(minioninfo->tfree_list);
 
-				DATA_TASK(item)->chip = 0;
+				DATA_TASK(item)->chip = chip;
 				DATA_TASK(item)->write = true;
 				DATA_TASK(item)->address = MINION_SYS_SPI_LED;
 				DATA_TASK(item)->task_id = 0;
@@ -4454,9 +4471,10 @@ static void chip_report(struct cgpu_info *minioncgpu)
 	char buf[512];
 	char res_err_msg[2];
 	size_t len;
-	double elapsed, ghs, expect, howlong;
+	double elapsed, ghs, ghs2, expect, howlong;
+	char ghs2_display[64];
 	K_ITEM *pitem;
-	int msdiff, chip, low_chips;
+	int msdiff, chip;
 	int res_err_count;
 
 	cgtime(&now);
@@ -4467,7 +4485,6 @@ static void chip_report(struct cgpu_info *minioncgpu)
 	}
 
 	// Always run the calculations to check chip GHs for the LED
-	low_chips = 0;
 	buf[0] = '\0';
 	res_err_msg[0] = '\0';
 	res_err_msg[1] = '\0';
@@ -4482,8 +4499,18 @@ static void chip_report(struct cgpu_info *minioncgpu)
 				ghs /= 1000000000.0;
 				ghs /= tdiff(&now, &(DATA_HIST(minioninfo->hchip_list[chip]->tail)->when));
 			}
-			if (ghs < opt_minion_ledlimit)
-				low_chips++;
+			if (minioninfo->chip_status[chip].first_nonce.tv_sec &&
+			    tdiff(&now, &minioninfo->chip_status[chip].first_nonce) < MINION_LED_TEST_TIME) {
+				ghs2_display[0] = '\0';
+				minioninfo->setled[chip] = false;
+			} else {
+				ghs2 = 0xffffffffull * (minioninfo->chip_status[chip].from_first_good - 1);
+				ghs2 /= 1000000000.0;
+				ghs2 /= tdiff(&now, &minioninfo->chip_status[chip].first_nonce);
+				minioninfo->setled[chip] = (ghs2 >= opt_minion_ledlimit);
+				snprintf(ghs2_display, sizeof(ghs2_display), "[%.2f]", ghs);
+			}
+
 			res_err_count = minioninfo->res_err_count[chip];
 			minioninfo->res_err_count[chip] = 0;
 			if (res_err_count > 100)
@@ -4495,13 +4522,11 @@ static void chip_report(struct cgpu_info *minioncgpu)
 			else
 				res_err_msg[0] = '\0';
 			snprintf(buf + len, sizeof(buf) - len,
-				 " %d=%s%.2f", chip, res_err_msg, ghs);
+				 " %d=%s%.2f%s", chip, res_err_msg, ghs, ghs2_display);
 			minioninfo->history_ghs[chip] = ghs;
 		}
 	}
 	K_RUNLOCK(minioninfo->hfree_list);
-
-	minioninfo->setled = !(low_chips > opt_minion_ledcount);
 
 	// But only display it if required
 	if (opt_minion_chipreport > 0) {

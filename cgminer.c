@@ -251,7 +251,7 @@ char *opt_minion_cores;
 char *opt_minion_freq;
 bool opt_minion_idlecount;
 int opt_minion_ledcount;
-int opt_minion_ledlimit = 90;
+int opt_minion_ledlimit = 98;
 bool opt_minion_noautofreq;
 bool opt_minion_overheat;
 int opt_minion_spidelay;
