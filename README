@@ -112,6 +112,8 @@ If building on Ubuntu:
 CGMiner specific configuration options:
   --enable-ants1          Compile support for Antminer S1 Bitmain (default
                           disabled)
+  --enable-ants2          Compile support for Antminer S2 Bitmain (default
+                          disabled)
   --enable-avalon         Compile support for Avalon (default disabled)
   --enable-bab            Compile support for BlackArrow Bitfury (default
                           disabled)
@@ -121,6 +123,7 @@ CGMiner specific configuration options:
   --enable-bitfury        Compile support for BitFury ASICs (default disabled)
   --enable-bitmine_A1     Compile support for Bitmine.ch A1 ASICs (default
                           disabled)
+  --enable-cointerra      Compile support for Cointerra ASICs (default disabled)
   --enable-drillbit       Compile support for Drillbit BitFury ASICs (default
                           disabled)
   --enable-hashfast       Compile support for Hashfast (default disabled)
