@@ -219,10 +219,15 @@ Options for both config file and command line:
 --log|-l <arg>      Interval in seconds between log output (default: 5)
 --lowmem            Minimise caching of shares for low memory applications
 --minion-chipreport <arg> Seconds to report chip 5min hashrate, range 0-100 (default: 0=disabled)
---minion-freq <arg> Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1000)
+--minion-freq <arg> Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1200)
 --minion-idlecount  Report when IdleCount is >0 or changes
+--minion-ledcount   Turn off led when more than this many chips below the ledlimit (default: 0)
+--minion-ledlimit   Turn off led when chips GHs are below this (default: 90)
 --minion-noautofreq Disable automatic frequency adjustment
 --minion-overheat   Enable directly halting any chip when the status exceeds 100C
+--minion-spidelay   Add a delay in microseconds after each SPI I/O
+--minion-spireset   SPI regular reset: iNNN for I/O count or sNNN for seconds - 0 means none
+--minion-spisleep   Sleep time in milliseconds when doing an SPI reset
 --minion-temp <arg> Set minion chip temperature threshold, single value or comma list, range 120-160 (default: 135C)
 --monitor|-m <arg>  Use custom pipe cmd for output messages
 --nfu-bits <arg>    Set nanofury bits for overclocking, range 32-63 (default: 50)

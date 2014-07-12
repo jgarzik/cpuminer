@@ -241,10 +241,16 @@ ASIC SPECIFIC COMMANDS
 --hfa-temp-target <arg> Set the hashfast target temperature (0 to disable) (default: 88)
 --klondike-options <arg> Set klondike options clock:temptarget
 --minion-chipreport <arg> Seconds to report chip 5min hashrate, range 0-100 (default: 0=disabled)
---minion-freq <arg> Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1000)
+--minion-freq <arg> Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1200)
+--minion-idlecount  Report when IdleCount is >0 or changes
+--minion-ledcount   Turn off led when more than this many chips below the ledlimit (default: 0)
+--minion-ledlimit   Turn off led when chips GHs are below this (default: 90)
 --minion-idlecount  Report when IdleCount is >0 or changes
 --minion-noautofreq Disable automatic frequency adjustment
 --minion-overheat   Enable directly halting any chip when the status exceeds 100C
+--minion-spidelay   Add a delay in microseconds after each SPI I/O
+--minion-spireset   SPI regular reset: iNNN for I/O count or sNNN for seconds - 0 means none
+--minion-spisleep   Sleep time in milliseconds when doing an SPI reset
 --minion-temp <arg> Set minion chip temperature threshold, single value or comma list, range 120-160 (default: 135C)
 --nfu-bits <arg>    Set nanofury bits for overclocking, range 32-63 (default: 50)
 --rock-freq <arg>   Set RockMiner frequency in MHz, range 125-500 (default: 270)
