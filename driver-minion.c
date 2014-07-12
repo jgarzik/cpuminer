@@ -4511,7 +4511,7 @@ static void chip_report(struct cgpu_info *minioncgpu)
 				ghs2 /= 1000000000.0;
 				ghs2 /= tdiff(&now, &minioninfo->chip_status[chip].first_nonce);
 				minioninfo->setled[chip] = (ghs2 >= opt_minion_ledlimit);
-				snprintf(ghs2_display, sizeof(ghs2_display), "[%.2f]", ghs);
+				snprintf(ghs2_display, sizeof(ghs2_display), "[%.2f]", ghs2);
 			}
 
 			res_err_count = minioninfo->res_err_count[chip];
