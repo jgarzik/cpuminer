@@ -79,7 +79,7 @@ static void send_minergate_pkt(const minergate_req_packet_sp30* mp_req, minergat
 	assert(mp_rsp->magic == 0xcaf4);
 }
 
-static bool spondoolies_prepare(struct thr_info *thr)
+static bool spondoolies_prepare_sp30(struct thr_info *thr)
 {
 	struct cgpu_info *spondoolies_sp30 = thr->cgpu;
 	struct timeval now;
@@ -129,10 +129,12 @@ static bool spondoolies_flush_queue(struct spond_adapter* a, bool flush_queue)
 			printf("%d + %d != %d\n", a->works_in_minergate_and_pending_tx, a->works_pending_tx,a->works_in_driver);
 		assert(a->works_in_minergate_and_pending_tx + a->works_pending_tx == a->works_in_driver);
 		send_minergate_pkt(a->mp_next_req,  a->mp_last_rsp, a->socket_fd);
-		if (flush_queue)
+		if (flush_queue) {
+      printf("FLUSH!\n");
 			a->mp_next_req->mask |= 0x02;
-		else
+		} else {
 			a->mp_next_req->mask &= ~0x02;
+		}
 
 		a->mp_next_req->req_count = 0;
 		a->parse_resp = 1;
@@ -142,7 +144,7 @@ static bool spondoolies_flush_queue(struct spond_adapter* a, bool flush_queue)
 	return true;
 }
 
-static void spondoolies_detect(__maybe_unused bool hotplug)
+static void spondoolies_detect_sp30(__maybe_unused bool hotplug)
 {
 	struct cgpu_info *cgpu = calloc(1, sizeof(*cgpu));
 	struct device_drv *drv = &sp30_drv;
@@ -177,10 +179,10 @@ static void spondoolies_detect(__maybe_unused bool hotplug)
 	spondoolies_flush_queue(a, true);
 	spondoolies_flush_queue(a, true);
 	spondoolies_flush_queue(a, true);
-	applog(LOG_DEBUG, "SPOND spondoolies_detect done");
+	applog(LOG_DEBUG, "SPOND spondoolies_detect_sp30 done");
 }
 
-static struct api_data *spondoolies_api_stats(struct cgpu_info *cgpu)
+static struct api_data *spondoolies_api_stats_sp30(struct cgpu_info *cgpu)
 {
 	struct spond_adapter *a = cgpu->device_data;
 	struct api_data *root = NULL;
@@ -216,7 +218,7 @@ static unsigned char get_leading_zeroes(const unsigned char *target)
 }
 #endif
 
-static void spondoolies_shutdown(__maybe_unused struct thr_info *thr)
+static void spondoolies_shutdown_sp30(__maybe_unused struct thr_info *thr)
 {
 }
 
@@ -245,17 +247,43 @@ static void fill_minergate_request(minergate_do_job_req_sp30* work, struct work 
 	//printf("%d %d\n",work->leading_zeroes, (int)round(cg_work->work_difficulty));
 	work->work_id_in_sw = cg_work->subid;
 	work->ntime_limit = max_offset;
-  printf("ID:%d, TS:%x\n",work->work_id_in_sw,work->timestamp);
+  //printf("ID:%d, TS:%x\n",work->work_id_in_sw,work->timestamp);
 	//work->ntime_offset = ntime_offset;
 }
 
 // returns true if queue full.
 static struct timeval last_force_queue = {0};
 
-static bool spondoolies_queue_full(struct cgpu_info *cgpu)
+unsigned long usec_stamp ()
 {
+    static unsigned long long int first_usec = 0;
+    struct timeval tv;
+    unsigned long long int curr_usec;
+    gettimeofday(&tv, NULL);
+    curr_usec = tv.tv_sec * 1000000 + tv.tv_usec;
+    if (first_usec == 0) {
+	first_usec = curr_usec;
+	curr_usec = 0;
+    } else
+	curr_usec -= first_usec;
+    return curr_usec;
+}
+
+
+static bool spondoolies_queue_full_sp30(struct cgpu_info *cgpu)
+{
+  struct spond_adapter* a = cgpu->device_data;
+  static int bla = 0;
+
+#if 1
+  if (!((bla++)%500)) {
+    printf("FAKE TEST FLUSH T:%d!\n",usec_stamp());
+    a->reset_mg_queue = 3;
+  }
+#endif
+
+  
 	// Only once every 1/10 second do work.
-	struct spond_adapter* a = cgpu->device_data;
 	int next_job_id, i;
 	struct timeval tv;
 	struct work *work;
@@ -270,11 +298,17 @@ static bool spondoolies_queue_full(struct cgpu_info *cgpu)
 	usec = (tv.tv_sec-last_force_queue.tv_sec) * 1000000;
 	usec += (tv.tv_usec-last_force_queue.tv_usec);
 
-	if ((usec >= REQUEST_PERIOD) || (a->reset_mg_queue == 2) ||
-	    ((a->reset_mg_queue == 1) && (a->works_pending_tx == REQUEST_SIZE))) {
-		spondoolies_flush_queue(a, (a->reset_mg_queue == 2));
-		if (a->reset_mg_queue)
-			a->reset_mg_queue--;
+	if ((usec >= REQUEST_PERIOD) || 
+      (a->reset_mg_queue == 3) || // push flush
+      ((a->reset_mg_queue == 2)) || // Fast pull
+	    ((a->reset_mg_queue == 1) && (a->works_pending_tx == REQUEST_SIZE))) { // Fast push after flush
+		spondoolies_flush_queue(a, (a->reset_mg_queue == 3));
+		if (a->reset_mg_queue) {
+      //printf("FLUSH(%d) %d T:%d\n",a->reset_mg_queue , a->works_pending_tx, usec_stamp());
+      if (a->works_pending_tx || (a->reset_mg_queue == 3)) {
+			  a->reset_mg_queue--;
+      }
+		}
 		last_force_queue = tv;
 	}
 
@@ -285,8 +319,10 @@ static bool spondoolies_queue_full(struct cgpu_info *cgpu)
 	}
 
 	// see if can take 1 more job.
-	next_job_id = (a->current_job_id + 1) % MAX_JOBS_IN_MINERGATE_SP30;
-	if (a->my_jobs[next_job_id].cgminer_work) {
+	// Must be smaller to prevent overflow.
+	assert(MAX_JOBS_PENDING_IN_MINERGATE_SP30 < MINERGATE_ADAPTER_QUEUE_SP30);
+	next_job_id = (a->current_job_id + 1) % MAX_JOBS_PENDING_IN_MINERGATE_SP30;
+	if (a->my_jobs[next_job_id].cgminer_work) {    
 		ret = true;
 		goto return_unlock;
 	}
@@ -300,12 +336,12 @@ static bool spondoolies_queue_full(struct cgpu_info *cgpu)
 	work->thr_id = cgpu->thr[0]->id;
 	assert(work->thr);
 
-	// Create 5 works using ntime increment
 	a->current_job_id = next_job_id;
 	work->subid = a->current_job_id;
 	// Get pointer for the request
 	a->my_jobs[a->current_job_id].cgminer_work = work;
 	a->my_jobs[a->current_job_id].state = SPONDWORK_STATE_IN_BUSY;
+  //printf("Push: %d\n", a->current_job_id);
 
 
 	int max_ntime_roll = (work->drv_rolllimit < MAX_NROLES) ? work->drv_rolllimit : MAX_NROLES;
@@ -317,6 +353,8 @@ static bool spondoolies_queue_full(struct cgpu_info *cgpu)
 	a->my_jobs[a->current_job_id].merkle_root = pkt_job->mrkle_root;
 
 return_unlock:
+  //printf("D:P.TX:%d inD:%d\n", a->works_pending_tx, a->works_in_driver);
+
 	mutex_unlock(&a->lock);
 
 	return ret;
@@ -344,7 +382,7 @@ static void spond_poll_stats(struct cgpu_info *spond, struct spond_adapter *a)
 
 // Return completed work to submit_nonce() and work_completed() 
 // struct timeval last_force_queue = {0};  
-static int64_t spond_scanhash(struct thr_info *thr)
+static int64_t spond_scanhash_sp30(struct thr_info *thr)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct spond_adapter *a = cgpu->device_data;
@@ -375,15 +413,13 @@ static int64_t spond_scanhash(struct thr_info *thr)
 			if ((a->my_jobs[job_id].cgminer_work)) {
 				if (a->my_jobs[job_id].merkle_root == work->mrkle_root) {
 					assert(a->my_jobs[job_id].state == SPONDWORK_STATE_IN_BUSY);
-					a->works_in_minergate_and_pending_tx--;
-					a->works_in_driver--;
 
 					if (work->winner_nonce) {
 						bool __maybe_unused ok;
 						struct work *cg_work = a->my_jobs[job_id].cgminer_work;
 						ok = submit_noffset_nonce(cg_work->thr, cg_work, work->winner_nonce, work->ntime_offset);
-						printf("OK on %d (+%d), none=%x = %d\n",
-              work->work_id_in_sw, work->ntime_offset, htole32(work->winner_nonce), ok);
+						/*printf("WIn on %d (+%d), none=%x = %d\n",
+              work->work_id_in_sw, work->ntime_offset, htole32(work->winner_nonce), ok);*/
 						a->wins++;
 					}
             
@@ -391,10 +427,13 @@ static int64_t spond_scanhash(struct thr_info *thr)
 
 					//printf("Done with %d\n", job_id);
 					if (work->job_complete) {
+            //printf("Complete %d\n", job_id);
   					work_completed(a->cgpu, a->my_jobs[job_id].cgminer_work);
   					a->good++;
   					a->my_jobs[job_id].cgminer_work = NULL;
   					a->my_jobs[job_id].state = SPONDWORK_STATE_EMPTY;
+            a->works_in_minergate_and_pending_tx--;
+  					a->works_in_driver--;
 					}
 
 				} else {
@@ -417,12 +456,12 @@ static int64_t spond_scanhash(struct thr_info *thr)
 }
 
 // Remove all work from queue
-static void spond_flush_work(struct cgpu_info *cgpu)
+static void spond_flush_work_sp30(struct cgpu_info *cgpu)
 {
 	struct spond_adapter *a = cgpu->device_data;
-
+  //printf("GOT FLUSH!%d\n");
 	mutex_lock(&a->lock);
-	a->reset_mg_queue = 2;
+	a->reset_mg_queue = 3;
 	mutex_unlock(&a->lock);
 }
 
@@ -431,12 +470,12 @@ struct device_drv sp30_drv = {
 	.dname = "Sp30",
 	.name = "S30",
 	.max_diff = 64.0, // Limit max diff to get some nonces back regardless
-	.drv_detect = spondoolies_detect,
-	.get_api_stats = spondoolies_api_stats,
-	.thread_prepare = spondoolies_prepare,
-	.thread_shutdown = spondoolies_shutdown,
+	.drv_detect = spondoolies_detect_sp30,
+	.get_api_stats = spondoolies_api_stats_sp30,
+	.thread_prepare = spondoolies_prepare_sp30,
+	.thread_shutdown = spondoolies_shutdown_sp30,
 	.hash_work = hash_queued_work,
-	.queue_full = spondoolies_queue_full,
-	.scanwork = spond_scanhash,
-	.flush_work = spond_flush_work,
+	.queue_full = spondoolies_queue_full_sp30,
+	.scanwork = spond_scanhash_sp30,
+	.flush_work = spond_flush_work_sp30,
 };

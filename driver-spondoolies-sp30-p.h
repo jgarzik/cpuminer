@@ -45,7 +45,7 @@ typedef struct {
 
 #define MAX_REQUESTS_SP30 30
 #define MAX_RESPONDS_SP30 60
-#define MINERGATE_TOTAL_QUEUE_SP30 20
+#define MINERGATE_ADAPTER_QUEUE_SP30 40
 
 typedef struct {
   uint32_t work_id_in_sw;

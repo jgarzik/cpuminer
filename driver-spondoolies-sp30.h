@@ -26,8 +26,9 @@ typedef enum spond_work_state {
 	SPONDWORK_STATE_IN_BUSY,
 } SPONDWORK_STATE;
 
-#define MAX_JOBS_IN_MINERGATE_SP30 MINERGATE_TOTAL_QUEUE_SP30 // 1.5 sec worth of jobs
+#define MAX_JOBS_PENDING_IN_MINERGATE_SP30 30
 #define MAX_NROLES 60 
+
 
 typedef struct {
 	struct work      *cgminer_work;
@@ -36,6 +37,8 @@ typedef struct {
 	time_t           start_time;
 	int              job_id;
 } spond_driver_work_sp30;
+
+
 
 struct spond_adapter {
 	pthread_mutex_t lock;
@@ -53,12 +56,12 @@ struct spond_adapter {
 	int works_in_minergate_and_pending_tx;
 	int works_pending_tx;
 	int socket_fd;
-	int reset_mg_queue;  // 2=reset, 1=fast send, 0=nada
+	int reset_mg_queue;  // 3=reset, 2=fast send 1 job, 1=fast send 10 jobs, 0=nada
 	int current_job_id;
 	int parse_resp;
 	minergate_req_packet_sp30* mp_next_req;
 	minergate_rsp_packet_sp30* mp_last_rsp;
-	spond_driver_work_sp30 my_jobs[MAX_JOBS_IN_MINERGATE_SP30];
+	spond_driver_work_sp30 my_jobs[MAX_JOBS_PENDING_IN_MINERGATE_SP30];
 
 	// Temperature statistics
 	int temp_rate;
