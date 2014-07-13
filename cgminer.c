@@ -77,7 +77,7 @@ char *curly = ":D";
 #endif
 
 #ifdef USE_SP10
-#include "driver-spondoolies.h"
+#include "driver-spondoolies-sp10.h"
 #endif
 
 #ifdef USE_SP30
