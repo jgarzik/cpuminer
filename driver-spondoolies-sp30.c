@@ -40,7 +40,7 @@
 
 #include "compat.h"
 #include "miner.h"
-#include "mg_proto_parser_sp30.h"
+#include "driver-spondoolies-sp30-p.h"
 #include "driver-spondoolies-sp30.h"
 
 #ifdef WORDS_BIGENDIAN

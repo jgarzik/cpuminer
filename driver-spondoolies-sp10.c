@@ -40,8 +40,8 @@
 
 #include "compat.h"
 #include "miner.h"
-#include "mg_proto_parser.h"
-#include "driver-spondoolies.h"
+#include "driver-spondoolies-sp10-p.h"
+#include "driver-spondoolies-p.h"
 
 #ifdef WORDS_BIGENDIAN
 #  define swap32tobe(out, in, sz)  ((out == in) ? (void)0 : memmove(out, in, sz))

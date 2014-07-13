@@ -12,7 +12,8 @@
 #define SPONDA_HFILE
 
 #include "miner.h"
-#include "mg_proto_parser.h"
+#include "driver-spondoolies-sp10-p.h"
+
 
 #define SP_NTIME
 

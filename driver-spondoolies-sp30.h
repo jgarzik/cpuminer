@@ -12,7 +12,8 @@
 #define SPONDA_HFILE
 
 #include "miner.h"
-#include "mg_proto_parser_sp30.h"
+#include "driver-spondoolies-sp30-p.h"
+
 
 
 typedef enum adapter_state {

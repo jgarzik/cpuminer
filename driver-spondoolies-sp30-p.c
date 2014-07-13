@@ -11,7 +11,7 @@
  This file holds functions needed for minergate packet parsing/creation
 */
 
-#include "mg_proto_parser_sp30.h"
+#include "driver-spondoolies-sp30-p.h"
 #include "assert.h"
 //#include "spond_debug.h"
 
