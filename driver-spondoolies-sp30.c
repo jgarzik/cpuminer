@@ -275,7 +275,7 @@ static bool spondoolies_queue_full_sp30(struct cgpu_info *cgpu)
   struct spond_adapter* a = cgpu->device_data;
   static int bla = 0;
 
-#if 1
+#if 0
   if (!((bla++)%500)) {
     printf("FAKE TEST FLUSH T:%d!\n",usec_stamp());
     a->reset_mg_queue = 3;
