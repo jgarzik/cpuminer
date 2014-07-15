@@ -244,7 +244,7 @@ static inline int fsync (int fd)
 	DRIVER_ADD_COMMAND(drillbit) \
 	DRIVER_ADD_COMMAND(bab) \
 	DRIVER_ADD_COMMAND(minion) \
-	DRIVER_ADD_COMMAND(spondoolies) \
+	DRIVER_ADD_COMMAND(sp10) \
 	DRIVER_ADD_COMMAND(sp30)
 
 #define DRIVER_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \

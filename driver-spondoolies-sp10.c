@@ -144,7 +144,7 @@ static bool spondoolies_flush_queue(struct spond_adapter* a, bool flush_queue)
 static void spondoolies_detect(__maybe_unused bool hotplug)
 {
 	struct cgpu_info *cgpu = calloc(1, sizeof(*cgpu));
-	struct device_drv *drv = &spondoolies_drv;
+	struct device_drv *drv = &sp10_drv;
 	struct spond_adapter *a;
 
 #if NEED_FIX
@@ -430,8 +430,8 @@ static void spond_flush_work(struct cgpu_info *cgpu)
 	mutex_unlock(&a->lock);
 }
 
-struct device_drv spondoolies_drv = {
-	.drv_id = DRIVER_spondoolies,
+struct device_drv sp10_drv = {
+	.drv_id = DRIVER_sp10,
 	.dname = "Spondoolies",
 	.name = "SPN",
 	.max_diff = 64.0, // Limit max diff to get some nonces back regardless
