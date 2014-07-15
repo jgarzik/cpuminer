@@ -5032,7 +5032,7 @@ void write_config(FILE *fcfg)
 				char *carg = *(char **)opt->u.arg;
 
 				if (carg)
-					fprintf(fcfg, ",\n\"%s\" : \"%s\"", p+2, json_escape(carg));
+					fprintf(fcfg, ",\n\"%s\" : \"%s\"", p+2, carg);
 				continue;
 			}
 		}
