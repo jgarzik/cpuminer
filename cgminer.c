@@ -5015,6 +5015,7 @@ void write_config(FILE *fcfg)
 			     (void *)opt->cb_arg == (void *)set_int_0_to_100 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_255 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_200 ||
+			     (void *)opt->cb_arg == (void *)set_int_0_to_4 ||
 			     (void *)opt->cb_arg == (void *)set_int_32_to_63)) {
 				fprintf(fcfg, ",\n\"%s\" : \"%d\"", p+2, *(int *)opt->u.arg);
 				continue;
