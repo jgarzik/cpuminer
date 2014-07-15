@@ -1112,14 +1112,23 @@ void ms_to_timeval(struct timeval *val, int64_t ms)
 	val->tv_usec = tvdiv.rem * 1000;
 }
 
+static void spec_nscheck(struct timespec *ts)
+{
+	while (ts->tv_nsec >= 1000000000) {
+		ts->tv_nsec -= 1000000000;
+		ts->tv_sec++;
+	}
+	while (ts->tv_nsec < 0) {
+		ts->tv_nsec += 1000000000;
+		ts->tv_sec--;
+	}
+}
+
 void timeraddspec(struct timespec *a, const struct timespec *b)
 {
 	a->tv_sec += b->tv_sec;
 	a->tv_nsec += b->tv_nsec;
-	if (a->tv_nsec >= 1000000000) {
-		a->tv_nsec -= 1000000000;
-		a->tv_sec++;
-	}
+	spec_nscheck(a);
 }
 
 static int __maybe_unused timespec_to_ms(struct timespec *ts)
@@ -1132,10 +1141,7 @@ static void __maybe_unused timersubspec(struct timespec *a, const struct timespe
 {
 	a->tv_sec -= b->tv_sec;
 	a->tv_nsec -= b->tv_nsec;
-	if (a->tv_nsec < 0) {
-		a->tv_nsec += 1000000000;
-		a->tv_sec--;
-	}
+	spec_nscheck(a);
 }
 
 /* These are cgminer specific sleep functions that use an absolute nanosecond
