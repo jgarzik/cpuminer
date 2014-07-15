@@ -30,7 +30,7 @@
 	defined(USE_HASHFAST) || defined(USE_BITFURY) || defined(USE_KLONDIKE) || \
 	defined(USE_KNC) || defined(USE_BAB) || defined(USE_DRILLBIT) || \
 	defined(USE_MINION) || defined(USE_COINTERRA) || defined(USE_BITMINE_A1) || \
-	defined(USE_ANT_S1) || defined(USE_ANT_S2) || defined(USE_SPONDOOLIES) || \
+	defined(USE_ANT_S1) || defined(USE_ANT_S2) || defined(USE_SP10) || defined(USE_SP30) || \
 	defined(USE_ICARUS)
 #define HAVE_AN_ASIC 1
 #endif
@@ -200,9 +200,13 @@ static const char *DEVICECODE = ""
 #ifdef USE_COINTERRA
 			"CTA "
 #endif
-#ifdef USE_SPONDOOLIES
+#ifdef USE_SP10
 			"SPN "
 #endif
+#ifdef USE_SP30
+      "S30 "
+#endif
+
 
 			"";
 
