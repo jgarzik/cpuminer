@@ -1562,7 +1562,8 @@ bool sock_full(struct pool *pool)
 
 static void clear_sockbuf(struct pool *pool)
 {
-	strcpy(pool->sockbuf, "");
+	if (likely(pool->sockbuf))
+		strcpy(pool->sockbuf, "");
 }
 
 static void clear_sock(struct pool *pool)
