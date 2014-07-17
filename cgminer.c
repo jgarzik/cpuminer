@@ -8658,7 +8658,8 @@ static void *test_pool_thread(void *arg)
 {
 	struct pool *pool = (struct pool *)arg;
 
-	pthread_detach(pthread_self());
+	if (!pool->blocking)
+		pthread_detach(pthread_self());
 retry:
 	if (pool_active(pool, false)) {
 		pool_tset(pool, &pool->lagging);
@@ -8710,12 +8711,12 @@ bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char 
 
 	pool->testing = true;
 	pool->idle = true;
+	pool->blocking = !live;
 	enable_pool(pool);
 
 	pthread_create(&pool->test_thread, NULL, test_pool_thread, (void *)pool);
 	if (!live) {
 		pthread_join(pool->test_thread, NULL);
-		pool->testing = false;
 		return pools_active;
 	}
 	return true;
