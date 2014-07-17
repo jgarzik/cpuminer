@@ -4924,13 +4924,7 @@ void api(int api_thr_id)
 
 					param = NULL;
 
-#if JANSSON_MAJOR_VERSION > 2 || (JANSSON_MAJOR_VERSION == 2 && JANSSON_MINOR_VERSION > 0)
 					json_config = json_loadb(buf, n, 0, &json_err);
-#elif JANSSON_MAJOR_VERSION > 1
-					json_config = json_loads(buf, 0, &json_err);
-#else
-					json_config = json_loads(buf, &json_err);
-#endif
 
 					if (!json_is_object(json_config)) {
 						message(io_data, MSG_INVJSON, 0, NULL, isjson);

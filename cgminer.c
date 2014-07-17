@@ -1653,11 +1653,7 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	if (++include_count > JSON_MAX_DEPTH)
 		return JSON_MAX_DEPTH_ERR;
 
-#if JANSSON_MAJOR_VERSION > 1
 	config = json_load_file(arg, 0, &err);
-#else
-	config = json_load_file(arg, &err);
-#endif
 	if (!json_is_object(config)) {
 		siz = JSON_LOAD_ERROR_LEN + strlen(arg) + strlen(err.text);
 		json_error = malloc(siz);

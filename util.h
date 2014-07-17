@@ -64,11 +64,7 @@
 	#endif
 #endif
 
-#if JANSSON_MAJOR_VERSION >= 2
 #define JSON_LOADS(str, err_ptr) json_loads((str), 0, (err_ptr))
-#else
-#define JSON_LOADS(str, err_ptr) json_loads((str), (err_ptr))
-#endif
 
 #ifdef HAVE_LIBCURL
 #include <curl/curl.h>
