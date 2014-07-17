@@ -8281,11 +8281,8 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 
 			/* Don't start testing a pool if its test thread
 			 * from startup is still doing its first attempt. */
-			if (unlikely(pool->testing)) {
-				if (pthread_tryjoin_np(pool->test_thread, NULL))
-					continue;
-				pool->testing = false;
-			}
+			if (unlikely(pool->testing))
+				continue;
 
 			/* Test pool is idle once every minute */
 			if (pool->idle && now.tv_sec - pool->tv_idle.tv_sec > 30) {
@@ -8661,6 +8658,7 @@ static void *test_pool_thread(void *arg)
 {
 	struct pool *pool = (struct pool *)arg;
 
+	pthread_detach(pthread_self());
 retry:
 	if (pool_active(pool, false)) {
 		pool_tset(pool, &pool->lagging);
@@ -8686,6 +8684,8 @@ retry:
 		sleep(5);
 		goto retry;
 	}
+
+	pool->testing = false;
 
 	return NULL;
 }
