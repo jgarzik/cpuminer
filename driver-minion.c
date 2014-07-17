@@ -37,6 +37,17 @@ static void minion_detect(__maybe_unused bool hotplug)
 // The code is always in - this just decides if it does it
 static bool minreread = false;
 
+#if MINION_ROCKCHIP == 1
+#define MINION_POWERCYCLE_GPIO 173
+#define MINION_CHIP_OFF "1"
+#define MINION_CHIP_ON "0"
+#define MINION_CHIP_DELAY 100
+#endif
+
+// Power cycle if the xff_list is full and the tail is less than
+// this long ago
+#define MINION_POWER_TIME 60
+
 /*
  * Use pins for board selection
  * If disabled, it will test chips just as 'pin 0'
@@ -67,8 +78,11 @@ static int minion_memory_addr = BCM2835_GPIO_BASE;
 #define MINION_SPI_BUS 0
 #define MINION_SPI_CHIP 0
 
-//#define MINION_SPI_SPEED 2000000
+#if MINION_ROCKCHIP == 0
 #define MINION_SPI_SPEED 8000000
+#else
+#define MINION_SPI_SPEED 500000
+#endif
 #define MINION_SPI_BUFSIZ 1024
 
 static struct minion_select_pins {
@@ -149,6 +163,7 @@ static struct minion_select_pins {
 // All SYS data sizes are DATA_SIZ
 #define MINION_SYS_CHIP_SIG 0x00
 #define MINION_SYS_CHIP_STA 0x01
+#define MINION_SYS_SPI_LED 0x02
 #define MINION_SYS_TEMP_CTL 0x03
 #define MINION_SYS_FREQ_CTL 0x04
 #define MINION_SYS_NONCE_LED 0x05
@@ -341,10 +356,17 @@ struct minion_header {
 #define MINION_CHIP_SIG_SHIFT3 (((MINION_CHIP_SIG & 0xffffff00) >>  8) & 0x00ffffff)
 #define MINION_CHIP_SIG_SHIFT4 (((MINION_CHIP_SIG & 0xffff0000) >> 16) & 0x0000ffff)
 
+#define MINION_SPI_LED_ON 0xa5a5
+#define MINION_SPI_LED_OFF 0x0
+
+// Time since first nonce/last reset before turning on the LED
+#define MINION_LED_TEST_TIME 600
+
 #define MINION_FREQ_MIN 100
-#define MINION_FREQ_DEF 1000
+#define MINION_FREQ_DEF 1200
 #define MINION_FREQ_MAX 1400
 #define MINION_FREQ_FACTOR 100
+#define MINION_FREQ_RESET_STEP MINION_FREQ_FACTOR
 #define MINION_FREQ_FACTOR_MIN 1
 #define MINION_FREQ_FACTOR_MAX 14
 
@@ -366,9 +388,12 @@ static uint32_t minion_freq[] = {
 	0x210074	// 14 = 1400Mhz
 };
 
-// When hash rate falls below this in the 5min av, reset it
+// When hash rate falls below this in the history hash rate, reset it
 #define MINION_RESET_PERCENT 75.0
-// After the above reset, delay sending work for:
+// When hash rate falls below this after the longer test time
+#define MINION_RESET2_PERCENT 85.0
+
+// After the above resets, delay sending work for:
 #define MINION_RESET_DELAY_s 0.088
 
 #define STA_TEMP(_sta) ((uint16_t)((_sta)[3] & 0x1f))
@@ -403,6 +428,8 @@ struct minion_status {
 	uint32_t idle;
 	uint32_t last_rpt_idle;
 	struct timeval idle_rpt;
+	struct timeval first_nonce;
+	uint64_t from_first_good;
 };
 
 #define ENABLE_CORE(_core, _n) ((_core[_n >> 3]) |= (1 << (_n % 8)))
@@ -486,10 +513,8 @@ struct minion_que {
  */
 #define MINION_SCAN_mS 88
 
-#define ALLOC_WITEMS 4096
-#define LIMIT_WITEMS 0
-
-typedef struct witem {
+// *** Work lists: generated, queued for a chip, sent to chip
+typedef struct work_item {
 	struct work *work;
 	uint32_t task_id;
 	struct timeval sent;
@@ -500,12 +525,13 @@ typedef struct witem {
 	int errors; // uncertain since the error could mean task_id is wrong
 	struct timeval created; // when work was generated
 	uint64_t ioseq;
-} WITEM;
+} WORK_ITEM;
 
-#define ALLOC_TITEMS 256
-#define LIMIT_TITEMS 0
+#define ALLOC_WORK_ITEMS 4096
+#define LIMIT_WORK_ITEMS 0
 
-typedef struct titem {
+// *** Task queue ready to be sent
+typedef struct task_item {
 	uint64_t tid;
 	uint8_t chip;
 	bool write;
@@ -523,12 +549,13 @@ typedef struct titem {
 	struct work *work;
 	K_ITEM *witem;
 	uint64_t ioseq;
-} TITEM;
+} TASK_ITEM;
 
-#define ALLOC_RITEMS 256
-#define LIMIT_RITEMS 0
+#define ALLOC_TASK_ITEMS 256
+#define LIMIT_TASK_ITEMS 0
 
-typedef struct ritem {
+// *** Results queue ready to be checked
+typedef struct res_item {
 	int chip;
 	int core;
 	uint32_t task_id;
@@ -546,25 +573,134 @@ typedef struct ritem {
 	bool another;
 	uint32_t task_id2;
 	uint32_t nonce2;
-} RITEM;
+} RES_ITEM;
 
-#define ALLOC_HITEMS 4096
-#define LIMIT_HITEMS 0
+#define ALLOC_RES_ITEMS 256
+#define LIMIT_RES_ITEMS 0
+
+// *** Per chip nonce history
+typedef struct hist_item {
+	struct timeval when;
+} HIST_ITEM;
+
+#define ALLOC_HIST_ITEMS 4096
+#define LIMIT_HIST_ITEMS 0
 
 // How much history to keep (5min)
 #define MINION_HISTORY_s 300
+// History required to decide a reset at MINION_FREQ_DEF Mhz
+#define MINION_RESET_s 10
+// How many times to reset before changing Freq
+// This doesn't include the secondary higher % check
+#define MINION_RESET_COUNT 6
+
+// To enable the 2nd check
+static bool second_check = false;
+// Longer time lapse to expect the higher %
+// This intercepts a slow GHs drop earlier
+#define MINION_RESET2_s 60
+
+#if (MINION_RESET_s > MINION_HISTORY_s)
+#error "MINION_RESET_s can't be greater than MINION_HISTORY_s"
+#endif
+
+#define FREQ_DELAY(freq) ((float)(MINION_RESET_s * MINION_FREQ_DEF) / (freq))
+
+#if (MINION_RESET2_s > MINION_HISTORY_s)
+#error "MINION_RESET2_s can't be greater than MINION_HISTORY_s"
+#endif
+
+// FREQ2_DELAY(MINION_FREQ_MIN) = FREQ2_FACTOR * MINION_RESET2_s
+#define FREQ2_FACTOR 1.5
+
+#define FREQ2_DELAY(freq) ((1.0 + (float)((freq - MINION_FREQ_DEF) * (1 - FREQ2_FACTOR)) / \
+				(float)(MINION_FREQ_DEF - MINION_FREQ_MIN)) * MINION_RESET2_s)
+
+#if (MINION_RESET2_s <= MINION_RESET_s)
+#error "MINION_RESET2_s must be greater than MINION_RESET_s"
+#endif
+
+/* If there was no reset for this long, clear the reset history
+ * (except the last one) since this means the current clock is ok
+ * with rare resets */
+#define MINION_CLR_s 300
+
+#if (MINION_CLR_s <= MINION_RESET2_s)
+#error "MINION_CLR_s must be greater than MINION_RESET2_s"
+#endif
 
 // History must be always generated for the reset check
 #define MINION_MAX_RESET_CHECK 2
 
-typedef struct hitem {
-	struct timeval when;
-} HITEM;
+/* Floating point reset settings required for the code to work properly
+ * Basically: RESET2 must be after RESET and CLR must be after RESET2 */
+static void define_test()
+{
+	float test;
 
-#define DATAW(_item) ((WITEM *)(_item->data))
-#define DATAT(_item) ((TITEM *)(_item->data))
-#define DATAR(_item) ((RITEM *)(_item->data))
-#define DATAH(_item) ((HITEM *)(_item->data))
+	if (MINION_RESET2_PERCENT <= MINION_RESET_PERCENT) {
+		quithere(1, "MINION_RESET2_PERCENT=%f must be "
+			    "> MINION_RESET_PERCENT=%f",
+			    MINION_RESET2_PERCENT, MINION_RESET_PERCENT);
+	}
+
+	test = FREQ_DELAY(MINION_FREQ_MIN);
+	if (test >= MINION_HISTORY_s) {
+		quithere(1, "FREQ_DELAY(MINION_FREQ_MIN)=%f must be "
+			    "< MINION_HISTORY_s=%d",
+			    test, MINION_HISTORY_s);
+	}
+
+	if (MINION_CLR_s <= test) {
+		quithere(1, "MINION_CLR_s=%d must be > "
+			    "FREQ_DELAY(MINION_FREQ_MIN)=%f",
+			    MINION_CLR_s, test);
+	}
+
+	if (FREQ2_FACTOR <= 1.0)
+		quithere(1, "FREQ2_FACTOR=%f must be > 1.0", FREQ2_FACTOR);
+
+
+	test = FREQ2_DELAY(MINION_FREQ_MIN);
+	if (test >= MINION_HISTORY_s) {
+		quithere(1, "FREQ2_DELAY(MINION_FREQ_MIN)=%f must be "
+			    "< MINION_HISTORY_s=%d",
+			    test, MINION_HISTORY_s);
+	}
+
+	if (MINION_CLR_s <= test) {
+		quithere(1, "MINION_CLR_s=%d must be > "
+			    "FREQ2_DELAY(MINION_FREQ_MIN)=%f",
+			    MINION_CLR_s, test);
+	}
+}
+
+// *** Chip freq/MHs performance history
+typedef struct perf_item {
+	double elapsed;
+	uint64_t nonces;
+	uint32_t freq;
+	double ghs;
+	struct timeval when;
+} PERF_ITEM;
+
+#define ALLOC_PERF_ITEMS 128
+#define LIMIT_PERF_ITEMS 0
+
+// *** 0xff error history
+typedef struct xff_item {
+	time_t when;
+} XFF_ITEM;
+
+#define ALLOC_XFF_ITEMS 100
+#define LIMIT_XFF_ITEMS 100
+
+#define DATA_WORK(_item) ((WORK_ITEM *)(_item->data))
+#define DATA_TASK(_item) ((TASK_ITEM *)(_item->data))
+#define DATA_RES(_item) ((RES_ITEM *)(_item->data))
+#define DATA_HIST(_item) ((HIST_ITEM *)(_item->data))
+#define DATA_PERF(_item) ((PERF_ITEM *)(_item->data))
+#define DATA_XFF(_item) ((XFF_ITEM *)(_item->data))
 
 // Set this to 1 to enable iostats processing
 // N.B. it slows down mining
@@ -678,6 +814,7 @@ static double time_bands[] = { 0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0 };
 #define TIME_BANDS ((int)(sizeof(time_bands)/sizeof(double)))
 
 struct minion_info {
+	struct thr_info *thr;
 	struct thr_info spiw_thr;
 	struct thr_info spir_thr;
 	struct thr_info res_thr;
@@ -694,6 +831,12 @@ struct minion_info {
 	int spifd;
 	char gpiointvalue[64];
 	int gpiointfd;
+
+	// I/O or seconds
+	bool spi_reset_io;
+	int spi_reset_count;
+	time_t last_spi_reset;
+	uint64_t spi_resets;
 
 	// TODO: need to track disabled chips - done?
 	int chips;
@@ -782,6 +925,28 @@ struct minion_info {
 	struct timeval chip_chk;
 	struct timeval chip_rpt;
 	double history_ghs[MINION_CHIPS];
+	// Point in history for MINION_RESET_s
+	int reset_time[MINION_CHIPS];
+	K_ITEM *reset_mark[MINION_CHIPS];
+	int reset_count[MINION_CHIPS];
+	// Point in history for MINION_RESET2_s
+	int reset2_time[MINION_CHIPS];
+	K_ITEM *reset2_mark[MINION_CHIPS];
+	int reset2_count[MINION_CHIPS];
+
+	// Performance history
+	K_LIST *pfree_list;
+	K_STORE *p_list[MINION_CHIPS];
+
+	// 0xff history
+	K_LIST *xfree_list;
+	K_STORE *xff_list;
+	time_t last_power_cycle;
+	uint64_t power_cycles;
+	time_t last_xff;
+	uint64_t xffs;
+	uint64_t last_displayed_xff;
+
 	// Gets reset to zero each time it is used in reporting
 	int res_err_count[MINION_CHIPS];
 
@@ -808,8 +973,135 @@ struct minion_info {
 	double wt_max;
 	uint64_t wt_bands[TIME_BANDS+1];
 
+	bool lednow[MINION_CHIPS];
+	bool setled[MINION_CHIPS];
+
 	bool initialised;
 };
+
+#if MINION_ROCKCHIP == 1
+static bool minion_toggle_gpio(struct cgpu_info *minioncgpu, int gpionum)
+{
+	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
+	char pindir[64], ena[64], pin[8], dir[64];
+	char gpiointvalue[64];
+	struct stat st;
+	int file, err, chip;
+	ssize_t ret;
+
+	snprintf(pindir, sizeof(pindir), MINION_GPIO_SYS MINION_GPIO_PIN, gpionum);
+	memset(&st, 0, sizeof(st));
+
+	if (stat(pindir, &st) == 0) { // already exists
+		if (!S_ISDIR(st.st_mode)) {
+			applog(LOG_ERR, "%s: failed1 to enable GPIO pin %d"
+					" - not a directory",
+					minioncgpu->drv->dname, gpionum);
+			return false;
+		}
+	} else {
+		snprintf(ena, sizeof(ena), MINION_GPIO_SYS MINION_GPIO_ENA);
+		file = open(ena, O_WRONLY | O_SYNC);
+		if (file == -1) {
+			applog(LOG_ERR, "%s: failed2 to export GPIO pin %d (%d)"
+					" - you need to be root?",
+					minioncgpu->drv->dname,
+					gpionum, errno);
+			return false;
+		}
+		snprintf(pin, sizeof(pin), MINION_GPIO_ENA_VAL, gpionum);
+		ret = write(file, pin, (size_t)strlen(pin));
+		if (ret != (ssize_t)strlen(pin)) {
+			if (ret < 0)
+				err = errno;
+			else
+				err = (int)ret;
+			close(file);
+			applog(LOG_ERR, "%s: failed3 to export GPIO pin %d (%d:%d)",
+					minioncgpu->drv->dname,
+					gpionum, err, (int)strlen(pin));
+			return false;
+		}
+		close(file);
+
+		// Check again if it exists
+		memset(&st, 0, sizeof(st));
+		if (stat(pindir, &st) != 0) {
+			applog(LOG_ERR, "%s: failed4 to export GPIO pin %d (%d)",
+					minioncgpu->drv->dname,
+					gpionum, errno);
+			return false;
+		}
+	}
+
+	// Set the pin attributes
+	// Direction
+	snprintf(dir, sizeof(dir), MINION_GPIO_SYS MINION_GPIO_PIN MINION_GPIO_DIR, gpionum);
+	file = open(dir, O_WRONLY | O_SYNC);
+	if (file == -1) {
+		applog(LOG_ERR, "%s: failed5 to configure GPIO pin %d (%d)"
+				" - you need to be root?",
+				minioncgpu->drv->dname,
+				gpionum, errno);
+		return false;
+	}
+	ret = write(file, MINION_GPIO_DIR_WRITE, sizeof(MINION_GPIO_DIR_WRITE)-1);
+	if (ret != sizeof(MINION_GPIO_DIR_WRITE)-1) {
+		if (ret < 0)
+			err = errno;
+		else
+			err = (int)ret;
+		close(file);
+		applog(LOG_ERR, "%s: failed6 to configure GPIO pin %d (%d:%d)",
+				minioncgpu->drv->dname, gpionum,
+				err, (int)sizeof(MINION_GPIO_DIR_WRITE)-1);
+		return false;
+	}
+	close(file);
+
+	// Open it
+	snprintf(gpiointvalue, sizeof(gpiointvalue),
+		 MINION_GPIO_SYS MINION_GPIO_PIN MINION_GPIO_VALUE,
+		 gpionum);
+	int fd = open(gpiointvalue, O_WRONLY);
+	if (fd == -1) {
+		applog(LOG_ERR, "%s: failed7 to access GPIO pin %d (%d)",
+				minioncgpu->drv->dname,
+				gpionum, errno);
+		return false;
+	}
+
+	ret = write(fd, MINION_CHIP_OFF, sizeof(MINION_CHIP_OFF)-1);
+	if (ret != sizeof(MINION_CHIP_OFF)-1) {
+		close(fd);
+		applog(LOG_ERR, "%s: failed8 to toggle off GPIO pin %d (%d:%d)",
+				minioncgpu->drv->dname,
+				gpionum, (int)ret, errno);
+		return false;
+	}
+
+	cgsleep_ms(MINION_CHIP_DELAY);
+
+	ret = write(fd, MINION_CHIP_ON, sizeof(MINION_CHIP_ON)-1);
+	if (ret != sizeof(MINION_CHIP_OFF)-1) {
+		close(fd);
+		applog(LOG_ERR, "%s: failed9 to toggle on GPIO pin %d (%d:%d)",
+				minioncgpu->drv->dname,
+				gpionum, (int)ret, errno);
+		return false;
+	}
+
+	close(fd);
+	minioninfo->last_power_cycle = time(NULL);
+	minioninfo->power_cycles++;
+	// Reset all chip led counters
+	for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
+		if (minioninfo->has_chip[chip])
+			minioninfo->chip_status[chip].first_nonce.tv_sec = 0L;
+	}
+	return true;
+}
+#endif
 
 static void ready_work(struct cgpu_info *minioncgpu, struct work *work, bool rolled)
 {
@@ -820,14 +1112,14 @@ static void ready_work(struct cgpu_info *minioncgpu, struct work *work, bool rol
 
 	item = k_unlink_head(minioninfo->wfree_list);
 
-	DATAW(item)->work = work;
-	DATAW(item)->task_id = 0;
-	memset(&(DATAW(item)->sent), 0, sizeof(DATAW(item)->sent));
-	DATAW(item)->nonces = 0;
-	DATAW(item)->urgent = false;
-	DATAW(item)->rolled = rolled;
-	DATAW(item)->errors = 0;
-	cgtime(&(DATAW(item)->created));
+	DATA_WORK(item)->work = work;
+	DATA_WORK(item)->task_id = 0;
+	memset(&(DATA_WORK(item)->sent), 0, sizeof(DATA_WORK(item)->sent));
+	DATA_WORK(item)->nonces = 0;
+	DATA_WORK(item)->urgent = false;
+	DATA_WORK(item)->rolled = rolled;
+	DATA_WORK(item)->errors = 0;
+	cgtime(&(DATA_WORK(item)->created));
 
 	k_add_head(minioninfo->wwork_list, item);
 
@@ -847,15 +1139,15 @@ static bool oldest_nonce(struct cgpu_info *minioncgpu, int *chip, int *core, uin
 	item = k_unlink_tail(minioninfo->rnonce_list);
 	if (item) {
 		found = true;
-		*chip = DATAR(item)->chip;
-		*core = DATAR(item)->core;
-		*task_id = DATAR(item)->task_id;
-		*nonce = DATAR(item)->nonce;
-		*no_nonce = DATAR(item)->no_nonce;
-		memcpy(when, &(DATAR(item)->when), sizeof(*when));
-		*another = DATAR(item)->another;
-		*task_id2 = DATAR(item)->task_id2;
-		*nonce2 = DATAR(item)->nonce2;
+		*chip = DATA_RES(item)->chip;
+		*core = DATA_RES(item)->core;
+		*task_id = DATA_RES(item)->task_id;
+		*nonce = DATA_RES(item)->nonce;
+		*no_nonce = DATA_RES(item)->no_nonce;
+		memcpy(when, &(DATA_RES(item)->when), sizeof(*when));
+		*another = DATA_RES(item)->another;
+		*task_id2 = DATA_RES(item)->task_id2;
+		*nonce2 = DATA_RES(item)->nonce2;
 
 		k_free_head(minioninfo->rfree_list, item);
 	}
@@ -872,6 +1164,8 @@ static const char *addr2txt(uint8_t addr)
 			return "RChipSig";
 		case READ_ADDR(MINION_SYS_CHIP_STA):
 			return "RChipSta";
+		case WRITE_ADDR(MINION_SYS_SPI_LED):
+			return "WLed";
 		case WRITE_ADDR(MINION_SYS_MISC_CTL):
 			return "WMiscCtrl";
 		case WRITE_ADDR(MINION_SYS_RSTN_CTL):
@@ -982,6 +1276,7 @@ static void display_ioctl(int reply, uint32_t osiz, uint8_t *obuf, uint32_t rsiz
 		case READ_ADDR(MINION_SYS_CHIP_SIG):
 		case READ_ADDR(MINION_SYS_CHIP_STA):
 			break;
+		case WRITE_ADDR(MINION_SYS_SPI_LED):
 		case WRITE_ADDR(MINION_SYS_MISC_CTL):
 		case WRITE_ADDR(MINION_SYS_RSTN_CTL):
 			if (osiz > HSIZE()) {
@@ -1080,11 +1375,17 @@ static void init_pins(struct minion_info *minioninfo)
 
 #define EXTRA_LOG_IO 0
 
-static int __do_ioctl(struct minion_info *minioninfo, int pin, uint8_t *obuf,
-		      uint32_t osiz, uint8_t *rbuf, uint32_t rsiz,
-		      uint64_t *ioseq, MINION_FFL_ARGS)
+static bool minion_init_spi(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, int bus, int chip, bool reset);
+
+static int __do_ioctl(struct cgpu_info *minioncgpu, struct minion_info *minioninfo,
+		      int pin, uint8_t *obuf, uint32_t osiz, uint8_t *rbuf,
+		      uint32_t rsiz, uint64_t *ioseq, MINION_FFL_ARGS)
 {
 	struct spi_ioc_transfer tran;
+	bool fail = false, powercycle = false, show = false;
+	double lastshow, total;
+	K_ITEM *xitem;
+	time_t now;
 	int ret;
 #if MINION_SHOW_IO
 	char dataw[DATA_ALL], datar[DATA_ALL];
@@ -1129,7 +1430,7 @@ static int __do_ioctl(struct minion_info *minioninfo, int pin, uint8_t *obuf,
 	else
 		return MINION_OVERSIZE_TASK;
 
-	tran.delay_usecs = 0;
+	tran.delay_usecs = opt_minion_spiusec;
 	tran.speed_hz = MINION_SPI_SPEED;
 
 #if MINION_SHOW_IO
@@ -1157,11 +1458,103 @@ static int __do_ioctl(struct minion_info *minioninfo, int pin, uint8_t *obuf,
 		// Pin back high after I/O
 		set_pin(minioninfo, pin, true);
 	}
+	now = time(NULL);
+	if (ret >= 0 && rbuf[0] == 0xff && rbuf[ret-1] == 0xff &&
+	    (obuf[1] == READ_ADDR(MINION_RES_DATA) || obuf[1] == READ_ADDR(MINION_SYS_FIFO_STA))) {
+		int i;
+		fail = true;
+		for (i = 1; i < ret-2; i++) {
+			if (rbuf[i] != 0xff) {
+				fail = false;
+				break;
+			}
+		}
+		if (fail) {
+			powercycle = show = false;
+			minioninfo->xffs++;
+			minioninfo->last_xff = now;
+
+			if (minioninfo->xfree_list->count > 0)
+				xitem = k_unlink_head(minioninfo->xfree_list);
+			else
+				xitem = k_unlink_tail(minioninfo->xff_list);
+			DATA_XFF(xitem)->when = now;
+			if (!minioninfo->xff_list->head)
+				show = true;
+			else {
+				// xff_list is full
+				if (minioninfo->xfree_list->count == 0) {
+					total = DATA_XFF(xitem)->when -
+						DATA_XFF(minioninfo->xff_list->tail)->when;
+					if (total <= MINION_POWER_TIME) {
+						powercycle = true;
+						// Discard the history
+						k_list_transfer_to_head(minioninfo->xff_list,
+									minioninfo->xfree_list);
+						k_add_head(minioninfo->xfree_list, xitem);
+						xitem = NULL;
+					}
+				}
+
+				if (!powercycle) {
+					lastshow = DATA_XFF(xitem)->when -
+						   DATA_XFF(minioninfo->xff_list->head)->when;
+					show = (lastshow >= 5);
+				}
+			}
+			if (xitem)
+				k_add_head(minioninfo->xff_list, xitem);
+
+#if MINION_ROCKCHIP == 1
+			if (powercycle)
+				minion_toggle_gpio(minioncgpu, MINION_POWERCYCLE_GPIO);
+#endif
+			minion_init_spi(minioncgpu, minioninfo, 0, 0, true);
+		}
+	} else if (minioninfo->spi_reset_count) {
+		if (minioninfo->spi_reset_io) {
+			if (*ioseq > 0 && (*ioseq % minioninfo->spi_reset_count) == 0)
+				minion_init_spi(minioncgpu, minioninfo, 0, 0, true);
+		} else {
+			if (minioninfo->last_spi_reset == 0)
+				minioninfo->last_spi_reset = now;
+			else {
+				if ((now - minioninfo->last_spi_reset) >= minioninfo->spi_reset_count)
+					minion_init_spi(minioncgpu, minioninfo, 0, 0, true);
+					minioninfo->last_spi_reset = now;
+			}
+		}
+	}
+	if (opt_minion_spidelay)
+		cgsleep_ms(opt_minion_spidelay);
 	mutex_unlock(&(minioninfo->spi_lock));
 	IO_STAT_NOW(&lfin);
 	IO_STAT_NOW(&tsd);
 
 	IO_STAT_STORE(&sta, &fin, &lsta, &lfin, &tsd, obuf, osiz, ret, 1);
+
+	if (fail) {
+		if (powercycle) {
+			applog(LOG_ERR, "%s%d: power cycle ioctl %"PRIu64" (%"PRIu64")",
+					minioncgpu->drv->name, minioncgpu->device_id, *ioseq,
+					minioninfo->xffs - minioninfo->last_displayed_xff);
+			minioninfo->last_displayed_xff = minioninfo->xffs;
+		} else if (show) {
+			char *what = "unk";
+			switch (obuf[1]) {
+				case READ_ADDR(MINION_RES_DATA):
+					what = "nonce";
+					break;
+				case READ_ADDR(MINION_SYS_FIFO_STA):
+					what = "fifo";
+					break;
+			}
+			applog(LOG_ERR, "%s%d: reset ioctl %"PRIu64" %s all 0xff (%"PRIu64")",
+					minioncgpu->drv->name, minioncgpu->device_id,
+					*ioseq, what, minioninfo->xffs - minioninfo->last_displayed_xff);
+			minioninfo->last_displayed_xff = minioninfo->xffs;
+		}
+	}
 
 #if MINION_SHOW_IO
 	if (ret > 0) {
@@ -1214,7 +1607,7 @@ static int __do_ioctl(struct minion_info *minioninfo, int pin, uint8_t *obuf,
 
 #if 1
 #define do_ioctl(_pin, _obuf, _osiz, _rbuf, _rsiz, _ioseq) \
-		__do_ioctl(minioninfo, _pin, _obuf, _osiz, _rbuf, \
+		__do_ioctl(minioncgpu, minioninfo, _pin, _obuf, _osiz, _rbuf, \
 			   _rsiz, _ioseq, MINION_FFL_HERE)
 #else
 #define do_ioctl(_pin, _obuf, _osiz, _rbuf, _rsiz, _ioseq) \
@@ -1233,13 +1626,13 @@ static int _do_ioctl(struct minion_info *minioninfo, int pin, uint8_t *obuf, uin
 	head->reg = READ_ADDR(MINION_SYS_FIFO_STA);
 	SET_HEAD_SIZ(head, DATA_SIZ);
 	siz = HSIZE() + DATA_SIZ;
-	__do_ioctl(minioninfo, pin, buf1, siz, buf2, MINION_CORE_SIZ, ioseq, MINION_FFL_PASS);
+	__do_ioctl(minioncgpu, minioninfo, pin, buf1, siz, buf2, MINION_CORE_SIZ, ioseq, MINION_FFL_PASS);
 
-	return __do_ioctl(minioninfo, pin, obuf, osiz, rbuf, rsiz, ioseq, MINION_FFL_PASS);
+	return __do_ioctl(minioncgpu, minioninfo, pin, obuf, osiz, rbuf, rsiz, ioseq, MINION_FFL_PASS);
 }
 #endif
 
-static bool _minion_txrx(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, TITEM *task, MINION_FFL_ARGS)
+static bool _minion_txrx(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, TASK_ITEM *task, MINION_FFL_ARGS)
 {
 	struct minion_header *head;
 
@@ -1392,8 +1785,16 @@ static void init_chip(struct cgpu_info *minioncgpu, struct minion_info *minionin
 	if (minioninfo->hfree_list) {
 		K_WLOCK(minioninfo->hfree_list);
 		k_list_transfer_to_head(minioninfo->hchip_list[chip], minioninfo->hfree_list);
+		minioninfo->reset_mark[chip] = NULL;
+		minioninfo->reset_count[chip] = 0;
 		K_WUNLOCK(minioninfo->hfree_list);
 	}
+
+	minioninfo->reset_time[chip] = (int)FREQ_DELAY(minioninfo->init_freq[chip]);
+	if (second_check)
+		minioninfo->reset2_time[chip] = (int)FREQ2_DELAY(minioninfo->init_freq[chip]);
+
+	minioninfo->chip_status[chip].first_nonce.tv_sec = 0L;
 }
 
 static void enable_chip_cores(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, int chip)
@@ -1668,32 +2069,44 @@ static struct {
 	{ -1, -1 }
 };
 
-static bool minion_init_spi(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, int bus, int chip)
+static bool minion_init_spi(struct cgpu_info *minioncgpu, struct minion_info *minioninfo, int bus, int chip, bool reset)
 {
 	int i, err, data;
 	char buf[64];
 
-	for (i = 0; minion_modules[i]; i++) {
-		snprintf(buf, sizeof(buf), "modprobe %s", minion_modules[i]);
-		err = system(buf);
-		if (err) {
-			applog(LOG_ERR, "%s: failed to modprobe %s (%d) - you need to be root?",
+	if (reset) {
+		// TODO: maybe slow it down?
+		close(minioninfo->spifd);
+		if (opt_minion_spisleep)
+			cgsleep_ms(opt_minion_spisleep);
+		minioninfo->spifd = open(minioncgpu->device_path, O_RDWR);
+		if (minioninfo->spifd < 0)
+			goto bad_out;
+		minioninfo->spi_resets++;
+//		minioninfo->chip_status[chip].first_nonce.tv_sec = 0L;
+	} else {
+		for (i = 0; minion_modules[i]; i++) {
+			snprintf(buf, sizeof(buf), "modprobe %s", minion_modules[i]);
+			err = system(buf);
+			if (err) {
+				applog(LOG_ERR, "%s: failed to modprobe %s (%d) - you need to be root?",
+						minioncgpu->drv->dname,
+						minion_modules[i], err);
+				goto bad_out;
+			}
+		}
+
+		snprintf(buf, sizeof(buf), "/dev/spidev%d.%d", bus, chip);
+		minioninfo->spifd = open(buf, O_RDWR);
+		if (minioninfo->spifd < 0) {
+			applog(LOG_ERR, "%s: failed to open spidev (%d)",
 					minioncgpu->drv->dname,
-					minion_modules[i], err);
+					errno);
 			goto bad_out;
 		}
-	}
 
-	snprintf(buf, sizeof(buf), "/dev/spidev%d.%d", bus, chip);
-	minioninfo->spifd = open(buf, O_RDWR);
-	if (minioninfo->spifd < 0) {
-		applog(LOG_ERR, "%s: failed to open spidev (%d)",
-				minioncgpu->drv->dname,
-				errno);
-		goto bad_out;
+		minioncgpu->device_path = strdup(buf);
 	}
-
-	minioncgpu->device_path = strdup(buf);
 
 	for (i = 0; minion_ioc[i].value != -1; i++) {
 		data = minion_ioc[i].value;
@@ -1951,6 +2364,33 @@ static void minion_process_options(struct minion_info *minioninfo)
 	int i, core1, core2;
 	bool cleared;
 
+	if (opt_minion_spireset && *opt_minion_spireset) {
+		bool is_io = true;
+		int val;
+
+		switch (tolower(*opt_minion_spireset)) {
+			case 'i':
+				is_io = true;
+				break;
+			case 's':
+				is_io = false;
+				break;
+			default:
+				applog(LOG_WARNING, "ERR: Invalid SPI reset '%s'",
+						    opt_minion_spireset);
+				goto skip;
+		}
+		val = atoi(opt_minion_spireset+1);
+		if (val < 0 || val > 9999) {
+			applog(LOG_WARNING, "ERR: Invalid SPI reset '%s'",
+					    opt_minion_spireset);
+		} else {
+			minioninfo->spi_reset_io = is_io;
+			minioninfo->spi_reset_count = val;
+			minioninfo->last_spi_reset = time(NULL);
+		}
+	}
+skip:
 	last_freq = MINION_FREQ_DEF;
 	if (opt_minion_freq && *opt_minion_freq) {
 		buf = freq = strdup(opt_minion_freq);
@@ -2092,6 +2532,8 @@ static void minion_detect(bool hotplug)
 	if (hotplug)
 		return;
 
+	define_test();
+
 	minioncgpu = calloc(1, sizeof(*minioncgpu));
 	if (unlikely(!minioncgpu))
 		quithere(1, "Failed to calloc minioncgpu");
@@ -2105,7 +2547,7 @@ static void minion_detect(bool hotplug)
 		quithere(1, "Failed to calloc minioninfo");
 	minioncgpu->device_data = (void *)minioninfo;
 
-	if (!minion_init_spi(minioncgpu, minioninfo, MINION_SPI_BUS, MINION_SPI_CHIP))
+	if (!minion_init_spi(minioncgpu, minioninfo, MINION_SPI_BUS, MINION_SPI_CHIP, false))
 		goto unalloc;
 
 #if ENABLE_INT_NONO
@@ -2155,7 +2597,8 @@ static void minion_detect(bool hotplug)
 
 	mutex_init(&(minioninfo->nonce_lock));
 
-	minioninfo->wfree_list = k_new_list("Work", sizeof(WITEM), ALLOC_WITEMS, LIMIT_WITEMS, true);
+	minioninfo->wfree_list = k_new_list("Work", sizeof(WORK_ITEM),
+					    ALLOC_WORK_ITEMS, LIMIT_WORK_ITEMS, true);
 	minioninfo->wwork_list = k_new_store(minioninfo->wfree_list);
 	minioninfo->wstale_list = k_new_store(minioninfo->wfree_list);
 	// Initialise them all in case we later decide to enable chips
@@ -2164,17 +2607,29 @@ static void minion_detect(bool hotplug)
 		minioninfo->wchip_list[i] = k_new_store(minioninfo->wfree_list);
 	}
 
-	minioninfo->tfree_list = k_new_list("Task", sizeof(TITEM), ALLOC_TITEMS, LIMIT_TITEMS, true);
+	minioninfo->tfree_list = k_new_list("Task", sizeof(TASK_ITEM),
+					    ALLOC_TASK_ITEMS, LIMIT_TASK_ITEMS, true);
 	minioninfo->task_list = k_new_store(minioninfo->tfree_list);
 	minioninfo->treply_list = k_new_store(minioninfo->tfree_list);
 
-	minioninfo->rfree_list = k_new_list("Reply", sizeof(RITEM), ALLOC_RITEMS, LIMIT_RITEMS, true);
+	minioninfo->rfree_list = k_new_list("Reply", sizeof(RES_ITEM),
+					    ALLOC_RES_ITEMS, LIMIT_RES_ITEMS, true);
 	minioninfo->rnonce_list = k_new_store(minioninfo->rfree_list);
 
 	minioninfo->history_gen = MINION_MAX_RESET_CHECK;
-	minioninfo->hfree_list = k_new_list("History", sizeof(HITEM), ALLOC_HITEMS, LIMIT_HITEMS, true);
+	minioninfo->hfree_list = k_new_list("History", sizeof(HIST_ITEM),
+					    ALLOC_HIST_ITEMS, LIMIT_HIST_ITEMS, true);
 	for (i = 0; i < (int)MINION_CHIPS; i++)
 		minioninfo->hchip_list[i] = k_new_store(minioninfo->hfree_list);
+
+	minioninfo->pfree_list = k_new_list("Performance", sizeof(PERF_ITEM),
+					    ALLOC_PERF_ITEMS, LIMIT_PERF_ITEMS, true);
+	for (i = 0; i < (int)MINION_CHIPS; i++)
+		minioninfo->p_list[i] = k_new_store(minioninfo->pfree_list);
+
+	minioninfo->xfree_list = k_new_list("0xff", sizeof(XFF_ITEM),
+					    ALLOC_XFF_ITEMS, LIMIT_XFF_ITEMS, true);
+	minioninfo->xff_list = k_new_store(minioninfo->xfree_list);
 
 	cgsem_init(&(minioninfo->task_ready));
 	cgsem_init(&(minioninfo->nonce_ready));
@@ -2196,14 +2651,20 @@ unalloc:
 	free(minioncgpu);
 }
 
-static char *minion_set(struct cgpu_info *minioncgpu, char *option, char *setting, char *replybuf)
+static char *minion_api_set(struct cgpu_info *minioncgpu, char *option, char *setting, char *replybuf)
 {
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
-	int chip;
+	int chip, val;
+	char *colon;
 
 	if (strcasecmp(option, "help") == 0) {
-		sprintf(replybuf, "reset: chip 0-%d",
-				  minioninfo->chips - 1);
+		sprintf(replybuf, "reset: chip 0-%d freq: 0-%d:%d-%d "
+				  "ledcount: 0-100 ledlimit: 0-200 "
+				  "spidelay: 0-9999 spireset i|s0-9999 "
+				  "spisleep: 0-9999",
+				  minioninfo->chips - 1,
+				  minioninfo->chips - 1,
+				  MINION_FREQ_MIN, MINION_FREQ_MAX);
 		return replybuf;
 	}
 
@@ -2230,6 +2691,173 @@ static char *minion_set(struct cgpu_info *minioncgpu, char *option, char *settin
 		return NULL;
 	}
 
+	// This must do a reset also - but changes the freq
+	if (strcasecmp(option, "freq") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing chip:freq");
+			return replybuf;
+		}
+
+		colon = strchr(setting, ':');
+		if (!colon) {
+			sprintf(replybuf, "missing ':' for chip:freq");
+			return replybuf;
+		}
+
+		*(colon++) = '\0';
+		if (!*colon) {
+			sprintf(replybuf, "missing freq in chip:freq");
+			return replybuf;
+		}
+
+		chip = atoi(setting);
+		if (chip < 0 || chip >= minioninfo->chips) {
+			sprintf(replybuf, "invalid freq: chip '%s' valid range 0-%d",
+					  setting,
+					  minioninfo->chips);
+			return replybuf;
+		}
+
+		if (!minioninfo->has_chip[chip]) {
+			sprintf(replybuf, "unable to modify chip %d - chip disabled",
+					  chip);
+			return replybuf;
+		}
+
+		val = atoi(colon);
+		if (val < MINION_FREQ_MIN || val > MINION_FREQ_MAX) {
+			sprintf(replybuf, "invalid freq: '%s' valid range %d-%d",
+					  setting,
+					  MINION_FREQ_MIN, MINION_FREQ_MAX);
+			return replybuf;
+		}
+
+		minioninfo->init_freq[chip] = val - (val % MINION_FREQ_FACTOR);
+		minioninfo->flag_reset[chip] = true;
+		minioninfo->do_reset[chip] = 0.0;
+
+		return NULL;
+	}
+
+	if (strcasecmp(option, "ledcount") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing ledcount value");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < 0 || val > 100) {
+			sprintf(replybuf, "invalid ledcount: '%s' valid range 0-100",
+					  setting);
+			return replybuf;
+		}
+
+		opt_minion_ledcount = val;
+		return NULL;
+	}
+
+	if (strcasecmp(option, "ledlimit") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing ledlimit value");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < 0 || val > 200) {
+			sprintf(replybuf, "invalid ledlimit: GHs '%s' valid range 0-200",
+					  setting);
+			return replybuf;
+		}
+
+		opt_minion_ledlimit = val;
+		return NULL;
+	}
+
+	if (strcasecmp(option, "spidelay") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing spidelay value");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < 0 || val > 9999) {
+			sprintf(replybuf, "invalid spidelay: ms '%s' valid range 0-9999",
+					  setting);
+			return replybuf;
+		}
+
+		opt_minion_spidelay = val;
+		return NULL;
+	}
+
+	if (strcasecmp(option, "spireset") == 0) {
+		bool is_io = true;
+
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing spireset value");
+			return replybuf;
+		}
+
+		switch (tolower(*setting)) {
+			case 'i':
+				is_io = true;
+				break;
+			case 's':
+				is_io = false;
+				break;
+			default:
+				sprintf(replybuf, "invalid spireset: '%s' must start with i or s",
+						  setting);
+				return replybuf;
+		}
+		val = atoi(setting+1);
+		if (val < 0 || val > 9999) {
+			sprintf(replybuf, "invalid spireset: %c '%s' valid range 0-9999",
+					  *setting, setting+1);
+			return replybuf;
+		}
+
+		minioninfo->spi_reset_io = is_io;
+		minioninfo->spi_reset_count = val;
+		minioninfo->last_spi_reset = time(NULL);
+
+		return NULL;
+	}
+
+	if (strcasecmp(option, "spisleep") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing spisleep value");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < 0 || val > 9999) {
+			sprintf(replybuf, "invalid spisleep: ms '%s' valid range 0-9999",
+					  setting);
+			return replybuf;
+		}
+
+		opt_minion_spisleep = val;
+		return NULL;
+	}
+
+	if (strcasecmp(option, "spiusec") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing spiusec value");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < 0 || val > 9999) {
+			sprintf(replybuf, "invalid spiusec: '%s' valid range 0-9999",
+					  setting);
+			return replybuf;
+		}
+
+		opt_minion_spiusec = val;
+		return NULL;
+	}
+
 	sprintf(replybuf, "Unknown option: %s", option);
 	return replybuf;
 }
@@ -2249,7 +2877,7 @@ static void *minion_spi_write(void *userdata)
 	struct cgpu_info *minioncgpu = (struct cgpu_info *)userdata;
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	K_ITEM *item, *tail, *task, *work;
-	TITEM *titem;
+	TASK_ITEM *titem;
 
 	applog(MINION_LOG, "%s%i: SPI writing...",
 				minioncgpu->drv->name, minioncgpu->device_id);
@@ -2272,7 +2900,7 @@ static void *minion_spi_write(void *userdata)
 		if (tail) {
 			// Find first urgent item
 			item = tail;
-			while (item && !(DATAT(item)->urgent))
+			while (item && !(DATA_TASK(item)->urgent))
 				item = item->prev;
 
 			// No urgent items, just do the tail
@@ -2290,12 +2918,13 @@ static void *minion_spi_write(void *userdata)
 			double howlong;
 			int i;
 
-			titem = DATAT(item);
+			titem = DATA_TASK(item);
 
 			switch (titem->address) {
 				// TODO: case MINION_SYS_TEMP_CTL:
 				// TODO: case MINION_SYS_FREQ_CTL:
 				case READ_ADDR(MINION_SYS_CHIP_STA):
+				case WRITE_ADDR(MINION_SYS_SPI_LED):
 				case WRITE_ADDR(MINION_SYS_RSTN_CTL):
 				case WRITE_ADDR(MINION_SYS_INT_CLR):
 				case READ_ADDR(MINION_SYS_IDLE_CNT):
@@ -2327,7 +2956,7 @@ static void *minion_spi_write(void *userdata)
 			if (do_txrx) {
 				if (titem->witem) {
 					cgtime(&now);
-					howlong = tdiff(&now, &(DATAW(titem->witem)->created));
+					howlong = tdiff(&now, &(DATA_WORK(titem->witem)->created));
 					minioninfo->wt_work++;
 					minioninfo->wt_time += howlong;
 					if (minioninfo->wt_min == 0 || minioninfo->wt_min > howlong)
@@ -2386,18 +3015,18 @@ static void *minion_spi_write(void *userdata)
 											    chip);
 									K_WLOCK(minioninfo->tfree_list);
 									task = k_unlink_head(minioninfo->tfree_list);
-									DATAT(task)->tid = ++(minioninfo->next_tid);
-									DATAT(task)->chip = chip;
-									DATAT(task)->write = true;
-									DATAT(task)->address = MINION_SYS_RSTN_CTL;
-									DATAT(task)->task_id = 0; // ignored
-									DATAT(task)->wsiz = MINION_SYS_SIZ;
-									DATAT(task)->rsiz = 0;
-									DATAT(task)->wbuf[0] = SYS_RSTN_CTL_FLUSH;
-									DATAT(task)->wbuf[1] = 0;
-									DATAT(task)->wbuf[2] = 0;
-									DATAT(task)->wbuf[3] = 0;
-									DATAT(task)->urgent = true;
+									DATA_TASK(task)->tid = ++(minioninfo->next_tid);
+									DATA_TASK(task)->chip = chip;
+									DATA_TASK(task)->write = true;
+									DATA_TASK(task)->address = MINION_SYS_RSTN_CTL;
+									DATA_TASK(task)->task_id = 0; // ignored
+									DATA_TASK(task)->wsiz = MINION_SYS_SIZ;
+									DATA_TASK(task)->rsiz = 0;
+									DATA_TASK(task)->wbuf[0] = SYS_RSTN_CTL_FLUSH;
+									DATA_TASK(task)->wbuf[1] = 0;
+									DATA_TASK(task)->wbuf[2] = 0;
+									DATA_TASK(task)->wbuf[3] = 0;
+									DATA_TASK(task)->urgent = true;
 									k_add_head(minioninfo->task_list, task);
 									K_WUNLOCK(minioninfo->tfree_list);
 									minioninfo->chip_status[chip].overheats++;
@@ -2419,7 +3048,7 @@ static void *minion_spi_write(void *userdata)
 							work = minioninfo->wchip_list[chip]->head;
 							while (work) {
 								cnt++;
-								DATAW(work)->stale = true;
+								DATA_WORK(work)->stale = true;
 								work = work->next;
 							}
 							minioninfo->chip_status[chip].chipwork = 0;
@@ -2439,7 +3068,7 @@ static void *minion_spi_write(void *userdata)
 						K_WLOCK(minioninfo->wchip_list[chip]);
 						k_unlink_item(minioninfo->wque_list[chip], titem->witem);
 						k_add_head(minioninfo->wchip_list[chip], titem->witem);
-						DATAW(titem->witem)->ioseq = titem->ioseq;
+						DATA_WORK(titem->witem)->ioseq = titem->ioseq;
 						minioninfo->chip_status[chip].quework--;
 						minioninfo->chip_status[chip].chipwork++;
 #if MINION_SHOW_IO
@@ -2475,6 +3104,7 @@ static void *minion_spi_write(void *userdata)
 						}
 						break;
 					case WRITE_ADDR(MINION_SYS_INT_CLR):
+					case WRITE_ADDR(MINION_SYS_SPI_LED):
 						break;
 					default:
 						break;
@@ -2509,14 +3139,14 @@ static void *minion_spi_reply(void *userdata)
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	struct minion_result *result1, *result2, *use1, *use2;
 	K_ITEM *item;
-	TITEM fifo_task, res1_task, res2_task;
+	TASK_ITEM fifo_task, res1_task, res2_task;
 	int chip, resoff;
 	bool somelow;
 	struct timeval now;
 
 #if ENABLE_INT_NONO
 	uint64_t ioseq;
-	TITEM clr_task;
+	TASK_ITEM clr_task;
 	struct pollfd pfd;
 	struct minion_header *head;
 	uint8_t rbuf[MINION_BUFSIZ];
@@ -2600,19 +3230,20 @@ static void *minion_spi_reply(void *userdata)
 						if (fifo_task.reply < (int)(fifo_task.osiz)) {
 							char *buf = bin2hex((unsigned char *)(&(fifo_task.rbuf[fifo_task.osiz - fifo_task.rsiz])),
 										(int)(fifo_task.rsiz));
-							applog(LOG_ERR, "%s%i: Chip %d Bad fifo reply (%s) size %d, should be %d",
-									minioncgpu->drv->name, minioncgpu->device_id,
-									chip, buf,
-									fifo_task.reply, (int)(fifo_task.osiz));
+							applog(LOG_DEBUG, "%s%i: Chip %d Bad fifo reply (%s) size %d, should be %d",
+									  minioncgpu->drv->name, minioncgpu->device_id,
+									  chip, buf,
+									  fifo_task.reply, (int)(fifo_task.osiz));
 							free(buf);
 							minioninfo->spi_errors++;
 							minioninfo->fifo_spi_errors[chip]++;
 							minioninfo->res_err_count[chip]++;
 						} else {
 							if (fifo_task.reply > (int)(fifo_task.osiz)) {
-								applog(LOG_ERR, "%s%i: Chip %d Unexpected fifo reply size %d, expected only %d",
-										minioncgpu->drv->name, minioncgpu->device_id,
-										chip, fifo_task.reply, (int)(fifo_task.osiz));
+								applog(LOG_DEBUG, "%s%i: Chip %d Unexpected fifo reply size %d, "
+										  "expected only %d",
+										  minioncgpu->drv->name, minioncgpu->device_id,
+										  chip, fifo_task.reply, (int)(fifo_task.osiz));
 							}
 							res = FIFO_RES(fifo_task.rbuf, fifo_task.osiz - fifo_task.rsiz);
 							cmd = FIFO_CMD(fifo_task.rbuf, fifo_task.osiz - fifo_task.rsiz);
@@ -2620,9 +3251,11 @@ static void *minion_spi_reply(void *userdata)
 							if (res <= MINION_QUE_MAX && cmd <= MINION_QUE_MAX)
 								break;
 
-							applog(LOG_ERR, "%s%i: Chip %d Bad fifo reply res %d (max is %d) cmd %d (max is %d)",
-									minioncgpu->drv->name, minioncgpu->device_id,
-									chip, (int)res, MINION_QUE_MAX, (int)cmd, MINION_QUE_MAX);
+							applog(LOG_DEBUG, "%s%i: Chip %d Bad fifo reply res %d (max is %d) "
+									  "cmd %d (max is %d)",
+									  minioncgpu->drv->name, minioncgpu->device_id,
+									  chip, (int)res, MINION_QUE_MAX,
+									  (int)cmd, MINION_QUE_MAX);
 							minioninfo->spi_errors++;
 							minioninfo->fifo_spi_errors[chip]++;
 							minioninfo->res_err_count[chip]++;
@@ -2750,9 +3383,9 @@ repeek:
 										minioninfo->use_res2[chip]++;
 									}
 
-									//DATAR(item)->chip = RES_CHIPID(use1);
+									//DATA_RES(item)->chip = RES_CHIPID(use1);
 									// We can avoid any SPI transmission error of the chip number
-									DATAR(item)->chip = (uint8_t)chip;
+									DATA_RES(item)->chip = (uint8_t)chip;
 									if (minioninfo->chipid[chip] != RES_CHIPID(use1)) {
 										minioninfo->spi_errors++;
 										minioninfo->res_spi_errors[chip]++;
@@ -2763,11 +3396,11 @@ repeek:
 										minioninfo->res_spi_errors[chip]++;
 										minioninfo->res_err_count[chip]++;
 									}
-									DATAR(item)->core = RES_CORE(use1);
-									DATAR(item)->task_id = RES_TASK(use1);
-									DATAR(item)->nonce = RES_NONCE(use1);
-									DATAR(item)->no_nonce = !RES_GOLD(use1);
-									memcpy(&(DATAR(item)->when), &now, sizeof(now));
+									DATA_RES(item)->core = RES_CORE(use1);
+									DATA_RES(item)->task_id = RES_TASK(use1);
+									DATA_RES(item)->nonce = RES_NONCE(use1);
+									DATA_RES(item)->no_nonce = !RES_GOLD(use1);
+									memcpy(&(DATA_RES(item)->when), &now, sizeof(now));
 									applog(LOG_DEBUG, "%s%i: reply task_id 0x%04x"
 											  " - chip %d - gold %d",
 											  minioncgpu->drv->name,
@@ -2777,18 +3410,24 @@ repeek:
 											  (int)RES_GOLD(use1));
 
 									if (!use2)
-										DATAR(item)->another = false;
+										DATA_RES(item)->another = false;
 									else {
-										DATAR(item)->another = true;
-										DATAR(item)->task_id2 = RES_TASK(use2);
-										DATAR(item)->nonce2 = RES_NONCE(use2);
+										DATA_RES(item)->another = true;
+										DATA_RES(item)->task_id2 = RES_TASK(use2);
+										DATA_RES(item)->nonce2 = RES_NONCE(use2);
 									}
 //if (RES_GOLD(use1))
-//applog(MINTASK_LOG, "%s%i: found a result chip %d core %d task 0x%04x nonce 0x%08x gold=%d", minioncgpu->drv->name, minioncgpu->device_id, DATAR(item)->chip, DATAR(item)->core, DATAR(item)->task_id, DATAR(item)->nonce, (int)RES_GOLD(use1));
+//applog(MINTASK_LOG, "%s%i: found a result chip %d core %d task 0x%04x nonce 0x%08x gold=%d", minioncgpu->drv->name, minioncgpu->device_id, DATA_RES(item)->chip, DATA_RES(item)->core, DATA_RES(item)->task_id, DATA_RES(item)->nonce, (int)RES_GOLD(use1));
 
 									K_WLOCK(minioninfo->rnonce_list);
 									k_add_head(minioninfo->rnonce_list, item);
 									K_WUNLOCK(minioninfo->rnonce_list);
+
+									if (!(minioninfo->chip_status[chip].first_nonce.tv_sec)) {
+										cgtime(&(minioninfo->chip_status[chip].first_nonce));
+										minioninfo->chip_status[chip].from_first_good = 0;
+									}
+
 									cgsem_post(&(minioninfo->nonce_ready));
 								} else {
 									minioninfo->res_err_count[chip]++;
@@ -2928,9 +3567,9 @@ static void cleanup_older(struct cgpu_info *minioncgpu, int chip, K_ITEM *item, 
 	/* remove older ioseq work items
 	   no_nonce means this 'item' has finished also */
 	tail = minioninfo->wchip_list[chip]->tail;
-	while (tail && (DATAW(tail)->ioseq < DATAW(item)->ioseq)) {
+	while (tail && (DATA_WORK(tail)->ioseq < DATA_WORK(item)->ioseq)) {
 		k_unlink_item(minioninfo->wchip_list[chip], tail);
-		if (!(DATAW(tail)->stale)) {
+		if (!(DATA_WORK(tail)->stale)) {
 			minioninfo->chip_status[chip].chipwork--;
 #if MINION_SHOW_IO
 			applog(IOCTRL_LOG, "COld chip %d cw-1=%u rw=%u qw=%u",
@@ -2941,26 +3580,26 @@ static void cleanup_older(struct cgpu_info *minioncgpu, int chip, K_ITEM *item, 
 #endif
 /*
 			// If it had no valid work (only errors) then it won't have been cleaned up
-			errs = (DATAW(tail)->errors > 0);
+			errs = (DATA_WORK(tail)->errors > 0);
 			applog(errs ? LOG_DEBUG : LOG_ERR,
 			applog(LOG_ERR,
 				"%s%i: discarded old task 0x%04x chip %d no reply errs=%d",
 				minioncgpu->drv->name, minioncgpu->device_id,
-				DATAW(tail)->task_id, chip, DATAW(tail)->errors);
+				DATA_WORK(tail)->task_id, chip, DATA_WORK(tail)->errors);
 */
 		}
 		applog(MINION_LOG, "%s%i: marking complete - old task 0x%04x chip %d",
 				   minioncgpu->drv->name, minioncgpu->device_id,
-				   DATAW(tail)->task_id, chip);
-		if (DATAW(tail)->rolled)
-			free_work(DATAW(tail)->work);
+				   DATA_WORK(tail)->task_id, chip);
+		if (DATA_WORK(tail)->rolled)
+			free_work(DATA_WORK(tail)->work);
 		else
-			work_completed(minioncgpu, DATAW(tail)->work);
+			work_completed(minioncgpu, DATA_WORK(tail)->work);
 		k_free_head(minioninfo->wfree_list, tail);
 		tail = minioninfo->wchip_list[chip]->tail;
 	}
 	if (no_nonce) {
-		if (!(DATAW(item)->stale)) {
+		if (!(DATA_WORK(item)->stale)) {
 			minioninfo->chip_status[chip].chipwork--;
 #if MINION_SHOW_IO
 		applog(IOCTRL_LOG, "CONoN chip %d cw-1=%u rw=%u qw=%u",
@@ -2972,11 +3611,11 @@ static void cleanup_older(struct cgpu_info *minioncgpu, int chip, K_ITEM *item, 
 		}
 		applog(MINION_LOG, "%s%i: marking complete - no_nonce task 0x%04x chip %d",
 				   minioncgpu->drv->name, minioncgpu->device_id,
-				   DATAW(item)->task_id, chip);
-		if (DATAW(item)->rolled)
-			free_work(DATAW(item)->work);
+				   DATA_WORK(item)->task_id, chip);
+		if (DATA_WORK(item)->rolled)
+			free_work(DATA_WORK(item)->work);
 		else
-			work_completed(minioncgpu, DATAW(item)->work);
+			work_completed(minioncgpu, DATA_WORK(item)->work);
 	}
 }
 
@@ -2986,7 +3625,7 @@ static void restorework(struct minion_info *minioninfo, int chip, K_ITEM *item)
 	K_ITEM *look;
 
 	look = minioninfo->wchip_list[chip]->tail;
-	while (look && DATAW(look)->ioseq < DATAW(item)->ioseq)
+	while (look && DATA_WORK(look)->ioseq < DATA_WORK(item)->ioseq)
 		look = look->prev;
 	if (!look)
 		k_add_head(minioninfo->wchip_list[chip], item);
@@ -3002,6 +3641,7 @@ static enum nonce_state oknonce(struct thr_info *thr, struct cgpu_info *minioncg
 	struct timeval now;
 	K_ITEM *item, *tail;
 	uint32_t min_task_id, max_task_id;
+	uint64_t chip_good;
 	bool redo;
 
 	// if the chip has been disabled - but we don't do that - so not possible (yet)
@@ -3048,14 +3688,14 @@ retry:
 		return NONCE_NO_WORK;
 	}
 
-	min_task_id = DATAW(item)->task_id;
+	min_task_id = DATA_WORK(item)->task_id;
 	while (item) {
-		if (DATAW(item)->task_id == task_id)
+		if (DATA_WORK(item)->task_id == task_id)
 			break;
 
 		item = item->prev;
 	}
-	max_task_id = DATAW(minioninfo->wchip_list[chip]->head)->task_id;
+	max_task_id = DATA_WORK(minioninfo->wchip_list[chip]->head)->task_id;
 
 	if (!item) {
 		K_WUNLOCK(minioninfo->wchip_list[chip]);
@@ -3096,9 +3736,9 @@ retry:
 
 	redo = false;
 retest:
-	if (test_nonce(DATAW(item)->work, nonce)) {
+	if (test_nonce(DATA_WORK(item)->work, nonce)) {
 /*
-		if (isdupnonce(minioncgpu, DATAW(item)->work, nonce)) {
+		if (isdupnonce(minioncgpu, DATA_WORK(item)->work, nonce)) {
 			minioninfo->chip_dup[chip]++;
 			applog(LOG_WARNING, " ... nonce %02x%02x%02x%02x chip %d core %d task 0x%04x",
 					    (nonce & 0xff), ((nonce >> 8) & 0xff),
@@ -3112,14 +3752,15 @@ retest:
 */
 //applog(MINTASK_LOG, "%s%i: Valid Nonce chip %d core %d task 0x%04x nonce 0x%08x", minioncgpu->drv->name, minioncgpu->device_id, chip, core, task_id, nonce);
 //
-		submit_tested_work(thr, DATAW(item)->work);
+		submit_tested_work(thr, DATA_WORK(item)->work);
 
 		if (redo)
 			minioninfo->nonces_recovered[chip]++;
 
-		minioninfo->chip_good[chip]++;
+		chip_good = ++(minioninfo->chip_good[chip]);
+		minioninfo->chip_status[chip].from_first_good++;
 		minioninfo->core_good[chip][core]++;
-		DATAW(item)->nonces++;
+		DATA_WORK(item)->nonces++;
 
 		mutex_lock(&(minioninfo->nonce_lock));
 		minioninfo->new_nonces++;
@@ -3131,22 +3772,62 @@ retest:
 		restorework(minioninfo, chip, item);
 		K_WUNLOCK(minioninfo->wchip_list[chip]);
 
-		// add to history and remove old history
+		// add to history and remove old history and keep track of the 2 reset marks
 		int chip_tmp;
 		cgtime(&now);
 		K_WLOCK(minioninfo->hfree_list);
 		item = k_unlink_head(minioninfo->hfree_list);
-		memcpy(&(DATAH(item)->when), when, sizeof(*when));
+		memcpy(&(DATA_HIST(item)->when), when, sizeof(*when));
 		k_add_head(minioninfo->hchip_list[chip], item);
+		if (minioninfo->reset_mark[chip])
+			minioninfo->reset_count[chip]++;
+		if (second_check && minioninfo->reset2_mark[chip])
+			minioninfo->reset2_count[chip]++;
+
+		// N.B. this also corrects each reset_mark/reset_count within each hchip_list
 		for (chip_tmp = 0; chip_tmp < (int)MINION_CHIPS; chip_tmp++) {
 			tail = minioninfo->hchip_list[chip_tmp]->tail;
-			while (tail && tdiff(&(DATAH(tail)->when), &now) > MINION_HISTORY_s) {
+			while (tail && tdiff(&(DATA_HIST(tail)->when), &now) > MINION_HISTORY_s) {
+				if (minioninfo->reset_mark[chip] == tail) {
+					minioninfo->reset_mark[chip] = tail->prev;
+					minioninfo->reset_count[chip]--;
+				}
+				if (second_check && minioninfo->reset2_mark[chip] == tail) {
+					minioninfo->reset2_mark[chip] = tail->prev;
+					minioninfo->reset2_count[chip]--;
+				}
 				tail = k_unlink_tail(minioninfo->hchip_list[chip_tmp]);
 				k_add_head(minioninfo->hfree_list, item);
 				tail = minioninfo->hchip_list[chip_tmp]->tail;
 			}
+			if (!(minioninfo->reset_mark[chip])) {
+				minioninfo->reset_mark[chip] = minioninfo->hchip_list[chip]->tail;
+				minioninfo->reset_count[chip] = minioninfo->hchip_list[chip]->count;
+			}
+			if (second_check && !(minioninfo->reset2_mark[chip])) {
+				minioninfo->reset2_mark[chip] = minioninfo->hchip_list[chip]->tail;
+				minioninfo->reset2_count[chip] = minioninfo->hchip_list[chip]->count;
+			}
+			tail = minioninfo->reset_mark[chip];
+			while (tail && tdiff(&(DATA_HIST(tail)->when), &now) > minioninfo->reset_time[chip]) {
+				tail = minioninfo->reset_mark[chip] = tail->prev;
+				minioninfo->reset_count[chip]--;
+			}
+			if (second_check) {
+				tail = minioninfo->reset2_mark[chip];
+				while (tail && tdiff(&(DATA_HIST(tail)->when), &now) > minioninfo->reset2_time[chip]) {
+					tail = minioninfo->reset2_mark[chip] = tail->prev;
+					minioninfo->reset2_count[chip]--;
+				}
+			}
 		}
 		K_WUNLOCK(minioninfo->hfree_list);
+
+		// Reset the chip after 8 nonces found
+		if (chip_good == 8) {
+			memcpy(&(minioninfo->last_reset[chip]), &now, sizeof(now));
+			init_chip(minioncgpu, minioninfo, chip);
+		}
 
 		return NONCE_GOOD_NONCE;
 	}
@@ -3158,7 +3839,7 @@ retest:
 		goto retest;
 	}
 
-	DATAW(item)->errors++;
+	DATA_WORK(item)->errors++;
 	K_WLOCK(minioninfo->wchip_list[chip]);
 	restorework(minioninfo, chip, item);
 	K_WUNLOCK(minioninfo->wchip_list[chip]);
@@ -3176,7 +3857,7 @@ static void *minion_results(void *userdata)
 {
 	struct cgpu_info *minioncgpu = (struct cgpu_info *)userdata;
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
-	struct thr_info *thr = minioncgpu->thr[0];
+	struct thr_info *thr;
 	int chip, core;
 	uint32_t task_id;
 	uint32_t nonce;
@@ -3196,6 +3877,8 @@ static void *minion_results(void *userdata)
 		}
 		cgsleep_ms(3);
 	}
+
+	thr = minioninfo->thr;
 
 	while (minioncgpu->shutdown == false) {
 		if (!oldest_nonce(minioncgpu, &chip, &core, &task_id, &nonce,
@@ -3244,22 +3927,22 @@ static void minion_flush_work(struct cgpu_info *minioncgpu)
 	task = minioninfo->task_list->tail;
 	while (task) {
 		prev_task = task->prev;
-		if (DATAT(task)->address == WRITE_ADDR(MINION_QUE_0)) {
-			minioninfo->chip_status[DATAT(task)->chip].quework--;
+		if (DATA_TASK(task)->address == WRITE_ADDR(MINION_QUE_0)) {
+			minioninfo->chip_status[DATA_TASK(task)->chip].quework--;
 #if MINION_SHOW_IO
 			applog(IOCTRL_LOG, "QueFlush chip %d cw=%u rw=%u qw-1=%u",
-					   (int)DATAT(task)->chip,
-					   minioninfo->chip_status[DATAT(task)->chip].chipwork,
-					   minioninfo->chip_status[DATAT(task)->chip].realwork,
-					   minioninfo->chip_status[DATAT(task)->chip].quework);
+					   (int)DATA_TASK(task)->chip,
+					   minioninfo->chip_status[DATA_TASK(task)->chip].chipwork,
+					   minioninfo->chip_status[DATA_TASK(task)->chip].realwork,
+					   minioninfo->chip_status[DATA_TASK(task)->chip].quework);
 #endif
-			witem = DATAT(task)->witem;
-			k_unlink_item(minioninfo->wque_list[DATAT(task)->chip], witem);
+			witem = DATA_TASK(task)->witem;
+			k_unlink_item(minioninfo->wque_list[DATA_TASK(task)->chip], witem);
 			minioninfo->wque_flushed++;
-			if (DATAW(witem)->rolled)
-				free_work(DATAW(witem)->work);
+			if (DATA_WORK(witem)->rolled)
+				free_work(DATA_WORK(witem)->work);
 			else
-				work_completed(minioncgpu, DATAW(witem)->work);
+				work_completed(minioncgpu, DATA_WORK(witem)->work);
 			k_free_head(minioninfo->wfree_list, witem);
 			k_unlink_item(minioninfo->task_list, task);
 			k_free_head(minioninfo->tfree_list, task);
@@ -3270,18 +3953,18 @@ static void minion_flush_work(struct cgpu_info *minioncgpu)
 		if (minioninfo->has_chip[i]) {
 			// TODO: consider sending it now rather than adding to the task list?
 			task = k_unlink_head(minioninfo->tfree_list);
-			DATAT(task)->tid = ++(minioninfo->next_tid);
-			DATAT(task)->chip = i;
-			DATAT(task)->write = true;
-			DATAT(task)->address = MINION_SYS_RSTN_CTL;
-			DATAT(task)->task_id = 0; // ignored
-			DATAT(task)->wsiz = MINION_SYS_SIZ;
-			DATAT(task)->rsiz = 0;
-			DATAT(task)->wbuf[0] = SYS_RSTN_CTL_FLUSH;
-			DATAT(task)->wbuf[1] = 0;
-			DATAT(task)->wbuf[2] = 0;
-			DATAT(task)->wbuf[3] = 0;
-			DATAT(task)->urgent = true;
+			DATA_TASK(task)->tid = ++(minioninfo->next_tid);
+			DATA_TASK(task)->chip = i;
+			DATA_TASK(task)->write = true;
+			DATA_TASK(task)->address = MINION_SYS_RSTN_CTL;
+			DATA_TASK(task)->task_id = 0; // ignored
+			DATA_TASK(task)->wsiz = MINION_SYS_SIZ;
+			DATA_TASK(task)->rsiz = 0;
+			DATA_TASK(task)->wbuf[0] = SYS_RSTN_CTL_FLUSH;
+			DATA_TASK(task)->wbuf[1] = 0;
+			DATA_TASK(task)->wbuf[2] = 0;
+			DATA_TASK(task)->wbuf[3] = 0;
+			DATA_TASK(task)->urgent = true;
 			k_add_head(minioninfo->task_list, task);
 		}
 	}
@@ -3296,10 +3979,10 @@ static void minion_flush_work(struct cgpu_info *minioncgpu)
 		// mark complete all stale unused work (oldest first)
 		prev_unused = minioninfo->wstale_list->tail;
 		while (prev_unused) {
-			if (DATAW(prev_unused)->rolled)
-				free_work(DATAW(prev_unused)->work);
+			if (DATA_WORK(prev_unused)->rolled)
+				free_work(DATA_WORK(prev_unused)->work);
 			else
-				work_completed(minioncgpu, DATAW(prev_unused)->work);
+				work_completed(minioncgpu, DATA_WORK(prev_unused)->work);
 			prev_unused = prev_unused->prev;
 		}
 
@@ -3329,30 +4012,30 @@ static void sys_chip_sta(struct cgpu_info *minioncgpu, int chip)
 
 			K_WLOCK(minioninfo->tfree_list);
 			item = k_unlink_head(minioninfo->tfree_list);
-			DATAT(item)->tid = ++(minioninfo->next_tid);
+			DATA_TASK(item)->tid = ++(minioninfo->next_tid);
 			K_WUNLOCK(minioninfo->tfree_list);
 
-			DATAT(item)->chip = chip;
-			DATAT(item)->write = false;
-			DATAT(item)->address = READ_ADDR(MINION_SYS_CHIP_STA);
-			DATAT(item)->task_id = 0;
-			DATAT(item)->wsiz = 0;
-			DATAT(item)->rsiz = MINION_SYS_SIZ;
-			DATAT(item)->urgent = false;
+			DATA_TASK(item)->chip = chip;
+			DATA_TASK(item)->write = false;
+			DATA_TASK(item)->address = READ_ADDR(MINION_SYS_CHIP_STA);
+			DATA_TASK(item)->task_id = 0;
+			DATA_TASK(item)->wsiz = 0;
+			DATA_TASK(item)->rsiz = MINION_SYS_SIZ;
+			DATA_TASK(item)->urgent = false;
 
 			K_WLOCK(minioninfo->task_list);
 			k_add_head(minioninfo->task_list, item);
 			item = k_unlink_head(minioninfo->tfree_list);
-			DATAT(item)->tid = ++(minioninfo->next_tid);
+			DATA_TASK(item)->tid = ++(minioninfo->next_tid);
 			K_WUNLOCK(minioninfo->task_list);
 
-			DATAT(item)->chip = chip;
-			DATAT(item)->write = false;
-			DATAT(item)->address = READ_ADDR(MINION_SYS_IDLE_CNT);
-			DATAT(item)->task_id = 0;
-			DATAT(item)->wsiz = 0;
-			DATAT(item)->rsiz = MINION_SYS_SIZ;
-			DATAT(item)->urgent = false;
+			DATA_TASK(item)->chip = chip;
+			DATA_TASK(item)->write = false;
+			DATA_TASK(item)->address = READ_ADDR(MINION_SYS_IDLE_CNT);
+			DATA_TASK(item)->task_id = 0;
+			DATA_TASK(item)->wsiz = 0;
+			DATA_TASK(item)->rsiz = MINION_SYS_SIZ;
+			DATA_TASK(item)->urgent = false;
 
 			K_WLOCK(minioninfo->task_list);
 			k_add_head(minioninfo->task_list, item);
@@ -3363,31 +4046,62 @@ static void sys_chip_sta(struct cgpu_info *minioncgpu, int chip)
 				// Ena
 				K_WLOCK(minioninfo->tfree_list);
 				item = k_unlink_head(minioninfo->tfree_list);
-				DATAT(item)->tid = ++(minioninfo->next_tid);
+				DATA_TASK(item)->tid = ++(minioninfo->next_tid);
 				K_WUNLOCK(minioninfo->tfree_list);
 
-				DATAT(item)->chip = chip;
-				DATAT(item)->write = false;
-				DATAT(item)->address = READ_ADDR(MINION_CORE_ENA0_31 + rep);
-				DATAT(item)->task_id = 0;
-				DATAT(item)->wsiz = 0;
-				DATAT(item)->rsiz = MINION_SYS_SIZ;
-				DATAT(item)->urgent = false;
+				DATA_TASK(item)->chip = chip;
+				DATA_TASK(item)->write = false;
+				DATA_TASK(item)->address = READ_ADDR(MINION_CORE_ENA0_31 + rep);
+				DATA_TASK(item)->task_id = 0;
+				DATA_TASK(item)->wsiz = 0;
+				DATA_TASK(item)->rsiz = MINION_SYS_SIZ;
+				DATA_TASK(item)->urgent = false;
 
 				K_WLOCK(minioninfo->task_list);
 				k_add_head(minioninfo->task_list, item);
 				// Act
 				item = k_unlink_head(minioninfo->tfree_list);
-				DATAT(item)->tid = ++(minioninfo->next_tid);
+				DATA_TASK(item)->tid = ++(minioninfo->next_tid);
 				K_WUNLOCK(minioninfo->task_list);
 
-				DATAT(item)->chip = chip;
-				DATAT(item)->write = false;
-				DATAT(item)->address = READ_ADDR(MINION_CORE_ACT0_31 + rep);
-				DATAT(item)->task_id = 0;
-				DATAT(item)->wsiz = 0;
-				DATAT(item)->rsiz = MINION_SYS_SIZ;
-				DATAT(item)->urgent = false;
+				DATA_TASK(item)->chip = chip;
+				DATA_TASK(item)->write = false;
+				DATA_TASK(item)->address = READ_ADDR(MINION_CORE_ACT0_31 + rep);
+				DATA_TASK(item)->task_id = 0;
+				DATA_TASK(item)->wsiz = 0;
+				DATA_TASK(item)->rsiz = MINION_SYS_SIZ;
+				DATA_TASK(item)->urgent = false;
+
+				K_WLOCK(minioninfo->task_list);
+				k_add_head(minioninfo->task_list, item);
+				K_WUNLOCK(minioninfo->task_list);
+			}
+
+			if (minioninfo->lednow[chip] != minioninfo->setled[chip]) {
+				uint32_t led;
+
+				minioninfo->lednow[chip] = minioninfo->setled[chip];
+				if (minioninfo->lednow[chip])
+					led = MINION_SPI_LED_ON;
+				else
+					led = MINION_SPI_LED_OFF;
+
+				K_WLOCK(minioninfo->tfree_list);
+				item = k_unlink_head(minioninfo->tfree_list);
+				DATA_TASK(item)->tid = ++(minioninfo->next_tid);
+				K_WUNLOCK(minioninfo->tfree_list);
+
+				DATA_TASK(item)->chip = chip;
+				DATA_TASK(item)->write = true;
+				DATA_TASK(item)->address = MINION_SYS_SPI_LED;
+				DATA_TASK(item)->task_id = 0;
+				DATA_TASK(item)->wsiz = MINION_SYS_SIZ;
+				DATA_TASK(item)->rsiz = 0;
+				DATA_TASK(item)->wbuf[0] = led & 0xff;
+				DATA_TASK(item)->wbuf[1] = (led >> 8) & 0xff;
+				DATA_TASK(item)->wbuf[2] = (led >> 16) & 0xff;
+				DATA_TASK(item)->wbuf[3] = (led >> 24) & 0xff;
+				DATA_TASK(item)->urgent = false;
 
 				K_WLOCK(minioninfo->task_list);
 				k_add_head(minioninfo->task_list, item);
@@ -3405,36 +4119,36 @@ static void new_work_task(struct cgpu_info *minioncgpu, K_ITEM *witem, int chip,
 
 	K_WLOCK(minioninfo->tfree_list);
 	item = k_unlink_head(minioninfo->tfree_list);
-	DATAT(item)->tid = ++(minioninfo->next_tid);
+	DATA_TASK(item)->tid = ++(minioninfo->next_tid);
 	K_WUNLOCK(minioninfo->tfree_list);
 
-	DATAT(item)->chip = chip;
-	DATAT(item)->write = true;
-	DATAT(item)->address = MINION_QUE_0;
+	DATA_TASK(item)->chip = chip;
+	DATA_TASK(item)->write = true;
+	DATA_TASK(item)->address = MINION_QUE_0;
 
 	// if threaded access to new_work_task() is added, this will need locking
 	// Don't use task_id 0 so that we can ignore all '0' work replies
 	// ... and report them as errors
 	if (minioninfo->next_task_id == 0)
 		minioninfo->next_task_id = 1;
-	DATAT(item)->task_id = minioninfo->next_task_id;
-	DATAW(witem)->task_id = minioninfo->next_task_id;
+	DATA_TASK(item)->task_id = minioninfo->next_task_id;
+	DATA_WORK(witem)->task_id = minioninfo->next_task_id;
 	minioninfo->next_task_id = (minioninfo->next_task_id + 1) & MINION_MAX_TASK_ID;
 
-	DATAT(item)->urgent = urgent;
-	DATAT(item)->work_state = state;
-	DATAT(item)->work = DATAW(witem)->work;
-	DATAT(item)->witem = witem;
+	DATA_TASK(item)->urgent = urgent;
+	DATA_TASK(item)->work_state = state;
+	DATA_TASK(item)->work = DATA_WORK(witem)->work;
+	DATA_TASK(item)->witem = witem;
 
-	que = (struct minion_que *)&(DATAT(item)->wbuf[0]);
-	que->task_id[0] = DATAT(item)->task_id & 0xff;
-	que->task_id[1] = (DATAT(item)->task_id & 0xff00) >> 8;
+	que = (struct minion_que *)&(DATA_TASK(item)->wbuf[0]);
+	que->task_id[0] = DATA_TASK(item)->task_id & 0xff;
+	que->task_id[1] = (DATA_TASK(item)->task_id & 0xff00) >> 8;
 
-	memcpy(&(que->midstate[0]), &(DATAW(witem)->work->midstate[0]), MIDSTATE_BYTES);
-	memcpy(&(que->merkle7[0]), &(DATAW(witem)->work->data[MERKLE7_OFFSET]), MERKLE_BYTES);
+	memcpy(&(que->midstate[0]), &(DATA_WORK(witem)->work->midstate[0]), MIDSTATE_BYTES);
+	memcpy(&(que->merkle7[0]), &(DATA_WORK(witem)->work->data[MERKLE7_OFFSET]), MERKLE_BYTES);
 
-	DATAT(item)->wsiz = (int)sizeof(*que);
-	DATAT(item)->rsiz = 0;
+	DATA_TASK(item)->wsiz = (int)sizeof(*que);
+	DATA_TASK(item)->rsiz = 0;
 
 	K_WLOCK(minioninfo->wque_list[chip]);
 	k_add_head(minioninfo->wque_list[chip], witem);
@@ -3473,7 +4187,7 @@ static K_ITEM *next_work(struct minion_info *minioninfo)
 	K_WUNLOCK(minioninfo->wwork_list);
 	if (item) {
 		cgtime(&now);
-		howlong = tdiff(&now, &(DATAW(item)->created));
+		howlong = tdiff(&now, &(DATA_WORK(item)->created));
 		minioninfo->que_work++;
 		minioninfo->que_time += howlong;
 		if (minioninfo->que_min == 0 || minioninfo->que_min > howlong)
@@ -3497,7 +4211,7 @@ static void minion_do_work(struct cgpu_info *minioncgpu)
 {
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	int count, chip, j, lowcount;
-	TITEM fifo_task;
+	TASK_ITEM fifo_task;
 	uint8_t state, cmd;
 	K_ITEM *item;
 #if ENABLE_INT_NONO
@@ -3607,7 +4321,7 @@ static void minion_do_work(struct cgpu_info *minioncgpu)
 								applog(MINION_LOG, "%s%i: 0 task 0x%04x in chip %d list",
 										   minioncgpu->drv->name,
 										   minioncgpu->device_id,
-										   DATAW(item)->task_id, chip);
+										   DATA_WORK(item)->task_id, chip);
 							} else {
 								applog(LOG_ERR, "%s%i: chip %d urgent empty work list",
 										minioncgpu->drv->name,
@@ -3637,7 +4351,7 @@ static void minion_do_work(struct cgpu_info *minioncgpu)
 									applog(MINION_LOG, "%s%i: 1 task 0x%04x in chip %d list",
 											   minioncgpu->drv->name,
 											   minioncgpu->device_id,
-											   DATAW(item)->task_id, chip);
+											   DATA_WORK(item)->task_id, chip);
 								} else {
 									applog(LOG_ERR, "%s%i: chip %d non-urgent lo "
 											   "empty work list (count=%d)",
@@ -3658,7 +4372,7 @@ static void minion_do_work(struct cgpu_info *minioncgpu)
 									applog(MINION_LOG, "%s%i: 2 task 0x%04x in chip %d list",
 											   minioncgpu->drv->name,
 											   minioncgpu->device_id,
-											   DATAW(item)->task_id, chip);
+											   DATA_WORK(item)->task_id, chip);
 								} else {
 									applog(LOG_DEBUG, "%s%i: chip %d non-urgent hi "
 											   "empty work list (count=%d)",
@@ -3682,18 +4396,18 @@ static void minion_do_work(struct cgpu_info *minioncgpu)
 		// Clear CMD interrupt since we've now sent more
 		K_WLOCK(minioninfo->tfree_list);
 		task = k_unlink_head(minioninfo->tfree_list);
-		DATAT(task)->tid = ++(minioninfo->next_tid);
-		DATAT(task)->chip = 0; // ignored
-		DATAT(task)->write = true;
-		DATAT(task)->address = MINION_SYS_INT_CLR;
-		DATAT(task)->task_id = 0; // ignored
-		DATAT(task)->wsiz = MINION_SYS_SIZ;
-		DATAT(task)->rsiz = 0;
-		DATAT(task)->wbuf[0] = MINION_CMD_INT;
-		DATAT(task)->wbuf[1] = 0;
-		DATAT(task)->wbuf[2] = 0;
-		DATAT(task)->wbuf[3] = 0;
-		DATAT(task)->urgent = false;
+		DATA_TASK(task)->tid = ++(minioninfo->next_tid);
+		DATA_TASK(task)->chip = 0; // ignored
+		DATA_TASK(task)->write = true;
+		DATA_TASK(task)->address = MINION_SYS_INT_CLR;
+		DATA_TASK(task)->task_id = 0; // ignored
+		DATA_TASK(task)->wsiz = MINION_SYS_SIZ;
+		DATA_TASK(task)->rsiz = 0;
+		DATA_TASK(task)->wbuf[0] = MINION_CMD_INT;
+		DATA_TASK(task)->wbuf[1] = 0;
+		DATA_TASK(task)->wbuf[2] = 0;
+		DATA_TASK(task)->wbuf[3] = 0;
+		DATA_TASK(task)->urgent = false;
 		k_add_head(minioninfo->task_list, task);
 		K_WUNLOCK(minioninfo->tfree_list);
 	}
@@ -3707,6 +4421,7 @@ static bool minion_thread_prepare(struct thr_info *thr)
 	struct cgpu_info *minioncgpu = thr->cgpu;
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 
+	minioninfo->thr = thr;
 	/*
 	 * SPI/ioctl write thread
 	 */
@@ -3856,9 +4571,10 @@ static void chip_report(struct cgpu_info *minioncgpu)
 	char buf[512];
 	char res_err_msg[2];
 	size_t len;
-	double ghs, expect, howlong;
-	int msdiff;
-	int chip;
+	double elapsed, ghs, ghs2, expect, howlong;
+	char ghs2_display[64];
+	K_ITEM *pitem;
+	int msdiff, chip;
 	int res_err_count;
 
 	cgtime(&now);
@@ -3868,39 +4584,54 @@ static void chip_report(struct cgpu_info *minioncgpu)
 		return;
 	}
 
+	// Always run the calculations to check chip GHs for the LED
+	buf[0] = '\0';
+	res_err_msg[0] = '\0';
+	res_err_msg[1] = '\0';
+	K_RLOCK(minioninfo->hfree_list);
+	for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
+		if (minioninfo->has_chip[chip]) {
+			len = strlen(buf);
+			if (minioninfo->hchip_list[chip]->count < 2)
+				ghs = 0.0;
+			else {
+				ghs = 0xffffffffull * (minioninfo->hchip_list[chip]->count - 1);
+				ghs /= 1000000000.0;
+				ghs /= tdiff(&now, &(DATA_HIST(minioninfo->hchip_list[chip]->tail)->when));
+			}
+			if (minioninfo->chip_status[chip].first_nonce.tv_sec == 0L ||
+			    tdiff(&now, &minioninfo->chip_status[chip].first_nonce) < MINION_LED_TEST_TIME) {
+				ghs2_display[0] = '\0';
+				minioninfo->setled[chip] = false;
+			} else {
+				ghs2 = 0xffffffffull * (minioninfo->chip_status[chip].from_first_good - 1);
+				ghs2 /= 1000000000.0;
+				ghs2 /= tdiff(&now, &minioninfo->chip_status[chip].first_nonce);
+				minioninfo->setled[chip] = (ghs2 >= opt_minion_ledlimit);
+				snprintf(ghs2_display, sizeof(ghs2_display), "[%.2f]", ghs2);
+			}
+
+			res_err_count = minioninfo->res_err_count[chip];
+			minioninfo->res_err_count[chip] = 0;
+			if (res_err_count > 100)
+				res_err_msg[0] = '!';
+			else if (res_err_count > 50)
+				res_err_msg[0] = '*';
+			else if (res_err_count > 0)
+				res_err_msg[0] = '\'';
+			else
+				res_err_msg[0] = '\0';
+			snprintf(buf + len, sizeof(buf) - len,
+				 " %d=%s%.2f%s", chip, res_err_msg, ghs, ghs2_display);
+			minioninfo->history_ghs[chip] = ghs;
+		}
+	}
+	K_RUNLOCK(minioninfo->hfree_list);
+
+	// But only display it if required
 	if (opt_minion_chipreport > 0) {
 		msdiff = ms_tdiff(&now, &(minioninfo->chip_rpt));
 		if (msdiff >= (opt_minion_chipreport * 1000)) {
-			buf[0] = '\0';
-			res_err_msg[0] = '\0';
-			res_err_msg[1] = '\0';
-			K_RLOCK(minioninfo->hfree_list);
-			for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
-				if (minioninfo->has_chip[chip]) {
-					len = strlen(buf);
-					if (minioninfo->hchip_list[chip]->count < 2)
-						ghs = 0.0;
-					else {
-						ghs = 0xffffffffull * (minioninfo->hchip_list[chip]->count - 1);
-						ghs /= 1000000000.0;
-						ghs /= tdiff(&now, &(DATAH(minioninfo->hchip_list[chip]->tail)->when));
-					}
-					res_err_count = minioninfo->res_err_count[chip];
-					minioninfo->res_err_count[chip] = 0;
-					if (res_err_count > 100)
-						res_err_msg[0] = '!';
-					else if (res_err_count > 50)
-						res_err_msg[0] = '*';
-					else if (res_err_count > 0)
-						res_err_msg[0] = '\'';
-					else
-						res_err_msg[0] = '\0';
-					snprintf(buf + len, sizeof(buf) - len,
-						 " %d=%s%.2f", chip, res_err_msg, ghs);
-					minioninfo->history_ghs[chip] = ghs;
-				}
-			}
-			K_RUNLOCK(minioninfo->hfree_list);
 			memcpy(&(minioninfo->chip_chk), &now, sizeof(now));
 			applogsiz(LOG_WARNING, 512,
 				  "%s%d: Chip GHs%s",
@@ -3910,49 +4641,125 @@ static void chip_report(struct cgpu_info *minioncgpu)
 	}
 
 	msdiff = ms_tdiff(&now, &(minioninfo->chip_chk));
-	if (total_secs >= MINION_HISTORY_s && msdiff >= (minioninfo->history_gen * 1000)) {
+	if (total_secs >= MINION_RESET_s && msdiff >= (minioninfo->history_gen * 1000)) {
 		K_RLOCK(minioninfo->hfree_list);
 		for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
 			if (minioninfo->has_chip[chip]) {
-				if (minioninfo->hchip_list[chip]->count < 2)
+				if (!minioninfo->reset_mark[chip] ||
+				    minioninfo->reset_count[chip] < 2) {
+					elapsed = 0.0;
 					ghs = 0.0;
-				else {
-					ghs = 0xffffffffull * (minioninfo->hchip_list[chip]->count - 1);
+				} else {
+					// 'now' includes that it may have stopped getting nonces
+					elapsed = tdiff(&now, &(DATA_HIST(minioninfo->reset_mark[chip])->when));
+					ghs = 0xffffffffull * (minioninfo->reset_count[chip] - 1);
 					ghs /= 1000000000.0;
-					ghs /= tdiff(&now, &(DATAH(minioninfo->hchip_list[chip]->tail)->when));
+					ghs /= elapsed;
 				}
 				expect = (double)(minioninfo->init_freq[chip]) *
 					 MINION_RESET_PERCENT / 1000.0;
 				howlong = tdiff(&now, &(minioninfo->last_reset[chip]));
-				if (ghs <= expect && howlong >= MINION_HISTORY_s)
+				if (ghs <= expect && howlong >= minioninfo->reset_time[chip]) {
 					minioninfo->do_reset[chip] = expect;
+
+					// For now - no lock required since no other code accesses it
+					pitem = k_unlink_head(minioninfo->pfree_list);
+					DATA_PERF(pitem)->elapsed = elapsed;
+					DATA_PERF(pitem)->nonces = minioninfo->reset_count[chip] - 1;
+					DATA_PERF(pitem)->freq = minioninfo->init_freq[chip];
+					DATA_PERF(pitem)->ghs = ghs;
+					memcpy(&(DATA_PERF(pitem)->when), &now, sizeof(now));
+					k_add_head(minioninfo->p_list[chip], pitem);
+				} else if (second_check) {
+					expect = (double)(minioninfo->init_freq[chip]) *
+						 MINION_RESET2_PERCENT / 1000.0;
+					if (ghs < expect && howlong >= minioninfo->reset2_time[chip]) {
+						/* Only do a reset, don't record it, since the ghs
+						   is still above MINION_RESET_PERCENT */
+						minioninfo->do_reset[chip] = expect;
+					}
+				}
 				minioninfo->history_ghs[chip] = ghs;
+				// Expire old perf items to stop clockdown
+				if (minioninfo->do_reset[chip] <= 1.0 && howlong > MINION_CLR_s) {
+					// Always remember the last reset
+					while (minioninfo->p_list[chip]->count > 1) {
+						pitem = k_unlink_tail(minioninfo->p_list[chip]);
+						k_add_head(minioninfo->pfree_list, pitem);
+					}
+				}
 			}
 		}
 		K_RUNLOCK(minioninfo->hfree_list);
 
-		for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
-			if (minioninfo->has_chip[chip]) {
-				if (minioninfo->do_reset[chip] > 1.0) {
-					applog(LOG_WARNING, "%s%d: Chip %d below threshold %.2fGHs - resetting ...",
-							    minioncgpu->drv->name, minioncgpu->device_id,
-							    chip, minioninfo->do_reset[chip]);
-					minioninfo->do_reset[chip] = 0.0;
-					memcpy(&(minioninfo->last_reset[chip]), &now, sizeof(now));
-					init_chip(minioncgpu, minioninfo, chip);
-					minioninfo->flag_reset[chip] = false;
-				}
-			}
-		}
 		memcpy(&(minioninfo->chip_chk), &now, sizeof(now));
 	}
 
 	for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
 		if (minioninfo->has_chip[chip]) {
-			if (minioninfo->flag_reset[chip]) {
-				applog(LOG_WARNING, "%s%d: Chip %d flagged - resetting ...",
-						    minioncgpu->drv->name, minioncgpu->device_id,
-						    chip);
+			if (minioninfo->do_reset[chip] > 1.0 ||
+			    minioninfo->flag_reset[chip]) {
+				bool std_reset = true;
+				int curr_freq = minioninfo->init_freq[chip];
+				int new_freq = 0.0;
+				int count;
+
+				// Adjust frequency down?
+				if (!opt_minion_noautofreq &&
+				    minioninfo->p_list[chip]->count >= MINION_RESET_COUNT) {
+					pitem = minioninfo->p_list[chip]->head;
+					count = 1;
+					while (pitem && pitem->next && count++ < MINION_RESET_COUNT) {
+						if (DATA_PERF(pitem)->freq != DATA_PERF(pitem->next)->freq)
+							break;
+						if (count >= MINION_RESET_COUNT) {
+							new_freq = minioninfo->init_freq[chip] -
+									MINION_FREQ_RESET_STEP;
+							if (new_freq < MINION_FREQ_MIN)
+								new_freq = MINION_FREQ_MIN;
+							if (minioninfo->init_freq[chip] != new_freq) {
+								minioninfo->init_freq[chip] = new_freq;
+								std_reset = false;
+							}
+							break;
+ 						} else
+							pitem = pitem->next;
+					}
+				}
+
+				if (std_reset) {
+					if (minioninfo->do_reset[chip] > 1.0) {
+						applog(LOG_WARNING, "%s%d: Chip %d %dMHz threshold "
+								    "%.2fGHs - resetting",
+								    minioncgpu->drv->name,
+								    minioncgpu->device_id,
+								    chip, curr_freq,
+								    minioninfo->do_reset[chip]);
+					} else {
+						applog(LOG_WARNING, "%s%d: Chip %d %dMhz flagged - "
+								    "resetting",
+								    minioncgpu->drv->name,
+								    minioncgpu->device_id,
+								    chip, curr_freq);
+					}
+				} else {
+					if (minioninfo->do_reset[chip] > 1.0) {
+						applog(LOG_WARNING, "%s%d: Chip %d %dMHz threshold "
+								    "%.2fGHs - resetting to %dMhz",
+								    minioncgpu->drv->name,
+								    minioncgpu->device_id,
+								    chip, curr_freq,
+								    minioninfo->do_reset[chip],
+								    new_freq);
+					} else {
+						applog(LOG_WARNING, "%s%d: Chip %d %dMhz flagged - "
+								    "resetting to %dMHz",
+								    minioncgpu->drv->name,
+								    minioncgpu->device_id,
+								    chip, curr_freq, new_freq);
+					}
+				}
+				minioninfo->do_reset[chip] = 0.0;
 				memcpy(&(minioninfo->last_reset[chip]), &now, sizeof(now));
 				init_chip(minioncgpu, minioninfo, chip);
 				minioninfo->flag_reset[chip] = false;
@@ -4141,6 +4948,11 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 
 	double his = MINION_HISTORY_s;
 	root = api_add_double(root, "History length", &his, true);
+	his = MINION_RESET_s;
+	root = api_add_double(root, "Default reset length", &his, true);
+	his = MINION_RESET2_s;
+	root = api_add_double(root, "Default reset2 length", &his, true);
+	root = api_add_bool(root, "Reset2 enabled", &second_check, true);
 
 	for (i = 0; i <= max_chip; i += CHIPS_PER_STAT) {
 		to = i + CHIPS_PER_STAT - 1;
@@ -4277,6 +5089,22 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 	root = api_add_int(root, "RFree Count", &(minioninfo->rfree_list->count), true);
 	root = api_add_int(root, "RNonce Count", &(minioninfo->rnonce_list->count), true);
 
+	root = api_add_int(root, "XFree Count", &(minioninfo->xfree_list->count), true);
+	root = api_add_int(root, "XFF Count", &(minioninfo->xff_list->count), true);
+	root = api_add_uint64(root, "XFFs", &(minioninfo->xffs), true);
+	root = api_add_uint64(root, "SPI Resets", &(minioninfo->spi_resets), true);
+	root = api_add_uint64(root, "Power Cycles", &(minioninfo->power_cycles), true);
+
+	root = api_add_int(root, "Chip Report", &opt_minion_chipreport, true);
+	root = api_add_int(root, "LED Count", &opt_minion_ledcount, true);
+	root = api_add_int(root, "LED Limit", &opt_minion_ledlimit, true);
+	bool b = !opt_minion_noautofreq;
+	root = api_add_bool(root, "Auto Freq", &b, true);
+	root = api_add_int(root, "SPI Delay", &opt_minion_spidelay, true);
+	root = api_add_bool(root, "SPI Reset I/O", &(minioninfo->spi_reset_io), true);
+	root = api_add_int(root, "SPI Reset", &(minioninfo->spi_reset_count), true);
+	root = api_add_int(root, "SPI Reset Sleep", &opt_minion_spisleep, true);
+
 #if DO_IO_STATS
 #define sta_api(_name, _iostat) \
 	do { \
@@ -4385,7 +5213,7 @@ struct device_drv minion_drv = {
 #ifdef LINUX
 	.get_api_stats = minion_api_stats,
 	.get_statline_before = minion_get_statline_before,
-	.set_device = minion_set,
+	.set_device = minion_api_set,
 	.identify_device = minion_identify,
 	.thread_prepare = minion_thread_prepare,
 	.hash_work = hash_queued_work,
