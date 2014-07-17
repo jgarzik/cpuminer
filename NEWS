@@ -1,3 +1,62 @@
+Version 4.4.2 - 17th July 2014
+
+- Fix processarg parameters loaded from a config file not being saveable
+- We only use the jansson in our source tree so no need for special case
+handling of older versions
+- Upgrade jansson to 2.6
+- Only clear sockbuf if it's been allocated
+- Fix missing osm-led-mode support in write config
+- Deal with nanosecond overflow in both directions on both addition and
+subtration of timespecs
+- Rename sp10 driver internally from spondoolies to sp10
+- minion - add a 2nd (optional - disabled) reset test
+- production stats added, reset queue added
+- minion - correct led ghs2 choice
+- minion - correct ghs2 display
+- minion - reset the led counter when doing a chip RSTN full reset
+- minion - don't reset the led counter for an SPI reset
+- minion - led per chip and use all time average
+- minion - report spi error counts and settings in stats
+- minion - undeclared fix
+- minion - chip power cycle option
+- minion - record 0xff error history and reduce screen output
+- minion - reset on result or fifo 0xff
+- minion - clarify the 0 value of spireset
+- minion - make SPI reset more configurable
+- minion - make the SPI reset ms sleep a parameter and API settable
+- sp10 sensors
+- sp30
+- minion - led+more api setting
+- Avoid blocking all pool testing if one pool fails to ever init
+- There is no point storing the hints addrinfo in struct pool
+- minion - 'reset' SPI when getting errors
+- initialise more pool values in benchmark
+- minion - auto adjust freq
+- merge upstream frequency changes
+- icarus - timing history in its own function
+- rbox - add lotsa stats, tidy up a bit more
+- Fix an off-by-one.
+- icarus - detect stat should be LOG_DEBUG
+- icarus - tidy up rbox code, remove statics, and add rocketbox
+- minion - do an early reset to clear the chip status
+- minion - use descriptive names for the list types
+- Avalon2: automatic adjust fan speed, using crc16 on job_id compare, turn on
+the led by API, detect twice when start, remember the last stratum message
+increase the hashrate, add cutoff option
+- fix AntS1 breakages from AntS2 changes
+- minion - disable dup nonce check
+- minion - add an ioseq number for each ioctl to simplify work ordering
+- minion - redo old work expiry based on txrx order
+- minion - more work stats, minimise queued work, free flushed queued work
+- minion - allow resetting a chip via the API
+- minion - correct 'WQue Count' in stats
+- minion - delay after reset, reset history also, add dups to api stats
+- noncedup - give access to the internal stats
+- minion - increase reset to 75%
+- minion - dup checking, disable reread by default and extra ioctl debugging
+- minion - always check the chip queue before queuing new work
+
+
 Version 4.4.1 - 21st June 2014
 
 - Move icarus driver to being seen as an asic
