@@ -244,6 +244,17 @@ if test "x$hashfast" = xyes; then
 fi
 AM_CONDITIONAL([HAS_HASHFAST], [test x$hashfast = xyes])
 
+hashratio="no"
+
+AC_ARG_ENABLE([hashratio],
+	[AC_HELP_STRING([--enable-hashratio],[Compile support for Hashratio (default disabled)])],
+	[hashratio=$enableval]
+	)
+if test "x$hashratio" = xyes; then
+	AC_DEFINE([USE_HASHRATIO], [1], [Defined to 1 if Hashratiosupport is wanted])
+fi
+AM_CONDITIONAL([HAS_HASHRATIO], [test x$hashratio = xyes])
+
 icarus="no"
 
 AC_ARG_ENABLE([icarus],
@@ -363,7 +374,7 @@ else
 	])
 fi
 
-if test x$avalon$bitforce$bitfury$modminer$bflsc$icarus$hashfast$klondike$drillbit$cointerra$ants1$ants2 != xnononononononononononono; then
+if test x$avalon$bitforce$bitfury$modminer$bflsc$icarus$hashfast$hashratio$klondike$drillbit$cointerra$ants1$ants2 != xnonononononononononononono; then
 	want_usbutils=true
 else
 	want_usbutils=false
@@ -635,6 +646,12 @@ else
 	echo "  Hashfast.ASICs.......: Disabled"
 fi
 
+if test "x$hashratio" = xyes; then
+	echo "  Hashratio.ASICs......: Enabled"
+else
+	echo "  Hashratio.ASICs......: Disabled"
+fi
+
 if test "x$icarus" = xyes; then
 	echo "  Icarus.ASICs/FPGAs...: Enabled"
 else
@@ -659,7 +676,7 @@ else
 	echo "  ModMiner.FPGAs.......: Disabled"
 fi
 
-if test "x$avalon$avalon2$bab$bflsc$bitforce$bitfury$hashfast$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$sp10$sp30" = xnonononononononononononononononononono; then
+if test "x$avalon$avalon2$bab$bflsc$bitforce$bitfury$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$sp10$sp30" = xnononononononononononononononononononono; then
 	AC_MSG_ERROR([No mining configured in])
 fi
 

@@ -6840,7 +6840,7 @@ void set_target(unsigned char *dest_target, double diff)
 	memcpy(dest_target, target, 32);
 }
 
-#ifdef USE_AVALON2
+#if defined (USE_AVALON2) || defined (USE_HASHRATIO)
 void submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool,
 			 uint32_t nonce2, uint32_t nonce)
 {

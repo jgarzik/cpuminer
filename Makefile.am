@@ -80,6 +80,10 @@ if HAS_HASHFAST
 cgminer_SOURCES += driver-hashfast.c driver-hashfast.h hf_protocol.h hf_protocol_be.h
 endif
 
+if HAS_HASHRATIO
+cgminer_SOURCES += driver-hashratio.c driver-hashratio.h crc16.c crc.h
+endif
+
 if HAS_BITFURY
 cgminer_SOURCES += driver-bitfury.c driver-bitfury.h
 endif

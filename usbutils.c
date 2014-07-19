@@ -72,6 +72,7 @@ static cgtimer_t usb11_cgt;
 #define KLONDIKE_TIMEOUT_MS 999
 #define COINTERRA_TIMEOUT_MS 999
 #define HASHFAST_TIMEOUT_MS 999
+#define HASHRATIO_TIMEOUT_MS 999
 
 /* The safety timeout we use, cancelling async transfers on windows that fail
  * to timeout on their own. */
@@ -85,6 +86,7 @@ static cgtimer_t usb11_cgt;
 #define KLONDIKE_TIMEOUT_MS 200
 #define COINTERRA_TIMEOUT_MS 200
 #define HASHFAST_TIMEOUT_MS 500
+#define HASHRATIO_TIMEOUT_MS 200
 #endif
 
 #define USB_EPS(_intx, _epinfosx) { \
@@ -213,6 +215,17 @@ static struct usb_epinfo hfa1_epinfos[] = {
 static struct usb_intinfo hfa_ints[] = {
 	USB_EPS(1,  hfa1_epinfos),
 	USB_EPS(0,  hfa0_epinfos)
+};
+#endif
+
+#ifdef USE_HASHRATIO
+static struct usb_epinfo hro_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
+};
+
+static struct usb_intinfo hro_ints[] = {
+	USB_EPS(0, hro_epinfos)
 };
 #endif
 
@@ -537,6 +550,18 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = HASHFAST_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
 		INTINFO(hfa_ints) },
+#endif
+#ifdef USE_HASHRATIO
+	{
+		.drv = DRIVER_hashratio,
+		.name = "HRO",
+		.ident = IDENT_HRO,
+		.idVendor = IDVENDOR_FTDI,
+		.idProduct = 0x6001,
+		.config = 1,
+		.timeout = HASHRATIO_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		INTINFO(hro_ints) },
 #endif
 #ifdef USE_KLONDIKE
 	{
