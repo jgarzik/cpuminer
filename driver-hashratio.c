@@ -513,6 +513,58 @@ static void hashratio_initialise(struct cgpu_info *hashratio)
 
 	applog(LOG_DEBUG, "%s%i: data got err %d",
 		hashratio->drv->name, hashratio->device_id, err);
+
+	if (hashratio->usbinfo.nodev)
+		return;
+
+	// Set the baud
+	err = usb_transfer(hashratio, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD_AVA,
+				(FTDI_INDEX_BAUD_AVA & 0xff00) | interface,
+				C_SETBAUD);
+
+	applog(LOG_DEBUG, "%s%i: setbaud got err %d",
+		hashratio->drv->name, hashratio->device_id, err);
+
+	if (hashratio->usbinfo.nodev)
+		return;
+
+	// Set Modem Control
+	err = usb_transfer(hashratio, FTDI_TYPE_OUT, FTDI_REQUEST_MODEM,
+				FTDI_VALUE_MODEM, interface, C_SETMODEM);
+
+	applog(LOG_DEBUG, "%s%i: setmodemctrl got err %d",
+		hashratio->drv->name, hashratio->device_id, err);
+
+	if (hashratio->usbinfo.nodev)
+		return;
+
+	// Set Flow Control
+	err = usb_transfer(hashratio, FTDI_TYPE_OUT, FTDI_REQUEST_FLOW,
+				FTDI_VALUE_FLOW, interface, C_SETFLOW);
+
+	applog(LOG_DEBUG, "%s%i: setflowctrl got err %d",
+		hashratio->drv->name, hashratio->device_id, err);
+
+	if (hashratio->usbinfo.nodev)
+		return;
+
+	/* hashratio repeats the following */
+	// Set Modem Control
+	err = usb_transfer(hashratio, FTDI_TYPE_OUT, FTDI_REQUEST_MODEM,
+				FTDI_VALUE_MODEM, interface, C_SETMODEM);
+
+	applog(LOG_DEBUG, "%s%i: setmodemctrl 2 got err %d",
+		hashratio->drv->name, hashratio->device_id, err);
+
+	if (hashratio->usbinfo.nodev)
+		return;
+
+	// Set Flow Control
+	err = usb_transfer(hashratio, FTDI_TYPE_OUT, FTDI_REQUEST_FLOW,
+				FTDI_VALUE_FLOW, interface, C_SETFLOW);
+
+	applog(LOG_DEBUG, "%s%i: setflowctrl 2 got err %d",
+		hashratio->drv->name, hashratio->device_id, err);
 }
 
 static struct cgpu_info *hashratio_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
