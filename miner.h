@@ -1094,7 +1094,7 @@ extern void clear_stratum_shares(struct pool *pool);
 extern void clear_pool_work(struct pool *pool);
 extern void set_target(unsigned char *dest_target, double diff);
 #if defined (USE_AVALON2) || defined (USE_HASHRATIO)
-void submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool,
+bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool,
 			 uint32_t nonce2, uint32_t nonce);
 #endif
 extern int restart_wait(struct thr_info *thr, unsigned int mstime);

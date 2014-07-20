@@ -6849,13 +6849,14 @@ void set_target(unsigned char *dest_target, double diff)
 }
 
 #if defined (USE_AVALON2) || defined (USE_HASHRATIO)
-void submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool,
+bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool,
 			 uint32_t nonce2, uint32_t nonce)
 {
 	const int thr_id = thr->id;
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct device_drv *drv = cgpu->drv;
 	struct work *work = make_work();
+	bool ret;
 
 	cg_wlock(&pool->data_lock);
 	pool->nonce2 = nonce2;
@@ -6869,10 +6870,11 @@ void submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *r
 	work->pool->works++;
 
 	work->mined = true;
-	work->device_diff = MIN(cgpu->drv->max_diff, work->work_difficulty);
+	work->device_diff = MIN(drv->max_diff, work->work_difficulty);
 
-	submit_nonce(thr, work, nonce);
+	ret = submit_nonce(thr, work, nonce);
 	free_work(work);
+	return ret;
 }
 #endif
 
