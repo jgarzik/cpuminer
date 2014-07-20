@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
  * Copyright 2012-2014 Xiangfu <xiangfu@openmobilefree.com>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -15,6 +15,7 @@
 #include "util.h"
 
 #ifdef USE_HASHRATIO
+int opt_hashratio_freq;
 
 #define HRTO_MINER_THREADS	1
 
@@ -93,8 +94,6 @@ struct hashratio_info {
 	int temp_history_index;
 	int temp_sum;
 	int temp_old;
-
-	int first;
 
 	struct timeval last_stratum;
 	struct pool pool;

@@ -226,6 +226,9 @@ static char *opt_set_avalon2_freq;
 static char *opt_set_avalon2_fan;
 static char *opt_set_avalon2_voltage;
 #endif
+#ifdef USE_HASHRATIO
+#include "driver-hashratio.h"
+#endif
 #ifdef USE_KLONDIKE
 char *opt_klondike_options = NULL;
 #endif
@@ -1322,6 +1325,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--hfa-temp-target",
 		     set_int_0_to_200, opt_show_intval, &opt_hfa_target,
 		     "Set the hashfast target temperature (0 to disable)"),
+#endif
+#ifdef USE_HASHRATIO
+	OPT_WITH_CBARG("--hro-freq",
+		       set_hashratio_freq, opt_show_intval, &opt_hashratio_freq,
+		       "Set the hashratio clock frequency"),
 #endif
 	OPT_WITH_ARG("--hotplug",
 		     set_int_0_to_9999, NULL, &hotplug_time,
