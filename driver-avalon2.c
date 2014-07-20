@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
  * Copyright 2012-2014 Xiangfu <xiangfu@openmobilefree.com>
  * Copyright 2012 Luke Dashjr
  * Copyright 2012 Andrew Smith
@@ -242,7 +242,6 @@ static inline int mm_cmp_1404(struct avalon2_info *info, int modular)
 	return strncmp(info->mm_version[modular] + 2, mm_1404, 4) > 0 ? 0 : 1;
 }
 
-extern void submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool, uint32_t nonce2, uint32_t nonce);
 static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg)
 {
 	struct cgpu_info *avalon2;
@@ -813,86 +812,88 @@ static void copy_pool_stratum(struct pool *pool)
 	cg_wunlock(&(pool_stratum.data_lock));
 }
 
+static void avalon2_update(struct cgpu_info *avalon2)
+{
+	struct avalon2_info *info = avalon2->device_data;
+	struct thr_info *thr = avalon2->thr[0];
+	struct avalon2_pkg send_pkg;
+	uint32_t tmp, range, start;
+	struct pool *pool;
+
+	applog(LOG_DEBUG, "Avalon2: New stratum: restart: %d, update: %d, first: %d",
+		thr->work_restart, thr->work_update, info->first);
+	thr->work_update = false;
+	thr->work_restart = false;
+	get_work(thr, thr->id); /* Make sure pool is ready */
+
+	pool = current_pool();
+	if (!pool->has_stratum)
+		quit(1, "Avalon2: Miner Manager have to use stratum pool");
+	if (pool->coinbase_len > AVA2_P_COINBASE_SIZE) {
+		applog(LOG_ERR, "Avalon2: Miner Manager pool coinbase length have to less then %d", AVA2_P_COINBASE_SIZE);
+		return;
+	}
+	if (pool->merkles > AVA2_P_MERKLES_COUNT) {
+		applog(LOG_ERR, "Avalon2: Miner Manager merkles have to less then %d", AVA2_P_MERKLES_COUNT);
+		return;
+	}
+
+	cgtime(&info->last_stratum);
+	cg_rlock(&pool->data_lock);
+	info->pool_no = pool->pool_no;
+	copy_pool_stratum(pool);
+	avalon2_stratum_pkgs(info->fd, pool, thr);
+	cg_runlock(&pool->data_lock);
+
+	/* Configuer the parameter from outside */
+	adjust_fan(info);
+	info->set_voltage = opt_avalon2_voltage_min;
+	info->set_frequency = opt_avalon2_freq_min;
+
+	/* Set the Fan, Voltage and Frequency */
+	memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
+
+	tmp = be32toh(info->fan_pwm);
+	memcpy(send_pkg.data, &tmp, 4);
+
+	applog(LOG_ERR, "Avalon2: Temp max: %d, Cut off temp: %d",
+		get_current_temp_max(info), opt_avalon2_overheat);
+	if (get_current_temp_max(info) >= opt_avalon2_overheat)
+		tmp = encode_voltage(0);
+	else
+		tmp = encode_voltage(info->set_voltage);
+	tmp = be32toh(tmp);
+	memcpy(send_pkg.data + 4, &tmp, 4);
+
+	tmp = be32toh(info->set_frequency);
+	memcpy(send_pkg.data + 8, &tmp, 4);
+
+	/* Configure the nonce2 offset and range */
+	range = 0xffffffff / total_devices;
+	start = range * avalon2->device_id;
+
+	tmp = be32toh(start);
+	memcpy(send_pkg.data + 12, &tmp, 4);
+
+	tmp = be32toh(range);
+	memcpy(send_pkg.data + 16, &tmp, 4);
+
+	/* Package the data */
+	avalon2_init_pkg(&send_pkg, AVA2_P_SET, 1, 1);
+	while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
+		;
+
+	if (unlikely(info->first < 2))
+		info->first++;
+}
+
 static int64_t avalon2_scanhash(struct thr_info *thr)
 {
-	struct avalon2_pkg send_pkg;
 	struct timeval current_stratum;
-
-	struct pool *pool;
 	struct cgpu_info *avalon2 = thr->cgpu;
 	struct avalon2_info *info = avalon2->device_data;
-
 	int64_t h;
-	uint32_t tmp, range, start;
 	int i;
-
-	if (thr->work_restart || thr->work_update || !info->first) {
-		applog(LOG_DEBUG, "Avalon2: New stratum: restart: %d, update: %d, first: %d",
-		       thr->work_restart, thr->work_update, info->first);
-		thr->work_update = false;
-		thr->work_restart = false;
-		get_work(thr, thr->id); /* Make sure pool is ready */
-
-		pool = current_pool();
-		if (!pool->has_stratum)
-			quit(1, "Avalon2: Miner Manager have to use stratum pool");
-		if (pool->coinbase_len > AVA2_P_COINBASE_SIZE) {
-			applog(LOG_ERR, "Avalon2: Miner Manager pool coinbase length have to less then %d", AVA2_P_COINBASE_SIZE);
-			return 0;
-		}
-		if (pool->merkles > AVA2_P_MERKLES_COUNT) {
-			applog(LOG_ERR, "Avalon2: Miner Manager merkles have to less then %d", AVA2_P_MERKLES_COUNT);
-			return 0;
-		}
-
-		cgtime(&info->last_stratum);
-		cg_rlock(&pool->data_lock);
-		info->pool_no = pool->pool_no;
-		copy_pool_stratum(pool);
-		avalon2_stratum_pkgs(info->fd, pool, thr);
-		cg_runlock(&pool->data_lock);
-
-		/* Configuer the parameter from outside */
-		adjust_fan(info);
-		info->set_voltage = opt_avalon2_voltage_min;
-		info->set_frequency = opt_avalon2_freq_min;
-
-		/* Set the Fan, Voltage and Frequency */
-		memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
-
-		tmp = be32toh(info->fan_pwm);
-		memcpy(send_pkg.data, &tmp, 4);
-
-		applog(LOG_ERR, "Avalon2: Temp max: %d, Cut off temp: %d",
-		       get_current_temp_max(info), opt_avalon2_overheat);
-		if (get_current_temp_max(info) >= opt_avalon2_overheat)
-			tmp = encode_voltage(0);
-		else
-			tmp = encode_voltage(info->set_voltage);
-		tmp = be32toh(tmp);
-		memcpy(send_pkg.data + 4, &tmp, 4);
-
-		tmp = be32toh(info->set_frequency);
-		memcpy(send_pkg.data + 8, &tmp, 4);
-
-		/* Configure the nonce2 offset and range */
-		range = 0xffffffff / total_devices;
-		start = range * avalon2->device_id;
-
-		tmp = be32toh(start);
-		memcpy(send_pkg.data + 12, &tmp, 4);
-
-		tmp = be32toh(range);
-		memcpy(send_pkg.data + 16, &tmp, 4);
-
-		/* Package the data */
-		avalon2_init_pkg(&send_pkg, AVA2_P_SET, 1, 1);
-		while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
-			;
-
-		if (unlikely(info->first < 2))
-			info->first++;
-	}
 
 	/* Stop polling the device if there is no stratum in 3 minutes, network is down */
 	cgtime(&current_stratum);
@@ -1059,6 +1060,8 @@ struct device_drv avalon2_drv = {
 	.reinit_device = avalon2_init,
 	.thread_prepare = avalon2_prepare,
 	.hash_work = hash_driver_work,
+	.flush_work = avalon2_update,
+	.update_work = avalon2_update,
 	.scanwork = avalon2_scanhash,
 	.thread_shutdown = avalon2_shutdown,
 };
