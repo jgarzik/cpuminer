@@ -11,8 +11,8 @@
 #ifndef _HASHRATIO_H_
 #define _HASHRATIO_H_
 
+#include "miner.h"
 #include "util.h"
-#include "fpgautils.h"
 
 #ifdef USE_HASHRATIO
 
@@ -94,11 +94,11 @@ struct hashratio_info {
 	int temp_sum;
 	int temp_old;
 
-	bool first;
-	bool new_stratum;
+	int first;
 
+	struct timeval last_stratum;
+	struct pool pool;
 	int pool_no;
-	int diff;
 
 	int local_works;
 	int hw_works;

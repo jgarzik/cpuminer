@@ -41,7 +41,6 @@ int opt_hashratio_fan_max = HRTO_DEFAULT_FAN_MAX;
 
 int opt_hashratio_freq = HRTO_DEFAULT_FREQUENCY;
 
-
 //static int get_fan_pwm(int temp) {
 //	int pwm;
 //	uint8_t fan_pwm_arr[] = {30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30,
@@ -133,7 +132,6 @@ static int hashratio_init_pkg(struct hashratio_pkg *pkg, uint8_t type,
 	return 0;
 }
 
-#if 0
 static int job_idcmp(uint8_t *job_id, char *pool_job_id)
 {
 	int job_id_len;
@@ -155,19 +153,18 @@ static int job_idcmp(uint8_t *job_id, char *pool_job_id)
 
 	return 1;
 }
-#endif
 
 static int decode_pkg(struct thr_info *thr, struct hashratio_ret *ar, uint8_t *pkg)
 {
 	struct cgpu_info *hashratio = thr->cgpu;
 	struct hashratio_info *info = hashratio->device_data;
-	struct pool *pool;
+	struct pool *pool, *real_pool, *pool_stratum = &info->pool;
 
 	unsigned int expected_crc;
 	unsigned int actual_crc;
 	uint32_t nonce, nonce2, miner;
 	int pool_no;
-	uint8_t job_id[5];
+	uint8_t job_id[4];
 	int tmp;
 
 	int type = HRTO_GETS_ERROR;
@@ -182,19 +179,21 @@ static int decode_pkg(struct thr_info *thr, struct hashratio_ret *ar, uint8_t *p
 			((ar->crc[1] & 0xff) << 8);
 
 		type = ar->type;
-		applog(LOG_DEBUG, "hashratio: %d: expected crc(%04x), actural_crc(%04x)", type, expected_crc, actual_crc);
+		applog(LOG_DEBUG, "hashratio: %d: expected crc(%04x), actual_crc(%04x)", type, expected_crc, actual_crc);
 		if (expected_crc != actual_crc)
 			goto out;
-		
+
 		switch(type) {
 		case HRTO_P_NONCE:
+			applog(LOG_DEBUG, "Hashratio: HRTO_P_NONCE");
 			memcpy(&miner,   ar->data + 0, 4);
 			memcpy(&pool_no, ar->data + 4, 4);
 			memcpy(&nonce2,  ar->data + 8, 4);
 			/* Calc time    ar->data + 12 */
 			memcpy(&nonce, ar->data + 12, 4);
-			memset(job_id, 0, 5);
 			memcpy(job_id, ar->data + 16, 4);
+//			memset(job_id, 0, 5);
+//			memcpy(job_id, ar->data + 16, 4);
 
 			miner = be32toh(miner);
 			pool_no = be32toh(pool_no);
@@ -209,11 +208,21 @@ static int decode_pkg(struct thr_info *thr, struct hashratio_ret *ar, uint8_t *p
 			applog(LOG_DEBUG, "hashratio: Found! [%s] %d:(%08x) (%08x)",
 			       job_id, pool_no, nonce2, nonce);
 
-			pool = pools[pool_no];
-			if (!info->new_stratum)
-				submit_nonce2_nonce(thr, pool, pool, nonce2, nonce);
+			real_pool = pool = pools[pool_no];
+			if (job_idcmp(job_id, pool->swork.job_id)) {
+				if (!job_idcmp(job_id, pool_stratum->swork.job_id)) {
+					applog(LOG_ERR, "Hashratio: Match to previous stratum! (%s)", pool_stratum->swork.job_id);
+					pool = pool_stratum;
+				} else {
+					applog(LOG_ERR, "Hashratio Cannot match to any stratum! (%s)", pool->swork.job_id);
+					break;
+				}
+			}
+			if (info->first)
+				submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce);
 			break;
 		case HRTO_P_STATUS:
+			applog(LOG_DEBUG, "Hashratio: HRTO_P_STATUS");
 			memcpy(&tmp, ar->data, 4);
 			tmp = be32toh(tmp);
 			info->temp = (tmp & 0x00f0) >> 8;
@@ -241,12 +250,16 @@ static int decode_pkg(struct thr_info *thr, struct hashratio_ret *ar, uint8_t *p
 			hashratio->temp = info->temp;
 			break;
 		case HRTO_P_ACKDETECT:
+			applog(LOG_DEBUG, "Hashratio: HRTO_P_ACKDETECT");
 			break;
 		case HRTO_P_ACK:
+			applog(LOG_DEBUG, "Hashratio: HRTO_P_ACK");
 			break;
 		case HRTO_P_NAK:
+			applog(LOG_DEBUG, "Hashratio: HRTO_P_NAK");
 			break;
 		default:
+			applog(LOG_DEBUG, "Hashratio: HRTO_GETS_ERROR");
 			type = HRTO_GETS_ERROR;
 			break;
 		}
@@ -346,6 +359,7 @@ static int hashratio_stratum_pkgs(struct cgpu_info *hashratio, struct pool *pool
 	int i, a, b, tmp;
 	unsigned char target[32];
 	int job_id_len;
+	unsigned short crc;
 
 	/* Send out the first stratum message STATIC */
 	applog(LOG_DEBUG, "hashratio: Pool stratum message STATIC: %d, %d, %d, %d, %d, %d",
@@ -399,10 +413,9 @@ static int hashratio_stratum_pkgs(struct cgpu_info *hashratio, struct pool *pool
 	memset(pkg.data, 0, HRTO_P_DATA_LEN);
 
 	job_id_len = strlen(pool->swork.job_id);
-	job_id_len = job_id_len >= 4 ? 4 : job_id_len;
-	for (i = 0; i < job_id_len; i++) {
-		pkg.data[i] = *(pool->swork.job_id + strlen(pool->swork.job_id) - 4 + i);
-	}
+	crc = crc16(pool->swork.job_id, job_id_len);
+	pkg.data[0] = (crc & 0xff00) >> 8;
+	pkg.data[1] = crc & 0x00ff;
 	hashratio_init_pkg(&pkg, HRTO_P_JOB_ID, 1, 1);
 	while (hashratio_send_pkg(hashratio, &pkg) != HRTO_SEND_OK)
 		;
@@ -459,8 +472,10 @@ static int hashratio_get_result(struct thr_info *thr, struct hashratio_ret *ar)
 	memset(result, 0, HRTO_READ_SIZE);
 
 	ret = hashratio_gets(hashratio, result);
-	if (ret != HRTO_GETS_OK)
+	if (ret != HRTO_GETS_OK) {
+		applog(LOG_WARNING, "Blah not ok :(");
 		return ret;
+	}
 
 //	if (opt_debug) {
 //		applog(LOG_DEBUG, "hashratio: Get(ret = %d):", ret);
@@ -585,7 +600,6 @@ static struct cgpu_info *hashratio_detect_one(struct libusb_device *dev, struct 
 
 	hashratio_init_pkg(&detect_pkg, HRTO_P_DETECT, 1, 1);
 	hashratio_send_pkg(hashratio, &detect_pkg);
-	cgsleep_ms(20);
 	err = usb_read(hashratio, (char *)&ret_pkg, HRTO_READ_SIZE, &amount, C_HRO_READ);
 	if (err || amount != HRTO_READ_SIZE) {
 		applog(LOG_ERR, "%s %d: Hashratio failed usb_read with err %d amount %d",
@@ -645,7 +659,7 @@ static bool hashratio_prepare(struct thr_info *thr)
 	struct cgpu_info *hashratio = thr->cgpu;
 	struct hashratio_info *info = hashratio->device_data;
 
-	info->first = true;
+	cglock_init(&info->pool.data_lock);
 
 	return true;
 }
@@ -656,6 +670,7 @@ static int polling(struct thr_info *thr)
 	struct hashratio_ret ar;
 	struct cgpu_info *hashratio = thr->cgpu;
 
+	cgsleep_ms(20);
 	memset(send_pkg.data, 0, HRTO_P_DATA_LEN);
 	hashratio_init_pkg(&send_pkg, HRTO_P_POLLING, 1, 1);
 
@@ -664,6 +679,55 @@ static int polling(struct thr_info *thr)
 	hashratio_get_result(thr, &ar);
 	
 	return 0;
+}
+
+static void copy_pool_stratum(struct hashratio_info *info, struct pool *pool)
+{
+	int i;
+	int merkles = pool->merkles;
+	size_t coinbase_len = pool->coinbase_len;
+	struct pool *pool_stratum = &info->pool;
+
+	if (!job_idcmp(pool->swork.job_id, pool_stratum->swork.job_id))
+		return;
+
+	cg_wlock(&(pool_stratum->data_lock));
+	free(pool_stratum->swork.job_id);
+	free(pool_stratum->nonce1);
+	free(pool_stratum->coinbase);
+
+	align_len(&coinbase_len);
+	pool_stratum->coinbase = calloc(coinbase_len, 1);
+	if (unlikely(!pool_stratum->coinbase))
+		quit(1, "Failed to calloc pool_stratum coinbase in hashratio");
+	memcpy(pool_stratum->coinbase, pool->coinbase, coinbase_len);
+
+
+	for (i = 0; i < pool_stratum->merkles; i++)
+		free(pool_stratum->swork.merkle_bin[i]);
+	if (merkles) {
+		pool_stratum->swork.merkle_bin = realloc(pool_stratum->swork.merkle_bin,
+						 sizeof(char *) * merkles + 1);
+		for (i = 0; i < merkles; i++) {
+			pool_stratum->swork.merkle_bin[i] = malloc(32);
+			if (unlikely(!pool_stratum->swork.merkle_bin[i]))
+				quit(1, "Failed to malloc pool_stratum swork merkle_bin");
+			memcpy(pool_stratum->swork.merkle_bin[i], pool->swork.merkle_bin[i], 32);
+		}
+	}
+
+	pool_stratum->sdiff = pool->sdiff;
+	pool_stratum->coinbase_len = pool->coinbase_len;
+	pool_stratum->nonce2_offset = pool->nonce2_offset;
+	pool_stratum->n2size = pool->n2size;
+	pool_stratum->merkles = pool->merkles;
+
+	pool_stratum->swork.job_id = strdup(pool->swork.job_id);
+	pool_stratum->nonce1 = strdup(pool->nonce1);
+
+	memcpy(pool_stratum->ntime, pool->ntime, sizeof(pool_stratum->ntime));
+	memcpy(pool_stratum->header_bin, pool->header_bin, sizeof(pool_stratum->header_bin));
+	cg_wunlock(&(pool_stratum->data_lock));
 }
 
 static int64_t hashratio_scanhash(struct thr_info *thr)
@@ -675,17 +739,16 @@ static int64_t hashratio_scanhash(struct thr_info *thr)
 	
 	uint32_t tmp, range, start;
 
-	
-	if (thr->work_restart || thr->work_update || info->first) {
-		info->new_stratum = true;
+	if (thr->work_restart || thr->work_update || !info->first) {
+		struct work *work;
+
 		applog(LOG_DEBUG, "hashratio: New stratum: restart: %d, update: %d, first: %d",
 		       thr->work_restart, thr->work_update, info->first);
 		thr->work_update = false;
 		thr->work_restart = false;
-		if (unlikely(info->first))
-			info->first = false;
 
-		get_work(thr, thr->id); /* Make sure pool is ready */
+		work = get_work(thr, thr->id); /* Make sure pool is ready */
+		discard_work(work);
 
 		pool = current_pool();
 		if (!pool->has_stratum)
@@ -695,13 +758,15 @@ static int64_t hashratio_scanhash(struct thr_info *thr)
 		if (pool->merkles > HRTO_P_MERKLES_COUNT)
 			quit(1, "hashratio: Miner Manager merkles have to less then %d", HRTO_P_MERKLES_COUNT);
 
-		info->diff = (int)pool->sdiff - 1;
 		info->pool_no = pool->pool_no;
 
-		cg_wlock(&pool->data_lock);
+		cgtime(&info->last_stratum);
+		cg_rlock(&pool->data_lock);
+		info->pool_no = pool->pool_no;
+		copy_pool_stratum(info, pool);
 		hashratio_stratum_pkgs(hashratio, pool);
-		cg_wunlock(&pool->data_lock);
-		
+		cg_runlock(&pool->data_lock);
+
 		/* Configuer the parameter from outside */
 		memset(send_pkg.data, 0, HRTO_P_DATA_LEN);
 		
@@ -730,7 +795,8 @@ static int64_t hashratio_scanhash(struct thr_info *thr)
 		while (hashratio_send_pkg(hashratio, &send_pkg) != HRTO_SEND_OK)
 			;
 		
-		info->new_stratum = false;
+		if (unlikely(info->first < 2))
+			info->first++;
 	}
 
 	polling(thr);
