@@ -324,6 +324,9 @@ static int hashratio_send_pkg(struct cgpu_info *hashratio, const struct hashrati
 //		hexdump((uint8_t *)buf, nr_len);
 //	}
 
+	if (unlikely(hashratio->usbinfo.nodev))
+		return HRTO_SEND_ERROR;
+
 	err = usb_write(hashratio, (char *)buf, nr_len, &amount, C_HRO_WRITE);
 	if (err || amount != nr_len) {
 		applog(LOG_DEBUG, "hashratio: Send(%d)!", amount);
@@ -333,7 +336,19 @@ static int hashratio_send_pkg(struct cgpu_info *hashratio, const struct hashrati
 	return HRTO_SEND_OK;
 }
 
-static int hashratio_stratum_pkgs(struct cgpu_info *hashratio, struct pool *pool)
+static int hashratio_send_pkgs(struct cgpu_info *hashratio, const struct hashratio_pkg *pkg)
+{
+	int ret;
+
+	do {
+		if (unlikely(hashratio->usbinfo.nodev))
+			return -1;
+		ret = hashratio_send_pkg(hashratio, pkg);
+	} while (ret != HRTO_SEND_OK);
+	return 0;
+}
+
+static void hashratio_stratum_pkgs(struct cgpu_info *hashratio, struct pool *pool)
 {
 	const int merkle_offset = 36;
 	struct hashratio_pkg pkg;
@@ -373,8 +388,8 @@ static int hashratio_stratum_pkgs(struct cgpu_info *hashratio, struct pool *pool
 	memcpy(pkg.data + 24, &tmp, 4);
 
 	hashratio_init_pkg(&pkg, HRTO_P_STATIC, 1, 1);
-	while (hashratio_send_pkg(hashratio, &pkg) != HRTO_SEND_OK)
-		;
+	if (hashratio_send_pkgs(hashratio, &pkg))
+		return;
 
 	set_target(target, pool->sdiff);
 	memcpy(pkg.data, target, 32);
@@ -385,9 +400,8 @@ static int hashratio_stratum_pkgs(struct cgpu_info *hashratio, struct pool *pool
 		free(target_str);
 	}
 	hashratio_init_pkg(&pkg, HRTO_P_TARGET, 1, 1);
-	while (hashratio_send_pkg(hashratio, &pkg) != HRTO_SEND_OK)
-		;
-
+	if (hashratio_send_pkgs(hashratio, &pkg))
+		return;
 
 	applog(LOG_DEBUG, "hashratio: Pool stratum message JOBS_ID: %s",
 	       pool->swork.job_id);
@@ -398,8 +412,8 @@ static int hashratio_stratum_pkgs(struct cgpu_info *hashratio, struct pool *pool
 	pkg.data[0] = (crc & 0xff00) >> 8;
 	pkg.data[1] = crc & 0x00ff;
 	hashratio_init_pkg(&pkg, HRTO_P_JOB_ID, 1, 1);
-	while (hashratio_send_pkg(hashratio, &pkg) != HRTO_SEND_OK)
-		;
+	if (hashratio_send_pkgs(hashratio, &pkg))
+		return;
 
 	a = pool->coinbase_len / HRTO_P_DATA_LEN;
 	b = pool->coinbase_len % HRTO_P_DATA_LEN;
@@ -408,8 +422,8 @@ static int hashratio_stratum_pkgs(struct cgpu_info *hashratio, struct pool *pool
 	for (i = 0; i < a; i++) {
 		memcpy(pkg.data, pool->coinbase + i * 32, 32);
 		hashratio_init_pkg(&pkg, HRTO_P_COINBASE, i + 1, a + (b ? 1 : 0));
-		while (hashratio_send_pkg(hashratio, &pkg) != HRTO_SEND_OK)
-			;
+		if (hashratio_send_pkgs(hashratio, &pkg))
+			return;
 		if (i % 25 == 0) {
 			cgsleep_ms(2);
 		}
@@ -418,8 +432,8 @@ static int hashratio_stratum_pkgs(struct cgpu_info *hashratio, struct pool *pool
 		memset(pkg.data, 0, HRTO_P_DATA_LEN);
 		memcpy(pkg.data, pool->coinbase + i * 32, b);
 		hashratio_init_pkg(&pkg, HRTO_P_COINBASE, i + 1, i + 1);
-		while (hashratio_send_pkg(hashratio, &pkg) != HRTO_SEND_OK)
-			;
+		if (hashratio_send_pkgs(hashratio, &pkg))
+			return;
 	}
 
 	b = pool->merkles;
@@ -428,8 +442,8 @@ static int hashratio_stratum_pkgs(struct cgpu_info *hashratio, struct pool *pool
 		memset(pkg.data, 0, HRTO_P_DATA_LEN);
 		memcpy(pkg.data, pool->swork.merkle_bin[i], 32);
 		hashratio_init_pkg(&pkg, HRTO_P_MERKLES, i + 1, b);
-		while (hashratio_send_pkg(hashratio, &pkg) != HRTO_SEND_OK)
-			;
+		if (hashratio_send_pkgs(hashratio, &pkg))
+			return;
 	}
 
 	applog(LOG_DEBUG, "hashratio: Pool stratum message HEADER: 4");
@@ -437,11 +451,10 @@ static int hashratio_stratum_pkgs(struct cgpu_info *hashratio, struct pool *pool
 		memset(pkg.data, 0, HRTO_P_HEADER);
 		memcpy(pkg.data, pool->header_bin + i * 32, 32);
 		hashratio_init_pkg(&pkg, HRTO_P_HEADER, i + 1, 4);
-		while (hashratio_send_pkg(hashratio, &pkg) != HRTO_SEND_OK)
-			;
+		if (hashratio_send_pkgs(hashratio, &pkg))
+			return;
 
 	}
-	return 0;
 }
 
 static int hashratio_get_result(struct thr_info *thr, struct hashratio_ret *ar)
@@ -453,10 +466,8 @@ static int hashratio_get_result(struct thr_info *thr, struct hashratio_ret *ar)
 	memset(result, 0, HRTO_READ_SIZE);
 
 	ret = hashratio_gets(hashratio, result);
-	if (ret != HRTO_GETS_OK) {
-		applog(LOG_WARNING, "Blah not ok :(");
+	if (ret != HRTO_GETS_OK)
 		return ret;
-	}
 
 //	if (opt_debug) {
 //		applog(LOG_DEBUG, "hashratio: Get(ret = %d):", ret);
@@ -701,8 +712,7 @@ static void hashratio_update_work(struct cgpu_info *hashratio)
 
 	/* Package the data */
 	hashratio_init_pkg(&send_pkg, HRTO_P_SET, 1, 1);
-	while (hashratio_send_pkg(hashratio, &send_pkg) != HRTO_SEND_OK)
-		;
+	hashratio_send_pkgs(hashratio, &send_pkg);
 }
 
 static int64_t hashratio_scanhash(struct thr_info *thr)
@@ -715,8 +725,11 @@ static int64_t hashratio_scanhash(struct thr_info *thr)
 	memset(send_pkg.data, 0, HRTO_P_DATA_LEN);
 	hashratio_init_pkg(&send_pkg, HRTO_P_POLLING, 1, 1);
 
-	while (hashratio_send_pkg(hashratio, &send_pkg) != HRTO_SEND_OK)
-		;
+	if (unlikely(hashratio->usbinfo.nodev || hashratio_send_pkgs(hashratio, &send_pkg))) {
+		applog(LOG_ERR, "%s%d: Device disappeared, shutting down thread",
+		       hashratio->drv->name, hashratio->device_id);
+		return -1;
+	}
 	hashratio_get_result(thr, &ar);
 
 	return (int64_t)info->local_work * 64 * 0xffffffff;
