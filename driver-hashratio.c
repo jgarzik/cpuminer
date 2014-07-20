@@ -865,7 +865,7 @@ static void hashratio_shutdown(struct thr_info __maybe_unused *thr)
 struct device_drv hashratio_drv = {
 	.drv_id = DRIVER_hashratio,
 	.dname = "hashratio",
-	.name = "HRTO",
+	.name = "HRO",
 	.get_api_stats   = hashratio_api_stats,
 	.drv_detect      = hashratio_detect,
 	.thread_prepare  = hashratio_prepare,
