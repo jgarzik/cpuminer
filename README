@@ -243,7 +243,7 @@ Options for both config file and command line:
 --quiet|-q          Disable logging output, display status and errors
 --quota|-U <arg>    quota;URL combination for server with load-balance strategy quotas
 --real-quiet        Disable all output
---rock-freq <arg>   Set RockMiner frequency in MHz, range 125-500 (default: 270)
+--rock-freq <arg>   Set RockMiner frequency in MHz, range 200-400 (default: 270)
 --rotate <arg>      Change multipool strategy from failover to regularly rotate at N minutes (default: 0)
 --round-robin       Change multipool strategy from failover to round robin on failure
 --scan-time|-s <arg> Upper bound on time spent scanning current work, in seconds (default: -1)
