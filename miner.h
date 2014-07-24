@@ -1025,6 +1025,8 @@ extern bool opt_bitmain_tempoverctrl;
 extern int opt_minion_chipreport;
 extern char *opt_minion_cores;
 extern char *opt_minion_freq;
+extern int opt_minion_freqchange;
+extern int opt_minion_freqpercent;
 extern bool opt_minion_idlecount;
 extern int opt_minion_ledcount;
 extern int opt_minion_ledlimit;

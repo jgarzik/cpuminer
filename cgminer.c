@@ -256,6 +256,8 @@ static char *opt_set_null;
 int opt_minion_chipreport;
 char *opt_minion_cores;
 char *opt_minion_freq;
+int opt_minion_freqchange = 1000;
+int opt_minion_freqpercent = 70;
 bool opt_minion_idlecount;
 int opt_minion_ledcount;
 int opt_minion_ledlimit = 98;
@@ -1376,6 +1378,12 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--minion-freq",
 		     opt_set_charp, NULL, &opt_minion_freq,
 		     "Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1200)"),
+	OPT_WITH_ARG("--minion-freqchange",
+		     set_int_0_to_9999, opt_show_intval, &opt_minion_freqchange,
+		     "Millisecond total time to do frequency changes (default: 1000)"),
+	OPT_WITH_ARG("--minion-freqpercent",
+		     set_int_0_to_100, opt_show_intval, &opt_minion_freqpercent,
+		     "Percentage to use when starting up a chip (default: 70%)"),
 	OPT_WITHOUT_ARG("--minion-idlecount",
 		     opt_set_bool, &opt_minion_idlecount,
 		     "Report when IdleCount is >0 or changes"),
