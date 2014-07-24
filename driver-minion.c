@@ -4719,15 +4719,15 @@ static void chip_report(struct cgpu_info *minioncgpu)
 		}
 	}
 
-	// Don't reset the chip while 'changing'
-	if (minioninfo->changing[chip])
-		return;
-
 	msdiff = ms_tdiff(&now, &(minioninfo->chip_chk));
 	if (total_secs >= MINION_RESET_s && msdiff >= (minioninfo->history_gen * 1000)) {
 		K_RLOCK(minioninfo->hfree_list);
 		for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
 			if (minioninfo->has_chip[chip]) {
+				// Don't reset the chip while 'changing'
+				if (minioninfo->changing[chip])
+					continue;
+
 				if (!minioninfo->reset_mark[chip] ||
 				    minioninfo->reset_count[chip] < 2) {
 					elapsed = 0.0;
@@ -4780,6 +4780,10 @@ static void chip_report(struct cgpu_info *minioncgpu)
 
 	for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
 		if (minioninfo->has_chip[chip]) {
+			// Don't reset the chip while 'changing'
+			if (minioninfo->changing[chip])
+				continue;
+
 			if (minioninfo->do_reset[chip] > 1.0 ||
 			    minioninfo->flag_reset[chip]) {
 				bool std_reset = true;
