@@ -1728,6 +1728,11 @@ static void set_freq(struct cgpu_info *minioncgpu, struct minion_info *minioninf
 			  rbuf, 0, data);
 
 	cgtime(&(minioninfo->lastfreq[chip]));
+	applog(LOG_DEBUG, "%s%i: chip %d freq %d sec %d usec %d",
+			  minioncgpu->drv->name, minioncgpu->device_id,
+			  chip, freq,
+			  (int)(minioninfo->lastfreq[chip].tv_sec) % 10,
+			  (int)(minioninfo->lastfreq[chip].tv_usec));
 
 	// Reset all this info on chip reset or freq change
 	minioninfo->reset_time[chip] = (int)FREQ_DELAY(minioninfo->init_freq[chip]);
@@ -2062,12 +2067,12 @@ static void minion_detect_chips(struct cgpu_info *minioncgpu, struct minion_info
 				minioninfo->want_freq[chip] = want_freq;
 				minioninfo->init_freq[chip] = start_freq;
 				if (start_freq != want_freq) {
-					minioninfo->changing[chip] = true;
 					freqms = opt_minion_freqchange;
 					freqms /= ((want_freq - start_freq) / MINION_FREQ_FACTOR);
 					if (freqms < 0)
 						freqms = -freqms;
 					minioninfo->freqms[chip] = freqms;
+					minioninfo->changing[chip] = true;
 				}
 				init_chip(minioncgpu, minioninfo, chip);
 				enable_chip_cores(minioncgpu, minioninfo, chip);
@@ -2728,7 +2733,7 @@ static char *minion_api_set(struct cgpu_info *minioncgpu, char *option, char *se
 		return NULL;
 	}
 
-	// This must do a reset also - but changes the freq
+	// This sets up a freq step up/down to the given freq without a reset
 	if (strcasecmp(option, "freq") == 0) {
 		if (!setting || !*setting) {
 			sprintf(replybuf, "missing chip:freq");
@@ -2756,7 +2761,7 @@ static char *minion_api_set(struct cgpu_info *minioncgpu, char *option, char *se
 		}
 
 		if (!minioninfo->has_chip[chip]) {
-			sprintf(replybuf, "unable to modify chip %d - chip disabled",
+			sprintf(replybuf, "unable to modify chip %d - chip not enabled",
 					  chip);
 			return replybuf;
 		}
@@ -2769,9 +2774,21 @@ static char *minion_api_set(struct cgpu_info *minioncgpu, char *option, char *se
 			return replybuf;
 		}
 
-		minioninfo->init_freq[chip] = val - (val % MINION_FREQ_FACTOR);
-		minioninfo->flag_reset[chip] = true;
-		minioninfo->do_reset[chip] = 0.0;
+		int want_freq = val - (val % MINION_FREQ_FACTOR);
+		int start_freq = minioninfo->init_freq[chip];
+		int freqms;
+
+		if (want_freq != start_freq) {
+			minioninfo->changing[chip] = false;
+			freqms = opt_minion_freqchange;
+			freqms /= ((want_freq - start_freq) / MINION_FREQ_FACTOR);
+			if (freqms < 0)
+				freqms = -freqms;
+			minioninfo->freqms[chip] = freqms;
+			minioninfo->want_freq[chip] = want_freq;
+			cgtime(&(minioninfo->lastfreq[chip]));
+			minioninfo->changing[chip] = true;
+		}
 
 		return NULL;
 	}
