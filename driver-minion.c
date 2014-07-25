@@ -3931,6 +3931,37 @@ retest:
 	return NONCE_BAD_NONCE;
 }
 
+/* Check each chip how long since the last nonce
+ * Should normally be a fraction of a second
+ * so (MINION_RESET_s * 1.5) will certainly be long enough,
+ * but also will avoid lots of resets if there is trouble getting work
+ * Should be longer than MINION_RESET_s to avoid interfering with normal resets */
+static void check_last_nonce(struct cgpu_info *minioncgpu)
+{
+	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
+	struct timeval now;
+	K_ITEM *head;
+	double howlong;
+	int chip;
+
+	cgtime(&now);
+	K_RLOCK(minioninfo->hfree_list);
+	for (chip = 0; chip < (int)MINION_CHIPS; chip++) {
+		if (minioninfo->has_chip[chip] &&  !(minioninfo->changing[chip])) {
+			head = minioninfo->hchip_list[chip]->head;
+			if (head) {
+				howlong = tdiff(&now, &(DATA_HIST(head)->when));
+				if (howlong > ((double)MINION_RESET_s * 1.5)) {
+					// Setup a reset
+					minioninfo->flag_reset[chip] = true;
+					minioninfo->do_reset[chip] = 0.0;
+				}
+			}
+		}
+	}
+	K_RUNLOCK(minioninfo->hfree_list);
+}
+
 // Results checking thread
 static void *minion_results(void *userdata)
 {
@@ -3945,6 +3976,7 @@ static void *minion_results(void *userdata)
 	bool another;
 	uint32_t task_id2;
 	uint32_t nonce2;
+	int last_check;
 
 	applog(MINION_LOG, "%s%i: Results...",
 				minioncgpu->drv->name, minioncgpu->device_id);
@@ -3959,15 +3991,24 @@ static void *minion_results(void *userdata)
 
 	thr = minioninfo->thr;
 
+	last_check = 0;
 	while (minioncgpu->shutdown == false) {
 		if (!oldest_nonce(minioncgpu, &chip, &core, &task_id, &nonce,
 				  &no_nonce, &when, &another, &task_id2, &nonce2)) {
+			check_last_nonce(minioncgpu);
+			last_check = 0;
 			cgsem_mswait(&(minioninfo->nonce_ready), MINION_NONCE_mS);
 			continue;
 		}
 
 		oknonce(thr, minioncgpu, chip, core, task_id, nonce, no_nonce, &when,
 			another, task_id2, nonce2);
+
+		// Interrupt nonce checking if low CPU and oldest_nonce() is always true
+		if (++last_check > 100) {
+			check_last_nonce(minioncgpu);
+			last_check = 0;
+		}
 	}
 
 	return NULL;
