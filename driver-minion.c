@@ -3973,14 +3973,14 @@ static void *minion_results(void *userdata)
 	struct cgpu_info *minioncgpu = (struct cgpu_info *)userdata;
 	struct minion_info *minioninfo = (struct minion_info *)(minioncgpu->device_data);
 	struct thr_info *thr;
-	int chip, core;
-	uint32_t task_id;
-	uint32_t nonce;
-	bool no_nonce;
+	int chip = 0, core = 0;
+	uint32_t task_id = 0;
+	uint32_t nonce = 0;
+	bool no_nonce = false;
 	struct timeval when;
 	bool another;
-	uint32_t task_id2;
-	uint32_t nonce2;
+	uint32_t task_id2 = 0;
+	uint32_t nonce2 = 0;
 	int last_check;
 
 	applog(MINION_LOG, "%s%i: Results...",
