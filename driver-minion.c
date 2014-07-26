@@ -594,7 +594,7 @@ typedef struct hist_item {
 #define MINION_RESET_COUNT 6
 
 // To enable the 2nd check
-static bool second_check = false;
+static bool second_check = true;
 // Longer time lapse to expect the higher %
 // This intercepts a slow GHs drop earlier
 #define MINION_RESET2_s 60
