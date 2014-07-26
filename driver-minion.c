@@ -2044,6 +2044,11 @@ static void minion_detect_chips(struct cgpu_info *minioncgpu, struct minion_info
 	int pin, chipid, chip;
 	int pinend, start_freq, want_freq, freqms;
 
+#if MINION_ROCKCHIP == 1
+	minion_toggle_gpio(minioncgpu, MINION_POWERCYCLE_GPIO);
+	cgsleep_ms(100);
+#endif
+
 	if (usepins) {
 		init_pins(minioninfo);
 		pinend = (int)MINION_PIN_COUNT;
