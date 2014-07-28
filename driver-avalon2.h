@@ -43,7 +43,7 @@
 
 /* Avalon3 default values */
 #define AVA2_AVA3_MINERS	5
-#define AVA2_AVA3_VOLTAGE	6625 /* 0.6625v */
+#define AVA2_AVA3_VOLTAGE	6660 /* 0.666v */
 #define AVA2_AVA3_FREQUENCY	450  /* MHz * 11.8 = MHs: 450MHz means ~5.3GHs */
 
 /* Avalon2 protocol package type */
