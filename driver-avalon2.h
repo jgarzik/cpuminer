@@ -102,8 +102,6 @@ struct avalon2_pkg {
 #define avalon2_ret avalon2_pkg
 
 struct avalon2_info {
-	pthread_t read_thr;
-
 	struct timeval last_stratum;
 	struct pool pool;
 	int pool_no;
