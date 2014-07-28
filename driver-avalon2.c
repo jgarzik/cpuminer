@@ -47,8 +47,8 @@ ASSERT1(sizeof(uint32_t) == 4);
 int opt_avalon2_freq_min = AVA2_DEFAULT_FREQUENCY;
 int opt_avalon2_freq_max = AVA2_DEFAULT_FREQUENCY_MAX;
 
-int opt_avalon2_fan_min = AVA2_DEFAULT_FAN_PWM;
-int opt_avalon2_fan_max = AVA2_DEFAULT_FAN_MAX;
+int opt_avalon2_fan_min = get_fan_pwm(AVA2_DEFAULT_FAN_MIN);
+int opt_avalon2_fan_max = get_fan_pwm(AVA2_DEFAULT_FAN_MAX);
 
 int opt_avalon2_voltage_min = AVA2_DEFAULT_VOLTAGE;
 int opt_avalon2_voltage_max = AVA2_DEFAULT_VOLTAGE_MAX;
@@ -216,7 +216,7 @@ static void adjust_fan(struct avalon2_info *info)
 	int t;
 
 	if (unlikely(info->first < 2) || opt_avalon2_fan_fixed == FAN_FIXED) {
-		info->fan_pwm = opt_avalon2_fan_min;
+		info->fan_pwm = get_fan_pwm(AVA2_DEFAULT_FAN_PWM);
 		return;
 	}
 
@@ -663,7 +663,7 @@ static bool avalon2_detect_one(const char *devpath)
 
 	info->fd = -1;
 	info->baud = AVA2_IO_SPEED;
-	info->fan_pwm = AVA2_DEFAULT_FAN_PWM;
+	info->fan_pwm = get_fan_pwm(AVA2_DEFAULT_FAN_PWM);
 	info->set_voltage = AVA2_DEFAULT_VOLTAGE_MIN;
 	info->set_frequency = AVA2_DEFAULT_FREQUENCY;
 	info->temp_max = 0;
