@@ -753,8 +753,8 @@ static void hashratio_update_work(struct cgpu_info *hashratio)
 	applog(LOG_DEBUG, "set freq: %d", info->default_freq);
 
 	/* Configure the nonce2 offset and range */
-	range = 0xffffffff / total_devices;
-	start = range * hashratio->device_id;
+	range = 0xffffffff / (total_devices + 1);
+	start = range * (hashratio->device_id + 1);
 
 	tmp = be32toh(start);
 	memcpy(send_pkg.data + 8, &tmp, 4);

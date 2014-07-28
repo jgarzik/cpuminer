@@ -841,8 +841,8 @@ static void avalon2_update(struct cgpu_info *avalon2)
 	memcpy(send_pkg.data + 8, &tmp, 4);
 
 	/* Configure the nonce2 offset and range */
-	range = 0xffffffff / total_devices;
-	start = range * avalon2->device_id;
+	range = 0xffffffff / (total_devices + 1);
+	start = range * (avalon2->device_id + 1);
 
 	tmp = be32toh(start);
 	memcpy(send_pkg.data + 12, &tmp, 4);
