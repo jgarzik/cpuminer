@@ -56,8 +56,6 @@ int opt_avalon2_voltage_max;
 int opt_avalon2_overheat = AVALON2_TEMP_OVERHEAT;
 enum avalon2_fan_fixed opt_avalon2_fan_fixed = FAN_AUTO;
 
-static struct pool pool_stratum;
-
 static inline uint8_t rev8(uint8_t d)
 {
     int i;
@@ -215,7 +213,7 @@ static void adjust_fan(struct avalon2_info *info)
 {
 	int t;
 
-	if (unlikely(info->first < 2) || opt_avalon2_fan_fixed == FAN_FIXED) {
+	if (opt_avalon2_fan_fixed == FAN_FIXED) {
 		info->fan_pct = AVA2_DEFAULT_FAN_PWM;
 		info->fan_pwm = get_fan_pwm(info->fan_pct);
 		return;
@@ -242,9 +240,9 @@ static inline int mm_cmp_1404(struct avalon2_info *info, int modular)
 
 static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg)
 {
-	struct cgpu_info *avalon2;
-	struct avalon2_info *info;
-	struct pool *pool, *real_pool;
+	struct cgpu_info *avalon2 = thr->cgpu;
+	struct avalon2_info *info = avalon2->device_data;
+	struct pool *pool, *real_pool, *pool_stratum = &info->pool;
 
 	unsigned int expected_crc;
 	unsigned int actual_crc;
@@ -255,11 +253,6 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 
 	int type = AVA2_GETS_ERROR;
 
-	if (thr) {
-		avalon2 = thr->cgpu;
-		info = avalon2->device_data;
-	}
-
 	memcpy((uint8_t *)ar, pkg, AVA2_READ_SIZE);
 
 	if (ar->head[0] == AVA2_H1 && ar->head[1] == AVA2_H2) {
@@ -268,7 +261,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			((ar->crc[1] & 0xff) << 8);
 
 		type = ar->type;
-		applog(LOG_DEBUG, "Avalon2: %d: expected crc(%04x), actural_crc(%04x)", type, expected_crc, actual_crc);
+		applog(LOG_DEBUG, "Avalon2: %d: expected crc(%04x), actual_crc(%04x)",
+		       type, expected_crc, actual_crc);
 		if (expected_crc != actual_crc)
 			goto out;
 
@@ -279,6 +273,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 
 		switch(type) {
 		case AVA2_P_NONCE:
+			applog(LOG_DEBUG, "Avalon2: AVA2_P_NONCE");
 			memcpy(&miner, ar->data + 0, 4);
 			memcpy(&pool_no, ar->data + 4, 4);
 			memcpy(&nonce2, ar->data + 8, 4);
@@ -305,19 +300,19 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 
 			real_pool = pool = pools[pool_no];
 			if (job_idcmp(job_id, pool->swork.job_id)) {
-				if (!job_idcmp(job_id, pool_stratum.swork.job_id)) {
-					applog(LOG_DEBUG, "Avalon2: Match to previous stratum! (%s)", pool_stratum.swork.job_id);
-					pool = &pool_stratum;
+				if (!job_idcmp(job_id, pool_stratum->swork.job_id)) {
+					applog(LOG_DEBUG, "Avalon2: Match to previous stratum! (%s)", pool_stratum->swork.job_id);
+					pool = pool_stratum;
 				} else {
 					applog(LOG_ERR, "Avalon2: Cannot match to any stratum! (%s)", pool->swork.job_id);
 					break;
 				}
 			}
 
-			if (thr && info->first)
-				submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce);
+			submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce);
 			break;
 		case AVA2_P_STATUS:
+			applog(LOG_DEBUG, "Avalon2: AVA2_P_STATUS");
 			memcpy(&tmp, ar->data, 4);
 			tmp = be32toh(tmp);
 			info->temp[0 + modular_id * 2] = tmp >> 16;
@@ -350,12 +345,16 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			avalon2->temp = get_temp_max(info);
 			break;
 		case AVA2_P_ACKDETECT:
+			applog(LOG_DEBUG, "Avalon2: AVA2_P_ACKDETECT");
 			break;
 		case AVA2_P_ACK:
+			applog(LOG_DEBUG, "Avalon2: AVA2_P_ACK");
 			break;
 		case AVA2_P_NAK:
+			applog(LOG_DEBUG, "Avalon2: AVA2_P_NAK");
 			break;
 		default:
+			applog(LOG_DEBUG, "Avalon2: Unknown response");
 			type = AVA2_GETS_ERROR;
 			break;
 		}
@@ -365,34 +364,23 @@ out:
 	return type;
 }
 
-static inline int avalon2_gets(int fd, uint8_t *buf)
+static inline int avalon2_gets(struct cgpu_info *avalon2, uint8_t *buf)
 {
 	int i;
 	int read_amount = AVA2_READ_SIZE;
 	uint8_t buf_tmp[AVA2_READ_SIZE];
 	uint8_t buf_copy[2 * AVA2_READ_SIZE];
 	uint8_t *buf_back = buf;
-	ssize_t ret = 0;
+	int ret = 0;
 
 	while (true) {
-		struct timeval timeout;
-		fd_set rd;
+		int err;
 
-		timeout.tv_sec = 0;
-		timeout.tv_usec = 100000;
-
-		FD_ZERO(&rd);
-		FD_SET(fd, &rd);
-		ret = select(fd + 1, &rd, NULL, NULL, &timeout);
-		if (unlikely(ret < 0)) {
-			applog(LOG_ERR, "Avalon2: Error %d on select in avalon_gets", errno);
-			return AVA2_GETS_ERROR;
-		}
 		if (ret) {
 			memset(buf, 0, read_amount);
-			ret = read(fd, buf, read_amount);
-			if (unlikely(ret < 0)) {
-				applog(LOG_ERR, "Avalon2: Error %d on read in avalon_gets", errno);
+			err = usb_read(avalon2, (char *)buf, read_amount, &ret, C_AVA2_READ);
+			if (unlikely(err < 0 || ret != read_amount)) {
+				applog(LOG_ERR, "Avalon2: Error %d on read in avalon_gets got %d", err, ret);
 				return AVA2_GETS_ERROR;
 			}
 			if (likely(ret >= read_amount)) {
@@ -402,9 +390,9 @@ static inline int avalon2_gets(int fd, uint8_t *buf)
 				}
 				i -= 1;
 				if (i) {
-					ret = read(fd, buf_tmp, i);
-					if (unlikely(ret != i)) {
-						applog(LOG_ERR, "Avalon2: Error %d on read in avalon_gets", errno);
+					err = usb_read(avalon2, (char *)buf, read_amount, &ret, C_AVA2_READ);
+					if (unlikely(err < 0 || ret != i)) {
+						applog(LOG_ERR, "Avalon2: Error %d on 2nd read in avalon_gets got %d", err, ret);
 						return AVA2_GETS_ERROR;
 					}
 					memcpy(buf_copy, buf_back + i, AVA2_READ_SIZE - i);
@@ -422,45 +410,39 @@ static inline int avalon2_gets(int fd, uint8_t *buf)
 	}
 }
 
-static int avalon2_send_pkg(int fd, const struct avalon2_pkg *pkg,
-			    struct thr_info __maybe_unused *thr)
+static int avalon2_send_pkg(struct cgpu_info *avalon2, const struct avalon2_pkg *pkg)
 {
-	int ret;
+	int err, amount;
 	uint8_t buf[AVA2_WRITE_SIZE];
 	int nr_len = AVA2_WRITE_SIZE;
 
+	if (unlikely(avalon2->usbinfo.nodev))
+		return AVA2_SEND_ERROR;
+
 	memcpy(buf, pkg, AVA2_WRITE_SIZE);
-	if (opt_debug) {
-		applog(LOG_DEBUG, "Avalon2: Sent(%d):", nr_len);
-		hexdump((uint8_t *)buf, nr_len);
-	}
-
-	ret = write(fd, buf, nr_len);
-	if (unlikely(ret != nr_len)) {
-		applog(LOG_DEBUG, "Avalon2: Send(%d)!", ret);
+	err = usb_write(avalon2, (char *)buf, nr_len, &amount, C_AVA2_WRITE);
+	if (err || amount != nr_len) {
+		applog(LOG_DEBUG, "Avalon2: Send(%d)!", amount);
 		return AVA2_SEND_ERROR;
 	}
-
-	cgsleep_ms(20);
-#if 0
-	ret = avalon2_gets(fd, result);
-	if (ret != AVA2_GETS_OK) {
-		applog(LOG_DEBUG, "Avalon2: Get(%d)!", ret);
-		return AVA2_SEND_ERROR;
-	}
-
-	ret = decode_pkg(thr, &ar, result);
-	if (ret != AVA2_P_ACK) {
-		applog(LOG_DEBUG, "Avalon2: PKG(%d)!", ret);
-		hexdump((uint8_t *)result, AVA2_READ_SIZE);
-		return AVA2_SEND_ERROR;
-	}
-#endif
 
 	return AVA2_SEND_OK;
 }
 
-static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
+static int avalon2_send_pkgs(struct cgpu_info *avalon2, const struct avalon2_pkg *pkg)
+{
+	int ret;
+
+	do {
+		if (unlikely(avalon2->usbinfo.nodev))
+			return -1;
+		ret = avalon2_send_pkg(avalon2, pkg);
+	} while (ret != AVA2_SEND_OK);
+
+	return 0;
+}
+
+static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 {
 	const int merkle_offset = 36;
 	struct avalon2_pkg pkg;
@@ -499,8 +481,8 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	memcpy(pkg.data + 24, &tmp, 4);
 
 	avalon2_init_pkg(&pkg, AVA2_P_STATIC, 1, 1);
-	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
-		;
+	if (avalon2_send_pkgs(avalon2, &pkg))
+		return;
 
 	set_target(target, pool->sdiff);
 	memcpy(pkg.data, target, 32);
@@ -511,9 +493,8 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 		free(target_str);
 	}
 	avalon2_init_pkg(&pkg, AVA2_P_TARGET, 1, 1);
-	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
-		;
-
+	if (avalon2_send_pkgs(avalon2, &pkg))
+		return;
 
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message JOBS_ID: %s",
 	       pool->swork.job_id);
@@ -524,8 +505,8 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	pkg.data[0] = (crc & 0xff00) >> 8;
 	pkg.data[1] = crc & 0x00ff;
 	avalon2_init_pkg(&pkg, AVA2_P_JOB_ID, 1, 1);
-	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
-		;
+	if (avalon2_send_pkgs(avalon2, &pkg))
+		return;
 
 	a = pool->coinbase_len / AVA2_P_DATA_LEN;
 	b = pool->coinbase_len % AVA2_P_DATA_LEN;
@@ -533,15 +514,15 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	for (i = 0; i < a; i++) {
 		memcpy(pkg.data, pool->coinbase + i * 32, 32);
 		avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, a + (b ? 1 : 0));
-		while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
-			;
+		if (avalon2_send_pkgs(avalon2, &pkg))
+			return;
 	}
 	if (b) {
 		memset(pkg.data, 0, AVA2_P_DATA_LEN);
 		memcpy(pkg.data, pool->coinbase + i * 32, b);
 		avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, i + 1);
-		while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
-			;
+		if (avalon2_send_pkgs(avalon2, &pkg))
+			return;
 	}
 
 	b = pool->merkles;
@@ -550,8 +531,8 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 		memset(pkg.data, 0, AVA2_P_DATA_LEN);
 		memcpy(pkg.data, pool->swork.merkle_bin[i], 32);
 		avalon2_init_pkg(&pkg, AVA2_P_MERKLES, i + 1, b);
-		while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
-			;
+		if (avalon2_send_pkgs(avalon2, &pkg))
+			return;
 	}
 
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message HEADER: 4");
@@ -559,66 +540,69 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 		memset(pkg.data, 0, AVA2_P_HEADER);
 		memcpy(pkg.data, pool->header_bin + i * 32, 32);
 		avalon2_init_pkg(&pkg, AVA2_P_HEADER, i + 1, 4);
-		while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
-			;
-
+		if (avalon2_send_pkgs(avalon2, &pkg))
+			return;
 	}
-	return 0;
 }
 
-static int avalon2_get_result(struct thr_info *thr, int fd_detect, struct avalon2_ret *ar)
+static int avalon2_get_result(struct thr_info *thr, struct avalon2_ret *ar)
 {
-	struct cgpu_info *avalon2;
-	struct avalon2_info *info;
-	int fd;
-
-	fd = fd_detect;
-	if (thr) {
-		avalon2 = thr->cgpu;
-		info = avalon2->device_data;
-		fd = info->fd;
-	}
-
-	uint8_t result[AVA2_READ_SIZE];
+	struct cgpu_info *avalon2 = thr->cgpu;
+	uint8_t result[AVA2_READ_SIZE] = {};
 	int ret;
 
-	memset(result, 0, AVA2_READ_SIZE);
-
-	ret = avalon2_gets(fd, result);
+	ret = avalon2_gets(avalon2, result);
 	if (ret != AVA2_GETS_OK)
 		return ret;
-
-	if (opt_debug) {
-		applog(LOG_DEBUG, "Avalon2: Get(ret = %d):", ret);
-		hexdump((uint8_t *)result, AVA2_READ_SIZE);
-	}
 
 	return decode_pkg(thr, ar, result);
 }
 
-static bool avalon2_detect_one(const char *devpath)
+static void avalon2_initialise(struct cgpu_info *avalon2)
+{
+	uint32_t ava2_data[2] = { PL2303_VALUE_LINE0, PL2303_VALUE_LINE1 };
+	int interface;
+
+	if (avalon2->usbinfo.nodev)
+		return;
+
+	interface = usb_interface(avalon2);
+	// Set Data Control
+	usb_transfer(avalon2, PL2303_CTRL_OUT, PL2303_REQUEST_CTRL, PL2303_VALUE_CTRL,
+		     interface, C_SETDATA);
+
+	if (avalon2->usbinfo.nodev)
+		return;
+
+	// Set Line Control
+	usb_transfer_data(avalon2, PL2303_CTRL_OUT, PL2303_REQUEST_LINE, PL2303_VALUE_LINE,
+			  interface, ava2_data, PL2303_VALUE_LINE_SIZE, C_SETLINE);
+	if (avalon2->usbinfo.nodev)
+		return;
+
+	// Vendor
+	usb_transfer(avalon2, PL2303_VENDOR_OUT, PL2303_REQUEST_VENDOR, PL2303_VALUE_VENDOR,
+		     interface, C_VENDOR);
+}
+
+static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct avalon2_info *info;
 	int ackdetect;
-	int fd;
-	int tmp, i, j, modular[AVA2_DEFAULT_MODULARS];
+	int err, amount;
+	int tmp, i, j, modular[AVA2_DEFAULT_MODULARS] = {};
 	char mm_version[AVA2_DEFAULT_MODULARS][16];
 
-	struct cgpu_info *avalon2;
+	struct cgpu_info *avalon2 = usb_alloc_cgpu(&avalon2_drv, 1);
 	struct avalon2_pkg detect_pkg;
 	struct avalon2_ret ret_pkg;
 
-	applog(LOG_DEBUG, "Avalon2 Detect: Attempting to open %s", devpath);
-
-	fd = avalon2_open(devpath, AVA2_IO_SPEED, true);
-	if (unlikely(fd == -1)) {
-		applog(LOG_ERR, "Avalon2 Detect: Failed to open %s", devpath);
-		return false;
+	if (!usb_init(avalon2, dev, found)) {
+		applog(LOG_ERR, "Avalon2 failed usb_init");
+		avalon2 = usb_free_cgpu(avalon2);
+		return NULL;
 	}
-	tcflush(fd, TCIOFLUSH);
-
-	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++)
-		modular[i] = 0;
+	avalon2_initialise(avalon2);
 
 	for (j = 0; j < 2; j++) {
 		for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
@@ -629,8 +613,16 @@ static bool avalon2_detect_one(const char *devpath)
 			memcpy(detect_pkg.data + 28, &tmp, 4);
 
 			avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
-			avalon2_send_pkg(fd, &detect_pkg, NULL);
-			ackdetect = avalon2_get_result(NULL, fd, &ret_pkg);
+			avalon2_send_pkg(avalon2, &detect_pkg);
+			err = usb_read(avalon2, (char *)&ret_pkg, AVA2_READ_SIZE, &amount, C_AVA2_READ);
+			if (err || amount != AVA2_READ_SIZE) {
+				applog(LOG_ERR, "%s %d: Avalon2 failed usb_read with err %d amount %d",
+				       avalon2->drv->name, avalon2->device_id, err, amount);
+				usb_uninit(avalon2);
+				usb_free_cgpu(avalon2);
+				return NULL;
+			}
+			ackdetect = ret_pkg.type;
 			applog(LOG_DEBUG, "Avalon2 Detect ID[%d]: %d", i, ackdetect);
 			if (ackdetect != AVA2_P_ACKDETECT && modular[i] == 0)
 				continue;
@@ -639,28 +631,28 @@ static bool avalon2_detect_one(const char *devpath)
 			mm_version[i][15] = '\0';
 		}
 	}
-	avalon2_close(fd);
-	if (!modular[0] && !modular[1] && !modular[2] && !modular[3])
-		return false;
+	if (!modular[0] && !modular[1] && !modular[2] && !modular[3]) {
+		applog(LOG_DEBUG, "Not an Avalon2 device");
+		usb_uninit(avalon2);
+		usb_free_cgpu(avalon2);
+		return NULL;
+	}
 
 	/* We have a real Avalon! */
-	avalon2 = calloc(1, sizeof(struct cgpu_info));
-	avalon2->drv = &avalon2_drv;
-	avalon2->device_path = strdup(devpath);
 	avalon2->threads = AVA2_MINER_THREADS;
 	add_cgpu(avalon2);
 
-	applog(LOG_INFO, "Avalon2 Detect: Found at %s, mark as %d",
-	       devpath, avalon2->device_id);
+	update_usb_stats(avalon2);
+
+	applog(LOG_INFO, "%s%d: Found at %s", avalon2->drv->name, avalon2->device_id,
+	       avalon2->device_path);
 
 	avalon2->device_data = calloc(sizeof(struct avalon2_info), 1);
 	if (unlikely(!(avalon2->device_data)))
-		quit(1, "Failed to malloc avalon2_info");
+		quit(1, "Failed to calloc avalon2_info");
 
 	info = avalon2->device_data;
 
-	info->fd = -1;
-	info->baud = AVA2_IO_SPEED;
 	info->fan_pwm = get_fan_pwm(AVA2_DEFAULT_FAN_PWM);
 	info->temp_max = 0;
 
@@ -687,29 +679,13 @@ static bool avalon2_detect_one(const char *devpath)
 	if (!opt_avalon2_freq_min)
 		opt_avalon2_freq_min = opt_avalon2_freq_max = info->set_frequency;
 
-	pool_stratum.swork.job_id = NULL;
-	pool_stratum.merkles = 0;
-	return true;
+	exit(0);
+	return avalon2;
 }
 
 static inline void avalon2_detect(bool __maybe_unused hotplug)
 {
-	serial_detect(&avalon2_drv, avalon2_detect_one);
-}
-
-static void avalon2_init(struct cgpu_info *avalon2)
-{
-	int fd;
-	struct avalon2_info *info = avalon2->device_data;
-
-	fd = avalon2_open(avalon2->device_path, info->baud, true);
-	if (unlikely(fd == -1)) {
-		applog(LOG_ERR, "Avalon2: Failed to open on %s", avalon2->device_path);
-		return;
-	}
-	applog(LOG_DEBUG, "Avalon2: Opened on %s", avalon2->device_path);
-
-	info->fd = fd;
+	usb_detect(&avalon2_drv, avalon2_detect_one);
 }
 
 static bool avalon2_prepare(struct thr_info *thr)
@@ -717,12 +693,7 @@ static bool avalon2_prepare(struct thr_info *thr)
 	struct cgpu_info *avalon2 = thr->cgpu;
 	struct avalon2_info *info = avalon2->device_data;
 
-	if (info->fd == -1)
-		avalon2_init(avalon2);
-
-	info->first = 0;
-
-	cglock_init(&(pool_stratum.data_lock));
+	cglock_init(&info->pool.data_lock);
 
 	return true;
 }
@@ -750,68 +721,67 @@ static int polling(struct thr_info *thr)
 			memcpy(send_pkg.data + 28, &tmp, 4);
 			if (info->led_red[i] && mm_cmp_1404(info, i)) {
 				avalon2_init_pkg(&send_pkg, AVA2_P_TEST, 1, 1);
-				while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
-					;
+				avalon2_send_pkgs(avalon2, &send_pkg);
 				info->enable[i] = 0;
 				continue;
 			} else
 				avalon2_init_pkg(&send_pkg, AVA2_P_POLLING, 1, 1);
 
-			while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
-				;
-			avalon2_get_result(thr, info->fd, &ar);
+			avalon2_send_pkgs(avalon2, &send_pkg);
+			avalon2_get_result(thr, &ar);
 		}
 	}
 
 	return 0;
 }
 
-static void copy_pool_stratum(struct pool *pool)
+static void copy_pool_stratum(struct avalon2_info *info, struct pool *pool)
 {
 	int i;
 	int merkles = pool->merkles;
 	size_t coinbase_len = pool->coinbase_len;
+	struct pool *pool_stratum = &info->pool;
 
-	if (!job_idcmp(pool->swork.job_id, pool_stratum.swork.job_id))
+	if (!job_idcmp(pool->swork.job_id, pool_stratum->swork.job_id))
 		return;
 
-	cg_wlock(&(pool_stratum.data_lock));
-	free(pool_stratum.swork.job_id);
-	free(pool_stratum.nonce1);
-	free(pool_stratum.coinbase);
+	cg_wlock(&pool_stratum->data_lock);
+	free(pool_stratum->swork.job_id);
+	free(pool_stratum->nonce1);
+	free(pool_stratum->coinbase);
 
 	align_len(&coinbase_len);
-	pool_stratum.coinbase = calloc(coinbase_len, 1);
-	if (unlikely(!pool_stratum.coinbase))
+	pool_stratum->coinbase = calloc(coinbase_len, 1);
+	if (unlikely(!pool_stratum->coinbase))
 		quit(1, "Failed to calloc pool_stratum coinbase in avalon2");
-	memcpy(pool_stratum.coinbase, pool->coinbase, coinbase_len);
+	memcpy(pool_stratum->coinbase, pool->coinbase, coinbase_len);
 
 
-	for (i = 0; i < pool_stratum.merkles; i++)
-		free(pool_stratum.swork.merkle_bin[i]);
+	for (i = 0; i < pool_stratum->merkles; i++)
+		free(pool_stratum->swork.merkle_bin[i]);
 	if (merkles) {
-		pool_stratum.swork.merkle_bin = realloc(pool_stratum.swork.merkle_bin,
+		pool_stratum->swork.merkle_bin = realloc(pool_stratum->swork.merkle_bin,
 						 sizeof(char *) * merkles + 1);
 		for (i = 0; i < merkles; i++) {
-			pool_stratum.swork.merkle_bin[i] = malloc(32);
-			if (unlikely(!pool_stratum.swork.merkle_bin[i]))
+			pool_stratum->swork.merkle_bin[i] = malloc(32);
+			if (unlikely(!pool_stratum->swork.merkle_bin[i]))
 				quit(1, "Failed to malloc pool_stratum swork merkle_bin");
-			memcpy(pool_stratum.swork.merkle_bin[i], pool->swork.merkle_bin[i], 32);
+			memcpy(pool_stratum->swork.merkle_bin[i], pool->swork.merkle_bin[i], 32);
 		}
 	}
 
-	pool_stratum.sdiff = pool->sdiff;
-	pool_stratum.coinbase_len = pool->coinbase_len;
-	pool_stratum.nonce2_offset = pool->nonce2_offset;
-	pool_stratum.n2size = pool->n2size;
-	pool_stratum.merkles = pool->merkles;
+	pool_stratum->sdiff = pool->sdiff;
+	pool_stratum->coinbase_len = pool->coinbase_len;
+	pool_stratum->nonce2_offset = pool->nonce2_offset;
+	pool_stratum->n2size = pool->n2size;
+	pool_stratum->merkles = pool->merkles;
 
-	pool_stratum.swork.job_id = strdup(pool->swork.job_id);
-	pool_stratum.nonce1 = strdup(pool->nonce1);
+	pool_stratum->swork.job_id = strdup(pool->swork.job_id);
+	pool_stratum->nonce1 = strdup(pool->nonce1);
 
-	memcpy(pool_stratum.ntime, pool->ntime, sizeof(pool_stratum.ntime));
-	memcpy(pool_stratum.header_bin, pool->header_bin, sizeof(pool_stratum.header_bin));
-	cg_wunlock(&(pool_stratum.data_lock));
+	memcpy(pool_stratum->ntime, pool->ntime, sizeof(pool_stratum->ntime));
+	memcpy(pool_stratum->header_bin, pool->header_bin, sizeof(pool_stratum->header_bin));
+	cg_wunlock(&pool_stratum->data_lock);
 }
 
 static void avalon2_update(struct cgpu_info *avalon2)
@@ -820,13 +790,16 @@ static void avalon2_update(struct cgpu_info *avalon2)
 	struct thr_info *thr = avalon2->thr[0];
 	struct avalon2_pkg send_pkg;
 	uint32_t tmp, range, start;
+	struct work *work;
 	struct pool *pool;
 
-	applog(LOG_DEBUG, "Avalon2: New stratum: restart: %d, update: %d, first: %d",
-		thr->work_restart, thr->work_update, info->first);
+	applog(LOG_DEBUG, "Avalon2: New stratum: restart: %d, update: %d",
+		thr->work_restart, thr->work_update);
 	thr->work_update = false;
 	thr->work_restart = false;
-	get_work(thr, thr->id); /* Make sure pool is ready */
+
+	work = get_work(thr, thr->id); /* Make sure pool is ready */
+	discard_work(work); /* Don't leak memory */
 
 	pool = current_pool();
 	if (!pool->has_stratum)
@@ -843,8 +816,8 @@ static void avalon2_update(struct cgpu_info *avalon2)
 	cgtime(&info->last_stratum);
 	cg_rlock(&pool->data_lock);
 	info->pool_no = pool->pool_no;
-	copy_pool_stratum(pool);
-	avalon2_stratum_pkgs(info->fd, pool, thr);
+	copy_pool_stratum(info, pool);
+	avalon2_stratum_pkgs(avalon2, pool);
 	cg_runlock(&pool->data_lock);
 
 	/* Configuer the parameter from outside */
@@ -882,11 +855,7 @@ static void avalon2_update(struct cgpu_info *avalon2)
 
 	/* Package the data */
 	avalon2_init_pkg(&send_pkg, AVA2_P_SET, 1, 1);
-	while (avalon2_send_pkg(info->fd, &send_pkg, thr) != AVA2_SEND_OK)
-		;
-
-	if (unlikely(info->first < 2))
-		info->first++;
+	avalon2_send_pkgs(avalon2, &send_pkg);
 }
 
 static int64_t avalon2_scanhash(struct thr_info *thr)
@@ -1066,7 +1035,6 @@ struct device_drv avalon2_drv = {
 	.get_statline_before = avalon2_statline_before,
 	.set_device = avalon2_set_device,
 	.drv_detect = avalon2_detect,
-	.reinit_device = avalon2_init,
 	.thread_prepare = avalon2_prepare,
 	.hash_work = hash_driver_work,
 	.flush_work = avalon2_update,

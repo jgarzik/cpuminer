@@ -102,12 +102,8 @@ struct avalon2_pkg {
 #define avalon2_ret avalon2_pkg
 
 struct avalon2_info {
-	int first;
 	struct timeval last_stratum;
-
-	int fd;
-	int baud;
-
+	struct pool pool;
 	int pool_no;
 
 	int modulars[AVA2_DEFAULT_MODULARS];
