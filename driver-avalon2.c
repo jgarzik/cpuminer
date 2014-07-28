@@ -376,11 +376,12 @@ static inline int avalon2_gets(struct cgpu_info *avalon2, uint8_t *buf)
 	while (true) {
 		int err;
 
-		if (ret) {
+		do {
 			memset(buf, 0, read_amount);
 			err = usb_read(avalon2, (char *)buf, read_amount, &ret, C_AVA2_READ);
 			if (unlikely(err < 0 || ret != read_amount)) {
-				applog(LOG_ERR, "Avalon2: Error %d on read in avalon_gets got %d", err, ret);
+				if (err != -7)
+					applog(LOG_ERR, "Avalon2: Error %d on read in avalon_gets got %d", err, ret);
 				return AVA2_GETS_ERROR;
 			}
 			if (likely(ret >= read_amount)) {
@@ -392,7 +393,8 @@ static inline int avalon2_gets(struct cgpu_info *avalon2, uint8_t *buf)
 				if (i) {
 					err = usb_read(avalon2, (char *)buf, read_amount, &ret, C_AVA2_READ);
 					if (unlikely(err < 0 || ret != i)) {
-						applog(LOG_ERR, "Avalon2: Error %d on 2nd read in avalon_gets got %d", err, ret);
+						if (err != -7)
+							applog(LOG_ERR, "Avalon2: Error %d on 2nd read in avalon_gets got %d", err, ret);
 						return AVA2_GETS_ERROR;
 					}
 					memcpy(buf_copy, buf_back + i, AVA2_READ_SIZE - i);
@@ -403,8 +405,7 @@ static inline int avalon2_gets(struct cgpu_info *avalon2, uint8_t *buf)
 			}
 			buf += ret;
 			read_amount -= ret;
-			continue;
-		}
+		} while (ret > 0);
 
 		return AVA2_GETS_TIMEOUT;
 	}
@@ -545,19 +546,6 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 	}
 }
 
-static int avalon2_get_result(struct thr_info *thr, struct avalon2_ret *ar)
-{
-	struct cgpu_info *avalon2 = thr->cgpu;
-	uint8_t result[AVA2_READ_SIZE] = {};
-	int ret;
-
-	ret = avalon2_gets(avalon2, result);
-	if (ret != AVA2_GETS_OK)
-		return ret;
-
-	return decode_pkg(thr, ar, result);
-}
-
 static void avalon2_initialise(struct cgpu_info *avalon2)
 {
 	uint32_t ava2_data[2] = { PL2303_VALUE_LINE0, PL2303_VALUE_LINE1 };
@@ -568,8 +556,13 @@ static void avalon2_initialise(struct cgpu_info *avalon2)
 
 	interface = usb_interface(avalon2);
 	// Set Data Control
-	usb_transfer(avalon2, PL2303_CTRL_OUT, PL2303_REQUEST_CTRL, PL2303_VALUE_CTRL,
-		     interface, C_SETDATA);
+	usb_transfer(avalon2, PL2303_VENDOR_OUT, PL2303_REQUEST_VENDOR, 8,
+		     interface, C_VENDOR);
+	if (avalon2->usbinfo.nodev)
+		return;
+
+	usb_transfer(avalon2, PL2303_VENDOR_OUT, PL2303_REQUEST_VENDOR, 9,
+		     interface, C_VENDOR);
 
 	if (avalon2->usbinfo.nodev)
 		return;
@@ -583,6 +576,12 @@ static void avalon2_initialise(struct cgpu_info *avalon2)
 	// Vendor
 	usb_transfer(avalon2, PL2303_VENDOR_OUT, PL2303_REQUEST_VENDOR, PL2303_VALUE_VENDOR,
 		     interface, C_VENDOR);
+
+	if (avalon2->usbinfo.nodev)
+		return;
+
+	// Set More Line Control ?
+	usb_transfer(avalon2, PL2303_CTRL_OUT, PL2303_REQUEST_CTRL, 3, interface, C_SETLINE);
 }
 
 static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
@@ -615,12 +614,10 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 			avalon2_init_pkg(&detect_pkg, AVA2_P_DETECT, 1, 1);
 			avalon2_send_pkg(avalon2, &detect_pkg);
 			err = usb_read(avalon2, (char *)&ret_pkg, AVA2_READ_SIZE, &amount, C_AVA2_READ);
-			if (err || amount != AVA2_READ_SIZE) {
-				applog(LOG_ERR, "%s %d: Avalon2 failed usb_read with err %d amount %d",
+			if (err < 0 || amount != AVA2_READ_SIZE) {
+				applog(LOG_DEBUG, "%s %d: Avalon2 failed usb_read with err %d amount %d",
 				       avalon2->drv->name, avalon2->device_id, err, amount);
-				usb_uninit(avalon2);
-				usb_free_cgpu(avalon2);
-				return NULL;
+				continue;
 			}
 			ackdetect = ret_pkg.type;
 			applog(LOG_DEBUG, "Avalon2 Detect ID[%d]: %d", i, ackdetect);
@@ -679,7 +676,6 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 	if (!opt_avalon2_freq_min)
 		opt_avalon2_freq_min = opt_avalon2_freq_max = info->set_frequency;
 
-	exit(0);
 	return avalon2;
 }
 
@@ -688,12 +684,40 @@ static inline void avalon2_detect(bool __maybe_unused hotplug)
 	usb_detect(&avalon2_drv, avalon2_detect_one);
 }
 
+static void *avalon2_get_results(void *userdata)
+{
+	struct thr_info *thr = (struct thr_info *)userdata;
+	struct cgpu_info *avalon2 = thr->cgpu;
+	struct avalon2_info *info = avalon2->device_data;
+	char threadname[16];
+
+	snprintf(threadname, sizeof(threadname), "%d/Av2Recv", avalon2->device_id);
+	RenameThread(threadname);
+
+	while (likely(!avalon2->shutdown)) {
+		uint8_t result[AVA2_READ_SIZE];
+		struct avalon2_ret ar;
+		int ret;
+
+		if (unlikely(avalon2->usbinfo.nodev))
+			break;
+		ret = avalon2_gets(avalon2, result);
+		if (ret != AVA2_GETS_OK)
+			continue;
+		decode_pkg(thr, &ar, result);
+	}
+
+	return NULL;
+}
+
 static bool avalon2_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *avalon2 = thr->cgpu;
 	struct avalon2_info *info = avalon2->device_data;
 
 	cglock_init(&info->pool.data_lock);
+	if (pthread_create(&info->read_thr, NULL, avalon2_get_results, (void *)thr))
+		quit(1, "Failed to create avalon read_thr");
 
 	return true;
 }
@@ -708,10 +732,9 @@ static int polling(struct thr_info *thr)
 	struct cgpu_info *avalon2 = thr->cgpu;
 	struct avalon2_info *info = avalon2->device_data;
 
-	static int pre_led_red[AVA2_DEFAULT_MODULARS];
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		if (info->modulars[i] && info->enable[i]) {
-			cgsleep_ms(20);
+			cgsleep_ms(100);
 			memset(send_pkg.data, 0, AVA2_P_DATA_LEN);
 
 			tmp = be32toh(info->led_red[i]); /* RED LED */
@@ -728,7 +751,6 @@ static int polling(struct thr_info *thr)
 				avalon2_init_pkg(&send_pkg, AVA2_P_POLLING, 1, 1);
 
 			avalon2_send_pkgs(avalon2, &send_pkg);
-			avalon2_get_result(thr, &ar);
 		}
 	}
 
@@ -866,6 +888,12 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 	int64_t h;
 	int i;
 
+	if (unlikely(avalon2->usbinfo.nodev)) {
+		applog(LOG_ERR, "%s%d: Device disappeared, shutting down thread",
+		       avalon2->drv->name, avalon2->device_id);
+		return -1;
+	}
+
 	/* Stop polling the device if there is no stratum in 3 minutes, network is down */
 	cgtime(&current_stratum);
 	if (tdiff(&current_stratum, &(info->last_stratum)) > (double)(3.0 * 60.0))
@@ -983,48 +1011,14 @@ static void avalon2_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 		    temp, info->fan_pct, volts);
 }
 
-static char *avalon2_set_device(struct cgpu_info *avalon2, char *option, char *setting, char *replybuf)
+static void avalon2_shutdown(struct thr_info *thr)
 {
-	int val;
-	struct avalon2_info *info;
+	struct cgpu_info *avalon2 = thr->cgpu;
+	struct avalon2_info *info = avalon2->device_data;
+	int interface = usb_interface(avalon2);
 
-	if (strcasecmp(option, "help") == 0) {
-		sprintf(replybuf, "led: module_id");
-		return replybuf;
-	}
-
-	if (strcasecmp(option, "led") == 0) {
-		if (!setting || !*setting) {
-			sprintf(replybuf, "missing module_id setting");
-			return replybuf;
-		}
-
-		val = atoi(setting);
-		if (val < 1 || val > AVA2_DEFAULT_MODULARS) {
-			sprintf(replybuf, "invalid module_id: %d, valid range 1-%d", val, AVA2_DEFAULT_MODULARS);
-			return replybuf;
-		}
-
-		val -= 1;
-
-		info = avalon2->device_data;
-		info->led_red[val] = !info->led_red[val];
-		if (!info->led_red[val] && mm_cmp_1404(info, val)) {
-			applog(LOG_ERR, "Avalon2: MM early then MM_XX1404, enable module:%d", val + 1);
-			info->enable[val] = 1;
-		}
-
-		applog(LOG_ERR, "Avalon2: Module:%d, LED: %s", val + 1, info->led_red[val] ? "on" : "off");
-		return NULL;
-	}
-	/* TODO: Add other commands */
-
-	sprintf(replybuf, "Unknown option: %s", option);
-	return replybuf;
-}
-
-static void avalon2_shutdown(struct thr_info __maybe_unused *thr)
-{
+	pthread_join(info->read_thr, NULL);
+	usb_transfer(avalon2, PL2303_CTRL_OUT, PL2303_REQUEST_CTRL, 0, interface, C_SETLINE);
 }
 
 struct device_drv avalon2_drv = {
@@ -1033,7 +1027,6 @@ struct device_drv avalon2_drv = {
 	.name = "AV2",
 	.get_api_stats = avalon2_api_stats,
 	.get_statline_before = avalon2_statline_before,
-	.set_device = avalon2_set_device,
 	.drv_detect = avalon2_detect,
 	.thread_prepare = avalon2_prepare,
 	.hash_work = hash_driver_work,
