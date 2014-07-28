@@ -392,7 +392,7 @@ static inline int avalon2_gets(struct cgpu_info *avalon2, uint8_t *buf)
 				i -= 1;
 				if (i) {
 					err = usb_read(avalon2, (char *)buf, read_amount, &ret, C_AVA2_READ);
-					if (unlikely(err < 0 || ret != i)) {
+					if (unlikely(err < 0 || ret != read_amount)) {
 						if (err != -7)
 							applog(LOG_ERR, "Avalon2: Error %d on 2nd read in avalon_gets got %d", err, ret);
 						return AVA2_GETS_ERROR;

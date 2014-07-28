@@ -293,7 +293,7 @@ static inline int hashratio_gets(struct cgpu_info *hashratio, uint8_t *buf)
 				i -= 1;
 				if (i) {
 					err = usb_read(hashratio, (char *)buf, read_amount, &ret, C_HRO_READ);
-					if (unlikely(err < 0 || ret != i)) {
+					if (unlikely(err < 0 || ret != read_amount)) {
 						applog(LOG_ERR, "hashratio: Error on 2nd read in hashratio_gets got %d", ret);
 						return HRTO_GETS_ERROR;
 					}
