@@ -37,7 +37,6 @@
 #include "fpgautils.h"
 #include "driver-avalon2.h"
 #include "crc.h"
-#include "hexdump.c"
 
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
@@ -163,7 +162,7 @@ static int job_idcmp(uint8_t *job_id, char *pool_job_id)
 		return 1;
 
 	job_id_len = strlen(pool_job_id);
-	crc_expect = crc16(pool_job_id, job_id_len);
+	crc_expect = crc16((unsigned char *)pool_job_id, job_id_len);
 
 	crc = job_id[0] << 8 | job_id[1];
 
@@ -500,7 +499,7 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 	memset(pkg.data, 0, AVA2_P_DATA_LEN);
 
 	job_id_len = strlen(pool->swork.job_id);
-	crc = crc16(pool->swork.job_id, job_id_len);
+	crc = crc16((unsigned char *)pool->swork.job_id, job_id_len);
 	pkg.data[0] = (crc & 0xff00) >> 8;
 	pkg.data[1] = crc & 0x00ff;
 	avalon2_init_pkg(&pkg, AVA2_P_JOB_ID, 1, 1);
@@ -736,7 +735,7 @@ static void copy_pool_stratum(struct avalon2_info *info, struct pool *pool)
 	size_t coinbase_len = pool->coinbase_len;
 	struct pool *pool_stratum = &info->pool;
 
-	if (!job_idcmp(pool->swork.job_id, pool_stratum->swork.job_id))
+	if (!job_idcmp((unsigned char *)pool->swork.job_id, pool_stratum->swork.job_id))
 		return;
 
 	cg_wlock(&pool_stratum->data_lock);
@@ -893,7 +892,7 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 		if(info->dev_type[i] == AVA2_ID_AVAX)
 			continue;
 		sprintf(buf, "ID%d MM Version", i + 1);
-		root = api_add_string(root, buf, &(info->mm_version[i]), false);
+		root = api_add_string(root, buf, (char *)&(info->mm_version[i]), false);
 	}
 
 	minerindex = 0;
@@ -986,7 +985,6 @@ static void avalon2_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 static void avalon2_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *avalon2 = thr->cgpu;
-	struct avalon2_info *info = avalon2->device_data;
 	int interface = usb_interface(avalon2);
 
 	usb_transfer(avalon2, PL2303_CTRL_OUT, PL2303_REQUEST_CTRL, 0, interface, C_SETLINE);
