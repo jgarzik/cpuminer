@@ -59,6 +59,10 @@ if WANT_LIBBITFURY
 cgminer_SOURCES += libbitfury.c libbitfury.h mcp2210.c mcp2210.h
 endif
 
+if WANT_CRC16
+cgminer_SOURCES += crc16.c crc.h
+endif
+
 # Device drivers
 if HAS_AVALON
 cgminer_SOURCES += driver-avalon.c driver-avalon.h
@@ -81,7 +85,7 @@ cgminer_SOURCES += driver-hashfast.c driver-hashfast.h hf_protocol.h hf_protocol
 endif
 
 if HAS_HASHRATIO
-cgminer_SOURCES += driver-hashratio.c driver-hashratio.h crc16.c crc.h
+cgminer_SOURCES += driver-hashratio.c driver-hashratio.h
 endif
 
 if HAS_BITFURY
@@ -130,7 +134,7 @@ cgminer_SOURCES += driver-bab.c
 endif
 
 if HAS_AVALON2
-cgminer_SOURCES += driver-avalon2.c driver-avalon2.h crc16.c crc.h
+cgminer_SOURCES += driver-avalon2.c driver-avalon2.h
 endif
 
 if HAS_MINION

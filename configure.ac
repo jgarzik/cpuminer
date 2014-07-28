@@ -386,12 +386,19 @@ else
 	want_libbitfury=false
 fi
 
+if test x$avalon2$hashratio != xnono; then
+	want_crc16=true
+else
+	want_crc16=false
+fi
+
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$modminer != xno])
 AM_CONDITIONAL([WANT_USBUTILS], [test x$want_usbutils != xfalse])
 AM_CONDITIONAL([WANT_LIBBITFURY], [test x$want_libbitfury != xfalse])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
+AM_CONDITIONAL([WANT_CRC16], [test x$want_crc16 != xfalse])
 
 if test "x$want_usbutils" != xfalse; then
 	dlibusb="no"
