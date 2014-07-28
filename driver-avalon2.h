@@ -123,6 +123,7 @@ struct avalon2_info {
 	int power_good[AVA2_DEFAULT_MODULARS];
 
 	int fan_pwm;
+	int fan_pct;
 	int temp_max;
 
 	int fan[2 * AVA2_DEFAULT_MODULARS];

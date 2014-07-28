@@ -216,24 +216,23 @@ static void adjust_fan(struct avalon2_info *info)
 	int t;
 
 	if (unlikely(info->first < 2) || opt_avalon2_fan_fixed == FAN_FIXED) {
-		info->fan_pwm = get_fan_pwm(AVA2_DEFAULT_FAN_PWM);
+		info->fan_pct = AVA2_DEFAULT_FAN_PWM;
+		info->fan_pwm = get_fan_pwm(info->fan_pct);
 		return;
 	}
 
 	t = get_current_temp_max(info);
 
 	/* TODO: Add options for temperature range and fan adjust function */
-	if (t < 50) {
-		info->fan_pwm = get_fan_pwm(40);
-		return;
-	}
+	if (t < 50)
+		info->fan_pct = 40;
+	else if (t > 70)
+		info->fan_pct = 70;
+	else
+		info->fan_pct = 3 * t - 110;
 
-	if (t > 70) {
-		info->fan_pwm = get_fan_pwm(100);
-		return;
-	}
-
-	info->fan_pwm = get_fan_pwm(3 * t - 110);
+	info->fan_pwm = get_fan_pwm(info->fan_pct);
+	applog(LOG_ERR, "Fan pct %d", info->fan_pct);
 }
 
 static inline int mm_cmp_1404(struct avalon2_info *info, int modular)
@@ -1006,6 +1005,14 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
+static void avalon2_statline_before(char *buf, size_t bufsiz, struct cgpu_info *avalon2)
+{
+	struct avalon2_info *info = avalon2->device_data;
+	int temp = get_temp_max(info);
+
+	tailsprintf(buf, bufsiz, "%2dC %3d%%", temp, info->fan_pct);
+}
+
 static char *avalon2_set_device(struct cgpu_info *avalon2, char *option, char *setting, char *replybuf)
 {
 	int val;
@@ -1055,6 +1062,7 @@ struct device_drv avalon2_drv = {
 	.dname = "avalon2",
 	.name = "AV2",
 	.get_api_stats = avalon2_api_stats,
+	.get_statline_before = avalon2_statline_before,
 	.set_device = avalon2_set_device,
 	.drv_detect = avalon2_detect,
 	.reinit_device = avalon2_init,
