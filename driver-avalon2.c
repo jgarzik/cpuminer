@@ -232,7 +232,6 @@ static void adjust_fan(struct avalon2_info *info)
 		info->fan_pct = 3 * t - 110;
 
 	info->fan_pwm = get_fan_pwm(info->fan_pct);
-	applog(LOG_ERR, "Fan pct %d", info->fan_pct);
 }
 
 static inline int mm_cmp_1404(struct avalon2_info *info, int modular)
@@ -1009,8 +1008,10 @@ static void avalon2_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 {
 	struct avalon2_info *info = avalon2->device_data;
 	int temp = get_temp_max(info);
+	float volts = (float)info->set_voltage / 10000;
 
-	tailsprintf(buf, bufsiz, "%2dC %3d%%", temp, info->fan_pct);
+	tailsprintf(buf, bufsiz, "%4dMhz %2dC %3d%% %.3fV", info->set_frequency,
+		    temp, info->fan_pct, volts);
 }
 
 static char *avalon2_set_device(struct cgpu_info *avalon2, char *option, char *setting, char *replybuf)
