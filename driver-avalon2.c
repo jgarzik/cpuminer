@@ -308,7 +308,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			real_pool = pool = pools[pool_no];
 			if (job_idcmp(job_id, pool->swork.job_id)) {
 				if (!job_idcmp(job_id, pool_stratum.swork.job_id)) {
-					applog(LOG_ERR, "Avalon2: Match to previous stratum! (%s)", pool_stratum.swork.job_id);
+					applog(LOG_DEBUG, "Avalon2: Match to previous stratum! (%s)", pool_stratum.swork.job_id);
 					pool = &pool_stratum;
 				} else {
 					applog(LOG_ERR, "Avalon2: Cannot match to any stratum! (%s)", pool->swork.job_id);
@@ -710,11 +710,6 @@ static bool avalon2_prepare(struct thr_info *thr)
 	struct cgpu_info *avalon2 = thr->cgpu;
 	struct avalon2_info *info = avalon2->device_data;
 
-	free(avalon2->works);
-	avalon2->works = calloc(sizeof(struct work *), 2);
-	if (!avalon2->works)
-		quit(1, "Failed to calloc avalon2 works in avalon2_prepare");
-
 	if (info->fd == -1)
 		avalon2_init(avalon2);
 
@@ -856,7 +851,7 @@ static void avalon2_update(struct cgpu_info *avalon2)
 	tmp = be32toh(info->fan_pwm);
 	memcpy(send_pkg.data, &tmp, 4);
 
-	applog(LOG_ERR, "Avalon2: Temp max: %d, Cut off temp: %d",
+	applog(LOG_INFO, "Avalon2: Temp max: %d, Cut off temp: %d",
 		get_current_temp_max(info), opt_avalon2_overheat);
 	if (get_current_temp_max(info) >= opt_avalon2_overheat)
 		tmp = encode_voltage(0);
@@ -1042,12 +1037,8 @@ static char *avalon2_set_device(struct cgpu_info *avalon2, char *option, char *s
 	return replybuf;
 }
 
-static void avalon2_shutdown(struct thr_info *thr)
+static void avalon2_shutdown(struct thr_info __maybe_unused *thr)
 {
-	struct cgpu_info *avalon = thr->cgpu;
-
-	free(avalon->works);
-	avalon->works = NULL;
 }
 
 struct device_drv avalon2_drv = {
