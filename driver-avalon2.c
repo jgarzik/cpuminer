@@ -44,14 +44,14 @@ ASSERT1(sizeof(uint32_t) == 4);
 
 #define get_fan_pwm(v)	(AVA2_PWM_MAX - (v) * AVA2_PWM_MAX / 100)
 
-int opt_avalon2_freq_min = AVA2_DEFAULT_FREQUENCY;
-int opt_avalon2_freq_max = AVA2_DEFAULT_FREQUENCY_MAX;
+int opt_avalon2_freq_min;
+int opt_avalon2_freq_max;
 
 int opt_avalon2_fan_min = get_fan_pwm(AVA2_DEFAULT_FAN_MIN);
 int opt_avalon2_fan_max = get_fan_pwm(AVA2_DEFAULT_FAN_MAX);
 
-int opt_avalon2_voltage_min = AVA2_DEFAULT_VOLTAGE;
-int opt_avalon2_voltage_max = AVA2_DEFAULT_VOLTAGE_MAX;
+int opt_avalon2_voltage_min;
+int opt_avalon2_voltage_max;
 
 int opt_avalon2_overheat = AVALON2_TEMP_OVERHEAT;
 enum avalon2_fan_fixed opt_avalon2_fan_fixed = FAN_AUTO;
@@ -664,8 +664,6 @@ static bool avalon2_detect_one(const char *devpath)
 	info->fd = -1;
 	info->baud = AVA2_IO_SPEED;
 	info->fan_pwm = get_fan_pwm(AVA2_DEFAULT_FAN_PWM);
-	info->set_voltage = AVA2_DEFAULT_VOLTAGE_MIN;
-	info->set_frequency = AVA2_DEFAULT_FREQUENCY;
 	info->temp_max = 0;
 
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
@@ -674,11 +672,22 @@ static bool avalon2_detect_one(const char *devpath)
 		info->enable[i] = modular[i];
 		info->dev_type[i] = AVA2_ID_AVAX;
 
-		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW2_PREFIXSTR, 2))
+		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW2_PREFIXSTR, 2)) {
 			info->dev_type[i] = AVA2_ID_AVA2;
-		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW3_PREFIXSTR, 2))
+			info->set_voltage = AVA2_DEFAULT_VOLTAGE_MIN;
+			info->set_frequency = AVA2_DEFAULT_FREQUENCY;
+		}
+		if (!strncmp((char *)&(info->mm_version[i]), AVA2_FW3_PREFIXSTR, 2)) {
 			info->dev_type[i] = AVA2_ID_AVA3;
+			info->set_voltage = AVA2_AVA3_VOLTAGE;
+			info->set_frequency = AVA2_AVA3_FREQUENCY;
+		}
 	}
+
+	if (!opt_avalon2_voltage_min)
+		opt_avalon2_voltage_min = opt_avalon2_voltage_max = info->set_voltage;
+	if (!opt_avalon2_freq_min)
+		opt_avalon2_freq_min = opt_avalon2_freq_max = info->set_frequency;
 
 	pool_stratum.swork.job_id = NULL;
 	pool_stratum.merkles = 0;
