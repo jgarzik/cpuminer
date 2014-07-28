@@ -46,8 +46,10 @@ ASSERT1(sizeof(uint32_t) == 4);
 int opt_avalon2_freq_min;
 int opt_avalon2_freq_max;
 
-int opt_avalon2_fan_min = get_fan_pwm(AVA2_DEFAULT_FAN_MIN);
-int opt_avalon2_fan_max = get_fan_pwm(AVA2_DEFAULT_FAN_MAX);
+int opt_avalon2_fan_min = AVA2_DEFAULT_FAN_MIN;
+int opt_avalon2_fan_max = AVA2_DEFAULT_FAN_MAX;
+static int avalon2_fan_min = get_fan_pwm(AVA2_DEFAULT_FAN_MIN);
+static int avalon2_fan_max = get_fan_pwm(AVA2_DEFAULT_FAN_MAX);
 
 int opt_avalon2_voltage_min;
 int opt_avalon2_voltage_max;
@@ -57,15 +59,15 @@ enum avalon2_fan_fixed opt_avalon2_fan_fixed = FAN_AUTO;
 
 static inline uint8_t rev8(uint8_t d)
 {
-    int i;
-    uint8_t out = 0;
+	int i;
+	uint8_t out = 0;
 
-    /* (from left to right) */
-    for (i = 0; i < 8; i++)
-        if (d & (1 << i))
-            out |= (1 << (7 - i));
+	/* (from left to right) */
+	for (i = 0; i < 8; i++)
+		if (d & (1 << i))
+		out |= (1 << (7 - i));
 
-    return out;
+	return out;
 }
 
 char *set_avalon2_fan(char *arg)
@@ -81,8 +83,10 @@ char *set_avalon2_fan(char *arg)
 	if (val1 < 0 || val1 > 100 || val2 < 0 || val2 > 100 || val2 < val1)
 		return "Invalid value passed to avalon2-fan";
 
-	opt_avalon2_fan_min = get_fan_pwm(val1);
-	opt_avalon2_fan_max = get_fan_pwm(val2);
+	opt_avalon2_fan_min = val1;
+	opt_avalon2_fan_max = val2;
+	avalon2_fan_min = get_fan_pwm(val1);
+	avalon2_fan_max = get_fan_pwm(val2);
 
 	return NULL;
 }
@@ -221,12 +225,12 @@ static void adjust_fan(struct avalon2_info *info)
 	t = get_current_temp_max(info);
 
 	/* TODO: Add options for temperature range and fan adjust function */
-	if (t < 50)
-		info->fan_pct = 40;
-	else if (t > 70)
-		info->fan_pct = 70;
+	if (t < 60)
+		info->fan_pct = opt_avalon2_fan_min;
+	else if (t > 80)
+		info->fan_pct = opt_avalon2_fan_max;
 	else
-		info->fan_pct = 3 * t - 110;
+		info->fan_pct = (t - 60) * (opt_avalon2_fan_max - opt_avalon2_fan_min) / 20 + opt_avalon2_fan_min;
 
 	info->fan_pwm = get_fan_pwm(info->fan_pct);
 }
