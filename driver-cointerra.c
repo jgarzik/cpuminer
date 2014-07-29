@@ -668,8 +668,7 @@ static void cta_parse_msg(struct thr_info *thr, struct cgpu_info *cointerra,
 		    (buf[CTA_MSG_TYPE] != CTA_RECV_WDONE)) {
 			if (unlikely(verify_checksum(buf) == 0)) {
 				inc_hw_errors(thr);
-				applog(LOG_WARNING, "%s %d: checksum bad",cointerra->drv->name,cointerra->device_id);
-				return;
+				applog(LOG_INFO, "%s %d: checksum bad",cointerra->drv->name,cointerra->device_id);
 			}
 		}
 
