@@ -224,6 +224,7 @@ Options for both config file and command line:
 --hfa-options <arg> Set hashfast options name:clock (comma separated)
 --hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
 --hfa-temp-target <arg> Set the hashfast target temperature (0 to disable) (default: 88)
+--hro-freq          Set the hashratio clock frequency (default: 280)
 --hotplug <arg>     Seconds between hotplug checks (0 means never check)
 --klondike-options <arg> Set klondike options clock:temptarget
 --load-balance      Change multipool strategy from failover to quota based balance
@@ -299,6 +300,11 @@ ASIC only options:
 --avalon-freq <arg> Set frequency range for avalon-auto, single value or range
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq:tech
 --avalon-temp <arg> Set avalon target temperature (default: 50)
+--avalon2-freq      Set frequency range for Avalon2, single value or range
+--avalon2-voltage   Set Avalon2 core voltage, in millivolts
+--avalon2-fan       Set Avalon2 target fan speed
+--avalon2-cutoff <arg> Set Avalon2 overheat cut off temperature (default: 88)
+--avalon2-fixed-speed Set Avalon2 fan to fixed speed
 --bab-options <arg> Set BaB options max:def:min:up:down:hz:delay:trf
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
@@ -314,6 +320,7 @@ ASIC only options:
 --hfa-noshed        Disable hashfast dynamic core disabling feature
 --hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
 --hfa-temp-target <arg> Set the hashfast target temperature (0 to disable) (default: 88)
+--hro-freq          Set the hashratio clock frequency (default: 280)
 --klondike-options <arg> Set klondike options clock:temptarget
 --rock-freq <arg>   Set RockMiner frequency in MHz, range 125-500 (default: 270)
 
@@ -331,8 +338,8 @@ Cgminer should automatically find all of your Avalon ASIC, BFL ASIC, BitForce
 FPGAs, Icarus bitstream FPGAs, Klondike ASIC, ASICMINER usb block erupters,
 KnC ASICs, BaB ASICs, Hashfast ASICs, ModMiner FPGAs, BPMC/BGMC BF1 USB ASICs,
 Bi*fury USB ASICs, Onestring miner USB ASICs, Hexfury USB ASICs, Nanofury USB
-ASICs, Antminer U1/U2/U2+ USB ASICs, Cointerra devices, BFx2 USB ASICs and
-Rockminer R-Box USB ASICs.
+ASICs, Antminer U1/U2/U2+ USB ASICs, Cointerra devices, BFx2 USB ASICs,
+Rockminer R-Box USB ASICs, Avalon2 USB ASICs and Hashratio USB ASICs.
 
 ---
 

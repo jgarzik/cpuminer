@@ -1,24 +1,28 @@
 SUPPORTED DEVICES
 
 Currently supported devices include:
-- Avalon (including BitBurner and Klondike)
-- Butterfly Labs SC range
+- Antminer U1/U2/U2+ USB
+- Antminer S1
 - ASICMINER block erupters
+- Avalon (including BitBurner and Klondike)
+- Avalon2/3
+- BFx2 USB
+- Butterfly Labs SC range
 - BF1 (bitfury) USB (red and blue)
-- KnCminer Mercury, Saturn and Jupiter
 - BlackArrow Bitfury
 - BlackArrow Minion
 - Bi*fury USB
-- Onestring miner USB
+- Cointerra
+- Hashfast Babyjet and Sierra
+- Hashratio
 - Hexfury USB
+- KnCminer Mercury, Saturn and Jupiter
 - Nanofury USB
 - Other bitfury USB devices
-- Hashfast Babyjet and Sierra
-- Antminer U1/U2/U2+ USB
-- Cointerra
-- Antminer S1
-- BFx2 USB
+- Onestring miner USB
 - Rockminer R-Box
+- Spondoolies SP10, SP30
+
 
 No COM ports on windows or TTY devices will be used by cgminer as it
 communicates directly with them via USB so it is normal for them to not exist or
@@ -36,6 +40,10 @@ BFL devices need the --enable-bflsc option when compiling cgminer yourself.
 Avalon will come up as AVA.
 
 Avalon devices need the --enable-avalon option when compiling cgminer.
+
+Avalon2/3 will come up as AV2.
+
+Avalon2/3 devices need the --enable-avalon2 option when compiling cgminer.
 
 Klondike will come up as KLN.
 
@@ -80,8 +88,8 @@ COINTERRA devices
 
 Cointerra devices need the --enable-cointerra option when compiling cgminer.
 
-Cointerra devices come up as CTA devices and currently take no command line
-arguments.
+Cointerra devices come up as CTA devices and currently take only hidden command
+line arguments for power settings.
 
 Cointerra USB devices are set up as per the USB ASIC instructions below.
 
@@ -96,10 +104,15 @@ they are and give them the following names:
 
 HFB: Hashfast Babyjet
 HFS: Hashfast Sierra
-HFA: Hashfast non standard (eg. a Babyjet with an added board)
+HFA: Hashfast non standard (eg. a Babyjet with an added board, Habanero)
 
 
-ANTMINER U1 devices
+HASHRATIO devices
+
+Hashratio devices need the --enable-hashratio option when compiling cgminer.
+
+
+ANTMINER U1/U2+ devices
 
 Antminer devices need the --enable-icarus option when compiling cgminer.
 
@@ -216,6 +229,11 @@ ASIC SPECIFIC COMMANDS
 --avalon-freq <arg> Set frequency range for avalon-auto, single value or range
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq:tech
 --avalon-temp <arg> Set avalon target temperature (default: 50)
+--avalon2-freq      Set frequency range for Avalon2, single value or range
+--avalon2-voltage   Set Avalon2 core voltage, in millivolts
+--avalon2-fan       Set Avalon2 target fan speed
+--avalon2-cutoff <arg> Set Avalon2 overheat cut off temperature (default: 88)
+--avalon2-fixed-speed Set Avalon2 fan to fixed speed
 --bab-options <arg> Set BaB options max:def:min:up:down:hz:delay:trf
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
@@ -239,6 +257,7 @@ ASIC SPECIFIC COMMANDS
 --hfa-options <arg> Set hashfast options name:clock (comma separated)
 --hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
 --hfa-temp-target <arg> Set the hashfast target temperature (0 to disable) (default: 88)
+--hro-freq          Set the hashratio clock frequency (default: 280)
 --klondike-options <arg> Set klondike options clock:temptarget
 --minion-chipreport <arg> Seconds to report chip 5min hashrate, range 0-100 (default: 0=disabled)
 --minion-freq <arg> Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1200)
@@ -461,6 +480,15 @@ ambient temp / highest device temp  lowest detected ASIC cooling fan RPM.
 Use the API for more detailed information than this.
 
 
+Avalon2 Devices
+
+--avalon2-freq      Set frequency range for Avalon2, single value or range
+--avalon2-voltage   Set Avalon2 core voltage, in millivolts
+--avalon2-fan       Set Avalon2 target fan speed
+--avalon2-cutoff <arg> Set Avalon2 overheat cut off temperature (default: 88)
+--avalon2-fixed-speed Set Avalon2 fan to fixed speed
+
+
 BFLSC Devices
 
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
@@ -494,6 +522,14 @@ Choose the overclocking  bits for BFx2 devices.
 Cgminer by default sets the clockspeed on nanofury devices to the highest that
 is still within USB2 spec. This value allows you to alter the clockspeed, with
 ~54 being the optimal but requiring a higher power or USB3 port.
+
+
+Cointerra Devices
+
+--cta-load <arg> (0 - 255)
+--ps-load <arg> (0 - 100)
+
+These are undocumented.
 
 
 Drillbit Systems Devices
@@ -630,6 +666,11 @@ rather than depending on the clockdown feature in cgminer.
 
 Other undocumented hashfast command line options are for development purposes
 only at this stage and serve no useful purpose to end users.
+
+
+Hashratio Devices
+
+--hro-freq          Set the hashratio clock frequency (default: 280)
 
 
 Bitmine A1 Devices
