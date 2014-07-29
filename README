@@ -956,6 +956,21 @@ should produce a work utility of approximately 1 per 71.6MH. This means at
 do "better WU" than this - it is luck related. However you can make it much
 worse if your machine produces a lot of hardware errors producing invalid work.
 
+Q: What should I build in for a generic distribution binary?
+A: There are a number of drivers that expect to be used on dedicated standalone
+hardware. That said, the drivers that are designed to work generically with
+USB on any hardware are the following:
+
+--enable-avalon
+--enable-avalon2
+--enable-bflsc
+--enable-bitfury
+--enable-cointerra
+--enable-drillbit
+--enable-hashfast
+--enable-hashratio
+--enable-icarus
+--enable-klondike
 
 ---
 
