@@ -115,6 +115,7 @@ CGMiner specific configuration options:
   --enable-ants2          Compile support for Antminer S2 Bitmain (default
                           disabled)
   --enable-avalon         Compile support for Avalon (default disabled)
+  --enable-avalon2        Compile support for Avalon2 (default disabled)
   --enable-bab            Compile support for BlackArrow Bitfury (default
                           disabled)
   --enable-bflsc          Compile support for BFL ASICs (default disabled)
@@ -130,11 +131,13 @@ CGMiner specific configuration options:
   --enable-icarus         Compile support for Icarus (default disabled)
   --enable-klondike       Compile support for Klondike (default disabled)
   --enable-knc            Compile support for KnC miners (default disabled)
-  --enable-avalon2        Compile support for Avalon2 (default disabled)
   --enable-minion         Compile support for Minion BlackArrow ASIC (default
                           disabled)
   --enable-modminer       Compile support for ModMiner FPGAs(default disabled)
-  --enable-spondoolies    Compile support for Spondoolies (default disabled)
+  --enable-sp10           Compile support for Spondoolies SP10 (default
+                          disabled)
+  --enable-sp30           Compile support for Spondoolies SP30 (default
+                          disabled)
   --disable-libcurl       Disable building with libcurl for getwork and GBT
                           support
   --without-curses        Compile support for curses TUI (default enabled)
@@ -179,6 +182,11 @@ Options for both config file and command line:
 --avalon-freq <arg> Set frequency range for avalon-auto, single value or range
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq:tech
 --avalon-temp <arg> Set avalon target temperature (default: 50)
+--avalon2-freq      Set frequency range for Avalon2, single value or range
+--avalon2-voltage   Set Avalon2 core voltage, in millivolts
+--avalon2-fan       Set Avalon2 target fan speed
+--avalon2-cutoff <arg> Set Avalon2 overheat cut off temperature (default: 88)
+--avalon2-fixed-speed Set Avalon2 fan to fixed speed
 --bab-options <arg> Set BaB options max:def:min:up:down:hz:delay:trf
 --balance           Change multipool strategy from failover to even share balance
 --benchfile <arg>   Run cgminer in benchmark mode using a work file - produces no shares
@@ -236,6 +244,7 @@ Options for both config file and command line:
 --nfu-bits <arg>    Set nanofury bits for overclocking, range 32-63 (default: 50)
 --net-delay         Impose small delays in networking to not overload slow routers
 --no-submit-stale   Don't submit shares if they are detected as stale
+--osm-led-mode <arg> Set LED mode for OneStringMiner devices (default: 4)
 --pass|-p <arg>     Password for bitcoin JSON-RPC server
 --per-device-stats  Force verbose mode and output per-device statistics
 --protocol-dump|-P  Verbose dump of protocol-level activities
@@ -712,6 +721,7 @@ btc address with the following options, altering to suit their setup:
 
 cgminer -o http://localhost:8332 -u username -p password --btc-address 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
 
+Note the http:// is mandatory for solo mining.
 
 ---
 LOGGING
