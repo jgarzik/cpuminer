@@ -7,6 +7,11 @@ address below.
 Con Kolivas <kernel@kolivas.org>
 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
 
+NOTE: This code is licensed under the GPLv3. This means that the source to any
+modifications you make to this code MUST be provided by law if you distribute
+modified binaries. See COPYING for details.
+
+
 DOWNLOADS:
 
 http://ck.kolivas.org/apps/cgminer
@@ -22,8 +27,6 @@ http://bitcointalk.org/index.php?topic=28402.0
 IRC Channel:
 
 irc://irc.freenode.net/cgminer
-
-License: GPLv3.  See COPYING for details.
 
 SEE ALSO API-README, ASIC-README and FGPA-README FOR MORE INFORMATION ON EACH.
 
@@ -155,7 +158,17 @@ Basic *nix build instructions:
 	directory directly, but you may do make install if you wish to install
 	cgminer to a system location or location you specified.
 
-Native WIN32 build instructions: see windows-build.txt
+Building for windows:
+
+It is actually easiest to build a windows binary using cross compilation tools
+provided by "mxe" available at http://mxe.cc/ (use the 32 bit one!)
+Once you have followed the instructions for building mxe:
+	export PATH=(path/to/mxe)/usr/bin/:$PATH
+	CFLAGS="-O2 -Wall -W -march=i686" ./configure --host=i686-pc-mingw32 <options>
+	make
+
+Native WIN32 build instructions: see windows-build.txt but these instructions
+are now hopelessly out of date.
 
 ---
 
