@@ -69,7 +69,8 @@ cgminer_SOURCES += driver-avalon.c driver-avalon.h
 endif
 
 if HAS_KNC
-cgminer_SOURCES += driver-knc-spi-fpga.c
+cgminer_SOURCES += driver-knc.c knc-asic.c knc-asic.h knc-transport.h knc-transport-spi.c
+cgminer_LDADD   += -lz
 endif
 
 if HAS_BFLSC
