@@ -5083,9 +5083,10 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 				for (i = 0; i < MINION_CORES; i++) {
 					if (datalen < sizeof(data)) {
 						nlen = snprintf(data+datalen, sizeof(data)-datalen,
-								"%s%"PRIu64"-%"PRIu64,
+								"%s%"PRIu64"-%s%"PRIu64,
 								i == 0 ? "" : "/",
 								minioninfo->core_good[chip][i],
+								minioninfo->core_bad[chip][i] ? "'" : "",
 								minioninfo->core_bad[chip][i]);
 						if (nlen < 1)
 							break;
