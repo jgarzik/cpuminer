@@ -4987,6 +4987,7 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 	char data[2048];
 	char buf[32];
 	int i, to, j;
+	size_t datalen, nlen;
 	int chip, max_chip, que_work, chip_work, temp;
 
 	if (minioninfo->initialised == false)
@@ -5075,6 +5076,26 @@ static struct api_data *minion_api_stats(struct cgpu_info *minioncgpu)
 			cores[MINION_CORES] = '\0';
 			snprintf(buf, sizeof(buf), "Chip %d CoresAct", chip);
 			root = api_add_string(root, buf, cores, true);
+
+			if (opt_minion_extra) {
+				data[0] = '\0';
+				datalen = 0;
+				for (i = 0; i < MINION_CORES; i++) {
+					if (datalen < sizeof(data)) {
+						nlen = snprintf(data+datalen, sizeof(data)-datalen,
+								"%s%"PRIu64"-%"PRIu64,
+								i == 0 ? "" : "/",
+								minioninfo->core_good[chip][i],
+								minioninfo->core_bad[chip][i]);
+						if (nlen < 1)
+							break;
+						datalen += nlen;
+					}
+				}
+				snprintf(buf, sizeof(buf), "Chip %d Cores Good-Bad", chip);
+				root = api_add_string(root, buf, data, true);
+			}
+
 			snprintf(buf, sizeof(buf), "Chip %d History GHs", chip);
 			root = api_add_mhs(root, buf, &(minioninfo->history_ghs[chip]), true);
 		}

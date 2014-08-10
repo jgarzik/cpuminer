@@ -255,6 +255,7 @@ static char *opt_set_null;
 #ifdef USE_MINION
 int opt_minion_chipreport;
 char *opt_minion_cores;
+bool opt_minion_extra;
 char *opt_minion_freq;
 int opt_minion_freqchange = 1000;
 int opt_minion_freqpercent = 70;
@@ -1374,6 +1375,9 @@ static struct opt_table opt_config_table[] = {
 		     "Seconds to report chip 5min hashrate, range 0-100 (default: 0=disabled)"),
 	OPT_WITH_ARG("--minion-cores",
 		     opt_set_charp, NULL, &opt_minion_cores,
+		     opt_hidden),
+	OPT_WITHOUT_ARG("--minion-extra",
+		     opt_set_bool, &opt_minion_extra,
 		     opt_hidden),
 	OPT_WITH_ARG("--minion-freq",
 		     opt_set_charp, NULL, &opt_minion_freq,
