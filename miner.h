@@ -231,8 +231,8 @@ static inline int fsync (int fd)
 #define ASIC_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(ants1) \
 	DRIVER_ADD_COMMAND(ants2) \
-	DRIVER_ADD_COMMAND(avalon2) \
 	DRIVER_ADD_COMMAND(avalon) \
+	DRIVER_ADD_COMMAND(avalon2) \
 	DRIVER_ADD_COMMAND(bflsc) \
 	DRIVER_ADD_COMMAND(bitfury) \
 	DRIVER_ADD_COMMAND(cointerra) \

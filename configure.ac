@@ -1,8 +1,8 @@
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [4])
-m4_define([v_min], [4])
-m4_define([v_mic], [2])
+m4_define([v_min], [5])
+m4_define([v_mic], [0])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
 m4_define([lt_rev], m4_eval(v_maj + v_min))
@@ -119,6 +119,7 @@ if test "x$has_winpthread" != xtrue; then
         PTHREAD_LIBS=-lpthread
 fi
 
+
 ants1="no"
 
 AC_ARG_ENABLE([ants1],
@@ -129,6 +130,7 @@ if test "x$ants1" = xyes; then
 	AC_DEFINE([USE_ANT_S1], [1], [Defined to 1 if Antminer S1 Bitmain support is wanted])
 fi
 AM_CONDITIONAL([HAS_ANT_S1], [test x$ants1 = xyes])
+
 
 ants2="no"
 
@@ -145,6 +147,7 @@ if test "x$ants1$ants2" = xyesyes; then
 	AC_MSG_ERROR([Only one of --enable-ants1 and --enable-ants2 allowed])
 fi
 
+
 avalon="no"
 
 AC_ARG_ENABLE([avalon],
@@ -156,137 +159,6 @@ if test "x$avalon" = xyes; then
 fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
-bab="no"
-
-AC_ARG_ENABLE([bab],
-	[AC_HELP_STRING([--enable-bab],[Compile support for BlackArrow Bitfury (default disabled)])],
-	[bab=$enableval]
-	)
-if test "x$bab" = xyes; then
-	AC_DEFINE([USE_BAB], [1], [Defined to 1 if BlackArrow Bitfury support is wanted])
-fi
-AM_CONDITIONAL([HAS_BAB], [test x$bab = xyes])
-
-bflsc="no"
-
-AC_ARG_ENABLE([bflsc],
-	[AC_HELP_STRING([--enable-bflsc],[Compile support for BFL ASICs (default disabled)])],
-	[bflsc=$enableval]
-	)
-if test "x$bflsc" = xyes; then
-	AC_DEFINE([USE_BFLSC], [1], [Defined to 1 if BFL ASIC support is wanted])
-fi
-AM_CONDITIONAL([HAS_BFLSC], [test x$bflsc = xyes])
-
-bitforce="no"
-
-AC_ARG_ENABLE([bitforce],
-	[AC_HELP_STRING([--enable-bitforce],[Compile support for BitForce FPGAs (default disabled)])],
-	[bitforce=$enableval]
-	)
-if test "x$bitforce" = xyes; then
-	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted])
-fi
-AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
-
-bitfury="no"
-
-AC_ARG_ENABLE([bitfury],
-	[AC_HELP_STRING([--enable-bitfury],[Compile support for BitFury ASICs (default disabled)])],
-	[bitfury=$enableval]
-	)
-if test "x$bitfury" = xyes; then
-	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if BitFury ASIC support is wanted])
-fi
-AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
-
-cointerra="no"
-
-AC_ARG_ENABLE([cointerra],
-	[AC_HELP_STRING([--enable-cointerra],[Compile support for Cointerra ASICs (default disabled)])],
-	[cointerra=$enableval]
-	)
-if test "x$cointerra" = xyes; then
-	AC_DEFINE([USE_COINTERRA], [1], [Defined to 1 if Cointerra support is wanted])
-fi
-AM_CONDITIONAL([HAS_COINTERRA], [test x$cointerra = xyes])
-
-bitmine_A1="no"
-
-AC_ARG_ENABLE([bitmine_A1],
-	[AC_HELP_STRING([--enable-bitmine_A1],[Compile support for Bitmine.ch A1 ASICs (default disabled)])],
-	[bitmine_A1=$enableval]
-	)
-if test "x$bitmine_A1" = xyes; then
-	AC_DEFINE([USE_BITMINE_A1], [1], [Defined to 1 if Bitmine A1 support is wanted])
-fi
-AM_CONDITIONAL([HAS_BITMINE_A1], [test x$bitmine_A1 = xyes])
-
-drillbit="no"
-
-AC_ARG_ENABLE([drillbit],
-	[AC_HELP_STRING([--enable-drillbit],[Compile support for Drillbit BitFury ASICs (default disabled)])],
-	[drillbit=$enableval]
-	)
-if test "x$drillbit" = xyes; then
-	AC_DEFINE([USE_DRILLBIT], [1], [Defined to 1 if Drillbit BitFury support is wanted])
-fi
-AM_CONDITIONAL([HAS_DRILLBIT], [test x$drillbit = xyes])
-
-hashfast="no"
-
-AC_ARG_ENABLE([hashfast],
-	[AC_HELP_STRING([--enable-hashfast],[Compile support for Hashfast (default disabled)])],
-	[hashfast=$enableval]
-	)
-if test "x$hashfast" = xyes; then
-	AC_DEFINE([USE_HASHFAST], [1], [Defined to 1 if Hashfast support is wanted])
-fi
-AM_CONDITIONAL([HAS_HASHFAST], [test x$hashfast = xyes])
-
-hashratio="no"
-
-AC_ARG_ENABLE([hashratio],
-	[AC_HELP_STRING([--enable-hashratio],[Compile support for Hashratio (default disabled)])],
-	[hashratio=$enableval]
-	)
-if test "x$hashratio" = xyes; then
-	AC_DEFINE([USE_HASHRATIO], [1], [Defined to 1 if Hashratiosupport is wanted])
-fi
-AM_CONDITIONAL([HAS_HASHRATIO], [test x$hashratio = xyes])
-
-icarus="no"
-
-AC_ARG_ENABLE([icarus],
-	[AC_HELP_STRING([--enable-icarus],[Compile support for Icarus (default disabled)])],
-	[icarus=$enableval]
-	)
-if test "x$icarus" = xyes; then
-	AC_DEFINE([USE_ICARUS], [1], [Defined to 1 if Icarus support is wanted])
-fi
-AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
-
-klondike="no"
-
-AC_ARG_ENABLE([klondike],
-	[AC_HELP_STRING([--enable-klondike],[Compile support for Klondike (default disabled)])],
-	[klondike=$enableval]
-	)
-if test "x$klondike" = xyes; then
-	AC_DEFINE([USE_KLONDIKE], [1], [Defined to 1 if Klondike support is wanted])
-fi
-AM_CONDITIONAL([HAS_KLONDIKE], [test x$klondike = xyes])
-
-knc="no"
-
-AC_ARG_ENABLE([knc],
-	[AC_HELP_STRING([--enable-knc],[Compile support for KnC miners (default disabled)])],
-	[knc=$enableval]
-	)
-if test "x$knc" = xyes; then
-	AC_DEFINE([USE_KNC], [1], [Defined to 1 if KnC miner support is wanted])
-fi
-AM_CONDITIONAL([HAS_KNC], [test x$knc = xyes])
 
 avalon2="no"
 
@@ -301,6 +173,150 @@ fi
 AM_CONDITIONAL([HAS_AVALON2], [test x$avalon2 = xyes])
 
 
+bab="no"
+
+AC_ARG_ENABLE([bab],
+	[AC_HELP_STRING([--enable-bab],[Compile support for BlackArrow Bitfury (default disabled)])],
+	[bab=$enableval]
+	)
+if test "x$bab" = xyes; then
+	AC_DEFINE([USE_BAB], [1], [Defined to 1 if BlackArrow Bitfury support is wanted])
+fi
+AM_CONDITIONAL([HAS_BAB], [test x$bab = xyes])
+
+
+bflsc="no"
+
+AC_ARG_ENABLE([bflsc],
+	[AC_HELP_STRING([--enable-bflsc],[Compile support for BFL ASICs (default disabled)])],
+	[bflsc=$enableval]
+	)
+if test "x$bflsc" = xyes; then
+	AC_DEFINE([USE_BFLSC], [1], [Defined to 1 if BFL ASIC support is wanted])
+fi
+AM_CONDITIONAL([HAS_BFLSC], [test x$bflsc = xyes])
+
+
+bitforce="no"
+
+AC_ARG_ENABLE([bitforce],
+	[AC_HELP_STRING([--enable-bitforce],[Compile support for BitForce FPGAs (default disabled)])],
+	[bitforce=$enableval]
+	)
+if test "x$bitforce" = xyes; then
+	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted])
+fi
+AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
+
+
+bitfury="no"
+
+AC_ARG_ENABLE([bitfury],
+	[AC_HELP_STRING([--enable-bitfury],[Compile support for BitFury ASICs (default disabled)])],
+	[bitfury=$enableval]
+	)
+if test "x$bitfury" = xyes; then
+	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if BitFury ASIC support is wanted])
+fi
+AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
+
+
+bitmine_A1="no"
+
+AC_ARG_ENABLE([bitmine_A1],
+	[AC_HELP_STRING([--enable-bitmine_A1],[Compile support for Bitmine.ch A1 ASICs (default disabled)])],
+	[bitmine_A1=$enableval]
+	)
+if test "x$bitmine_A1" = xyes; then
+	AC_DEFINE([USE_BITMINE_A1], [1], [Defined to 1 if Bitmine A1 support is wanted])
+fi
+AM_CONDITIONAL([HAS_BITMINE_A1], [test x$bitmine_A1 = xyes])
+
+
+cointerra="no"
+
+AC_ARG_ENABLE([cointerra],
+	[AC_HELP_STRING([--enable-cointerra],[Compile support for Cointerra ASICs (default disabled)])],
+	[cointerra=$enableval]
+	)
+if test "x$cointerra" = xyes; then
+	AC_DEFINE([USE_COINTERRA], [1], [Defined to 1 if Cointerra support is wanted])
+fi
+AM_CONDITIONAL([HAS_COINTERRA], [test x$cointerra = xyes])
+
+
+drillbit="no"
+
+AC_ARG_ENABLE([drillbit],
+	[AC_HELP_STRING([--enable-drillbit],[Compile support for Drillbit BitFury ASICs (default disabled)])],
+	[drillbit=$enableval]
+	)
+if test "x$drillbit" = xyes; then
+	AC_DEFINE([USE_DRILLBIT], [1], [Defined to 1 if Drillbit BitFury support is wanted])
+fi
+AM_CONDITIONAL([HAS_DRILLBIT], [test x$drillbit = xyes])
+
+
+hashfast="no"
+
+AC_ARG_ENABLE([hashfast],
+	[AC_HELP_STRING([--enable-hashfast],[Compile support for Hashfast (default disabled)])],
+	[hashfast=$enableval]
+	)
+if test "x$hashfast" = xyes; then
+	AC_DEFINE([USE_HASHFAST], [1], [Defined to 1 if Hashfast support is wanted])
+fi
+AM_CONDITIONAL([HAS_HASHFAST], [test x$hashfast = xyes])
+
+
+hashratio="no"
+
+AC_ARG_ENABLE([hashratio],
+	[AC_HELP_STRING([--enable-hashratio],[Compile support for Hashratio (default disabled)])],
+	[hashratio=$enableval]
+	)
+if test "x$hashratio" = xyes; then
+	AC_DEFINE([USE_HASHRATIO], [1], [Defined to 1 if Hashratiosupport is wanted])
+fi
+AM_CONDITIONAL([HAS_HASHRATIO], [test x$hashratio = xyes])
+
+
+icarus="no"
+
+AC_ARG_ENABLE([icarus],
+	[AC_HELP_STRING([--enable-icarus],[Compile support for Icarus (default disabled)])],
+	[icarus=$enableval]
+	)
+if test "x$icarus" = xyes; then
+	AC_DEFINE([USE_ICARUS], [1], [Defined to 1 if Icarus support is wanted])
+fi
+AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
+
+
+klondike="no"
+
+AC_ARG_ENABLE([klondike],
+	[AC_HELP_STRING([--enable-klondike],[Compile support for Klondike (default disabled)])],
+	[klondike=$enableval]
+	)
+if test "x$klondike" = xyes; then
+	AC_DEFINE([USE_KLONDIKE], [1], [Defined to 1 if Klondike support is wanted])
+fi
+AM_CONDITIONAL([HAS_KLONDIKE], [test x$klondike = xyes])
+
+
+knc="no"
+
+AC_ARG_ENABLE([knc],
+	[AC_HELP_STRING([--enable-knc],[Compile support for KnC miners (default disabled)])],
+	[knc=$enableval]
+	)
+if test "x$knc" = xyes; then
+	AC_DEFINE([USE_KNC], [1], [Defined to 1 if KnC miner support is wanted])
+fi
+AM_CONDITIONAL([HAS_KNC], [test x$knc = xyes])
+
+
 minion="no"
 
 AC_ARG_ENABLE([minion],
@@ -312,6 +328,7 @@ if test "x$minion" = xyes; then
 fi
 AM_CONDITIONAL([HAS_MINION], [test x$minion = xyes])
 
+
 modminer="no"
 
 AC_ARG_ENABLE([modminer],
@@ -322,7 +339,6 @@ if test "x$modminer" = xyes; then
 	AC_DEFINE([USE_MODMINER], [1], [Defined to 1 if ModMiner support is wanted])
 fi
 AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
-
 
 
 sp10="no"
@@ -374,7 +390,7 @@ else
 	])
 fi
 
-if test x$avalon$bitforce$bitfury$modminer$bflsc$icarus$hashfast$hashratio$klondike$drillbit$cointerra$ants1$ants2 != xnonononononononononononono; then
+if test x$avalon$avalon2$bitforce$bitfury$modminer$bflsc$icarus$hashfast$hashratio$klondike$drillbit$cointerra$ants1$ants2 != xnononononononononononononono; then
 	want_usbutils=true
 else
 	want_usbutils=false
@@ -386,12 +402,19 @@ else
 	want_libbitfury=false
 fi
 
-AM_CONDITIONAL([NEED_FPGAUTILS], [test x$avalon2$modminer != xno])
+if test x$avalon2$hashratio != xnono; then
+	want_crc16=true
+else
+	want_crc16=false
+fi
+
+AM_CONDITIONAL([NEED_FPGAUTILS], [test x$modminer != xno])
 AM_CONDITIONAL([WANT_USBUTILS], [test x$want_usbutils != xfalse])
 AM_CONDITIONAL([WANT_LIBBITFURY], [test x$want_libbitfury != xfalse])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
+AM_CONDITIONAL([WANT_CRC16], [test x$want_crc16 != xfalse])
 
 if test "x$want_usbutils" != xfalse; then
 	dlibusb="no"

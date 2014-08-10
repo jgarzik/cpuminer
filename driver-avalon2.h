@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
  * Copyright 2012-2014 Xiangfu <xiangfu@openmobilefree.com>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -24,9 +24,9 @@
 #define AVA2_DEFAULT_MODULARS	4
 
 #define AVA2_PWM_MAX	0x3FF
-#define AVA2_DEFAULT_FAN_PWM	80 /* % */
-#define AVA2_DEFAULT_FAN_MIN	0
-#define AVA2_DEFAULT_FAN_MAX	100
+#define AVA2_DEFAULT_FAN_PWM	15 /* % */
+#define AVA2_DEFAULT_FAN_MIN	10
+#define AVA2_DEFAULT_FAN_MAX	85
 
 #define AVALON2_TEMP_OVERHEAT	88
 
@@ -43,8 +43,8 @@
 
 /* Avalon3 default values */
 #define AVA2_AVA3_MINERS	5
-#define AVA2_AVA3_VOLTAGE	6625 /* 0.6625v */
-#define AVA2_AVA3_FREQUENCY	400  /* MHz * 11.8 = MHs: 400MHz means ~4.7GHs */
+#define AVA2_AVA3_VOLTAGE	6660 /* 0.666v */
+#define AVA2_AVA3_FREQUENCY	450  /* MHz * 11.8 = MHs: 450MHz means ~5.3GHs */
 
 /* Avalon2 protocol package type */
 #define AVA2_H1	'A'
@@ -102,12 +102,8 @@ struct avalon2_pkg {
 #define avalon2_ret avalon2_pkg
 
 struct avalon2_info {
-	int first;
 	struct timeval last_stratum;
-
-	int fd;
-	int baud;
-
+	struct pool pool;
 	int pool_no;
 
 	int modulars[AVA2_DEFAULT_MODULARS];
@@ -123,6 +119,7 @@ struct avalon2_info {
 	int power_good[AVA2_DEFAULT_MODULARS];
 
 	int fan_pwm;
+	int fan_pct;
 	int temp_max;
 
 	int fan[2 * AVA2_DEFAULT_MODULARS];

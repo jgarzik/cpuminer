@@ -1,5 +1,52 @@
+Version 4.5.0 - 29th July 2014
+
+- Fix windows build for hashratio and ava2
+- Demote bad checksum message in cointerra driver but allow message to still be
+parsed since it won't allow existing firmwares to work otherwise
+- Reorder and document the configure options
+- Merge https://github.com/KnCMiner/cgminer into knc
+- Change default voltage on ava2 to 0.666V because Satan
+- Enable combined building of avalon2 and hashratio
+- Fix stratum embedded fpgas to not duplicate work with other devices
+- Implement smarter PID type fan control for ava2 allowing more generous
+temperatures and far lower fan speeds for optimal power and noise usage. Adjust
+default frequency to 450 as per recommendation.
+- Fix various warnings in ava2
+- Go back to polling design since async will not work for ava2 and fix various
+read design errors
+- Fix error in 2nd read functions for av2 and hro
+- Correct init and read sequence for ava2, and convert from a polling mechanism
+to a separate read thread
+- Initial commit of ava2 conversion to direct USB
+- Display frequency and voltage with ava2 on the statline
+- Store fan percentage and display temp and fan percent for ava2
+- Set avalon2 frequency and voltage to appropriate defaults if none are
+specified on the command line
+- Demote some ava2 messages that don't need to be errors and remove unused works
+array
+- Fix broken fan logic for ava2
+- Fix hexdump on 64bit
+- rockminer frequency is between 200 and 400 MHz
+- fix jansson include path in cgminer-api compile instructions
+- Remove requirement for ifndefs for avalon2 from the generic driver work
+function
+- Fix hashratio device name
+- Make submit_nonce2_nonce return whether the share was valid or not
+- Reinstate missing necessary init sequence for hashratio
+- Handle disconnected hashratio devices
+- Add hashratio frequency command line
+- Fix stratum updates not being passed to hashratio devices and clean up
+- Move to updated avalon2 type driver model for hashratio device
+- Initial import and conversion of hashratio driver to direct USB
+- Increase the internal buffer for API response,   as "stats" command response
+can grow greater than 8K
+- Detach test pool thread only if we have a blocking startup
+
+
 Version 4.4.2 - 17th July 2014
 
+- Remove the use of the pthread_tryjoin_np which is currently unimplemented on
+many platforms
 - Fix processarg parameters loaded from a config file not being saveable
 - We only use the jansson in our source tree so no need for special case
 handling of older versions
