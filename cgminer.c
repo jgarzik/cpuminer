@@ -1149,6 +1149,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--avalon2-fixed-speed",
 		     set_avalon2_fixed_speed, &opt_avalon2_fan_fixed,
 		     "Set Avalon2 fan to fixed speed"),
+	OPT_WITH_ARG("--avalon2-polling-delay",
+		     set_int_1_to_65535, opt_show_intval, &opt_avalon2_polling_delay,
+		     "Set Avalon2 polling delay value (ms)"),
 #endif
 #ifdef USE_BAB
 	OPT_WITH_ARG("--bab-options",
