@@ -1136,10 +1136,10 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_AVALON2
 	OPT_WITH_CBARG("--avalon2-freq",
 		     set_avalon2_freq, NULL, &opt_set_avalon2_freq,
-		     "Set frequency range for Avalon2, single value or range"),
+		     "Set frequency range for Avalon2, single value or range, step: 25"),
 	OPT_WITH_CBARG("--avalon2-voltage",
 		     set_avalon2_voltage, NULL, &opt_set_avalon2_voltage,
-		     "Set Avalon2 core voltage, in millivolts"),
+		     "Set Avalon2 core voltage, in millivolts, step: 125"),
 	OPT_WITH_CBARG("--avalon2-fan",
 		     set_avalon2_fan, NULL, &opt_set_avalon2_fan,
 		     "Set Avalon2 target fan speed"),
@@ -1149,6 +1149,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--avalon2-fixed-speed",
 		     set_avalon2_fixed_speed, &opt_avalon2_fan_fixed,
 		     "Set Avalon2 fan to fixed speed"),
+	OPT_WITH_ARG("--avalon2-polling-delay",
+		     set_int_1_to_65535, opt_show_intval, &opt_avalon2_polling_delay,
+		     "Set Avalon2 polling delay value (ms)"),
 #endif
 #ifdef USE_BAB
 	OPT_WITH_ARG("--bab-options",
