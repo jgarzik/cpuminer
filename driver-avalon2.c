@@ -487,7 +487,7 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 	struct avalon2_pkg pkg;
 	int i, a, b, tmp;
 	unsigned char target[32];
-	int job_id_len;
+	int job_id_len, n2size;
 	unsigned short crc;
 
 	/* Send out the first stratum message STATIC */
@@ -504,7 +504,8 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 	tmp = be32toh(pool->nonce2_offset);
 	memcpy(pkg.data + 4, &tmp, 4);
 
-	tmp = be32toh(pool->n2size);
+	n2size = pool->n2size >= 4 ? 4 : pool->n2size;
+	tmp = be32toh(n2size);
 	memcpy(pkg.data + 8, &tmp, 4);
 
 	tmp = be32toh(merkle_offset);
