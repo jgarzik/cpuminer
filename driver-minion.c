@@ -126,7 +126,7 @@ static struct minion_select_pins {
 #define CHIP_PIN(_chip) (minioninfo->chip_pin[_chip])
 
 #define MINION_MIN_CHIP 0
-#define MINION_MAX_CHIP 10
+#define MINION_MAX_CHIP 11
 
 #define MINION_CHIP_PER_PIN (1 + MINION_MAX_CHIP - MINION_MIN_CHIP)
 
