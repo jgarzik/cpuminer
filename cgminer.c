@@ -8763,16 +8763,18 @@ static bool input_pool(bool live)
 	wlogprint("Input server details.\n");
 
 	url = curses_input("URL");
-	if (!url)
+	if (!strcmp(url, "-1"))
 		goto out;
 
 	user = curses_input("Username");
-	if (!user)
+	if (!strcmp(user, "-1"))
 		goto out;
 
 	pass = curses_input("Password");
-	if (!pass)
+	if (!strcmp(pass, "-1")) {
+		free(pass);
 		pass = strdup("");
+	}
 
 	pool = add_pool();
 
@@ -8794,12 +8796,9 @@ out:
 	immedok(logwin, false);
 
 	if (!ret) {
-		if (url)
-			free(url);
-		if (user)
-			free(user);
-		if (pass)
-			free(pass);
+		free(url);
+		free(user);
+		free(pass);
 	}
 	return ret;
 }
