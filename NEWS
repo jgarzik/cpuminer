@@ -1,3 +1,35 @@
+Version 4.6.0 - 7th September 2014
+
+- We should not be checking for pool_unworkable in cnx_needed as it is keeping
+stratum connections open on unused pools
+- Properly handle lack of input when adding pool via menu
+- Allow workers without passwords
+- minion - increase max chip number
+- Avalon2: add more comments on Avalon2 options
+- Avalon2: add polling delay option, long coinbase support, LED status on API,
+change overheat from 88 to 98
+- minion - add a ' before non-zero core error counts
+- minion - hidden optional per core nonce stats
+- bflsc28 - clock is hex
+- bflsc28 - allow setting clock and volt from the API ascset command
+- bflsc28 - add chip count to stats
+- bflsc28 stats
+- Simplehacks to better serve bflsc28
+- Only use one hashtable for bflsc28 work queued
+- Copy back the buffer after we've stripped the inprocess field on bflsc
+- Parse results for BMA based on uid and remove work from the queue when found
+- Strip out the inprocess details from bflsc results if it exists
+- Create a hashtable of work by uid as it's accepted by BMA
+- Add some rudimentary values for BMA sleep times
+- Fix various errors in queueing work for bflsc28 and limit job queueing to 10
+to fit within a usb frame
+- Create preliminary work queueing for bflsc28 using jobs of up to 20 at a time
+by rolling work where possible
+- Convert all bflsc transfers to the full 512 bytes
+- Don't mistake bflsc28 for fpga
+- Do initial detection of bflsc28 devices
+
+
 Version 4.5.0 - 29th July 2014
 
 - Fix windows build for hashratio and ava2
