@@ -1371,7 +1371,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct thr_info *thr = bflsc->thr[0];
-	struct work *work;
+	struct work *work = NULL;
 	int8_t core = -1;
 	uint32_t nonce;
 	int i, num, x;
