@@ -947,7 +947,7 @@ static char *set_userpass(const char *arg)
 		return "Failed to find : delimited user info";
 	pool->rpc_pass = strtok(NULL, ":");
 	if (!pool->rpc_pass)
-		return "Failed to find : delimited pass info";
+		pool->rpc_pass = strdup("");
 
 	return NULL;
 }
@@ -8772,7 +8772,7 @@ static bool input_pool(bool live)
 
 	pass = curses_input("Password");
 	if (!pass)
-		goto out;
+		pass = strdup("");
 
 	pool = add_pool();
 
@@ -9557,7 +9557,9 @@ int main(int argc, char *argv[])
 		pool->cgminer_pool_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 
 		if (!pool->rpc_userpass) {
-			if (!pool->rpc_user || !pool->rpc_pass)
+			if (!pool->rpc_pass)
+				pool->rpc_pass = strdup("");
+			if (!pool->rpc_user)
 				early_quit(1, "No login credentials supplied for pool %u %s", i, pool->rpc_url);
 			siz = strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2;
 			pool->rpc_userpass = malloc(siz);
