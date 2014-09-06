@@ -6161,8 +6161,6 @@ static bool cnx_needed(struct pool *pool)
 	 * it. */
 	if (pool_strategy == POOL_FAILOVER && pool->prio < cp_prio())
 		return true;
-	if (pool_unworkable(cp))
-		return true;
 	/* We've run out of work, bring anything back to life. */
 	if (no_work)
 		return true;
