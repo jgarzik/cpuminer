@@ -7,7 +7,7 @@ Currently supported devices include:
 - Avalon (including BitBurner and Klondike)
 - Avalon2/3
 - BFx2 USB
-- Butterfly Labs SC range
+- Butterfly Labs SC 65/28nm range
 - BF1 (bitfury) USB (red and blue)
 - BlackArrow Bitfury
 - BlackArrow Minion
@@ -34,6 +34,7 @@ BAJ: BFL ASIC Jalapeño
 BAL: BFL ASIC Little Single
 BAS: BFL ASIC Single
 BAM: BFL ASIC Minirig
+BMA: BFL Monarch
 
 BFL devices need the --enable-bflsc option when compiling cgminer yourself.
 
@@ -287,12 +288,12 @@ ANTMINER S1 DEVICES
 --bitmain-options   Set bitmain options baud:miners:asic:timeout:freq
 --bitmain-temp      Set bitmain target temperature
 
-The Antminer S1 device comes with it's own operating system and a preinstalled
+The Antminer S1 device comes with its own operating system and a preinstalled
 version of cgminer as part of the flash firmware. No configuration should be
 necessary.
 
 
-ANTMINER U1 DEVICES
+ANTMINER U1/2 DEVICES
 
 --anu-freq <arg>    Set AntminerU1 frequency in MHz, range 150-500 (default: 200)
 

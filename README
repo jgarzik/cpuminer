@@ -843,6 +843,11 @@ For RPC API details see the API-README file
 
 FAQ
 
+Q: Help, I've started cgminer and everything reads zero!?
+A: Welcome to bitcoin mining. Your computer by itself cannot mine bitcoin no
+matter how powerful it is. You have to purchase dedicated mining hardware
+called ASICs to plug into your computer. See Q regarding ASICs below.
+
 Q: I have multiple USB stick devices but I can't get them all to work at once?
 A: Very few USB hubs deliver the promised power required to run as many devices
 as they fit if all of them draw power from USB.
@@ -929,7 +934,8 @@ linux is the primary development platform and is virtually guaranteed to be
 more stable.
 
 Q: My network gets slower and slower and then dies for a minute?
-A; Try the --net-delay option if you are on a getwork or GBT server.
+A; Try the --net-delay option if you are on a getwork or GBT server. This does
+nothing with stratum mining.
 
 Q: How do I tune for p2pool?
 A: It is also recommended to use --failover-only since the work is effectively
@@ -942,7 +948,7 @@ working in the logs?
 A: http://us.php.net/manual/en/sockets.installation.php
 
 Q: What is a PGA?
-A: At the moment, cgminer supports 3 FPGAs: BitForce, Icarus and ModMiner.
+A: Cgminer supports 3 FPGAs: BitForce, Icarus and ModMiner.
 They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
 mining. Since the acronym needs to be only 3 characters, the "Field-" part has
 been skipped.
@@ -950,6 +956,7 @@ been skipped.
 Q: What is an ASIC?
 A: They are Application Specify Integrated Circuit devices and provide the
 highest performance per unit power due to being dedicated to only one purpose.
+They are the only meaningful way to mine bitcoin today.
 
 Q: What is stratum and how do I use it?
 A: Stratum is a protocol designed for pooled mining in such a way as to
