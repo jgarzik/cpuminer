@@ -72,6 +72,7 @@ static cgtimer_t usb11_cgt;
 #define KLONDIKE_TIMEOUT_MS 999
 #define COINTERRA_TIMEOUT_MS 999
 #define HASHFAST_TIMEOUT_MS 999
+#define HASHRATIO_TIMEOUT_MS 999
 
 /* The safety timeout we use, cancelling async transfers on windows that fail
  * to timeout on their own. */
@@ -85,6 +86,7 @@ static cgtimer_t usb11_cgt;
 #define KLONDIKE_TIMEOUT_MS 200
 #define COINTERRA_TIMEOUT_MS 200
 #define HASHFAST_TIMEOUT_MS 500
+#define HASHRATIO_TIMEOUT_MS 200
 #endif
 
 #define USB_EPS(_intx, _epinfosx) { \
@@ -215,6 +217,17 @@ static struct usb_intinfo hfa_ints[] = {
 };
 #endif
 
+#ifdef USE_HASHRATIO
+static struct usb_epinfo hro_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
+};
+
+static struct usb_intinfo hro_ints[] = {
+	USB_EPS(0, hro_epinfos)
+};
+#endif
+
 #ifdef USE_MODMINER
 static struct usb_epinfo mmq_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0, 0 },
@@ -234,6 +247,17 @@ static struct usb_epinfo ava_epinfos[] = {
 
 static struct usb_intinfo ava_ints[] = {
 	USB_EPS(0, ava_epinfos)
+};
+#endif
+
+#ifdef USE_AVALON2
+static struct usb_epinfo ava2_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
+};
+
+static struct usb_intinfo ava2_ints[] = {
+	USB_EPS(0, ava2_epinfos)
 };
 #endif
 
@@ -535,6 +559,18 @@ static struct usb_find_devices find_dev[] = {
 		.latency = 10,
 		INTINFO(ava_ints) },
 #endif
+#ifdef USE_AVALON2
+	{
+		.drv = DRIVER_avalon2,
+		.name = "AV2",
+		.ident = IDENT_AV2,
+		.idVendor = 0x067b,
+		.idProduct = 0x2303,
+		.config = 1,
+		.timeout = AVALON_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		INTINFO(ava2_ints) },
+#endif
 #ifdef USE_HASHFAST
 	{
 		.drv = DRIVER_hashfast,
@@ -548,6 +584,18 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = HASHFAST_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
 		INTINFO(hfa_ints) },
+#endif
+#ifdef USE_HASHRATIO
+	{
+		.drv = DRIVER_hashratio,
+		.name = "HRO",
+		.ident = IDENT_HRO,
+		.idVendor = IDVENDOR_FTDI,
+		.idProduct = 0x6001,
+		.config = 1,
+		.timeout = HASHRATIO_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		INTINFO(hro_ints) },
 #endif
 #ifdef USE_KLONDIKE
 	{

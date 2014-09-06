@@ -7,6 +7,11 @@ address below.
 Con Kolivas <kernel@kolivas.org>
 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
 
+NOTE: This code is licensed under the GPLv3. This means that the source to any
+modifications you make to this code MUST be provided by law if you distribute
+modified binaries. See COPYING for details.
+
+
 DOWNLOADS:
 
 http://ck.kolivas.org/apps/cgminer
@@ -22,8 +27,6 @@ http://bitcointalk.org/index.php?topic=28402.0
 IRC Channel:
 
 irc://irc.freenode.net/cgminer
-
-License: GPLv3.  See COPYING for details.
 
 SEE ALSO API-README, ASIC-README and FGPA-README FOR MORE INFORMATION ON EACH.
 
@@ -115,6 +118,7 @@ CGMiner specific configuration options:
   --enable-ants2          Compile support for Antminer S2 Bitmain (default
                           disabled)
   --enable-avalon         Compile support for Avalon (default disabled)
+  --enable-avalon2        Compile support for Avalon2 (default disabled)
   --enable-bab            Compile support for BlackArrow Bitfury (default
                           disabled)
   --enable-bflsc          Compile support for BFL ASICs (default disabled)
@@ -130,11 +134,13 @@ CGMiner specific configuration options:
   --enable-icarus         Compile support for Icarus (default disabled)
   --enable-klondike       Compile support for Klondike (default disabled)
   --enable-knc            Compile support for KnC miners (default disabled)
-  --enable-avalon2        Compile support for Avalon2 (default disabled)
   --enable-minion         Compile support for Minion BlackArrow ASIC (default
                           disabled)
   --enable-modminer       Compile support for ModMiner FPGAs(default disabled)
-  --enable-spondoolies    Compile support for Spondoolies (default disabled)
+  --enable-sp10           Compile support for Spondoolies SP10 (default
+                          disabled)
+  --enable-sp30           Compile support for Spondoolies SP30 (default
+                          disabled)
   --disable-libcurl       Disable building with libcurl for getwork and GBT
                           support
   --without-curses        Compile support for curses TUI (default enabled)
@@ -152,7 +158,17 @@ Basic *nix build instructions:
 	directory directly, but you may do make install if you wish to install
 	cgminer to a system location or location you specified.
 
-Native WIN32 build instructions: see windows-build.txt
+Building for windows:
+
+It is actually easiest to build a windows binary using cross compilation tools
+provided by "mxe" available at http://mxe.cc/ (use the 32 bit one!)
+Once you have followed the instructions for building mxe:
+	export PATH=(path/to/mxe)/usr/bin/:$PATH
+	CFLAGS="-O2 -Wall -W -march=i686" ./configure --host=i686-pc-mingw32 <options>
+	make
+
+Native WIN32 build instructions: see windows-build.txt but these instructions
+are now hopelessly out of date.
 
 ---
 
@@ -179,6 +195,11 @@ Options for both config file and command line:
 --avalon-freq <arg> Set frequency range for avalon-auto, single value or range
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq:tech
 --avalon-temp <arg> Set avalon target temperature (default: 50)
+--avalon2-freq      Set frequency range for Avalon2, single value or range
+--avalon2-voltage   Set Avalon2 core voltage, in millivolts
+--avalon2-fan       Set Avalon2 target fan speed
+--avalon2-cutoff <arg> Set Avalon2 overheat cut off temperature (default: 88)
+--avalon2-fixed-speed Set Avalon2 fan to fixed speed
 --bab-options <arg> Set BaB options max:def:min:up:down:hz:delay:trf
 --balance           Change multipool strategy from failover to even share balance
 --benchfile <arg>   Run cgminer in benchmark mode using a work file - produces no shares
@@ -216,6 +237,7 @@ Options for both config file and command line:
 --hfa-options <arg> Set hashfast options name:clock (comma separated)
 --hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
 --hfa-temp-target <arg> Set the hashfast target temperature (0 to disable) (default: 88)
+--hro-freq          Set the hashratio clock frequency (default: 280)
 --hotplug <arg>     Seconds between hotplug checks (0 means never check)
 --klondike-options <arg> Set klondike options clock:temptarget
 --load-balance      Change multipool strategy from failover to quota based balance
@@ -223,6 +245,8 @@ Options for both config file and command line:
 --lowmem            Minimise caching of shares for low memory applications
 --minion-chipreport <arg> Seconds to report chip 5min hashrate, range 0-100 (default: 0=disabled)
 --minion-freq <arg> Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1200)
+--minion-freqchange Millisecond total time to do frequency changes (default: 1000)
+--minion-freqpercent Percentage to use when starting up a chip (default: 70%)
 --minion-idlecount  Report when IdleCount is >0 or changes
 --minion-ledcount   Turn off led when more than this many chips below the ledlimit (default: 0)
 --minion-ledlimit   Turn off led when chips GHs are below this (default: 90)
@@ -236,6 +260,7 @@ Options for both config file and command line:
 --nfu-bits <arg>    Set nanofury bits for overclocking, range 32-63 (default: 50)
 --net-delay         Impose small delays in networking to not overload slow routers
 --no-submit-stale   Don't submit shares if they are detected as stale
+--osm-led-mode <arg> Set LED mode for OneStringMiner devices (default: 4)
 --pass|-p <arg>     Password for bitcoin JSON-RPC server
 --per-device-stats  Force verbose mode and output per-device statistics
 --protocol-dump|-P  Verbose dump of protocol-level activities
@@ -243,7 +268,7 @@ Options for both config file and command line:
 --quiet|-q          Disable logging output, display status and errors
 --quota|-U <arg>    quota;URL combination for server with load-balance strategy quotas
 --real-quiet        Disable all output
---rock-freq <arg>   Set RockMiner frequency in MHz, range 125-500 (default: 270)
+--rock-freq <arg>   Set RockMiner frequency in MHz, range 200-400 (default: 270)
 --rotate <arg>      Change multipool strategy from failover to regularly rotate at N minutes (default: 0)
 --round-robin       Change multipool strategy from failover to round robin on failure
 --scan-time|-s <arg> Upper bound on time spent scanning current work, in seconds (default: -1)
@@ -290,6 +315,11 @@ ASIC only options:
 --avalon-freq <arg> Set frequency range for avalon-auto, single value or range
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq:tech
 --avalon-temp <arg> Set avalon target temperature (default: 50)
+--avalon2-freq      Set frequency range for Avalon2, single value or range
+--avalon2-voltage   Set Avalon2 core voltage, in millivolts
+--avalon2-fan       Set Avalon2 target fan speed
+--avalon2-cutoff <arg> Set Avalon2 overheat cut off temperature (default: 88)
+--avalon2-fixed-speed Set Avalon2 fan to fixed speed
 --bab-options <arg> Set BaB options max:def:min:up:down:hz:delay:trf
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
@@ -305,6 +335,7 @@ ASIC only options:
 --hfa-noshed        Disable hashfast dynamic core disabling feature
 --hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
 --hfa-temp-target <arg> Set the hashfast target temperature (0 to disable) (default: 88)
+--hro-freq          Set the hashratio clock frequency (default: 280)
 --klondike-options <arg> Set klondike options clock:temptarget
 --rock-freq <arg>   Set RockMiner frequency in MHz, range 125-500 (default: 270)
 
@@ -322,8 +353,8 @@ Cgminer should automatically find all of your Avalon ASIC, BFL ASIC, BitForce
 FPGAs, Icarus bitstream FPGAs, Klondike ASIC, ASICMINER usb block erupters,
 KnC ASICs, BaB ASICs, Hashfast ASICs, ModMiner FPGAs, BPMC/BGMC BF1 USB ASICs,
 Bi*fury USB ASICs, Onestring miner USB ASICs, Hexfury USB ASICs, Nanofury USB
-ASICs, Antminer U1/U2/U2+ USB ASICs, Cointerra devices, BFx2 USB ASICs and
-Rockminer R-Box USB ASICs.
+ASICs, Antminer U1/U2/U2+ USB ASICs, Cointerra devices, BFx2 USB ASICs,
+Rockminer R-Box USB ASICs, Avalon2 USB ASICs and Hashratio USB ASICs.
 
 ---
 
@@ -712,6 +743,7 @@ btc address with the following options, altering to suit their setup:
 
 cgminer -o http://localhost:8332 -u username -p password --btc-address 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
 
+Note the http:// is mandatory for solo mining.
 
 ---
 LOGGING
@@ -956,6 +988,21 @@ should produce a work utility of approximately 1 per 71.6MH. This means at
 do "better WU" than this - it is luck related. However you can make it much
 worse if your machine produces a lot of hardware errors producing invalid work.
 
+Q: What should I build in for a generic distribution binary?
+A: There are a number of drivers that expect to be used on dedicated standalone
+hardware. That said, the drivers that are designed to work generically with
+USB on any hardware are the following:
+
+--enable-avalon
+--enable-avalon2
+--enable-bflsc
+--enable-bitfury
+--enable-cointerra
+--enable-drillbit
+--enable-hashfast
+--enable-hashratio
+--enable-icarus
+--enable-klondike
 
 ---
 
