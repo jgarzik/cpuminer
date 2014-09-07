@@ -30,6 +30,8 @@
 #include "uthash.h"
 #include "driver-bflsc.h"
 
+#include "util.h"
+
 int opt_bflsc_overheat = BFLSC_TEMP_OVERHEAT;
 
 static const char *blank = "";
@@ -631,7 +633,7 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 			sc_dev.firmware = strdup(fields[0]);
 			sc_info->driver_version = drv_ver(bflsc, sc_dev.firmware);
 		}
-		else if (strcasestr(firstname, BFLSC_DI_ENGINES)) {
+		else if (strstr(firstname, BFLSC_DI_ENGINES)) {
 			sc_dev.engines = atoi(fields[0]);
 			if (sc_dev.engines < 1) {
 				tmp = str_text(items[i]);
@@ -1502,7 +1504,7 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *pbuf, int *no
 
 	xlinkstr(xlink, sizeof(xlink), dev, sc_info);
 
-	buf = strdupa(pbuf);
+	buf = strdup(pbuf);
 	if (!strncmp(buf, "INPROCESS", 9))
 		sscanf(buf, "INPROCESS:%d\n%s", in_process, pbuf);
 	res = tolines(bflsc, dev, buf, &lines, &items, C_GETRESULTS);
@@ -1576,6 +1578,7 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *pbuf, int *no
 
 arigatou:
 	freetolines(&lines, &items);
+	free(buf);
 
 	return que;
 }
@@ -1895,7 +1898,7 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 		unsigned int uid;
 
 		work = works[i];
-		field = strsep(&ptr, ",");
+		field = Strsep(&ptr, ",");
 		if (!field) {
 			applog(LOG_WARNING, "%s%d: Ran out of queued IDs after %d of %d",
 			       bflsc->drv->name, bflsc->device_id, i, queued);

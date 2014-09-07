@@ -28,6 +28,7 @@
 	{
 		return (errno == EINTR);
 	}
+	#define Strsep(a, b) strsep(a, b)
 #elif defined WIN32
 	#include <winsock2.h>
 	#include <ws2tcpip.h>
@@ -62,6 +63,7 @@
 	#ifndef in_addr_t
 	#define in_addr_t uint32_t
 	#endif
+	char *Strsep(char **stringp, const char *delim);
 #endif
 
 #define JSON_LOADS(str, err_ptr) json_loads((str), 0, (err_ptr))
