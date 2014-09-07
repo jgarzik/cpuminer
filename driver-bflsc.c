@@ -30,8 +30,6 @@
 #include "uthash.h"
 #include "driver-bflsc.h"
 
-#include "util.h"
-
 int opt_bflsc_overheat = BFLSC_TEMP_OVERHEAT;
 
 static const char *blank = "";
@@ -633,7 +631,7 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 			sc_dev.firmware = strdup(fields[0]);
 			sc_info->driver_version = drv_ver(bflsc, sc_dev.firmware);
 		}
-		else if (strstr(firstname, BFLSC_DI_ENGINES)) {
+		else if (Strcasestr(firstname, BFLSC_DI_ENGINES)) {
 			sc_dev.engines = atoi(fields[0]);
 			if (sc_dev.engines < 1) {
 				tmp = str_text(items[i]);
