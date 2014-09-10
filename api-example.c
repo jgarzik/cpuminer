@@ -187,18 +187,25 @@ void display(char *buf)
 	}
 }
 
+#define SOCKSIZ 65535
+
 int callapi(char *command, char *host, short int port)
 {
-	char buf[RECVSIZE+1];
 	struct hostent *ip;
 	struct sockaddr_in serv;
 	SOCKETTYPE sock;
 	int ret = 0;
-	int n, p;
+	int n;
+	char *buf = NULL;
+	size_t len, p;
 
 	SOCKETINIT;
 
 	ip = gethostbyname(host);
+	if (!ip) {
+		printf("Couldn't get hostname: '%s'\n", host);
+		return 1;
+	}
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock == INVSOCK) {
@@ -222,10 +229,24 @@ int callapi(char *command, char *host, short int port)
 		ret = 1;
 	}
 	else {
+		len = SOCKSIZ;
+		buf = malloc(len+1);
+		if (!buf) {
+			printf("Err: OOM (%d)\n", (int)(len+1));
+			return 1;
+		}
 		p = 0;
-		buf[0] = '\0';
-		while (p < RECVSIZE) {
-			n = recv(sock, &buf[p], RECVSIZE - p , 0);
+		while (42) {
+			if ((len - p) < 1) {
+				len += SOCKSIZ;
+				buf = realloc(buf, len+1);
+				if (!buf) {
+					printf("Err: OOM (%d)\n", (int)(len+1));
+					return 1;
+				}
+			}
+
+			n = recv(sock, &buf[p], len - p , 0);
 
 			if (SOCKETFAIL(n)) {
 				printf("Recv failed: %s\n", SOCKERRMSG);
@@ -237,8 +258,8 @@ int callapi(char *command, char *host, short int port)
 				break;
 
 			p += n;
-			buf[p] = '\0';
 		}
+		buf[p] = '\0';
 
 		if (ONLY)
 			printf("%s\n", buf);
