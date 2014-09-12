@@ -483,6 +483,7 @@ static int avalon2_send_pkgs(struct cgpu_info *avalon2, const struct avalon2_pkg
 
 static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 {
+	struct avalon2_info *info = avalon2->device_data;
 	const int merkle_offset = 36;
 	struct avalon2_pkg pkg;
 	int i, a, b, tmp;
@@ -887,6 +888,10 @@ static void avalon2_update(struct cgpu_info *avalon2)
 		applog(LOG_ERR, "Avalon2: MM merkles have to less then %d", AVA2_P_MERKLES_COUNT);
 		return;
 	}
+	if (pool->n2size < 3) {
+		applog(LOG_ERR, "Avalon2: MM nonce2 size have to >= 3 (%d)", pool->n2size);
+		return;
+	}
 
 	cgtime(&info->last_stratum);
 	cg_rlock(&pool->data_lock);
@@ -919,7 +924,10 @@ static void avalon2_update(struct cgpu_info *avalon2)
 	memcpy(send_pkg.data + 8, &tmp, 4);
 
 	/* Configure the nonce2 offset and range */
-	range = 0xffffffff / (total_devices + 1);
+	if (pool->n2size == 3)
+		range = 0xffffff / (total_devices + 1);
+	else
+		range = 0xffffffff / (total_devices + 1);
 	start = range * (avalon2->device_id + 1);
 
 	tmp = be32toh(start);
