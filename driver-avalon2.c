@@ -239,7 +239,7 @@ static void adjust_fan(struct avalon2_info *info)
 	int t;
 
 	if (opt_avalon2_fan_fixed == FAN_FIXED) {
-		info->fan_pct = AVA2_DEFAULT_FAN_PWM;
+		info->fan_pct = opt_avalon2_fan_min;
 		info->fan_pwm = get_fan_pwm(info->fan_pct);
 		return;
 	}
