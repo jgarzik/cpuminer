@@ -6366,14 +6366,13 @@ static void *stratum_sthread(void *userdata)
 			bool sessionid_match;
 
 			if (likely(stratum_send(pool, s, strlen(s)))) {
-				if (pool_tclear(pool, &pool->submit_fail))
-						applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
-
 				mutex_lock(&sshare_lock);
 				HASH_ADD_INT(stratum_shares, id, sshare);
 				pool->sshares++;
 				mutex_unlock(&sshare_lock);
 
+				if (pool_tclear(pool, &pool->submit_fail))
+						applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
 				applog(LOG_DEBUG, "Successfully submitted, adding to stratum_shares db");
 				submitted = true;
 				break;
