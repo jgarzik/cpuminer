@@ -155,3 +155,7 @@ cgminer_SOURCES += driver-modminer.c
 bitstreamsdir = $(bindir)/bitstreams
 dist_bitstreams_DATA = $(top_srcdir)/bitstreams/README
 endif
+
+if HAS_BLOCKERUPTER
+cgminer_SOURCES += driver-blockerupter.c driver-blockerupter.h
+endif

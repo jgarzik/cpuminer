@@ -233,6 +233,18 @@ fi
 AM_CONDITIONAL([HAS_BITMINE_A1], [test x$bitmine_A1 = xyes])
 
 
+blockerupter="no"
+
+AC_ARG_ENABLE([blockerupter],
+	[AC_HELP_STRING([--enable-blockerupter],[Compile support for BlockErupter (default disabled)])],
+	[blockerupter=$enableval]
+	)
+if test "x$blockerupter" = xyes; then
+	AC_DEFINE([USE_BLOCKERUPTER], [1], [Defined to 1 if BlockErupter support is wanted])
+fi
+AM_CONDITIONAL([HAS_BLOCKERUPTER], [test x$blockerupter = xyes])
+
+
 cointerra="no"
 
 AC_ARG_ENABLE([cointerra],
@@ -390,7 +402,7 @@ else
 	])
 fi
 
-if test x$avalon$avalon2$bitforce$bitfury$modminer$bflsc$icarus$hashfast$hashratio$klondike$drillbit$cointerra$ants1$ants2 != xnononononononononononononono; then
+if test x$avalon$avalon2$bitforce$bitfury$blockerupter$modminer$bflsc$icarus$hashfast$hashratio$klondike$drillbit$cointerra$ants1$ants2 != xnononononononononononononono; then
 	want_usbutils=true
 else
 	want_usbutils=false
@@ -631,6 +643,12 @@ else
 	echo "  BitFury.ASICs........: Disabled"
 fi
 
+if test "x$blockerupter" = xyes; then
+	echo "  BlockErupter.ASICs...: Enabled"
+else
+	echo "  BlockErupter.ASICs...: Disabled"
+fi
+
 if test "x$cointerra" = xyes; then
 	echo "  Cointerra.ASICs......: Enabled"
 else
@@ -699,7 +717,7 @@ else
 	echo "  ModMiner.FPGAs.......: Disabled"
 fi
 
-if test "x$avalon$avalon2$bab$bflsc$bitforce$bitfury$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$sp10$sp30" = xnononononononononononononononononononono; then
+if test "x$avalon$avalon2$bab$bflsc$bitforce$bitfury$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$sp10$sp30" = xnononononononononononononononononononono; then
 	AC_MSG_ERROR([No mining configured in])
 fi
 

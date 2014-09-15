@@ -84,6 +84,9 @@ char *curly = ":D";
 #include "driver-spondoolies-sp30.h"
 #endif
 
+#ifdef USE_BLOCK_ERUPTER
+#include "driver-blockerupter.h"
+#endif
 
 #ifdef USE_BITFURY
 #include "driver-bitfury.h"
