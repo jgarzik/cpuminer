@@ -239,7 +239,7 @@ static void adjust_fan(struct avalon2_info *info)
 	int t;
 
 	if (opt_avalon2_fan_fixed == FAN_FIXED) {
-		info->fan_pct = AVA2_DEFAULT_FAN_PWM;
+		info->fan_pct = opt_avalon2_fan_min;
 		info->fan_pwm = get_fan_pwm(info->fan_pct);
 		return;
 	}
@@ -483,11 +483,12 @@ static int avalon2_send_pkgs(struct cgpu_info *avalon2, const struct avalon2_pkg
 
 static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 {
+	struct avalon2_info *info = avalon2->device_data;
 	const int merkle_offset = 36;
 	struct avalon2_pkg pkg;
 	int i, a, b, tmp;
 	unsigned char target[32];
-	int job_id_len;
+	int job_id_len, n2size;
 	unsigned short crc;
 
 	/* Send out the first stratum message STATIC */
@@ -504,7 +505,8 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 	tmp = be32toh(pool->nonce2_offset);
 	memcpy(pkg.data + 4, &tmp, 4);
 
-	tmp = be32toh(pool->n2size);
+	n2size = pool->n2size >= 4 ? 4 : pool->n2size;
+	tmp = be32toh(n2size);
 	memcpy(pkg.data + 8, &tmp, 4);
 
 	tmp = be32toh(merkle_offset);
@@ -886,6 +888,10 @@ static void avalon2_update(struct cgpu_info *avalon2)
 		applog(LOG_ERR, "Avalon2: MM merkles have to less then %d", AVA2_P_MERKLES_COUNT);
 		return;
 	}
+	if (pool->n2size < 3) {
+		applog(LOG_ERR, "Avalon2: MM nonce2 size have to >= 3 (%d)", pool->n2size);
+		return;
+	}
 
 	cgtime(&info->last_stratum);
 	cg_rlock(&pool->data_lock);
@@ -918,7 +924,10 @@ static void avalon2_update(struct cgpu_info *avalon2)
 	memcpy(send_pkg.data + 8, &tmp, 4);
 
 	/* Configure the nonce2 offset and range */
-	range = 0xffffffff / (total_devices + 1);
+	if (pool->n2size == 3)
+		range = 0xffffff / (total_devices + 1);
+	else
+		range = 0xffffffff / (total_devices + 1);
 	start = range * (avalon2->device_id + 1);
 
 	tmp = be32toh(start);
