@@ -418,6 +418,18 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = BFLSC_TIMEOUT_MS,
 		.latency = LATENCY_STD,
 		INTINFO(bflsc_ints) },
+	{
+		.drv = DRIVER_bflsc,
+		.name = "BMA",
+		.ident = IDENT_BMA,
+		.idVendor = IDVENDOR_FTDI,
+		.idProduct = 0x6014,
+		.iManufacturer = "BUTTERFLY LABS",
+		.iProduct = "BitFORCE SHA256",
+		.config = 1,
+		.timeout = BFLSC_TIMEOUT_MS,
+		.latency = LATENCY_STD,
+		INTINFO(bflsc_ints) },
 #endif
 #ifdef USE_BITFORCE
 	{
