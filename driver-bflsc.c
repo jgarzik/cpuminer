@@ -1820,6 +1820,10 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 	if (bflsc->usbinfo.nodev)
 		return true;
 
+	/* Don't send any work if this device is overheating */
+	if (sc_info->sc_devs[0].overheat == true)
+		return true;
+
 	wr_lock(&bflsc->qlock);
 	base_work = __get_queued(bflsc);
 	if (likely(base_work))
