@@ -483,7 +483,6 @@ static int avalon2_send_pkgs(struct cgpu_info *avalon2, const struct avalon2_pkg
 
 static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 {
-	struct avalon2_info *info = avalon2->device_data;
 	const int merkle_offset = 36;
 	struct avalon2_pkg pkg;
 	int i, a, b, tmp;
