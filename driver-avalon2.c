@@ -1071,7 +1071,7 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 static void avalon2_statline_before(char *buf, size_t bufsiz, struct cgpu_info *avalon2)
 {
 	struct avalon2_info *info = avalon2->device_data;
-	int temp = get_temp_max(info);
+	int temp = get_current_temp_max(info);
 	float volts = (float)info->set_voltage / 10000;
 
 	tailsprintf(buf, bufsiz, "%4dMhz %2dC %3d%% %.3fV", info->set_frequency,
