@@ -97,7 +97,7 @@ typedef struct blockerupter_info {
     uint8_t found;
     int clock;
     int nonces;
-    uint8_t diff;
+    int diff;
     int rolling;
     int accepted;
     int hashes;
