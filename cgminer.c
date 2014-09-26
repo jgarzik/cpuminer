@@ -198,6 +198,7 @@ char *opt_api_allow = NULL;
 char *opt_api_groups;
 char *opt_api_description = PACKAGE_STRING;
 int opt_api_port = 4028;
+char *opt_api_host = API_LISTEN_ADDR;
 bool opt_api_listen;
 bool opt_api_mcast;
 char *opt_api_mcast_addr = API_MCAST_ADDR;
@@ -1116,6 +1117,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--api-port",
 		     set_int_1_to_65535, opt_show_intval, &opt_api_port,
 		     "Port number of miner API"),
+	OPT_WITH_ARG("--api-host",
+		     opt_set_charp, NULL, &opt_api_host,
+		     "Specify API listen address, default: 0.0.0.0"),
 #ifdef USE_AVALON
 	OPT_WITHOUT_ARG("--avalon-auto",
 			opt_set_bool, &opt_avalon_auto,

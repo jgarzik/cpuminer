@@ -613,9 +613,9 @@ static bool do_a_restart;
 
 static time_t when = 0;	// when the request occurred
 
-struct IP4ACCESS {
-	in_addr_t ip;
-	in_addr_t mask;
+struct IPACCESS {
+	struct in6_addr ip;
+	struct in6_addr mask;
 	char group;
 };
 
@@ -633,7 +633,7 @@ struct APIGROUPS {
 	char *commands;
 } apigroups['Z' - 'A' + 1]; // only A=0 to Z=25 (R: noprivs, W: allprivs)
 
-static struct IP4ACCESS *ipaccess = NULL;
+static struct IPACCESS *ipaccess = NULL;
 static int ips = 0;
 
 struct io_data {
@@ -4419,17 +4419,20 @@ static void setup_groups()
 
 /*
  * Interpret [W:]IP[/Prefix][,[R|W:]IP2[/Prefix2][,...]] --api-allow option
+ *  ipv6 address should be enclosed with a pair of square brackets and the prefix left outside
  *	special case of 0/0 allows /0 (means all IP addresses)
  */
-#define ALLIP4 "0/0"
+#define ALLIP "0/0"
 /*
  * N.B. IP4 addresses are by Definition 32bit big endian on all platforms
  */
 static void setup_ipaccess()
 {
-	char *buf, *ptr, *comma, *slash, *dot;
-	int ipcount, mask, octet, i;
+	char *buf, *ptr, *comma, *slash, *end;
+	int ipcount, mask, octet, i, shift;
 	char group;
+	bool ipv6;
+	char tmp[30];
 
 	buf = malloc(strlen(opt_api_allow) + 1);
 	if (unlikely(!buf))
@@ -4444,7 +4447,7 @@ static void setup_ipaccess()
 			ipcount++;
 
 	// possibly more than needed, but never less
-	ipaccess = calloc(ipcount, sizeof(struct IP4ACCESS));
+	ipaccess = calloc(ipcount, sizeof(struct IPACCESS));
 	if (unlikely(!ipaccess))
 		quit(1, "Failed to calloc ipaccess");
 
@@ -4474,41 +4477,58 @@ static void setup_ipaccess()
 
 		ipaccess[ips].group = group;
 
-		if (strcmp(ptr, ALLIP4) == 0)
-			ipaccess[ips].ip = ipaccess[ips].mask = 0;
+		if (strcmp(ptr, ALLIP) == 0){
+			for (i = 0; i < 16; i++){
+				ipaccess[ips].ip.s6_addr[i] = 0;
+				ipaccess[ips].mask.s6_addr[i] = 0;
+			}
+		}
 		else {
-			slash = strchr(ptr, '/');
+			ipv6 = false;
+			end = strchr(ptr, '/');
+			slash = end--;
+			if (*ptr == '[' && *end == ']'){
+				*(ptr++) = '\0';
+				*(end--) = '\0';
+				ipv6 = true;
+			}
 			if (!slash)
-				ipaccess[ips].mask = 0xffffffff;
+				for (i = 0; i < 16; i++)
+					ipaccess[ips].mask.s6_addr[i] = 0xff;
 			else {
 				*(slash++) = '\0';
 				mask = atoi(slash);
-				if (mask < 1 || mask > 32)
+				if (mask < 1 || (mask += ipv6 ? 0 : 96) > 128 )
 					goto popipo; // skip invalid/zero
 
-				ipaccess[ips].mask = 0;
-				while (mask-- >= 0) {
-					octet = 1 << (mask % 8);
-					ipaccess[ips].mask |= (octet << (24 - (8 * (mask >> 3))));
+				for (i = 0; i < 16; i++)
+					ipaccess[ips].mask.s6_addr[i] = 0;
+
+				i = 0;
+				shift = 7;
+				while (mask-- > 0) {
+					ipaccess[ips].mask.s6_addr[i] |= 1 << shift;
+					if (shift-- == 0){
+						i++;
+						shift = 7;
+					}
 				}
 			}
 
-			ipaccess[ips].ip = 0; // missing default to '.0'
-			for (i = 0; ptr && (i < 4); i++) {
-				dot = strchr(ptr, '.');
-				if (dot)
-					*(dot++) = '\0';
-
-				octet = atoi(ptr);
-				if (octet < 0 || octet > 0xff)
-					goto popipo; // skip invalid
-
-				ipaccess[ips].ip |= (octet << (24 - (i * 8)));
-
-				ptr = dot;
+			for (i = 0; i < 16; i++)
+				ipaccess[ips].ip.s6_addr[i] = 0; // missing default to '[::]'
+			if (ipv6){
+				if (inet_pton(AF_INET6, ptr, &(ipaccess[ips].ip)) != 1)
+					goto popipo;
 			}
-
-			ipaccess[ips].ip &= ipaccess[ips].mask;
+			else {
+				// v4 mapped v6 address, such as "::ffff:255.255.255.255"
+				sprintf(tmp, "::ffff:%s", ptr);
+				if (inet_pton(AF_INET6, tmp, &(ipaccess[ips].ip)) != 1)
+					goto popipo;
+			}
+			for (i = 0; i < 16; i++)
+				ipaccess[ips].ip.s6_addr[i] &= ipaccess[ips].mask.s6_addr[i];
 		}
 
 		ips++;
@@ -4547,18 +4567,37 @@ static void *restart_thread(__maybe_unused void *userdata)
 	return NULL;
 }
 
-static bool check_connect(struct sockaddr_in *cli, char **connectaddr, char *group)
+static bool check_connect(struct sockaddr_storage *cli, char **connectaddr, char *group)
 {
 	bool addrok = false;
-	int i;
+	int i, j;
+	bool match;
+	char ip[50], tmp[50];
+	struct in6_addr client_ip;
 
-	*connectaddr = inet_ntoa(cli->sin_addr);
+	getnameinfo((struct sockaddr *)cli, sizeof(*cli),
+			ip, sizeof(ip), NULL, 0, NI_NUMERICHOST);
+	*connectaddr = ip;
+
+	// v4 mapped v6 address, such as "::ffff:255.255.255.255"
+	if (cli->ss_family == AF_INET){
+		sprintf(tmp, "::ffff:%s", ip);
+		inet_pton(AF_INET6, tmp, &client_ip);
+	}
+	else
+		inet_pton(AF_INET6, *connectaddr, &client_ip);
 
 	*group = NOPRIVGROUP;
 	if (opt_api_allow) {
-		int client_ip = htonl(cli->sin_addr.s_addr);
-		for (i = 0; i < ips; i++) {
-			if ((client_ip & ipaccess[i].mask) == ipaccess[i].ip) {
+		for (i = 0; i < ips; i++){
+			match = true;
+			for (j = 0; j < 16; j++)
+				if ((client_ip.s6_addr[j] & ipaccess[i].mask.s6_addr[j])
+						!= ipaccess[i].ip.s6_addr[j]) {
+					match = false;
+					break;
+				}
+			if (match){
 				addrok = true;
 				*group = ipaccess[i].group;
 				break;
@@ -4568,7 +4607,8 @@ static bool check_connect(struct sockaddr_in *cli, char **connectaddr, char *gro
 		if (opt_api_network)
 			addrok = true;
 		else
-			addrok = (strcmp(*connectaddr, localaddr) == 0);
+			addrok = (strcmp(*connectaddr, localaddr) == 0)
+				|| IN6_IS_ADDR_LOOPBACK(&client_ip);
 	}
 
 	return addrok;
@@ -4660,7 +4700,7 @@ static void mcast()
 			continue;
 		}
 
-		addrok = check_connect(&came_from, &connectaddr, &group);
+		addrok = check_connect((struct sockaddr_storage *)&came_from, &connectaddr, &group);
 		applog(LOG_DEBUG, "API mcast from %s - %s",
 					connectaddr, addrok ? "Accepted" : "Ignored");
 		if (!addrok)
@@ -4753,8 +4793,8 @@ void api(int api_thr_id)
 	char *binderror;
 	time_t bindstart;
 	short int port = opt_api_port;
-	struct sockaddr_in serv;
-	struct sockaddr_in cli;
+	char port_s[10];
+	struct sockaddr_storage cli;
 	socklen_t clisiz;
 	char cmdbuf[100];
 	char *cmd = NULL;
@@ -4767,6 +4807,7 @@ void api(int api_thr_id)
 	bool isjson;
 	bool did, isjoin = false, firstjoin;
 	int i;
+	struct addrinfo hints, *res;
 
 	SOCKETTYPE *apisock;
 
@@ -4802,27 +4843,26 @@ void api(int api_thr_id)
 	 * to ensure curl has already called WSAStartup() in windows */
 	cgsleep_ms(opt_log_interval*1000);
 
-	*apisock = socket(AF_INET, SOCK_STREAM, 0);
-	if (*apisock == INVSOCK) {
-		applog(LOG_ERR, "API1 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
+	sprintf(port_s, "%d", port);
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_flags = AI_PASSIVE;
+	hints.ai_family = AF_UNSPEC;
+	if (getaddrinfo(opt_api_host, port_s, &hints, &res) != 0){
+		applog(LOG_ERR, "API failed to resolve %s", opt_api_host);
 		free(apisock);
 		return;
 	}
-
-	memset(&serv, 0, sizeof(serv));
-
-	serv.sin_family = AF_INET;
-
-	if (!opt_api_allow && !opt_api_network) {
-		serv.sin_addr.s_addr = inet_addr(localaddr);
-		if (serv.sin_addr.s_addr == (in_addr_t)INVINETADDR) {
-			applog(LOG_ERR, "API2 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
-			free(apisock);
-			return;
-		}
+	while (res != NULL){
+		*apisock = socket(res->ai_family, SOCK_STREAM, 0);
+		if (*apisock > 0)
+			break;
+		res = res -> ai_next;
 	}
-
-	serv.sin_port = htons(port);
+	if (*apisock == INVSOCK) {
+		applog(LOG_ERR, "API initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
+		free(apisock);
+		return;
+	}
 
 #ifndef WIN32
 	// On linux with SO_REUSEADDR, bind will get the port if the previous
@@ -4842,7 +4882,7 @@ void api(int api_thr_id)
 	bound = 0;
 	bindstart = time(NULL);
 	while (bound == 0) {
-		if (SOCKETFAIL(bind(*apisock, (struct sockaddr *)(&serv), sizeof(serv)))) {
+		if (SOCKETFAIL(bind(*apisock, res->ai_addr, res->ai_addrlen))) {
 			binderror = SOCKERRMSG;
 			if ((time(NULL) - bindstart) > 61)
 				break;
@@ -4888,7 +4928,7 @@ void api(int api_thr_id)
 			goto die;
 		}
 
-		addrok = check_connect(&cli, &connectaddr, &group);
+		addrok = check_connect((struct sockaddr_storage *)&cli, &connectaddr, &group);
 		applog(LOG_DEBUG, "API: connection from %s - %s",
 					connectaddr, addrok ? "Accepted" : "Ignored");
 
@@ -5052,7 +5092,7 @@ die:
 	pthread_cleanup_pop(true);
 
 	free(apisock);
-	
+
 	if (opt_debug)
 		applog(LOG_DEBUG, "API: terminating due to: %s",
 				do_a_quit ? "QUIT" : (do_a_restart ? "RESTART" : (bye ? "BYE" : "UNKNOWN!")));
