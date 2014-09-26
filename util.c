@@ -1476,7 +1476,13 @@ bool extract_sockaddr(char *url, char **sockaddr_url, char **sockaddr_port)
 
 	if (url_len < 1)
 		return false;
-
+	
+	/* Get rid of the [] */
+	if (ipv6_begin && ipv6_end && ipv6_end > ipv6_begin){
+		url_len -= 2;
+		url_begin++;
+	}
+	
 	snprintf(url_address, 254, "%.*s", url_len, url_begin);
 
 	if (port_len) {
