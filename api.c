@@ -4807,7 +4807,7 @@ void api(int api_thr_id)
 	bool isjson;
 	bool did, isjoin = false, firstjoin;
 	int i;
-	struct addrinfo hints, *res;
+	struct addrinfo hints, *res, *host;
 
 	SOCKETTYPE *apisock;
 
@@ -4852,14 +4852,16 @@ void api(int api_thr_id)
 		free(apisock);
 		return;
 	}
-	while (res != NULL){
+	host = res;
+	while (host != NULL){
 		*apisock = socket(res->ai_family, SOCK_STREAM, 0);
 		if (*apisock > 0)
 			break;
-		res = res -> ai_next;
+		host = host->ai_next;
 	}
 	if (*apisock == INVSOCK) {
 		applog(LOG_ERR, "API initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
+		freeaddrinfo(res);
 		free(apisock);
 		return;
 	}
@@ -4882,7 +4884,7 @@ void api(int api_thr_id)
 	bound = 0;
 	bindstart = time(NULL);
 	while (bound == 0) {
-		if (SOCKETFAIL(bind(*apisock, res->ai_addr, res->ai_addrlen))) {
+		if (SOCKETFAIL(bind(*apisock, host->ai_addr, host->ai_addrlen))) {
 			binderror = SOCKERRMSG;
 			if ((time(NULL) - bindstart) > 61)
 				break;
@@ -4893,6 +4895,7 @@ void api(int api_thr_id)
 		} else
 			bound = 1;
 	}
+	freeaddrinfo(res);
 
 	if (bound == 0) {
 		applog(LOG_ERR, "API bind to port %d failed (%s)%s", port, binderror, UNAVAILABLE);
