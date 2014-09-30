@@ -738,11 +738,11 @@ static void hashratio_update_work(struct cgpu_info *hashratio)
 	hashratio_stratum_pkgs(hashratio, pool);
 	cg_runlock(&pool->data_lock);
 
-	/* Configuer the parameter from outside */
+	/* Configure the parameter from outside */
 	memset(send_pkg.data, 0, HRTO_P_DATA_LEN);
 
-	// fan
-	info->fan_pwm = HRTO_PWM_MAX;
+	// fan. We're not measuring temperature so set a safe but not max value
+	info->fan_pwm = HRTO_PWM_MAX * 2 / 3;
 	tmp = be32toh(info->fan_pwm);
 	memcpy(send_pkg.data, &tmp, 4);
 
