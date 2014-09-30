@@ -2154,6 +2154,11 @@ bool auth_stratum(struct pool *pool)
 	pool->probed = true;
 	successful_connect = true;
 
+	if (opt_suggest_diff) {
+		sprintf(s, "{\"id\": %d, \"method\": \"mining.suggest_difficulty(%d)\", \"params\": []}",
+			swork_id++, opt_suggest_diff);
+		stratum_send(pool, s, strlen(s));
+	}
 out:
 	json_decref(val);
 	return ret;
