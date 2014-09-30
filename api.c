@@ -4572,16 +4572,16 @@ static bool check_connect(struct sockaddr_storage *cli, char **connectaddr, char
 	bool addrok = false;
 	int i, j;
 	bool match;
-	char ip[50], tmp[50];
+	char tmp[30];
 	struct in6_addr client_ip;
 
+	*connectaddr = (char *)malloc(INET6_ADDRSTRLEN);
 	getnameinfo((struct sockaddr *)cli, sizeof(*cli),
-			ip, sizeof(ip), NULL, 0, NI_NUMERICHOST);
-	*connectaddr = ip;
+			*connectaddr, INET6_ADDRSTRLEN, NULL, 0, NI_NUMERICHOST);
 
 	// v4 mapped v6 address, such as "::ffff:255.255.255.255"
 	if (cli->ss_family == AF_INET){
-		sprintf(tmp, "::ffff:%s", ip);
+		sprintf(tmp, "::ffff:%s", *connectaddr);
 		inet_pton(AF_INET6, tmp, &client_ip);
 	}
 	else
