@@ -406,12 +406,8 @@ out:
 
 static inline int avalon2_gets(struct cgpu_info *avalon2, uint8_t *buf)
 {
-	int i;
-	int read_amount = AVA2_READ_SIZE;
-	uint8_t buf_tmp[AVA2_READ_SIZE];
-	uint8_t buf_copy[2 * AVA2_READ_SIZE];
+	int read_amount = AVA2_READ_SIZE, ret = 0;
 	uint8_t *buf_back = buf;
-	int ret = 0;
 
 	while (true) {
 		int err;
@@ -424,21 +420,8 @@ static inline int avalon2_gets(struct cgpu_info *avalon2, uint8_t *buf)
 				return AVA2_GETS_ERROR;
 			}
 			if (likely(ret >= read_amount)) {
-				for (i = 1; i < read_amount; i++) {
-					if (buf_back[i - 1] == AVA2_H1 && buf_back[i] == AVA2_H2)
-						break;
-				}
-				i -= 1;
-				if (i) {
-					err = usb_read(avalon2, (char *)buf, read_amount, &ret, C_AVA2_READ);
-					if (unlikely(err < 0 || ret != read_amount)) {
-						applog(LOG_ERR, "Avalon2: Error %d on 2nd read in avalon_gets got %d", err, ret);
-						return AVA2_GETS_ERROR;
-					}
-					memcpy(buf_copy, buf_back + i, AVA2_READ_SIZE - i);
-					memcpy(buf_copy + AVA2_READ_SIZE - i, buf_tmp, i);
-					memcpy(buf_back, buf_copy, AVA2_READ_SIZE);
-				}
+				if (unlikely(buf_back[0] != AVA2_H1 || buf_back[1] != AVA2_H2))
+					return AVA2_GETS_ERROR;
 				return AVA2_GETS_OK;
 			}
 			buf += ret;
