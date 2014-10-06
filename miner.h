@@ -348,6 +348,9 @@ struct device_drv {
 
 	/* Highest target diff the device supports */
 	double max_diff;
+
+	/* Lowest diff the controller can safely run at */
+	double min_diff;
 };
 
 extern struct device_drv *copy_drv(struct device_drv*);
