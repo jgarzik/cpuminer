@@ -142,8 +142,9 @@ static void blockerupter_setdiff(struct cgpu_info *blockerupter,int diff) {
         bits = 1;
         local_diff = 64;
     } else {
-        bits = 0;
-        local_diff = 1;
+        /* exceed bandwidth limit with diff 1 */
+        bits = 1;
+        local_diff = 64;
     }
     
     if(local_diff==info->diff) return;
