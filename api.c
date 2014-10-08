@@ -4477,8 +4477,8 @@ static void setup_ipaccess()
 
 		ipaccess[ips].group = group;
 
-		if (strcmp(ptr, ALLIP) == 0){
-			for (i = 0; i < 16; i++){
+		if (strcmp(ptr, ALLIP) == 0) {
+			for (i = 0; i < 16; i++) {
 				ipaccess[ips].ip.s6_addr[i] = 0;
 				ipaccess[ips].mask.s6_addr[i] = 0;
 			}
@@ -4487,7 +4487,7 @@ static void setup_ipaccess()
 			ipv6 = false;
 			end = strchr(ptr, '/');
 			slash = end--;
-			if (*ptr == '[' && *end == ']'){
+			if (*ptr == '[' && *end == ']') {
 				*(ptr++) = '\0';
 				*(end--) = '\0';
 				ipv6 = true;
@@ -4508,7 +4508,7 @@ static void setup_ipaccess()
 				shift = 7;
 				while (mask-- > 0) {
 					ipaccess[ips].mask.s6_addr[i] |= 1 << shift;
-					if (shift-- == 0){
+					if (shift-- == 0) {
 						i++;
 						shift = 7;
 					}
@@ -4517,7 +4517,7 @@ static void setup_ipaccess()
 
 			for (i = 0; i < 16; i++)
 				ipaccess[ips].ip.s6_addr[i] = 0; // missing default to '[::]'
-			if (ipv6){
+			if (ipv6) {
 				if (inet_pton(AF_INET6, ptr, &(ipaccess[ips].ip)) != 1)
 					goto popipo;
 			}
@@ -4580,7 +4580,7 @@ static bool check_connect(struct sockaddr_storage *cli, char **connectaddr, char
 			*connectaddr, INET6_ADDRSTRLEN, NULL, 0, NI_NUMERICHOST);
 
 	// v4 mapped v6 address, such as "::ffff:255.255.255.255"
-	if (cli->ss_family == AF_INET){
+	if (cli->ss_family == AF_INET) {
 		sprintf(tmp, "::ffff:%s", *connectaddr);
 		inet_pton(AF_INET6, tmp, &client_ip);
 	}
@@ -4589,7 +4589,7 @@ static bool check_connect(struct sockaddr_storage *cli, char **connectaddr, char
 
 	*group = NOPRIVGROUP;
 	if (opt_api_allow) {
-		for (i = 0; i < ips; i++){
+		for (i = 0; i < ips; i++) {
 			match = true;
 			for (j = 0; j < 16; j++)
 				if ((client_ip.s6_addr[j] & ipaccess[i].mask.s6_addr[j])
@@ -4597,7 +4597,7 @@ static bool check_connect(struct sockaddr_storage *cli, char **connectaddr, char
 					match = false;
 					break;
 				}
-			if (match){
+			if (match) {
 				addrok = true;
 				*group = ipaccess[i].group;
 				break;
@@ -4616,13 +4616,11 @@ static bool check_connect(struct sockaddr_storage *cli, char **connectaddr, char
 
 static void mcast()
 {
-	struct sockaddr_in listen;
-	struct ip_mreq grp;
-	struct sockaddr_in came_from;
+	struct sockaddr_storage came_from;
 	time_t bindstart;
 	char *binderror;
-	SOCKETTYPE mcast_sock;
-	SOCKETTYPE reply_sock;
+	SOCKETTYPE mcast_sock = INVSOCK;
+	SOCKETTYPE reply_sock = INVSOCK;
 	socklen_t came_from_siz;
 	char *connectaddr;
 	ssize_t rep;
@@ -4632,19 +4630,31 @@ static void mcast()
 	bool addrok;
 	char group;
 
+	char port_s[10], came_from_port[10];
+	struct addrinfo hints, *res, *host, *client;
+
 	char expect[] = "cgminer-"; // first 8 bytes constant
 	char *expect_code;
 	size_t expect_code_len;
 	char buf[1024];
 	char replybuf[1024];
 
-	memset(&grp, 0, sizeof(grp));
-	grp.imr_multiaddr.s_addr = inet_addr(opt_api_mcast_addr);
-	if (grp.imr_multiaddr.s_addr == INADDR_NONE)
-		quit(1, "Invalid Multicast Address");
-	grp.imr_interface.s_addr = INADDR_ANY;
-
-	mcast_sock = socket(AF_INET, SOCK_DGRAM, 0);
+	sprintf(port_s, "%d", opt_api_mcast_port);
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_UNSPEC;
+	if (getaddrinfo(opt_api_mcast_addr, port_s, &hints, &res) != 0)
+		quit(1, "Invalid API Multicast Address");
+	host = res;
+	while (host != NULL) {
+		mcast_sock = socket(res->ai_family, SOCK_DGRAM, 0);
+		if (mcast_sock > 0)
+			break;
+		host = host->ai_next;
+	}
+	if (mcast_sock == INVSOCK) {
+		freeaddrinfo(res);
+		quit(1, "API mcast could not open socket");
+	}
 
 	int optval = 1;
 	if (SOCKETFAIL(setsockopt(mcast_sock, SOL_SOCKET, SO_REUSEADDR, (void *)(&optval), sizeof(optval)))) {
@@ -4652,16 +4662,11 @@ static void mcast()
 		goto die;
 	}
 
-	memset(&listen, 0, sizeof(listen));
-	listen.sin_family = AF_INET;
-	listen.sin_addr.s_addr = INADDR_ANY;
-	listen.sin_port = htons(opt_api_mcast_port);
-
 	// try for more than 1 minute ... in case the old one hasn't completely gone yet
 	bound = 0;
 	bindstart = time(NULL);
 	while (bound == 0) {
-		if (SOCKETFAIL(bind(mcast_sock, (struct sockaddr *)(&listen), sizeof(listen)))) {
+		if (SOCKETFAIL(bind(mcast_sock, host->ai_addr, host->ai_addrlen))) {
 			binderror = SOCKERRMSG;
 			if ((time(NULL) - bindstart) > 61)
 				break;
@@ -4672,14 +4677,41 @@ static void mcast()
 	}
 
 	if (bound == 0) {
-		applog(LOG_ERR, "API mcast bind to port %d failed (%s)%s", opt_api_port, binderror, MUNAVAILABLE);
+		applog(LOG_ERR, "API mcast bind to port %d failed (%s)%s", opt_api_mcast_port, binderror, MUNAVAILABLE);
 		goto die;
 	}
 
-	if (SOCKETFAIL(setsockopt(mcast_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (void *)(&grp), sizeof(grp)))) {
-		applog(LOG_ERR, "API mcast join failed (%s)%s", SOCKERRMSG, MUNAVAILABLE);
-		goto die;
+	switch (host->ai_family) {
+		case AF_INET: {
+			struct ip_mreq grp;
+			memset(&grp, 0, sizeof(grp));
+			grp.imr_multiaddr.s_addr = ((struct sockaddr_in *)(host->ai_addr))->sin_addr.s_addr;
+			grp.imr_interface.s_addr = INADDR_ANY;
+
+			if (SOCKETFAIL(setsockopt(mcast_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,
+							(void *)(&grp), sizeof(grp)))) {
+				applog(LOG_ERR, "API mcast join failed (%s)%s", SOCKERRMSG, MUNAVAILABLE);
+				goto die;
+			}
+			break;
+		}
+		case AF_INET6: {
+			struct ipv6_mreq grp;
+			memcpy(&grp.ipv6mr_multiaddr, &(((struct sockaddr_in6 *)(host->ai_addr))->sin6_addr),
+					sizeof(struct in6_addr));
+			grp.ipv6mr_interface= 0;
+
+			if (SOCKETFAIL(setsockopt(mcast_sock, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP,
+							(void *)(&grp), sizeof(grp)))) {
+				applog(LOG_ERR, "API mcast join failed (%s)%s", SOCKERRMSG, MUNAVAILABLE);
+				goto die;
+			}
+			break;
+		}
+		default:
+			break;
 	}
+	freeaddrinfo(res);
 
 	expect_code_len = sizeof(expect) + strlen(opt_api_mcast_code);
 	expect_code = malloc(expect_code_len+1);
@@ -4700,7 +4732,7 @@ static void mcast()
 			continue;
 		}
 
-		addrok = check_connect((struct sockaddr_storage *)&came_from, &connectaddr, &group);
+		addrok = check_connect(&came_from, &connectaddr, &group);
 		applog(LOG_DEBUG, "API mcast from %s - %s",
 					connectaddr, addrok ? "Accepted" : "Ignored");
 		if (!addrok)
@@ -4710,10 +4742,11 @@ static void mcast()
 		if (rep > 0 && buf[rep-1] == '\n')
 			buf[--rep] = '\0';
 
-		applog(LOG_DEBUG, "API mcast request rep=%d (%s) from %s:%d",
-					(int)rep, buf,
-					inet_ntoa(came_from.sin_addr),
-					ntohs(came_from.sin_port));
+		getnameinfo((struct sockaddr *)(&came_from), came_from_siz,
+				NULL, 0, came_from_port, sizeof(came_from_port), NI_NUMERICHOST);
+
+		applog(LOG_DEBUG, "API mcast request rep=%d (%s) from [%s]:%s",
+					(int)rep, buf, connectaddr, came_from_port);
 
 		if ((size_t)rep > expect_code_len && memcmp(buf, expect_code, expect_code_len) == 0) {
 			reply_port = atoi(&buf[expect_code_len]);
@@ -4724,16 +4757,30 @@ static void mcast()
 				applog(LOG_DEBUG, "API mcast request OK port %s=%d",
 							&buf[expect_code_len], reply_port);
 
-				came_from.sin_port = htons(reply_port);
-				reply_sock = socket(AF_INET, SOCK_DGRAM, 0);
+				if (getaddrinfo(connectaddr, &buf[expect_code_len], &hints, &res) != 0) {
+					applog(LOG_ERR, "Invalid client address %s", connectaddr);
+					continue;
+				}
+				client = res;
+				while (client) {
+					reply_sock = socket(res->ai_family, SOCK_DGRAM, 0);
+					if (mcast_sock > 0)
+						break;
+					client = client->ai_next;
+				}
+				if (reply_sock == INVSOCK) {
+					freeaddrinfo(res);
+					applog(LOG_ERR, "API mcast could not open socket to client %s", connectaddr);
+					continue;
+				}
 
 				snprintf(replybuf, sizeof(replybuf),
 							"cgm-" API_MCAST_CODE "-%d-%s",
 							opt_api_port, opt_api_mcast_des);
 
 				rep = sendto(reply_sock, replybuf, strlen(replybuf)+1,
-						0, (struct sockaddr *)(&came_from),
-						sizeof(came_from));
+						0, client->ai_addr, client->ai_addrlen);
+				freeaddrinfo(res);
 				if (SOCKETFAIL(rep)) {
 					applog(LOG_DEBUG, "API mcast send reply failed (%s) (%d)",
 								SOCKERRMSG, (int)reply_sock);
@@ -4847,13 +4894,13 @@ void api(int api_thr_id)
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_family = AF_UNSPEC;
-	if (getaddrinfo(opt_api_host, port_s, &hints, &res) != 0){
+	if (getaddrinfo(opt_api_host, port_s, &hints, &res) != 0) {
 		applog(LOG_ERR, "API failed to resolve %s", opt_api_host);
 		free(apisock);
 		return;
 	}
 	host = res;
-	while (host != NULL){
+	while (host) {
 		*apisock = socket(res->ai_family, SOCK_STREAM, 0);
 		if (*apisock > 0)
 			break;
