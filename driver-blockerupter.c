@@ -179,7 +179,7 @@ static void blockerupter_init(struct cgpu_info *blockerupter) {
     info = blockerupter->device_data;
     // Set Clock
     blockerupter_setclock(blockerupter, BET_CLOCK_DEFAULT);
-    info->clock = (BET_CLOCK_DEFAULT+1)*5;
+    info->clock = (BET_CLOCK_DEFAULT+1)*10;
     info->expected = info->clock*24*32*info->found/1000.0;
     // Set Diff
     blockerupter_setdiff(blockerupter, BET_DIFF_DEFAULT);
