@@ -27,6 +27,7 @@ install WinUSB driver for detected CP2102x device with Zadig (Some users might n
 #define BET_CLOCK_DEFAULT 23
 #define BET_DIFF_DEFAULT 64
 #define BET_ROLLING_DEFAULT 5
+extern int opt_bet_clk;
 
 #define BET_WORK_FIFO 128
 #define BET_NONCE_FIX 4
