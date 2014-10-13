@@ -532,7 +532,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_MISPDP,	PARAM_NONE,	"Missing addpool details" },
  { SEVERITY_ERR,   MSG_INVPDP,	PARAM_STR,	"Invalid addpool details '%s'" },
  { SEVERITY_ERR,   MSG_TOOMANYP,PARAM_NONE,	"Reached maximum number of pools (%d)" },
- { SEVERITY_SUCC,  MSG_ADDPOOL,	PARAM_STR,	"Added pool '%s'" },
+ { SEVERITY_SUCC,  MSG_ADDPOOL,	PARAM_POOL,	"Added pool %d: '%s'" },
  { SEVERITY_ERR,   MSG_REMLASTP,PARAM_POOL,	"Cannot remove last pool %d:'%s'" },
  { SEVERITY_ERR,   MSG_ACTPOOL, PARAM_POOL,	"Cannot remove active pool %d:'%s'" },
  { SEVERITY_SUCC,  MSG_REMPOOL, PARAM_BOTH,	"Removed pool %d:'%s'" },
@@ -2774,7 +2774,7 @@ static void addpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *
 	add_pool_details(pool, true, url, user, pass);
 
 	ptr = escape_string(url, isjson);
-	message(io_data, MSG_ADDPOOL, 0, ptr, isjson);
+	message(io_data, MSG_ADDPOOL, pool->pool_no, ptr, isjson);
 	if (ptr != url)
 		free(ptr);
 	ptr = NULL;

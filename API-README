@@ -211,7 +211,7 @@ The list of requests - a (*) means it requires privileged access - and replies:
  addpool|URL,USR,PASS (*)
                none           There is no reply section just the STATUS section
                               stating the results of attempting to add pool N
-                              The Msg includes the pool URL
+                              The Msg includes the pool number and URL
                               Use '\\' to get a '\' and '\,' to include a comma
                               inside URL, USR or PASS
 
