@@ -313,7 +313,7 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               It will return an empty list of devices if all
                               devices are blacklisted or zombies
 
- check|cmd     COMMAND        Exists=Y/N, <- 'cmd' exists in this version
+ check|cmd     CHECK          Exists=Y/N, <- 'cmd' exists in this version
                               Access=Y/N| <- you have access to use 'cmd'
 
  failover-only|true/false (*)
