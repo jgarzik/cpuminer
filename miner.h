@@ -349,6 +349,9 @@ struct device_drv {
 
 	/* Highest target diff the device supports */
 	double max_diff;
+
+	/* Lowest diff the controller can safely run at */
+	double min_diff;
 };
 
 extern struct device_drv *copy_drv(struct device_drv*);
@@ -965,6 +968,7 @@ extern bool opt_protocol;
 extern bool have_longpoll;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
+extern int opt_suggest_diff;
 extern char *cgminer_path;
 extern bool opt_fail_only;
 extern bool opt_lowmem;

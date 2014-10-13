@@ -402,8 +402,9 @@ static int64_t spond_scanhash_sp30(struct thr_info *thr)
 		int array_size, i, j;
 
 		mutex_lock(&a->lock);
-		ghashes = (a->mp_last_rsp->gh_div_10_rate);
-		ghashes = ghashes  * 10000 * REQUEST_PERIOD;
+		/* Original hashrate calculation based on requests */
+		// ghashes = (a->mp_last_rsp->gh_div_10_rate);
+		// ghashes = ghashes  * 10000 * REQUEST_PERIOD;
 		array_size = a->mp_last_rsp->rsp_count;
 		for (i = 0; i < array_size; i++) { // walk the jobs
 			int job_id;
@@ -415,9 +416,12 @@ static int64_t spond_scanhash_sp30(struct thr_info *thr)
 					assert(a->my_jobs[job_id].state == SPONDWORK_STATE_IN_BUSY);
 
 					if (work->winner_nonce) {
-						bool __maybe_unused ok;
 						struct work *cg_work = a->my_jobs[job_id].cgminer_work;
+						bool ok;
+
 						ok = submit_noffset_nonce(cg_work->thr, cg_work, work->winner_nonce, work->ntime_offset);
+						if (ok)
+							ghashes += 0xffffffffull * cg_work->device_diff;
 						/*printf("WIn on %d (+%d), none=%x = %d\n",
               work->work_id_in_sw, work->ntime_offset, htole32(work->winner_nonce), ok);*/
 						a->wins++;
@@ -469,7 +473,8 @@ struct device_drv sp30_drv = {
 	.drv_id = DRIVER_sp30,
 	.dname = "Sp30",
 	.name = "S30",
-	.max_diff = 64.0, // Limit max diff to get some nonces back regardless
+	.min_diff = 16,
+	.max_diff = 256.0, // Limit max diff to get some nonces back regardless
 	.drv_detect = spondoolies_detect_sp30,
 	.get_api_stats = spondoolies_api_stats_sp30,
 	.thread_prepare = spondoolies_prepare_sp30,

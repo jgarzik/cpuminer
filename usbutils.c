@@ -310,6 +310,20 @@ static struct usb_intinfo ica_ints[] = {
 	USB_EPS(0, ica_epinfos)
 };
 
+static struct usb_epinfo ica1_epinfos0[] = {
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	16,	EPI(0x82), 0, 0 }
+};
+
+static struct usb_epinfo ica1_epinfos1[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(0x81), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(0x01), 0, 0 }
+};
+
+static struct usb_intinfo ica1_ints[] = {
+	USB_EPS(1, ica1_epinfos1),
+	USB_EPS(0, ica1_epinfos0)
+};
+
 static struct usb_epinfo amu_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0, 0 }
@@ -428,6 +442,18 @@ static struct usb_find_devices find_dev[] = {
 		.idProduct = 0x6014,
 		//.iManufacturer = "BUTTERFLY LABS"
 		.iProduct = "BitFORCE SC-28nm",
+		.config = 1,
+		.timeout = BFLSC_TIMEOUT_MS,
+		.latency = LATENCY_STD,
+		INTINFO(bflsc_ints) },
+	{
+		.drv = DRIVER_bflsc,
+		.name = "BMA",
+		.ident = IDENT_BMA,
+		.idVendor = IDVENDOR_FTDI,
+		.idProduct = 0x6014,
+		.iManufacturer = "BUTTERFLY LABS",
+		.iProduct = "BitFORCE SHA256",
 		.config = 1,
 		.timeout = BFLSC_TIMEOUT_MS,
 		.latency = LATENCY_STD,
@@ -657,6 +683,16 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = ICARUS_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
 		INTINFO(ica_ints) },
+ 	{
+ 		.drv = DRIVER_icarus,
+ 		.name = "ICA",
+ 		.ident = IDENT_AVA,
+ 		.idVendor = 0x1fc9,
+ 		.idProduct = 0x0083,
+ 		.config = 1,
+ 		.timeout = ICARUS_TIMEOUT_MS,
+ 		.latency = LATENCY_UNUSED,
+ 		INTINFO(ica1_ints) },
 	{
 		.drv = DRIVER_icarus,
 		.name = "AMU",

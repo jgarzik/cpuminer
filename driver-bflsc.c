@@ -51,8 +51,8 @@ static enum driver_version drv_ver(struct cgpu_info *bflsc, const char *ver)
 		return BFLSC_DRV2;
 
 	tmp = str_text((char *)ver);
-	applog(LOG_WARNING, "%s detect (%s) Warning unknown firmware '%s' using Ver2",
-		bflsc->drv->dname, bflsc->device_path, tmp);
+	applog(LOG_INFO, "%s detect (%s) Warning unknown firmware '%s' using Ver2",
+	       bflsc->drv->dname, bflsc->device_path, tmp);
 	free(tmp);
 	return BFLSC_DRV2;
 }
@@ -1818,6 +1818,10 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 			  );
 
 	if (bflsc->usbinfo.nodev)
+		return true;
+
+	/* Don't send any work if this device is overheating */
+	if (sc_info->sc_devs[0].overheat == true)
 		return true;
 
 	wr_lock(&bflsc->qlock);

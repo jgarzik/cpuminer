@@ -158,7 +158,7 @@ bool opt_loginput;
 bool opt_compact;
 const int opt_cutofftemp = 95;
 int opt_log_interval = 5;
-int opt_queue = 9999;
+int opt_queue = 1;
 static int max_queue = 1;
 int opt_scantime = -1;
 int opt_expiry = 120;
@@ -410,7 +410,7 @@ struct stratum_share {
 static struct stratum_share *stratum_shares = NULL;
 
 char *opt_socks_proxy = NULL;
-
+int opt_suggest_diff;
 static const char def_conf[] = "cgminer.conf";
 static char *default_config;
 static bool config_loaded;
@@ -1520,6 +1520,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--socks-proxy",
 		     opt_set_charp, NULL, &opt_socks_proxy,
 		     "Set socks4 proxy (host:port)"),
+	OPT_WITH_ARG("--suggest-diff",
+		     opt_set_intval, NULL, &opt_suggest_diff,
+		     "Suggest miner difficulty for pool to user (default: none)"),
 #ifdef HAVE_SYSLOG_H
 	OPT_WITHOUT_ARG("--syslog",
 			opt_set_bool, &use_syslog,
@@ -6894,6 +6897,7 @@ bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *r
 
 	work->mined = true;
 	work->device_diff = MIN(drv->max_diff, work->work_difficulty);
+	work->device_diff = MAX(drv->min_diff, work->device_diff);
 
 	ret = submit_nonce(thr, work, nonce);
 	free_work(work);
@@ -7175,6 +7179,7 @@ struct work *get_work(struct thr_info *thr, const int thr_id)
 	thread_reportin(thr);
 	work->mined = true;
 	work->device_diff = MIN(cgpu->drv->max_diff, work->work_difficulty);
+	work->device_diff = MAX(cgpu->drv->min_diff, work->device_diff);
 	return work;
 }
 
@@ -7428,6 +7433,7 @@ static void hash_sole_work(struct thr_info *mythr)
 			break;
 		}
 		work->device_diff = MIN(drv->max_diff, work->work_difficulty);
+		work->device_diff = MAX(drv->min_diff, work->device_diff);
 
 		do {
 			cgtime(&tv_start);
@@ -9057,6 +9063,7 @@ void null_device_drv(struct device_drv *drv)
 
 	drv->zero_stats = &noop_zero_stats;
 	drv->max_diff = 1;
+	drv->min_diff = 1;
 }
 
 void enable_device(struct cgpu_info *cgpu)

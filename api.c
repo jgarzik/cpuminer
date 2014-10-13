@@ -1,6 +1,6 @@
 /*
  * Copyright 2011-2014 Andrew Smith
- * Copyright 2011-2013 Con Kolivas
+ * Copyright 2011-2014 Con Kolivas
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -133,7 +133,7 @@ static const char SEPARATOR = '|';
 #define JOIN_CMD "CMD="
 #define BETWEEN_JOIN SEPSTR
 
-static const char *APIVERSION = "3.4";
+static const char *APIVERSION = "3.5";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -273,6 +273,7 @@ static const char ISJSON = '{';
 // If anyone cares, id=0 for truncated output
 #define JSON4_TRUNCATED	",\"id\":0"
 #define JSON5		"}"
+#define JSON6		"\":"
 
 #define JSON_START	JSON0
 #define JSON_DEVS	JSON1 _DEVS JSON2
@@ -281,6 +282,7 @@ static const char ISJSON = '{';
 #define JSON_STATUS	JSON1 _STATUS JSON2
 #define JSON_VERSION	JSON1 _VERSION JSON2
 #define JSON_MINECONFIG	JSON1 _MINECONFIG JSON2
+#define JSON_ACTION	JSON0 JSON1 _STATUS JSON6
 
 #ifdef HAVE_AN_FPGA
 #define JSON_PGA	JSON1 _PGA JSON2
@@ -533,7 +535,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_MISPDP,	PARAM_NONE,	"Missing addpool details" },
  { SEVERITY_ERR,   MSG_INVPDP,	PARAM_STR,	"Invalid addpool details '%s'" },
  { SEVERITY_ERR,   MSG_TOOMANYP,PARAM_NONE,	"Reached maximum number of pools (%d)" },
- { SEVERITY_SUCC,  MSG_ADDPOOL,	PARAM_STR,	"Added pool '%s'" },
+ { SEVERITY_SUCC,  MSG_ADDPOOL,	PARAM_POOL,	"Added pool %d: '%s'" },
  { SEVERITY_ERR,   MSG_REMLASTP,PARAM_POOL,	"Cannot remove last pool %d:'%s'" },
  { SEVERITY_ERR,   MSG_ACTPOOL, PARAM_POOL,	"Cannot remove active pool %d:'%s'" },
  { SEVERITY_SUCC,  MSG_REMPOOL, PARAM_BOTH,	"Removed pool %d:'%s'" },
@@ -2775,7 +2777,7 @@ static void addpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *
 	add_pool_details(pool, true, url, user, pass);
 
 	ptr = escape_string(url, isjson);
-	message(io_data, MSG_ADDPOOL, 0, ptr, isjson);
+	message(io_data, MSG_ADDPOOL, pool->pool_no, ptr, isjson);
 	if (ptr != url)
 		free(ptr);
 	ptr = NULL;
@@ -3018,7 +3020,7 @@ static void removepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 void doquit(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	if (isjson)
-		io_put(io_data, JSON_START JSON_BYE);
+		io_put(io_data, JSON_ACTION JSON_BYE);
 	else
 		io_put(io_data, _BYE);
 
@@ -3029,7 +3031,7 @@ void doquit(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused
 void dorestart(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	if (isjson)
-		io_put(io_data, JSON_START JSON_RESTART);
+		io_put(io_data, JSON_ACTION JSON_RESTART);
 	else
 		io_put(io_data, _RESTART);
 

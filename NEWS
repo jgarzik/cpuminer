@@ -1,3 +1,19 @@
+Version 4.6.1 - 20th September 2014
+
+- Throttle bflsc28 devices when they hit the overheat limit
+- Add whitelisting of firmware used in final bflsc28 products
+- API.java - remove lowercase of all data sent
+- Avalon2: Add 3 bytes nonce2 support
+- Avalon2: MM needs n2size length <= 4
+- Use fan min as fan speed when run with --avalon2-fixed-speed
+- Clear the pool submit fail bool after adding shares to the stratum hashtable
+to minimise window the share is not in the table
+- api-example unlimited socket works
+- Add custom strcasestr and use custom gnu type functions in bflsc
+- Fix windows build of bflsc driver
+- Fix possible deref in bflsc28
+
+
 Version 4.6.0 - 7th September 2014
 
 - We should not be checking for pool_unworkable in cnx_needed as it is keeping
