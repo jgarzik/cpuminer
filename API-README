@@ -242,8 +242,8 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               The filename is optional and will use the cgminer
                               default if not specified
 
- quit (*)      none           There is no status section but just a single "BYE"
-                              reply before cgminer quits
+ quit (*)      none           Status is a single "BYE" reply before cgminer
+                              quits
 
  notify        NOTIFY         The last status and history count of each devices
                               problem
@@ -293,8 +293,8 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               supported by the 'devs' command
                               e.g. DEVDETAILS=0,Name=ASC,ID=0,Driver=yuu,...|
 
- restart (*)   none           There is no status section but just a single
-                              "RESTART" reply before cgminer restarts
+ restart (*)   none           Status is a single "RESTART" reply before cgminer
+                              restarts
 
  stats         STATS          Each device or pool that has 1 or more getworks
                               with a list of stats regarding getwork times
