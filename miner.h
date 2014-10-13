@@ -235,6 +235,7 @@ static inline int fsync (int fd)
 	DRIVER_ADD_COMMAND(avalon2) \
 	DRIVER_ADD_COMMAND(bflsc) \
 	DRIVER_ADD_COMMAND(bitfury) \
+	DRIVER_ADD_COMMAND(blockerupter) \
 	DRIVER_ADD_COMMAND(cointerra) \
 	DRIVER_ADD_COMMAND(hashfast) \
 	DRIVER_ADD_COMMAND(hashratio) \

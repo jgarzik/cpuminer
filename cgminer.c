@@ -84,6 +84,9 @@ char *curly = ":D";
 #include "driver-spondoolies-sp30.h"
 #endif
 
+#ifdef USE_BLOCK_ERUPTER
+#include "driver-blockerupter.h"
+#endif
 
 #ifdef USE_BITFURY
 #include "driver-bitfury.h"
@@ -225,6 +228,9 @@ static char *opt_set_avalon_freq;
 static char *opt_set_avalon2_freq;
 static char *opt_set_avalon2_fan;
 static char *opt_set_avalon2_voltage;
+#endif
+#ifdef USE_BLOCKERUPTER
+int opt_bet_clk = 0;
 #endif
 #ifdef USE_HASHRATIO
 #include "driver-hashratio.h"
@@ -1252,6 +1258,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bxm-bits",
 		     set_int_0_to_100, opt_show_intval, &opt_bxm_bits,
 		     "Set BXM bits for overclocking"),
+#endif
+#ifdef USE_BLOCKERUPTER
+        OPT_WITH_ARG("--bet-clk",
+                     opt_set_intval, opt_show_intval, &opt_bet_clk,
+                     "Set Block Erupter clock"),
 #endif
 #ifdef HAVE_LIBCURL
 	OPT_WITH_ARG("--btc-address",

@@ -27,7 +27,7 @@
 #include "klist.h"
 
 #if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_AVALON2) || \
-	defined(USE_HASHFAST) || defined(USE_BITFURY) || defined(USE_KLONDIKE) || \
+  defined(USE_HASHFAST) || defined(USE_BITFURY) || defined(USE_BLOCKERUPTER) || defined(USE_KLONDIKE) || \
 	defined(USE_KNC) || defined(USE_BAB) || defined(USE_DRILLBIT) || \
 	defined(USE_MINION) || defined(USE_COINTERRA) || defined(USE_BITMINE_A1) || \
 	defined(USE_ANT_S1) || defined(USE_ANT_S2) || defined(USE_SP10) || defined(USE_SP30) || \
@@ -175,6 +175,9 @@ static const char *DEVICECODE = ""
 #endif
 #ifdef USE_BITFURY
 			"BFU "
+#endif
+#ifdef USE_BLOCKERUPTER
+                        "BET "
 #endif
 #ifdef USE_DRILLBIT
 			"DRB "
