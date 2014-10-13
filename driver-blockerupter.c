@@ -138,7 +138,7 @@ static void blockerupter_setdiff(struct cgpu_info *blockerupter,int diff)
      int err;
      int local_diff;
 
-
+     // min_diff for driver is 64
      if (diff >= 262144) {
 	  bits = 3;
 	  local_diff = 262144;
@@ -148,17 +148,12 @@ static void blockerupter_setdiff(struct cgpu_info *blockerupter,int diff)
      } else if (diff >= 64) {
 	  bits = 1;
 	  local_diff = 64;
-     } else {
-	  // exceed bandwidth limit with diff 1
-	  bits = 1;
-	  local_diff = 64;
-     }
+     } 
     
      if (local_diff==info->diff) return;
     
      command = C_DIF | bits;   
      err = blockerupter_send(blockerupter,&command,1);
-     cgsleep_ms(2);
      if (!err) {
 	  applog(LOG_DEBUG,"%s%d: Set Diff Bits to %d",blockerupter->drv->name, blockerupter->device_id, bits);
 	  info->diff = local_diff;    
@@ -174,7 +169,6 @@ static void blockerupter_setrolling(struct cgpu_info *blockerupter,uint8_t rolli
     
      command = C_LPO | rolling;
      err = blockerupter_send(blockerupter,&command,1);
-     cgsleep_ms(2);
     
      if (!err) {
 	  applog(LOG_DEBUG,"%s%d: Set nTime Rolling to %d seconds",blockerupter->drv->name, blockerupter->device_id, (rolling+1)*30);
@@ -187,12 +181,12 @@ static void blockerupter_init(struct cgpu_info *blockerupter)
      struct blockerupter_info *info;
      info = blockerupter->device_data;
      // Set Clock
-     if (!opt_bet_clk) {
+     if (!opt_bet_clk || opt_bet_clk< 19 || opt_bet_clk > 31) {
 	  opt_bet_clk = BET_CLOCK_DEFAULT;
      }
      blockerupter_setclock(blockerupter, opt_bet_clk);
      info->clock = (opt_bet_clk+1)*10;
-     info->expected = info->clock*24*32*info->found/1000.0;
+     info->expected = info->clock * 24 * 32 * info->found/1000.0;
      // Set Diff
      blockerupter_setdiff(blockerupter, BET_DIFF_DEFAULT);
      info->diff = BET_DIFF_DEFAULT;
@@ -206,7 +200,7 @@ static struct cgpu_info *blockerupter_detect_one(struct libusb_device *dev, stru
 {
      struct blockerupter_info *info;
      struct cgpu_info *blockerupter = usb_alloc_cgpu(&blockerupter_drv, 1);
-     int i,bytesread;
+     int i,err,bytesread;
      char reset = C_RES;
 
      if (!usb_init(blockerupter, dev, found)) {
@@ -220,7 +214,12 @@ static struct cgpu_info *blockerupter_detect_one(struct libusb_device *dev, stru
      memset(info, 0, sizeof (blockerupter_info));
      blockerupter_init_com(blockerupter);
 
-     blockerupter_send(blockerupter, &reset, 1);
+     err = blockerupter_send(blockerupter, &reset, 1);
+     if (err) {
+	  applog(LOG_ERR, "Blockerupter detect failed");
+	  blockerupter = usb_free_cgpu(blockerupter);
+	  return NULL;
+     }
      cgsleep_ms(5000);
 
      char detect, answer;
@@ -267,8 +266,8 @@ static struct api_data *blockerupter_api_stats(struct cgpu_info *blockerupter)
     
      cgtime(&now);
      timersub(&now,&info->start_time,&elapsed);
-    
-     info->hashrate = info->hashes*4.295/elapsed.tv_sec;
+     
+     info->hashrate = elapsed.tv_sec?info->hashes*4.295/elapsed.tv_sec:0;
      info->eff = info->hashrate/info->expected;
 
      root = api_add_int(root, "Nonces", &info->nonces, false);
@@ -288,7 +287,7 @@ static struct api_data *blockerupter_api_stats(struct cgpu_info *blockerupter)
 	       sprintf(buf,"Board%02d hwerror",i);
 	       root = api_add_double(root, buf, &info->b_info[i].hwe, false);
 	       sprintf(buf,"Board%02d hashrate",i);
-	       brd_hashrate = info->b_info[i].hashes*4.295/elapsed.tv_sec;
+	       brd_hashrate = elapsed.tv_sec?info->b_info[i].hashes*4.295/elapsed.tv_sec:0;
 	       root = api_add_double(root, buf, &brd_hashrate, false);
 	  }
      }
@@ -331,10 +330,12 @@ static void blockerupter_sendjob(struct cgpu_info *blockerupter, int board)
     
      cgsleep_ms(1);
      blockerupter_space_mode(blockerupter);
+	
+     answer = 0;
      err = blockerupter_read(blockerupter, (char *)&answer, 1);
 
      cgtime(&info->last_job);
-
+	
      if (err || answer != A_GET) {
 	  applog(LOG_ERR, "%s%d: Sync Error", blockerupter->drv->name, blockerupter->device_id);
      } else {
@@ -400,9 +401,9 @@ static uint64_t blockerupter_checknonce(struct cgpu_info *blockerupter, struct b
      if (i==BET_NONCE_FIX) {
 	  applog(LOG_DEBUG, "%s%d: Nonce Fix Failed", blockerupter->drv->name, blockerupter->device_id);
 	  cur_brd->bad++;
-	  cur_brd->hwe = (double)cur_brd->bad/cur_brd->nonces;
+	  cur_brd->hwe = cur_brd->nonces?(double)cur_brd->bad/cur_brd->nonces:0;
 	  cur_asic->bad++;
-	  cur_asic->hwe = (double)cur_asic->bad/cur_asic->nonces;
+	  cur_asic->hwe = cur_asic->nonces?(double)cur_asic->bad/cur_asic->nonces:0;
         
      }
      return hashes;
@@ -473,6 +474,7 @@ struct device_drv blockerupter_drv = {
      .drv_id = DRIVER_blockerupter,
      .dname = "blockerupter",
      .name = "BET",
+     .min_diff = 64,     
      .get_api_stats = blockerupter_api_stats,
      .drv_detect = blockerupter_detect,
      .thread_prepare = blockerupter_prepare,
