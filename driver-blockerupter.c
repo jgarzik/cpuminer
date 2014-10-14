@@ -145,11 +145,11 @@ static void blockerupter_setdiff(struct cgpu_info *blockerupter,int diff)
      } else if (diff >= 4096) {
 	  bits = 2;
 	  local_diff = 4096;
-     } else if (diff >= 64) {
+     } else {
 	  bits = 1;
 	  local_diff = 64;
-     } 
-    
+     }
+
      if (local_diff==info->diff) return;
     
      command = C_DIF | bits;   
