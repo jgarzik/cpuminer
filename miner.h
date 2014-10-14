@@ -960,6 +960,7 @@ static inline void _cg_wunlock(cglock_t *lock, const char *file, const char *fun
 
 struct pool;
 
+#define API_LISTEN_ADDR "0.0.0.0"
 #define API_MCAST_CODE "FTW"
 #define API_MCAST_ADDR "224.0.0.75"
 
@@ -984,6 +985,7 @@ extern int opt_api_mcast_port;
 extern char *opt_api_groups;
 extern char *opt_api_description;
 extern int opt_api_port;
+extern char *opt_api_host;
 extern bool opt_api_listen;
 extern bool opt_api_network;
 extern bool opt_delaynet;
