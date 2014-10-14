@@ -127,6 +127,8 @@ CGMiner specific configuration options:
   --enable-bitfury        Compile support for BitFury ASICs (default disabled)
   --enable-bitmine_A1     Compile support for Bitmine.ch A1 ASICs (default
                           disabled)
+  --enable-blockerupter   Compile support for ASICMINER BlockErupter Tube/Prisma
+  			  (default disabled)
   --enable-cointerra      Compile support for Cointerra ASICs (default disabled)
   --enable-drillbit       Compile support for Drillbit BitFury ASICs (default
                           disabled)
@@ -205,6 +207,7 @@ Options for both config file and command line:
 --benchfile <arg>   Run cgminer in benchmark mode using a work file - produces no shares
 --benchfile-display Display each benchfile nonce found
 --benchmark         Run cgminer in benchmark mode - produces no shares
+--bet-clk <arg>     Set clockspeed of ASICMINER Tube/Prisma to (arg+1)*10MHz (default: 23)
 --bfl-range         Use nonce range on bitforce devices if supported
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 85)
 --bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
@@ -1005,6 +1008,7 @@ USB on any hardware are the following:
 --enable-avalon2
 --enable-bflsc
 --enable-bitfury
+--enable-blockerupter
 --enable-cointerra
 --enable-drillbit
 --enable-hashfast
