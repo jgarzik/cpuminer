@@ -4434,9 +4434,9 @@ static void setup_groups()
 static void setup_ipaccess()
 {
 	char *buf, *ptr, *comma, *slash, *end;
-	int ipcount, mask, octet, i, shift;
+	int ipcount, mask, i, shift;
+	bool ipv6 = false;
 	char group;
-	bool ipv6;
 	char tmp[30];
 
 	buf = malloc(strlen(opt_api_allow) + 1);
@@ -4495,7 +4495,6 @@ static void setup_ipaccess()
 					ipaccess[ips].mask.s6_addr[i] = 0xff;
 			else {
 				slash = end--;
-				ipv6 = false;
 				if (*ptr == '[' && *end == ']') {
 					*(ptr++) = '\0';
 					*(end--) = '\0';
