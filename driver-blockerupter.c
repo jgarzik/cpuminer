@@ -200,7 +200,7 @@ static struct cgpu_info *blockerupter_detect_one(struct libusb_device *dev, stru
 {
      struct blockerupter_info *info;
      struct cgpu_info *blockerupter = usb_alloc_cgpu(&blockerupter_drv, 1);
-     int i,err,bytesread;
+     int i, err;
      char reset = C_RES;
 
      if (!usb_init(blockerupter, dev, found)) {
@@ -465,8 +465,8 @@ static int64_t blockerupter_scanhash(struct thr_info *thr)
 
 static void blockerupter_flush_work(struct cgpu_info *blockerupter)
 {
-     struct blockerupter_info *info = blockerupter->device_data;
      uint8_t command = C_LPO | BET_ROLLING_DEFAULT;
+
      blockerupter_send(blockerupter, (char *)&command, 1);
 }
 
