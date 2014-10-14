@@ -1,5 +1,6 @@
 Version 4.7.0 - 14th October 2014
 
+- Implement generic inet_pton for windows
 - Fix warnings
 - Fix bulk of remaining style in blockerupter.c
 - Tidy style in blockerupter.h
