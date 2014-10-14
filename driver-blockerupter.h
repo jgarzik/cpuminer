@@ -70,60 +70,60 @@ extern int opt_bet_clk;
 #pragma pack(1)
 
 typedef struct asic_info {
-    int bad;
-    int accepted;
-    int nonces;
-    int hashes;
-    double hwe;
+	int bad;
+	int accepted;
+	int nonces;
+	int hashes;
+	double hwe;
 } asic_info;
 
 #pragma pack(1)
 
 typedef struct board_info {
-    int bad;
-    int job_count;
-    int nonces;
-    int accepted;
-    int hashes;
-    double hashrate;
-    double hwe;
-    struct asic_info asics[BET_MAXASICS];
+	int bad;
+	int job_count;
+	int nonces;
+	int accepted;
+	int hashes;
+	double hashrate;
+	double hwe;
+	struct asic_info asics[BET_MAXASICS];
 } board_info;
 
 #pragma pack(1)
 
 typedef struct blockerupter_info {
-    struct pool pool;
-    uint8_t found;
-    int clock;
-    int nonces;
-    int diff;
-    int rolling;
-    int accepted;
-    int hashes;
-    double hashrate;
-    double expected;
-    double eff;
-    uint8_t work_idx;
-    struct work works[BET_WORK_FIFO];
-    uint8_t boards[BET_MAXBOARDS];
-    board_info b_info[BET_MAXBOARDS];
-    struct timeval start_time;
-    struct timeval last_job;
+	struct pool pool;
+	uint8_t found;
+	int clock;
+	int nonces;
+	int diff;
+	int rolling;
+	int accepted;
+	int hashes;
+	double hashrate;
+	double expected;
+	double eff;
+	uint8_t work_idx;
+	struct work works[BET_WORK_FIFO];
+	uint8_t boards[BET_MAXBOARDS];
+	board_info b_info[BET_MAXBOARDS];
+	struct timeval start_time;
+	struct timeval last_job;
 } blockerupter_info;
 
 
 #pragma pack(1)
 
 typedef struct blockerupter_response {
-    uint8_t midstate[32];
-    uint8_t merkle[4];
-    uint8_t ntime[4];
-    uint8_t diff[4];
-    uint8_t exnonc2[4];
-    uint8_t nonce[4];
-    uint8_t work_idx;
-    uint8_t chip;
+	uint8_t midstate[32];
+	uint8_t merkle[4];
+	uint8_t ntime[4];
+	uint8_t diff[4];
+	uint8_t exnonc2[4];
+	uint8_t nonce[4];
+	uint8_t work_idx;
+	uint8_t chip;
 } blockerupter_response;
 #define BET_RESP_SZ (sizeof(blockerupter_response))
 
