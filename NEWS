@@ -1,3 +1,43 @@
+Version 4.7.0 - 14th October 2014
+
+- Fix warnings
+- Fix bulk of remaining style in blockerupter.c
+- Tidy style in blockerupter.h
+- Tidy bulk of style in blockerupter.c
+- Fix missing minimum diff setting for blockerupter
+- Fix unused variable warnings
+- remove unnecessary sleep; fix potenital div by 0 errs; use min_diff in driver
+definition
+- Fix coding style
+- Make the sp30 hashrate meter based on valid share generation
+- Change default max queue back to 1 in line with speed of most current asic
+controllers
+- Change diff limits to values suitable for sp30
+- Add pool number to response from addpool to the API
+- Make the restart and quit API commands valid json responses
+- Fix number of nos
+- Add option to set clock ('--bet-clk X' actual clock is (X+1)*10 )
+- compatible with X24 board
+- Fix error when using v6 without mask in api-allow
+- Support ipv6 multicast
+- Set min_diff to 1
+- Allow arbitrary clamping of lower device diffs for slow controllers by driver
+- Don't set default fan to max on hashratio
+- The 2nd read never gets anything on ava2 so remove it entirely and just return
+an error if we are out of sync
+- Implement support for mining.suggest_difficulty
+- Fix client ip address output
+- Free addrinfo garbage
+- Remove the brackets when using v6 pool address
+- Add ipv6 support for api listen
+- Avalon Nano: Add support Avalon Nano usb miner
+- fix bug in setdiff
+- limit minimum diff to 64
+- Add BlockErupter Driver
+- Avalon2: display currect max temperature on statline
+- Remove unused variable
+
+
 Version 4.6.1 - 20th September 2014
 
 - Throttle bflsc28 devices when they hit the overheat limit
