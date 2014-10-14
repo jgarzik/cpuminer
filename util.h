@@ -14,6 +14,7 @@
 	#define INVSOCK -1
 	#define INVINETADDR -1
 	#define CLOSESOCKET close
+	#define INET_PTON inet_pton
 
 	#define SOCKERRMSG strerror(errno)
 	static inline bool sock_blocks(void)
@@ -37,6 +38,9 @@
 	#define INVSOCK INVALID_SOCKET
 	#define INVINETADDR INADDR_NONE
 	#define CLOSESOCKET closesocket
+
+	int Inet_Pton(int af, const char *src, void *dst);
+	#define INET_PTON Inet_Pton
 
 	extern char *WSAErrorMsg(void);
 	#define SOCKERRMSG WSAErrorMsg()

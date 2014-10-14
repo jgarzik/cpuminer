@@ -4522,13 +4522,13 @@ static void setup_ipaccess()
 			for (i = 0; i < 16; i++)
 				ipaccess[ips].ip.s6_addr[i] = 0; // missing default to '[::]'
 			if (ipv6) {
-				if (inet_pton(AF_INET6, ptr, &(ipaccess[ips].ip)) != 1)
+				if (INET_PTON(AF_INET6, ptr, &(ipaccess[ips].ip)) != 1)
 					goto popipo;
 			}
 			else {
 				// v4 mapped v6 address, such as "::ffff:255.255.255.255"
 				sprintf(tmp, "::ffff:%s", ptr);
-				if (inet_pton(AF_INET6, tmp, &(ipaccess[ips].ip)) != 1)
+				if (INET_PTON(AF_INET6, tmp, &(ipaccess[ips].ip)) != 1)
 					goto popipo;
 			}
 			for (i = 0; i < 16; i++)
@@ -4586,10 +4586,10 @@ static bool check_connect(struct sockaddr_storage *cli, char **connectaddr, char
 	// v4 mapped v6 address, such as "::ffff:255.255.255.255"
 	if (cli->ss_family == AF_INET) {
 		sprintf(tmp, "::ffff:%s", *connectaddr);
-		inet_pton(AF_INET6, tmp, &client_ip);
+		INET_PTON(AF_INET6, tmp, &client_ip);
 	}
 	else
-		inet_pton(AF_INET6, *connectaddr, &client_ip);
+		INET_PTON(AF_INET6, *connectaddr, &client_ip);
 
 	*group = NOPRIVGROUP;
 	if (opt_api_allow) {
