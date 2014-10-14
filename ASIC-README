@@ -4,6 +4,7 @@ Currently supported devices include:
 - Antminer U1/U2/U2+ USB
 - Antminer S1
 - ASICMINER block erupters
+- ASICMINER Tube/Prisma
 - Avalon (including BitBurner and Klondike)
 - Avalon2/3
 - BFx2 USB
@@ -57,6 +58,10 @@ Also note that the AMU is managed by the Icarus driver which is detailed
 in the FPGA-README. Configuring them uses the same mechanism as outlined
 below for getting started with USB ASICs.
 
+ASICMINER BlockErupter Tube/Prisma will come up as BET.
+
+ASICMINER Tube/Prisma devices need the --enable-blockerupter option when
+compiling cgminer.
 
 BlackArrow Bitfury devices
 
@@ -236,6 +241,7 @@ ASIC SPECIFIC COMMANDS
 --avalon2-cutoff <arg> Set Avalon2 overheat cut off temperature (default: 88)
 --avalon2-fixed-speed Set Avalon2 fan to fixed speed
 --bab-options <arg> Set BaB options max:def:min:up:down:hz:delay:trf
+--bet-clk <arg>     Set clockspeed of ASICMINER Tube/Prisma to (arg+1)*10MHz (default: 23)
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
 --bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
@@ -305,6 +311,16 @@ ONLY FROM VALID HASHES so if you increase the frequency but your hashrate does
 not increase or it decreases and hardware errors start showing up, you have
 overclocked it too much. In the worst case scenario it will fail to start at too
 high a speed. Most will run happily up to 250.
+
+ASICMINER BlockErupter Tube/Prisma DEVICES
+
+--bet-clk <arg>     Set clockspeed of ASICMINER Tube/Prisma to (arg+1)*10MHz (default: 23)
+
+Default clockspeed for Tube/Prisma is 240MHz. This command allows to set clockspeed
+of on board BE200 chips in range from 200MHz to 320MHz. For Tube devices, you can
+try overclocking to 270MHz or even higher, but NOT recommended for Prisma devices.
+If you notice hash rate drops or board fails to start, restart cgminer with lower
+clockspeed.
 
 
 AVALON AND BITBURNER DEVICES
