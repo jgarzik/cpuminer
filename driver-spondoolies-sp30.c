@@ -283,11 +283,11 @@ static bool spondoolies_queue_full_sp30(struct cgpu_info *cgpu)
 	}
 #endif
 	// Only once every 1/10 second do work.
+	bool ret = false, do_sleep = false;
 	int next_job_id;
 	struct timeval tv;
 	struct work *work;
 	unsigned int usec;
-	bool ret = false;
 
 	mutex_lock(&a->lock);
 	assert(a->works_pending_tx <= REQUEST_SIZE);
@@ -326,8 +326,8 @@ static bool spondoolies_queue_full_sp30(struct cgpu_info *cgpu)
 		goto return_unlock;
 	}
 	work = get_queued(cgpu);
-	if (!work) {
-		cgsleep_ms(10);
+	if (unlikely(!work)) {
+		do_sleep = true;
 		goto return_unlock;
 	}
 
@@ -353,6 +353,9 @@ static bool spondoolies_queue_full_sp30(struct cgpu_info *cgpu)
 return_unlock:
 	//printf("D:P.TX:%d inD:%d\n", a->works_pending_tx, a->works_in_driver);
 	mutex_unlock(&a->lock);
+
+	if (do_sleep)
+		cgsleep_ms(10);
 
 	return ret;
 }
