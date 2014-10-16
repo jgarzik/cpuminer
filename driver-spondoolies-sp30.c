@@ -273,9 +273,9 @@ unsigned long usec_stamp ()
 static bool spondoolies_queue_full_sp30(struct cgpu_info *cgpu)
 {
   struct spond_adapter* a = cgpu->device_data;
+#if 0
   static int bla = 0;
 
-#if 0
   if (!((bla++)%500)) {
     printf("FAKE TEST FLUSH T:%d!\n",usec_stamp());
     a->reset_mg_queue = 3;
@@ -284,7 +284,7 @@ static bool spondoolies_queue_full_sp30(struct cgpu_info *cgpu)
 
   
 	// Only once every 1/10 second do work.
-	int next_job_id, i;
+	int next_job_id;
 	struct timeval tv;
 	struct work *work;
 	unsigned int usec;
@@ -399,7 +399,7 @@ static int64_t spond_scanhash_sp30(struct thr_info *thr)
 	}
 
 	if (a->parse_resp) {
-		int array_size, i, j;
+		int array_size, i;
 
 		mutex_lock(&a->lock);
 		/* Original hashrate calculation based on requests */
