@@ -240,7 +240,7 @@ static void fill_minergate_request(minergate_do_job_req_sp30* work, struct work 
 	//work->leading_zeroes = get_leading_zeroes(cg_work->target);
 	// Is there no better way to get leading zeroes?
 	work->leading_zeroes = 30;
-	wd = round(cg_work->work_difficulty);
+	wd = round(cg_work->device_diff);
 	while (wd) {
 		work->leading_zeroes++;
 		wd = wd >> 1;
