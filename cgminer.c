@@ -3962,6 +3962,55 @@ static void _stage_work(struct work *work);
 	WORK = NULL; \
 } while (0)
 
+/* Adjust an existing char ntime field with a relative noffset */
+static void modify_ntime(char *ntime, int noffset)
+{
+	unsigned char bin[4];
+	uint32_t h32, *be32 = (uint32_t *)bin;
+
+	hex2bin(bin, ntime, 4);
+	h32 = be32toh(*be32) + noffset;
+	*be32 = htobe32(h32);
+	__bin2hex(ntime, bin, 4);
+}
+
+void roll_work(struct work *work)
+{
+	uint32_t *work_ntime;
+	uint32_t ntime;
+
+	work_ntime = (uint32_t *)(work->data + 68);
+	ntime = be32toh(*work_ntime);
+	ntime++;
+	*work_ntime = htobe32(ntime);
+	local_work++;
+	work->rolls++;
+	work->nonce = 0;
+	applog(LOG_DEBUG, "Successfully rolled work");
+	/* Change the ntime field if this is stratum work */
+	if (work->ntime)
+		modify_ntime(work->ntime, 1);
+
+	/* This is now a different work item so it needs a different ID for the
+	 * hashtable */
+	work->id = total_work_inc();
+}
+
+struct work *make_clone(struct work *work)
+{
+	struct work *work_clone = copy_work(work);
+
+	work_clone->clone = true;
+	cgtime((struct timeval *)&(work_clone->tv_cloned));
+	work_clone->longpoll = false;
+	work_clone->mandatory = false;
+	/* Make cloned work appear slightly older to bias towards keeping the
+	 * master work item which can be further rolled */
+	work_clone->tv_staged.tv_sec -= 1;
+
+	return work_clone;
+}
+
 #ifdef HAVE_LIBCURL
 /* Called with pool_lock held. Recruit an extra curl if none are available for
  * this pool. */
@@ -4056,40 +4105,6 @@ static inline bool can_roll(struct work *work)
 		work->rolls < 7000 && !stale_work(work, false));
 }
 
-/* Adjust an existing char ntime field with a relative noffset */
-static void modify_ntime(char *ntime, int noffset)
-{
-	unsigned char bin[4];
-	uint32_t h32, *be32 = (uint32_t *)bin;
-
-	hex2bin(bin, ntime, 4);
-	h32 = be32toh(*be32) + noffset;
-	*be32 = htobe32(h32);
-	__bin2hex(ntime, bin, 4);
-}
-
-void roll_work(struct work *work)
-{
-	uint32_t *work_ntime;
-	uint32_t ntime;
-
-	work_ntime = (uint32_t *)(work->data + 68);
-	ntime = be32toh(*work_ntime);
-	ntime++;
-	*work_ntime = htobe32(ntime);
-	local_work++;
-	work->rolls++;
-	work->nonce = 0;
-	applog(LOG_DEBUG, "Successfully rolled work");
-	/* Change the ntime field if this is stratum work */
-	if (work->ntime)
-		modify_ntime(work->ntime, 1);
-
-	/* This is now a different work item so it needs a different ID for the
-	 * hashtable */
-	work->id = total_work_inc();
-}
-
 static void *submit_work_thread(void *userdata)
 {
 	struct work *work = (struct work *)userdata;
@@ -4131,21 +4146,6 @@ static void *submit_work_thread(void *userdata)
 	push_curl_entry(ce, pool);
 
 	return NULL;
-}
-
-struct work *make_clone(struct work *work)
-{
-	struct work *work_clone = copy_work(work);
-
-	work_clone->clone = true;
-	cgtime((struct timeval *)&(work_clone->tv_cloned));
-	work_clone->longpoll = false;
-	work_clone->mandatory = false;
-	/* Make cloned work appear slightly older to bias towards keeping the
-	 * master work item which can be further rolled */
-	work_clone->tv_staged.tv_sec -= 1;
-
-	return work_clone;
 }
 
 static bool clone_available(void)
