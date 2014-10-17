@@ -451,7 +451,14 @@ if test "x$want_usbutils" != xfalse; then
 		AC_CONFIG_SUBDIRS([compat/libusb-1.0])
 		LIBUSB_LIBS="compat/libusb-1.0/libusb/.libs/libusb-1.0.a"
 		if test "x$have_linux" = "xtrue"; then
-			LIBUSB_LIBS+=" -ludev"
+			AC_ARG_ENABLE([udev],
+				[AC_HELP_STRING([--disable-udev],[Disable building libusb with udev])],
+				[udev=$enableval]
+				)
+
+			if test "x$udev" != xno; then
+				LIBUSB_LIBS+=" -ludev"
+			fi
 		fi
 		if test "x$have_darwin" = "xtrue"; then
 			LIBUSB_LIBS+=" -lobjc"
