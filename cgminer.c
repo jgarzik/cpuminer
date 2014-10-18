@@ -7599,10 +7599,10 @@ struct work *__get_queued(struct cgpu_info *cgpu)
 		work = cgpu->unqueued_work;
 		if (unlikely(stale_work(work, false))) {
 			discard_work(work);
-			wake_gws();
 		} else
 			__add_queued(cgpu, work);
 		cgpu->unqueued_work = NULL;
+		wake_gws();
 	}
 
 	return work;
