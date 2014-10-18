@@ -9031,7 +9031,7 @@ void fill_device_drv(struct device_drv *drv)
 	if (!drv->zero_stats)
 		drv->zero_stats = &noop_zero_stats;
 	if (!drv->max_diff)
-		drv->max_diff = 1;
+		drv->max_diff = 0xffffffffull;
 }
 
 void null_device_drv(struct device_drv *drv)
