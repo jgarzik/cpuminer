@@ -406,8 +406,8 @@ static int64_t spond_scanhash_sp30(struct thr_info *thr)
 		int array_size, i;
 
 		mutex_lock(&a->lock);
-		ghashes = (a->mp_last_rsp->gh_div_50_rate);
-		ghashes = ghashes  * 50000 * REQUEST_PERIOD;
+		//ghashes = (a->mp_last_rsp->gh_div_50_rate);
+		//ghashes = ghashes  * 50000 * REQUEST_PERIOD;
 		array_size = a->mp_last_rsp->rsp_count;
 		for (i = 0; i < array_size; i++) { // walk the jobs
 			int job_id;
