@@ -71,7 +71,7 @@ typedef struct {
   uint8_t requester_id;
   uint8_t request_id;
   uint8_t protocol_version;
-  uint8_t gh_div_10_rate;
+  uint8_t gh_div_50_rate;
   uint16_t magic;   // 0xcaf4
   uint16_t rsp_count;
   minergate_do_job_rsp_sp30 rsp[MAX_RESPONDS_SP30]; // array of responces
