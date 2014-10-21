@@ -65,8 +65,9 @@ struct spond_adapter {
 
 	// Temperature statistics
 	int temp_rate;
-	int rear_temp;
 	int front_temp;
+	int rear_temp_top;
+	int rear_temp_bot;
 
 	// Last second we polled stats
 	time_t last_stats;

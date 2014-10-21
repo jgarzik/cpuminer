@@ -42,6 +42,6 @@ minergate_rsp_packet_sp30 *allocate_minergate_packet_rsp_sp30(uint8_t requester_
   p->protocol_version = MINERGATE_PROTOCOL_VERSION_SP30;
   p->request_id = request_id;
   p->magic = 0xcaf4;
-  p->gh_div_10_rate= 0;
+  p->gh_div_50_rate= 0;
   return p;
 }
