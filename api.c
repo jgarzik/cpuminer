@@ -4500,6 +4500,7 @@ static void setup_ipaccess()
 					ipaccess[ips].mask.s6_addr[i] = 0xff;
 			else {
 				slash = end--;
+				ipv6 = false;
 				if (*ptr == '[' && *end == ']') {
 					*(ptr++) = '\0';
 					*(end--) = '\0';
