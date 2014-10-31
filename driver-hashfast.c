@@ -1428,8 +1428,9 @@ static bool hfa_init(struct thr_info *thr)
 		}
 	}
 
-	// Read current device settings
-	hfa_send_generic_frame(hashfast, OP_SETTINGS, 0x00, 0x00, HFA_MAGIC_SETTINGS_VALUE, NULL, 0);
+	// Read current device settings if voltage was set in options
+	if (info->hash_voltage != 0)
+		hfa_send_generic_frame(hashfast, OP_SETTINGS, 0x00, 0x00, HFA_MAGIC_SETTINGS_VALUE, NULL, 0);
 
 	mutex_init(&info->lock);
 	mutex_init(&info->rlock);
