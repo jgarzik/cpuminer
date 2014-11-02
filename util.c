@@ -2180,13 +2180,32 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 
 static bool send_version(struct pool *pool, json_t *val)
 {
+	json_t *id_val = json_object_get(val, "id");
 	char s[RBUFSIZE];
-	int id = json_integer_value(json_object_get(val, "id"));
-	
-	if (!id)
+	int id;
+
+	if (!id_val)
 		return false;
+	id = json_integer_value(json_object_get(val, "id"));
 
 	sprintf(s, "{\"id\": %d, \"result\": \""PACKAGE"/"VERSION"\", \"error\": null}", id);
+	if (!stratum_send(pool, s, strlen(s)))
+		return false;
+
+	return true;
+}
+
+static bool send_pong(struct pool *pool, json_t *val)
+{
+	json_t *id_val = json_object_get(val, "id");
+	char s[RBUFSIZE];
+	int id;
+
+	if (!id_val)
+		return false;
+	id = json_integer_value(json_object_get(val, "id"));
+
+	sprintf(s, "{\"id\": %d, \"result\": \"pong\", \"error\": null}", id);
 	if (!stratum_send(pool, s, strlen(s)))
 		return false;
 
@@ -2270,6 +2289,12 @@ bool parse_method(struct pool *pool, char *s)
 
 	if (!strncasecmp(buf, "client.show_message", 19)) {
 		ret = show_message(pool, params);
+		goto out_decref;
+	}
+
+	if (!strncasecmp(buf, "mining.ping", 11)) {
+		applog(LOG_INFO, "Pool %d ping", pool->pool_no);
+		ret = send_pong(pool, val);
 		goto out_decref;
 	}
 out_decref:
