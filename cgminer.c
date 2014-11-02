@@ -6014,6 +6014,8 @@ static bool parse_stratum_response(struct pool *pool, char *s)
 	}
 
 	res_val = json_object_get(val, "result");
+	if (!res_val)
+		goto out;
 	err_val = json_object_get(val, "error");
 	id_val = json_object_get(val, "id");
 
