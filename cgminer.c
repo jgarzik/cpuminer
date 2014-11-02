@@ -5013,7 +5013,7 @@ void write_config(FILE *fcfg)
 	/* Write pool values */
 	fputs("{\n\"pools\" : [", fcfg);
 	for(i = 0; i < total_pools; i++) {
-		struct pool *pool = pools[i];
+		struct pool *pool = priority_pool(i);
 
 		if (pool->quota != 1) {
 			fprintf(fcfg, "%s\n\t{\n\t\t\"quota\" : \"%s%s%s%d;%s\",", i > 0 ? "," : "",
