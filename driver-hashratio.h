@@ -15,7 +15,7 @@
 #include "util.h"
 
 #ifdef USE_HASHRATIO
-int opt_hashratio_freq;
+char *opt_hashratio_freq;
 
 #define HRTO_MINER_THREADS	1
 

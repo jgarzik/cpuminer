@@ -35,10 +35,10 @@
 #include "crc.h"
 #include "usbutils.h"
 
-int opt_hashratio_fan_min = HRTO_DEFAULT_FAN_MIN;
-int opt_hashratio_fan_max = HRTO_DEFAULT_FAN_MAX;
+static int opt_hashratio_fan_min = HRTO_DEFAULT_FAN_MIN;
+static int opt_hashratio_fan_max = HRTO_DEFAULT_FAN_MAX;
 
-int opt_hashratio_freq = HRTO_DEFAULT_FREQUENCY;
+static int hashratio_freq = HRTO_DEFAULT_FREQUENCY;
 
 //static int get_fan_pwm(int temp) {
 //	int pwm;
@@ -74,8 +74,8 @@ char *set_hashratio_freq(char *arg)
 	
 	if (val < HRTO_DEFAULT_FREQUENCY_MIN || val > HRTO_DEFAULT_FREQUENCY_MAX)
 		return "Invalid value passed to hashratio-freq";
-	
-	opt_hashratio_freq = val;
+
+	hashratio_freq = val;
 	
 	return NULL;
 }
@@ -635,7 +635,7 @@ static struct cgpu_info *hashratio_detect_one(struct libusb_device *dev, struct 
 	info->temp_history_index = 0;
 	info->temp_sum = 0;
 	info->temp_old = 0;
-	info->default_freq = opt_hashratio_freq;
+	info->default_freq = hashratio_freq;
 
 	return hashratio;
 }

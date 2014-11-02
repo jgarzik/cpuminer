@@ -1349,7 +1349,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 #ifdef USE_HASHRATIO
 	OPT_WITH_CBARG("--hro-freq",
-		       set_hashratio_freq, opt_show_intval, &opt_hashratio_freq,
+		       set_hashratio_freq, NULL, &opt_hashratio_freq,
 		       "Set the hashratio clock frequency"),
 #endif
 	OPT_WITH_ARG("--hotplug",
