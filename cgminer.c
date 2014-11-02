@@ -9030,8 +9030,10 @@ void fill_device_drv(struct device_drv *drv)
 		drv->queue_full = &noop_queue_full;
 	if (!drv->zero_stats)
 		drv->zero_stats = &noop_zero_stats;
+	/* If drivers support internal diff they should set a max_diff or
+	 * we will assume they don't and set max to 1. */
 	if (!drv->max_diff)
-		drv->max_diff = 0xffffffffull;
+		drv->max_diff = 1;
 }
 
 void null_device_drv(struct device_drv *drv)
