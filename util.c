@@ -67,7 +67,7 @@ static void keep_sockalive(SOCKETTYPE fd)
 #ifndef __linux
 		setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one));
 #else /* __linux */
-	fcntl(fd, F_SETFL, O_CLOEXEC | flags);
+	fcntl(fd, F_SETFD, FD_CLOEXEC);
 	setsockopt(fd, SOL_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one));
 	setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_one, sizeof(tcp_one));
 	setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(tcp_keepidle));
