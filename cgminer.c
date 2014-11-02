@@ -6228,8 +6228,10 @@ static void *stratum_rthread(void *userdata)
 		fd_set rd;
 		char *s;
 
-		if (unlikely(pool->removed))
+		if (unlikely(pool->removed)) {
+			suspend_stratum(pool);
 			break;
+		}
 
 		/* Check to see whether we need to maintain this connection
 		 * indefinitely or just bring it up when we switch to this
