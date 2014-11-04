@@ -3125,7 +3125,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 		if (pool->seq_rejects > 10 && !work->stale && opt_disable_pool && enabled_pools > 1) {
 			double utility = total_accepted / total_secs * 60;
 
-			if (pool->seq_rejects > utility * 3) {
+			if (pool->seq_rejects > utility * 3 && enabled_pools > 1) {
 				applog(LOG_WARNING, "Pool %d rejected %d sequential shares, disabling!",
 				       pool->pool_no, pool->seq_rejects);
 				reject_pool(pool);
@@ -6247,7 +6247,10 @@ static void *stratum_rthread(void *userdata)
 			while (!restart_stratum(pool)) {
 				if (pool->removed)
 					goto out;
-				cgsleep_ms(30000);
+				if (enabled_pools > 1)
+					cgsleep_ms(30000);
+				else
+					cgsleep_ms(3000);
 			}
 		}
 
