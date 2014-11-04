@@ -9350,6 +9350,14 @@ int main(int argc, char *argv[])
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
 		early_quit(1, "Failed to curl_global_init");
 
+# ifdef __linux
+	/* If we're on a small lowspec platform with only one CPU, we should
+	 * yield after dropping a lock to allow a thread waiting for it to be
+	 * able to get CPU time to grab the lock. */
+	if (sysconf(_SC_NPROCESSORS_ONLN) == 1)
+		selective_yield = &sched_yield;
+#endif
+
 #if LOCK_TRACKING
 	// Must be first
 	if (unlikely(pthread_mutex_init(&lockstat_lock, NULL)))

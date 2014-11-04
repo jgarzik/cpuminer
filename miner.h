@@ -782,7 +782,7 @@ static inline void _mutex_unlock_noyield(pthread_mutex_t *lock, const char *file
 static inline void _mutex_unlock(pthread_mutex_t *lock, const char *file, const char *func, const int line)
 {
 	_mutex_unlock_noyield(lock, file, func, line);
-	sched_yield();
+	selective_yield();
 }
 
 static inline int _mutex_trylock(pthread_mutex_t *lock, __maybe_unused const char *file, __maybe_unused const char *func, __maybe_unused const int line)
@@ -837,13 +837,13 @@ static inline void _wr_unlock_noyield(pthread_rwlock_t *lock, const char *file, 
 static inline void _rd_unlock(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
 	_rw_unlock(lock, file, func, line);
-	sched_yield();
+	selective_yield();
 }
 
 static inline void _wr_unlock(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
 	_rw_unlock(lock, file, func, line);
-	sched_yield();
+	selective_yield();
 }
 
 static inline void _mutex_init(pthread_mutex_t *lock, const char *file, const char *func, const int line)

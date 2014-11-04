@@ -102,6 +102,8 @@ typedef LARGE_INTEGER cgtimer_t;
 typedef struct timespec cgtimer_t;
 #endif
 
+int no_yield(void);
+int (*selective_yield)(void);
 struct thr_info;
 struct pool;
 enum dev_reason;

@@ -37,6 +37,7 @@
 # include <ws2tcpip.h>
 # include <mmsystem.h>
 #endif
+#include <sched.h>
 
 #include "miner.h"
 #include "elist.h"
@@ -46,6 +47,13 @@
 #define DEFAULT_SOCKWAIT 60
 
 bool successful_connect = false;
+
+int no_yield(void)
+{
+	return 0;
+}
+
+int (*selective_yield)(void) = &no_yield;
 
 static void keep_sockalive(SOCKETTYPE fd)
 {
