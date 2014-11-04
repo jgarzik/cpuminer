@@ -119,15 +119,21 @@ if test "x$has_winpthread" != xtrue; then
         PTHREAD_LIBS=-lpthread
 fi
 
+# Drivers that are designed to be run on dedicated hardware should set standalone to yes
+# All drivers should prepend an x to the drivercount
 
+standalone="no"
 ants1="no"
+drivercount=""
 
 AC_ARG_ENABLE([ants1],
-	[AC_HELP_STRING([--enable-ants1],[Compile support for Antminer S1 Bitmain (default disabled)])],
+	[AC_HELP_STRING([--enable-ants1],[Compile support for Antminer S1 Bitmain STANDALONE(default disabled)])],
 	[ants1=$enableval]
 	)
 if test "x$ants1" = xyes; then
 	AC_DEFINE([USE_ANT_S1], [1], [Defined to 1 if Antminer S1 Bitmain support is wanted])
+	drivercount=x$drivercount
+	standalone="yes"
 fi
 AM_CONDITIONAL([HAS_ANT_S1], [test x$ants1 = xyes])
 
@@ -135,18 +141,15 @@ AM_CONDITIONAL([HAS_ANT_S1], [test x$ants1 = xyes])
 ants2="no"
 
 AC_ARG_ENABLE([ants2],
-	[AC_HELP_STRING([--enable-ants2],[Compile support for Antminer S2 Bitmain (default disabled)])],
+	[AC_HELP_STRING([--enable-ants2],[Compile support for Antminer S2 Bitmain STANDALONE(default disabled)])],
 	[ants2=$enableval]
 	)
 if test "x$ants2" = xyes; then
 	AC_DEFINE([USE_ANT_S2], [1], [Defined to 1 if Antminer S2 Bitmain support is wanted])
+	drivercount=x$drivercount
+	standalone="yes"
 fi
 AM_CONDITIONAL([HAS_ANT_S2], [test x$ants2 = xyes])
-
-if test "x$ants1$ants2" = xyesyes; then
-	AC_MSG_ERROR([Only one of --enable-ants1 and --enable-ants2 allowed])
-fi
-
 
 avalon="no"
 
@@ -156,6 +159,7 @@ AC_ARG_ENABLE([avalon],
 	)
 if test "x$avalon" = xyes; then
 	AC_DEFINE([USE_AVALON], [1], [Defined to 1 if Avalon support is wanted])
+	drivercount=x$drivercount
 fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
@@ -167,8 +171,8 @@ AC_ARG_ENABLE([avalon2],
 	[avalon2=$enableval]
 	)
 if test "x$avalon2" = xyes; then
-	AC_DEFINE([USE_FPGA_SERIAL], [1], [Defined to 1 if serial support required])
 	AC_DEFINE([USE_AVALON2], [1], [Defined to 1 if Avalon2 support is wanted])
+	drivercount=x$drivercount
 fi
 AM_CONDITIONAL([HAS_AVALON2], [test x$avalon2 = xyes])
 
@@ -176,11 +180,13 @@ AM_CONDITIONAL([HAS_AVALON2], [test x$avalon2 = xyes])
 bab="no"
 
 AC_ARG_ENABLE([bab],
-	[AC_HELP_STRING([--enable-bab],[Compile support for BlackArrow Bitfury (default disabled)])],
+	[AC_HELP_STRING([--enable-bab],[Compile support for BlackArrow Bitfury STANDALONE(default disabled)])],
 	[bab=$enableval]
 	)
 if test "x$bab" = xyes; then
 	AC_DEFINE([USE_BAB], [1], [Defined to 1 if BlackArrow Bitfury support is wanted])
+	drivercount=x$drivercount
+	standalone="yes"
 fi
 AM_CONDITIONAL([HAS_BAB], [test x$bab = xyes])
 
@@ -193,6 +199,7 @@ AC_ARG_ENABLE([bflsc],
 	)
 if test "x$bflsc" = xyes; then
 	AC_DEFINE([USE_BFLSC], [1], [Defined to 1 if BFL ASIC support is wanted])
+	drivercount=x$drivercount
 fi
 AM_CONDITIONAL([HAS_BFLSC], [test x$bflsc = xyes])
 
@@ -205,6 +212,7 @@ AC_ARG_ENABLE([bitforce],
 	)
 if test "x$bitforce" = xyes; then
 	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted])
+	drivercount=x$drivercount
 fi
 AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
 
@@ -217,6 +225,7 @@ AC_ARG_ENABLE([bitfury],
 	)
 if test "x$bitfury" = xyes; then
 	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if BitFury ASIC support is wanted])
+	drivercount=x$drivercount
 fi
 AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
 
@@ -224,11 +233,13 @@ AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
 bitmine_A1="no"
 
 AC_ARG_ENABLE([bitmine_A1],
-	[AC_HELP_STRING([--enable-bitmine_A1],[Compile support for Bitmine.ch A1 ASICs (default disabled)])],
+	[AC_HELP_STRING([--enable-bitmine_A1],[Compile support for Bitmine.ch A1 ASICs STANDALONE(default disabled)])],
 	[bitmine_A1=$enableval]
 	)
 if test "x$bitmine_A1" = xyes; then
 	AC_DEFINE([USE_BITMINE_A1], [1], [Defined to 1 if Bitmine A1 support is wanted])
+	drivercount=x$drivercount
+	standalone="yes"
 fi
 AM_CONDITIONAL([HAS_BITMINE_A1], [test x$bitmine_A1 = xyes])
 
@@ -241,6 +252,7 @@ AC_ARG_ENABLE([blockerupter],
 	)
 if test "x$blockerupter" = xyes; then
 	AC_DEFINE([USE_BLOCKERUPTER], [1], [Defined to 1 if BlockErupter support is wanted])
+	drivercount=x$drivercount
 fi
 AM_CONDITIONAL([HAS_BLOCKERUPTER], [test x$blockerupter = xyes])
 
@@ -253,6 +265,7 @@ AC_ARG_ENABLE([cointerra],
 	)
 if test "x$cointerra" = xyes; then
 	AC_DEFINE([USE_COINTERRA], [1], [Defined to 1 if Cointerra support is wanted])
+	drivercount=x$drivercount
 fi
 AM_CONDITIONAL([HAS_COINTERRA], [test x$cointerra = xyes])
 
@@ -265,6 +278,7 @@ AC_ARG_ENABLE([drillbit],
 	)
 if test "x$drillbit" = xyes; then
 	AC_DEFINE([USE_DRILLBIT], [1], [Defined to 1 if Drillbit BitFury support is wanted])
+	drivercount=x$drivercount
 fi
 AM_CONDITIONAL([HAS_DRILLBIT], [test x$drillbit = xyes])
 
@@ -277,6 +291,7 @@ AC_ARG_ENABLE([hashfast],
 	)
 if test "x$hashfast" = xyes; then
 	AC_DEFINE([USE_HASHFAST], [1], [Defined to 1 if Hashfast support is wanted])
+	drivercount=x$drivercount
 fi
 AM_CONDITIONAL([HAS_HASHFAST], [test x$hashfast = xyes])
 
@@ -289,6 +304,7 @@ AC_ARG_ENABLE([hashratio],
 	)
 if test "x$hashratio" = xyes; then
 	AC_DEFINE([USE_HASHRATIO], [1], [Defined to 1 if Hashratiosupport is wanted])
+	drivercount=x$drivercount
 fi
 AM_CONDITIONAL([HAS_HASHRATIO], [test x$hashratio = xyes])
 
@@ -301,6 +317,7 @@ AC_ARG_ENABLE([icarus],
 	)
 if test "x$icarus" = xyes; then
 	AC_DEFINE([USE_ICARUS], [1], [Defined to 1 if Icarus support is wanted])
+	drivercount=x$drivercount
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
@@ -313,6 +330,7 @@ AC_ARG_ENABLE([klondike],
 	)
 if test "x$klondike" = xyes; then
 	AC_DEFINE([USE_KLONDIKE], [1], [Defined to 1 if Klondike support is wanted])
+	drivercount=x$drivercount
 fi
 AM_CONDITIONAL([HAS_KLONDIKE], [test x$klondike = xyes])
 
@@ -320,11 +338,13 @@ AM_CONDITIONAL([HAS_KLONDIKE], [test x$klondike = xyes])
 knc="no"
 
 AC_ARG_ENABLE([knc],
-	[AC_HELP_STRING([--enable-knc],[Compile support for KnC miners (default disabled)])],
+	[AC_HELP_STRING([--enable-knc],[Compile support for KnC miners STANDALONE(default disabled)])],
 	[knc=$enableval]
 	)
 if test "x$knc" = xyes; then
 	AC_DEFINE([USE_KNC], [1], [Defined to 1 if KnC miner support is wanted])
+	drivercount=x$drivercount
+	standalone="yes"
 fi
 AM_CONDITIONAL([HAS_KNC], [test x$knc = xyes])
 
@@ -332,11 +352,13 @@ AM_CONDITIONAL([HAS_KNC], [test x$knc = xyes])
 minion="no"
 
 AC_ARG_ENABLE([minion],
-	[AC_HELP_STRING([--enable-minion],[Compile support for Minion BlackArrow ASIC (default disabled)])],
+	[AC_HELP_STRING([--enable-minion],[Compile support for Minion BlackArrow ASIC STANDALONE(default disabled)])],
 	[minion=$enableval]
 	)
 if test "x$minion" = xyes; then
 	AC_DEFINE([USE_MINION], [1], [Defined to 1 if Minion BlackArrow ASIC support is wanted])
+	drivercount=x$drivercount
+	standalone="yes"
 fi
 AM_CONDITIONAL([HAS_MINION], [test x$minion = xyes])
 
@@ -349,6 +371,7 @@ AC_ARG_ENABLE([modminer],
 	)
 if test "x$modminer" = xyes; then
 	AC_DEFINE([USE_MODMINER], [1], [Defined to 1 if ModMiner support is wanted])
+	drivercount=x$drivercount
 fi
 AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
 
@@ -356,11 +379,13 @@ AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
 sp10="no"
 
 AC_ARG_ENABLE([sp10],
-	[AC_HELP_STRING([--enable-sp10],[Compile support for Spondoolies SP10 (default disabled)])],
+	[AC_HELP_STRING([--enable-sp10],[Compile support for Spondoolies SP10 STANDALONE(default disabled)])],
 	[sp10=$enableval]
 	)
 if test "x$sp10" = xyes; then
 	AC_DEFINE([USE_SP10], [1], [Defined to 1 if Spondoolies SP10 support is wanted])
+	drivercount=x$drivercount
+	standalone="yes"
 fi
 AM_CONDITIONAL([HAS_SP10], [test x$sp10 = xyes])
 
@@ -369,11 +394,13 @@ AM_CONDITIONAL([HAS_SP10], [test x$sp10 = xyes])
 sp30="no"
 
 AC_ARG_ENABLE([sp30],
-	[AC_HELP_STRING([--enable-sp30],[Compile support for Spondoolies SP30 (default disabled)])],
+	[AC_HELP_STRING([--enable-sp30],[Compile support for Spondoolies SP30 STANDALONE(default disabled)])],
 	[sp30=$enableval]
 	)
 if test "x$sp30" = xyes; then
 	AC_DEFINE([USE_SP30], [1], [Defined to 1 if SP30 support is wanted])
+	drivercount=x$drivercount
+	standalone="yes"
 fi
 AM_CONDITIONAL([HAS_SP30], [test x$sp30 = xyes])
 
@@ -402,6 +429,8 @@ else
 	])
 fi
 
+
+#Add a new device to this list if it needs libusb, along with a no on the end.
 if test x$avalon$avalon2$bitforce$bitfury$blockerupter$modminer$bflsc$icarus$hashfast$hashratio$klondike$drillbit$cointerra$ants1$ants2 != xnonononononononononononononono; then
 	want_usbutils=true
 else
@@ -724,8 +753,15 @@ else
 	echo "  ModMiner.FPGAs.......: Disabled"
 fi
 
+#Add any new device to this, along with a no on the end of the test
 if test "x$avalon$avalon2$bab$bflsc$bitforce$bitfury$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$sp10$sp30" = xnonononononononononononononononononononono; then
-	AC_MSG_ERROR([No mining configured in])
+	AC_MSG_ERROR([No mining devices configured in])
+fi
+
+if test "x$standalone" = xyes; then
+	if test $drivercount != x; then
+		AC_MSG_ERROR([You have configured more than one driver in with a driver that is designed to be standalone only (see ./configure --help)])
+	fi
 fi
 
 echo
