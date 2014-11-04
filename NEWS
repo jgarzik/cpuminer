@@ -1,3 +1,44 @@
+Version 4.7.1 - 4th November 2014
+
+- Selectively yield on dropping a lock only on single CPU platforms
+- Make it impossible to configure in more than one device that is meant to be
+standalone. Add more information to configure help, along with comments for new
+drivers.
+- Add warning against system libusb in configure help
+- stratum_rthread sleep only 3s when all the pool have disconnected
+- Filter responses that don't have a result
+- Implement support for pool ping and json integers of zero in getversion and
+ping
+- Fix segfault when writing config with hashratio built in
+- Save pools in priority order at time of writing config
+- Set the correct flag for close on exec for sockets
+- Suspend stratum on removing a pool
+- Set CLOEXEC on sockets on linux
+- Drivers that take a diff should specify a max diff or it is assumed they don't
+support one so set max_diff to 1 if unset
+- Send hfa generic frame only if voltage was specified on the command line for
+that device
+- Set hashfast voltage settings only when really needed
+- Hashfast voltage support
+- Increase max diff on sp30 to 1024
+- Reset ipv6 flag to false in every api-allow loop
+- undeclared identifier 'IPV6_ADD_MEMBERSHIP' fix for apple
+- two back temps spondoolies2
+- two back temps spondoolies
+- correct suggest_difficulty json rpc call
+- Add more usb3 hub identifiers for windows
+- Set driver max diff to large value if unset
+- Wake gws on get queued
+- Implement blacklisting of attempting to match known products from ones without
+identifiers
+- Fix hfa driver building without libcurl
+- Enable building libusb without udev
+- Fix off by one calculation error in sp30 leading zeroes
+- Send correct diff work to sp30 for hashmeter to be correct
+- Do the sleep in spondoolies_queue_full_sp30 after dropping the lock
+- Minor tidy in sp30 driver
+- Fix sp30 warnings
+
 Version 4.7.0 - 14th October 2014
 
 - Implement generic inet_pton for windows
