@@ -309,6 +309,7 @@ struct ICARUS_INFO {
 
 	cgsem_t sem;
 	ROCKMINER_DEVICE_INFO rmdev;
+	struct work *base_work; // For when we roll work
 	struct work *g_work[MAX_CHIP_NUM][MAX_WORK_BUFFER_SIZE];
 	uint32_t last_nonce[MAX_CHIP_NUM][MAX_WORK_BUFFER_SIZE];
 	char rock_init[64];
@@ -1680,7 +1681,16 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 	struct work *work = NULL;
 
 	if (info->g_work[chip_no][current_task_id] == NULL) {
-		work = get_work(thr, thr->id);
+		if (!info->base_work)
+			info->base_work = get_work(thr, thr->id);
+		if (info->base_work->drv_rolllimit > 0) {
+			info->base_work->drv_rolllimit--;
+			roll_work(info->base_work);
+			work = make_clone(info->base_work);
+		} else {
+			work = info->base_work;
+			info->base_work = NULL;
+		}
 		info->g_work[chip_no][current_task_id] = work;
 	} else {
 		work = info->g_work[chip_no][current_task_id];
