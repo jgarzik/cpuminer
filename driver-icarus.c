@@ -2074,7 +2074,7 @@ static int64_t rock_scanwork(struct thr_info *thr)
 	nonce_data.chip_no = nonce_bin[NONCE_CHIP_NO_OFFSET] & RM_CHIP_MASK;
 	if (nonce_data.chip_no >= info->rmdev.chip_max)
 		nonce_data.chip_no = 0;
-	nonce_data.task_no = (nonce_bin[NONCE_TASK_NO_OFFSET] >= 2) ? 0 : nonce_bin[NONCE_TASK_NO_OFFSET];
+	nonce_data.task_no = nonce_bin[NONCE_TASK_NO_OFFSET] & 0x1;
 	nonce_data.cmd_value = nonce_bin[NONCE_TASK_CMD_OFFSET] & RM_CMD_MASK;
 	nonce_data.work_state = nonce_bin[NONCE_TASK_CMD_OFFSET] & RM_STATUS_MASK;
 
