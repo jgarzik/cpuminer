@@ -2006,9 +2006,9 @@ static int64_t rock_scanwork(struct thr_info *thr)
 	int64_t estimate_hashes;
 	int correction_times = 0;
 	NONCE_DATA nonce_data;
-	double temp;
-
 	time_t recv_time;
+	int chip_no;
+	double temp;
 
 	if (unlikely(share_work_tdiff(icarus) > info->fail_time)) {
 		if (info->failing) {
@@ -2031,16 +2031,15 @@ static int64_t rock_scanwork(struct thr_info *thr)
 		return -1;
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
-#if 0
 	for (chip_no = 0; chip_no < info->rmdev.chip_max; chip_no++) {
 		recv_time = time(NULL);
-		if (recv_time > info->rmdev.chip[chip_no].last_received_task_complete_time + 1) {
+		if (recv_time > info->rmdev.chip[chip_no].last_received_task_complete_time + 2) {
 			info->rmdev.chip[chip_no].last_received_task_complete_time = recv_time;
 			rock_send_task(chip_no, 0,thr);
 			break;
 		}
 	}
-#endif
+
 	memset(nonce_bin, 0, sizeof(nonce_bin));
 	ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, thr, 3000);//info->read_time);
 
@@ -2081,7 +2080,7 @@ static int64_t rock_scanwork(struct thr_info *thr)
 		icarus->temp = temp;
 
 	if (nonce_data.cmd_value == NONCE_TASK_COMPLETE_CMD) {
-		/* Should we be doing anything here? Doesn't look it */
+		info->rmdev.chip[nonce_data.chip_no].last_received_task_complete_time = time(NULL);
 		goto out;
 	}
 
