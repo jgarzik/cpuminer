@@ -1450,7 +1450,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 				info->rmdev.product_id = ROCKMINER_T1;
 				info->rmdev.chip_max = 12;
 				info->rmdev.min_frq = 200;
-				info->rmdev.def_frq = 300;
+				info->rmdev.def_frq = 330;
 				info->rmdev.max_frq = 400;
 				break;
 			case RM_PRODUCT_T2: // what's this?
