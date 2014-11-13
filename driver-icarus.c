@@ -189,8 +189,8 @@ static const char *MODE_UNKNOWN_STR = "unknown";
 #define MAX_DEVICE_NUM 100
 #define MAX_WORK_BUFFER_SIZE 2
 #define MAX_CHIP_NUM 24
-// Set it to 3 or 9
-#define	NONCE_CORRECTION_TIMES	3
+// Set it to 3, 5 or 9
+#define	NONCE_CORRECTION_TIMES	5
 #define MAX_TRIES	4
 #define	RM_CMD_MASK		0x0F
 #define	RM_STATUS_MASK		0xF0
@@ -201,6 +201,9 @@ static const char *MODE_UNKNOWN_STR = "unknown";
 #define	RM_PRODUCT_T2		0x80
 #define	RM_PRODUCT_TEST		0xC0
 
+#if (NONCE_CORRECTION_TIMES == 5)
+static int32_t rbox_corr_values[] = {0, 1, -1, -2, -4};
+#endif
 #if (NONCE_CORRECTION_TIMES == 9)
 static int32_t rbox_corr_values[] = {0, 1, -1, 2, -2, 3, -3, 4, -4};
 #endif
