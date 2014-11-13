@@ -1505,8 +1505,11 @@ extern struct work *make_clone(struct work *work);
 extern void clean_work(struct work *work);
 extern void _free_work(struct work *work);
 #define free_work(WORK) do { \
-	_free_work(WORK); \
-	WORK = NULL; \
+	if (likely(WORK)) { \
+		struct work *work = WORK; \
+		WORK = NULL; \
+		_free_work(work); \
+	} \
 } while (0)
 extern void set_work_ntime(struct work *work, int ntime);
 extern struct work *copy_work_noffset(struct work *base_work, int noffset);
