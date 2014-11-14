@@ -311,6 +311,8 @@ struct ICARUS_INFO {
 	bool failing;
 
 	cgsem_t sem;
+	pthread_mutex_t lock;
+
 	ROCKMINER_DEVICE_INFO rmdev;
 	struct work *base_work; // For when we roll work
 	struct work *g_work[MAX_CHIP_NUM][MAX_WORK_BUFFER_SIZE];
@@ -1358,6 +1360,7 @@ static void rock_statline_before(char *buf, size_t bufsiz, struct cgpu_info *cgp
 }
 
 static bool rock_prepare(struct thr_info *thr);
+static void rock_flush(struct cgpu_info *icarus);
 
 static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
@@ -1550,6 +1553,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 	icarus->drv->dname = "Rockminer";
 	icarus->drv->get_statline_before = &rock_statline_before;
 	icarus->drv->thread_prepare = &rock_prepare;
+	icarus->drv->flush_work = &rock_flush;
 
 	applog(LOG_INFO, "%s%d: Found at %s",
 			  icarus->drv->name, icarus->device_id,
@@ -1623,6 +1627,22 @@ static void *rock_fill_thread(void *arg)
 	return NULL;
 }
 
+/* The only thing to do on flush_work is to remove the base work to prevent us
+ * rolling what is now stale work */
+static void rock_flush(struct cgpu_info *icarus)
+{
+	struct ICARUS_INFO *info = icarus->device_data;
+	struct work *work;
+
+	mutex_lock(&info->lock);
+	work = info->base_work;
+	info->base_work = NULL;
+	mutex_unlock(&info->lock);
+
+	if (work)
+		free_work(work);
+}
+
 static bool rock_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
@@ -1630,6 +1650,7 @@ static bool rock_prepare(struct thr_info *thr)
 	pthread_t pth;
 
 	cgsem_init(&info->sem);
+	mutex_init(&info->lock);
 	pthread_create(&pth, NULL, rock_fill_thread, thr);
 	cgsem_post(&info->sem);
 	return true;
@@ -1683,7 +1704,10 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 	char *ob_hex;
 	struct work *work = NULL;
 
+	/* Only base_work needs locking since it can be asynchronously deleted
+	 * by flush work */
 	if (info->g_work[chip_no][current_task_id] == NULL) {
+		mutex_lock(&info->lock);
 		if (!info->base_work)
 			info->base_work = get_work(thr, thr->id);
 		if (info->base_work->drv_rolllimit > 0) {
@@ -1694,6 +1718,8 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 			work = info->base_work;
 			info->base_work = NULL;
 		}
+		mutex_unlock(&info->lock);
+
 		info->g_work[chip_no][current_task_id] = work;
 	} else {
 		work = info->g_work[chip_no][current_task_id];
