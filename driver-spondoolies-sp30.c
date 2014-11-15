@@ -189,9 +189,9 @@ static struct api_data *spondoolies_api_stats_sp30(struct cgpu_info *cgpu)
 	struct api_data *root = NULL;
 
 	root = api_add_int(root, "ASICs total rate", &a->temp_rate, false);
-	root = api_add_int(root, "Temparature front", &a->front_temp, false);
-	root = api_add_int(root, "Temparature rear top", &a->rear_temp_top, false);
-	root = api_add_int(root, "Temparature rear bot", &a->rear_temp_bot, false);
+	root = api_add_int(root, "Temperature front", &a->front_temp, false);
+	root = api_add_int(root, "Temperature rear top", &a->rear_temp_top, false);
+	root = api_add_int(root, "Temperature rear bot", &a->rear_temp_bot, false);
 
   
 
