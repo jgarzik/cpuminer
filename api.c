@@ -4495,17 +4495,20 @@ static void setup_ipaccess()
 		}
 		else {
 			end = strchr(ptr, '/');
-			if (!end)
+			if (!end) {
 				for (i = 0; i < 16; i++)
 					ipaccess[ips].mask.s6_addr[i] = 0xff;
-			else {
-				slash = end--;
+				end = ptr + strlen(ptr);
+			}
+			slash = end--;
+			if (*ptr == '[' && *end == ']') {
+				*(ptr++) = '\0';
+				*(end--) = '\0';
+				ipv6 = true;
+			}
+			else
 				ipv6 = false;
-				if (*ptr == '[' && *end == ']') {
-					*(ptr++) = '\0';
-					*(end--) = '\0';
-					ipv6 = true;
-				}
+			if (*slash) {
 				*(slash++) = '\0';
 				mask = atoi(slash);
 				if (mask < 1 || (mask += ipv6 ? 0 : 96) > 128 )
