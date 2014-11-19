@@ -310,7 +310,6 @@ struct ICARUS_INFO {
 
 	bool failing;
 
-	cgsem_t sem;
 	pthread_mutex_t lock;
 
 	ROCKMINER_DEVICE_INFO rmdev;
@@ -1359,8 +1358,21 @@ static void rock_statline_before(char *buf, size_t bufsiz, struct cgpu_info *cgp
 		tailsprintf(buf, bufsiz, "%.0fMHz", opt_rock_freq);
 }
 
-static bool rock_prepare(struct thr_info *thr);
-static void rock_flush(struct cgpu_info *icarus);
+/* The only thing to do on flush_work is to remove the base work to prevent us
+ * rolling what is now stale work */
+static void rock_flush(struct cgpu_info *icarus)
+{
+	struct ICARUS_INFO *info = icarus->device_data;
+	struct work *work;
+
+	mutex_lock(&info->lock);
+	work = info->base_work;
+	info->base_work = NULL;
+	mutex_unlock(&info->lock);
+
+	if (work)
+		free_work(work);
+}
 
 static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
@@ -1552,8 +1564,8 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 	icarus->drv->scanwork = rock_scanwork;
 	icarus->drv->dname = "Rockminer";
 	icarus->drv->get_statline_before = &rock_statline_before;
-	icarus->drv->thread_prepare = &rock_prepare;
 	icarus->drv->flush_work = &rock_flush;
+	mutex_init(&info->lock);
 
 	applog(LOG_INFO, "%s%d: Found at %s",
 			  icarus->drv->name, icarus->device_id,
@@ -1586,73 +1598,6 @@ static bool icarus_prepare(__maybe_unused struct thr_info *thr)
 {
 //	struct cgpu_info *icarus = thr->cgpu;
 
-	return true;
-}
-
-void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct thr_info *thr);
-
-static void rock_free_task(unsigned char chip_no, unsigned int current_task_id, struct ICARUS_INFO *info)
-{
-	struct work *work = info->g_work[chip_no][current_task_id];
-
-	info->g_work[chip_no][current_task_id] = NULL;
-	cgsem_post(&info->sem);
-	if (work)
-		free_work(work);
-}
-
-static void *rock_fill_thread(void *arg)
-{
-	struct thr_info *thr = arg;
-	struct cgpu_info *icarus = thr->cgpu;
-	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
-	char threadname[24];
-
-	snprintf(threadname, 24, "rck_fill/%d", icarus->device_id);
-	RenameThread(threadname);
-
-	while (!icarus->shutdown) {
-		int chip_no;
-
-		cgsem_wait(&info->sem);
-	        for (chip_no = 0; chip_no < info->rmdev.chip_max; chip_no++) {
-			int i;
-			for (i = 0; i < MAX_WORK_BUFFER_SIZE; i++) {
-				if (info->g_work[chip_no][i])
-					continue;
-				rock_send_task(chip_no, i, thr);
-			}
-		}
-        }
-	return NULL;
-}
-
-/* The only thing to do on flush_work is to remove the base work to prevent us
- * rolling what is now stale work */
-static void rock_flush(struct cgpu_info *icarus)
-{
-	struct ICARUS_INFO *info = icarus->device_data;
-	struct work *work;
-
-	mutex_lock(&info->lock);
-	work = info->base_work;
-	info->base_work = NULL;
-	mutex_unlock(&info->lock);
-
-	if (work)
-		free_work(work);
-}
-
-static bool rock_prepare(struct thr_info *thr)
-{
-	struct cgpu_info *icarus = thr->cgpu;
-	struct ICARUS_INFO *info = icarus->device_data;
-	pthread_t pth;
-
-	cgsem_init(&info->sem);
-	mutex_init(&info->lock);
-	pthread_create(&pth, NULL, rock_fill_thread, thr);
-	cgsem_post(&info->sem);
 	return true;
 }
 
@@ -1745,6 +1690,9 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 		free(ob_hex);
 	}
 
+	// We only want results for the work we are about to send
+	usb_buffer_clear(icarus);
+
 	err = usb_write_ii(icarus, info->intinfo, (char *)(&workdata), sizeof(workdata), &amount, C_SENDWORK);
 
 	if (err < 0 || amount != sizeof(workdata)) {
@@ -1754,7 +1702,10 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 		icarus_initialise(icarus, info->baud);
 
 		if (info->g_work[chip_no][current_task_id])
-			rock_free_task(chip_no, current_task_id, info);
+		{
+			free_work(info->g_work[chip_no][current_task_id]);
+			info->g_work[chip_no][current_task_id] = NULL;
+		}
 
 		return;
 	}
@@ -2035,9 +1986,10 @@ static int64_t rock_scanwork(struct thr_info *thr)
 	int64_t estimate_hashes;
 	int correction_times = 0;
 	NONCE_DATA nonce_data;
-	time_t recv_time;
-	int chip_no;
 	double temp;
+
+	int chip_no = 0;
+	time_t recv_time = 0;
 
 	if (unlikely(share_work_tdiff(icarus) > info->fail_time)) {
 		if (info->failing) {
@@ -2060,9 +2012,10 @@ static int64_t rock_scanwork(struct thr_info *thr)
 		return -1;
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
+
 	for (chip_no = 0; chip_no < info->rmdev.chip_max; chip_no++) {
 		recv_time = time(NULL);
-		if (recv_time > info->rmdev.chip[chip_no].last_received_task_complete_time + 2) {
+		if (recv_time > info->rmdev.chip[chip_no].last_received_task_complete_time + 1) {
 			info->rmdev.chip[chip_no].last_received_task_complete_time = recv_time;
 			rock_send_task(chip_no, 0,thr);
 			break;
@@ -2071,6 +2024,38 @@ static int64_t rock_scanwork(struct thr_info *thr)
 
 	memset(nonce_bin, 0, sizeof(nonce_bin));
 	ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, thr, 3000);//info->read_time);
+
+	nonce_data.chip_no = nonce_bin[NONCE_CHIP_NO_OFFSET] & RM_CHIP_MASK;
+	if (nonce_data.chip_no >= info->rmdev.chip_max)
+		nonce_data.chip_no = 0;
+	nonce_data.task_no = nonce_bin[NONCE_TASK_NO_OFFSET] & 0x1;
+	nonce_data.cmd_value = nonce_bin[NONCE_TASK_CMD_OFFSET] & RM_CMD_MASK;
+	nonce_data.work_state = nonce_bin[NONCE_TASK_CMD_OFFSET] & RM_STATUS_MASK;
+
+	temp = (double)nonce_bin[NONCE_COMMAND_OFFSET];
+	if (temp != 128)
+		icarus->temp = temp;
+
+	if (nonce_data.cmd_value == NONCE_TASK_COMPLETE_CMD) {
+		info->rmdev.chip[nonce_data.chip_no].last_received_task_complete_time = time(NULL);
+		if (info->g_work[nonce_data.chip_no][nonce_data.task_no]) {
+			free_work(info->g_work[nonce_data.chip_no][nonce_data.task_no]);
+			info->g_work[nonce_data.chip_no][nonce_data.task_no] = NULL;
+		}
+		goto out;
+	}
+
+	if (nonce_data.cmd_value == NONCE_GET_TASK_CMD) {
+		rock_send_task(nonce_data.chip_no, nonce_data.task_no, thr);
+		goto out;
+	}
+
+	if (ret == ICA_NONCE_TIMEOUT)
+		rock_send_task(nonce_data.chip_no, nonce_data.task_no, thr);
+
+	work = info->g_work[nonce_data.chip_no][nonce_data.task_no];
+	if (work == NULL)
+		goto out;
 
 	if (ret == ICA_NONCE_ERROR)
 		goto out;
@@ -2097,34 +2082,8 @@ static int64_t rock_scanwork(struct thr_info *thr)
 		goto out;
 	}
 
-	nonce_data.chip_no = nonce_bin[NONCE_CHIP_NO_OFFSET] & RM_CHIP_MASK;
-	if (nonce_data.chip_no >= info->rmdev.chip_max)
-		nonce_data.chip_no = 0;
-	nonce_data.task_no = nonce_bin[NONCE_TASK_NO_OFFSET] & 0x1;
-	nonce_data.cmd_value = nonce_bin[NONCE_TASK_CMD_OFFSET] & RM_CMD_MASK;
-	nonce_data.work_state = nonce_bin[NONCE_TASK_CMD_OFFSET] & RM_STATUS_MASK;
-
-	temp = (double)nonce_bin[NONCE_COMMAND_OFFSET];
-	if (temp != 128)
-		icarus->temp = temp;
-
-	if (nonce_data.cmd_value == NONCE_TASK_COMPLETE_CMD) {
-		info->rmdev.chip[nonce_data.chip_no].last_received_task_complete_time = time(NULL);
-		goto out;
-	}
-
-	if (nonce_data.cmd_value == NONCE_GET_TASK_CMD) {
-		rock_free_task(nonce_data.chip_no, nonce_data.task_no, info);
-		goto out;
-	}
-
-	work = info->g_work[nonce_data.chip_no][nonce_data.task_no];
-	if (work == NULL)
-		goto out;
-
 	memcpy((char *)&nonce, nonce_bin, ICARUS_READ_SIZE);
 	nonce = htobe32(nonce);
-
 	recv_time = time(NULL);
 	if ((recv_time-info->rmdev.dev_detect_time) >= 60) {
 		unsigned char i;
@@ -2143,7 +2102,6 @@ static int64_t rock_scanwork(struct thr_info *thr)
 
 	correction_times = 0;
 	info->nonces_checked++;
-
 	while (correction_times < NONCE_CORRECTION_TIMES) {
 		uint32_t new_nonce;
 
@@ -2157,8 +2115,9 @@ static int64_t rock_scanwork(struct thr_info *thr)
 		if (new_nonce == info->last_nonce[nonce_data.chip_no][nonce_data.task_no])
 			break;
 		if (test_nonce(work, new_nonce)) {
+			nonce = new_nonce;
 			submit_tested_work(thr, work);
-			info->last_nonce[nonce_data.chip_no][nonce_data.task_no] = new_nonce;
+			info->last_nonce[nonce_data.chip_no][nonce_data.task_no] = nonce;
 			info->nonces_correction[correction_times]++;
 			hash_count++;
 			info->failing = false;
@@ -2166,7 +2125,7 @@ static int64_t rock_scanwork(struct thr_info *thr)
 			break;
 		} else {
 			applog(LOG_DEBUG, "Rockminer nonce error times = %d", correction_times);
-			if (nonce == 0)
+			if (new_nonce == 0)
 				break;
 		}
 		correction_times++;
