@@ -219,6 +219,8 @@ static int32_t rbox_corr_values[] = {0, 1, -1, 2, -2, 3, -3, 4, -4};
 static int32_t rbox_corr_values[] = {0, 1, -1};
 #endif
 
+#define ANT_QUEUE_NUM 36
+
 typedef enum {
 	NONCE_DATA1_OFFSET = 0,
 	NONCE_DATA2_OFFSET,
@@ -331,6 +333,7 @@ struct ICARUS_INFO {
 	uint64_t nonces_fail;
 	uint64_t nonces_correction[NONCE_CORRECTION_TIMES];
 
+	struct work **antworks;
 	bool ant;
 	bool u3;
 };
@@ -1710,10 +1713,13 @@ static void icarus_detect(bool __maybe_unused hotplug)
 	usb_detect(&icarus_drv, icarus_detect_one);
 }
 
-static bool icarus_prepare(__maybe_unused struct thr_info *thr)
+static bool icarus_prepare(struct thr_info *thr)
 {
-//	struct cgpu_info *icarus = thr->cgpu;
+	struct cgpu_info *icarus = thr->cgpu;
+	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
 
+	if (info->ant)
+		info->antworks = calloc(sizeof(struct work *), ANT_QUEUE_NUM);
 	return true;
 }
 
