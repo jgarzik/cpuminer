@@ -884,6 +884,7 @@ static void get_options(int this_option_offset, struct cgpu_info *icarus, int *b
 			break;
 		case IDENT_AMU:
 		case IDENT_ANU:
+		case IDENT_AU3:
 			*baud = ICARUS_IO_SPEED;
 			*work_division = 1;
 			*fpga_count = 1;
@@ -1220,6 +1221,7 @@ static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb
 			info->timeout = ICARUS_WAIT_TIMEOUT;
 			break;
 		case IDENT_ANU:
+		case IDENT_AU3:
 			info->timeout = ANT_WAIT_TIMEOUT;
 			break;
 		case IDENT_CMR2:
