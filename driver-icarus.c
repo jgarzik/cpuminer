@@ -1970,7 +1970,7 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	struct timeval tv_start, tv_finish, elapsed;
 	int curr_hw_errors;
 	bool was_hw_error;
-	struct work *work, *worked;
+	struct work *work, *worked = NULL;
 	int64_t estimate_hashes;
 	uint8_t workid = 0;
 
@@ -1996,7 +1996,7 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 
-	worked = work = get_work(thr, thr->id);
+	work = get_work(thr, thr->id);
 	memset((void *)(&workdata), 0, sizeof(workdata));
 	memcpy(&(workdata.midstate), work->midstate, ICARUS_MIDSTATE_SIZE);
 	memcpy(&(workdata.work), work->data + ICARUS_WORK_DATA_OFFSET, ICARUS_WORK_SIZE);
@@ -2014,7 +2014,8 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 			free_work(info->antworks[workid]);
 		info->antworks[workid] = work;
 		workdata.id = workid;
-	}
+	} else
+		worked = work;
 
 	if (info->speed_next_work || info->flash_next_work)
 		cmr2_commands(icarus);
@@ -2121,7 +2122,8 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	if (info->do_icarus_timing && !was_hw_error)
 		process_history(icarus, info, nonce, hash_count, &elapsed, &tv_start);
 out:
-	free_work(worked);
+	if (worked)
+		free_work(worked);
 
 	return hash_count;
 }
