@@ -73,8 +73,11 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define ICARUS_READ_TIME(baud) (0.001)
 
 // USB ms timeout to wait - user specified timeouts are multiples of this
-#define ICARUS_WAIT_TIMEOUT 100
+#define ICA_WAIT_TIMEOUT 100
 #define ANT_WAIT_TIMEOUT 10
+#define AU3_WAIT_TIMEOUT 1
+#define ICARUS_WAIT_TIMEOUT (info->u3 ? AU3_WAIT_TIMEOUT : (info->ant ? ANT_WAIT_TIMEOUT : ICA_WAIT_TIMEOUT))
+
 #define ICARUS_CMR2_TIMEOUT 1
 
 // Defined in multiples of ICARUS_WAIT_TIMEOUT
@@ -92,6 +95,8 @@ ASSERT1(sizeof(uint32_t) == 4);
 // Antminer USB is > 1GH/s so use a shorter limit
 // 1000 ms allows for up to ~4GH/s device
 #define ANTUSB_READ_COUNT_TIMING	1000
+
+#define ANTU3_READ_COUNT_TIMING		100
 
 #define ICARUS_READ_COUNT_MIN		ICARUS_WAIT_TIMEOUT
 #define SECTOMS(s)	((int)((s) * 1000))
@@ -113,8 +118,11 @@ ASSERT1(sizeof(uint32_t) == 4);
 // Per FPGA
 #define CAIRNSMORE2_HASH_TIME 0.0000000066600
 #define NANOSEC 1000000000.0
-#define ANTMINERUSB_HASH_MHZ  0.000000125
+#define ANTMINERUSB_HASH_MHZ 0.000000125
 #define ANTMINERUSB_HASH_TIME (ANTMINERUSB_HASH_MHZ / (double)(opt_anu_freq))
+#define ANTU3_HASH_MHZ 0.0000000032
+#define ANTU3_HASH_TIME (ANTU3_HASH_MHZ / (double)(opt_au3_freq))
+
 #define CAIRNSMORE2_INTS 4
 
 // Icarus Rev3 doesn't send a completion message when it finishes
@@ -322,6 +330,9 @@ struct ICARUS_INFO {
 	uint64_t nonces_correction_tests;
 	uint64_t nonces_fail;
 	uint64_t nonces_correction[NONCE_CORRECTION_TIMES];
+
+	bool ant;
+	bool u3;
 };
 
 #define ICARUS_MIDSTATE_SIZE 32
@@ -358,6 +369,29 @@ struct ICARUS_WORK {
 	uint8_t prefix;
 	uint8_t unused[ICARUS_UNUSED_SIZE];
 	uint8_t work[ICARUS_WORK_SIZE];
+};
+
+#define ANT_U1_DEFFREQ 200
+#define ANT_U3_DEFFREQ 225
+#define ANT_U3_MAXFREQ 250
+struct {
+	float freq;
+	uint16_t hex;
+} u3freqtable[] = {
+	{ 100,		0x0783 },
+	{ 125,		0x0983 },
+	{ 150,		0x0b83 },
+	{ 175,		0x0d83 },
+	{ 193.75,	0x0f03 },
+	{ 196.88,	0x1f07 },
+	{ 200,		0x0782 },
+	{ 206.25,	0x1006 },
+	{ 212.5,	0x1086 },
+	{ 218.75,	0x1106 },
+	{ 225,		0x0882 },
+	{ 237.5,	0x1286 },
+	{ 243.75,	0x1306 },
+	{ 250,		0x0982 },
 };
 
 #define END_CONDITION 0x0000ffff
@@ -520,6 +554,7 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 			break;
 		case IDENT_AMU:
 		case IDENT_ANU:
+		case IDENT_AU3:
 		case IDENT_LIN:
 			// Enable the UART
 			transfer(icarus, CP210X_TYPE_OUT, CP210X_REQUEST_IFC_ENABLE,
@@ -682,6 +717,10 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 		case IDENT_ANU:
 			info->Hs = ANTMINERUSB_HASH_TIME;
 			read_count_timing = ANTUSB_READ_COUNT_TIMING;
+			break;
+		case IDENT_AU3:
+			info->Hs = ANTU3_HASH_TIME;
+			read_count_timing = ANTU3_READ_COUNT_TIMING;
 			break;
 		default:
 			quit(1, "Icarus get_options() called with invalid %s ident=%d",
@@ -955,16 +994,15 @@ unsigned char crc5(unsigned char *ptr, unsigned char len)
 	return crc;
 }
 
-static bool anu_freqfound = false;
-static uint16_t anu_freq_hex;
-
-static void anu_find_freqhex(void)
+static uint16_t anu_find_freqhex(void)
 {
 	float fout, best_fout = opt_anu_freq;
 	int od, nf, nr, no, n, m, bs;
+	uint16_t anu_freq_hex = 0;
 	float best_diff = 1000;
 
-	anu_freqfound = true;
+	if (!best_fout)
+		best_fout = ANT_U1_DEFFREQ;
 
 	for (od = 0; od < 4; od++) {
 		no = 1 << od;
@@ -985,24 +1023,43 @@ static void anu_find_freqhex(void)
 				if (fout == opt_anu_freq) {
 					applog(LOG_DEBUG, "ANU found exact frequency %.1f with hex %04x",
 					       opt_anu_freq, anu_freq_hex);
-					return;
+					goto out;
 				}
 			}
 		}
 	}
-	opt_anu_freq = best_fout;
-	applog(LOG_NOTICE, "ANU found nearest frequency %.1f with hex %04x", opt_anu_freq,
+	applog(LOG_NOTICE, "ANU found nearest frequency %.1f with hex %04x", best_fout,
 	       anu_freq_hex);
+out:
+	return anu_freq_hex;
 }
 
-static bool set_anu_freq(struct cgpu_info *icarus, struct ICARUS_INFO *info)
+static uint16_t anu3_find_freqhex(void)
+{
+	int i = 0, freq = opt_au3_freq, u3freq;
+	uint16_t anu_freq_hex = 0x0882;
+
+	if (!freq)
+		freq = ANT_U3_DEFFREQ;
+
+	do {
+		u3freq = u3freqtable[i].freq;
+		if (u3freq <= freq)
+			anu_freq_hex = u3freqtable[i].hex;
+		i++;
+	} while (u3freq < ANT_U3_MAXFREQ);
+
+	return anu_freq_hex;
+}
+
+static bool set_anu_freq(struct cgpu_info *icarus, struct ICARUS_INFO *info, uint16_t anu_freq_hex)
 {
 	unsigned char cmd_buf[4], rdreg_buf[4];
 	int amount, err;
 	char buf[512];
 
-	if (!anu_freqfound)
-		anu_find_freqhex();
+	if (!anu_freq_hex)
+		anu_freq_hex = anu_find_freqhex();
 	memset(cmd_buf, 0, 4);
 	memset(rdreg_buf, 0, 4);
 	cmd_buf[0] = 2 | 0x80;
@@ -1046,6 +1103,36 @@ static bool set_anu_freq(struct cgpu_info *icarus, struct ICARUS_INFO *info)
 	}
 
 	return true;
+}
+
+static void set_anu_volt(struct cgpu_info *icarus)
+{
+	unsigned char voltage_data[2], cmd_buf[4];
+	char volt_buf[8];
+	int err, amount;
+
+	/* Allow a zero setting to imply not to try and set voltage */
+	if (!opt_au3_volt)
+		return;
+	if (opt_au3_volt < 725 || opt_au3_volt > 850) {
+		applog(LOG_WARNING, "Invalid ANU voltage %d specified, must be 725-850", opt_au3_volt);
+		return;
+	}
+	sprintf(volt_buf, "%04d", opt_au3_volt);
+	hex2bin(voltage_data, volt_buf, 2);
+	cmd_buf[0] = 0xaa;
+	cmd_buf[1] = voltage_data[0];
+	cmd_buf[1] &=0x0f;
+	cmd_buf[1] |=0xb0;
+	cmd_buf[2] = voltage_data[1];
+	cmd_buf[3] = 0x00; //0-7
+	cmd_buf[3] = crc5(cmd_buf, 4*8 - 5);
+	cmd_buf[3] |= 0xc0;
+	applog(LOG_INFO, "Send ANU voltage %02x%02x%02x%02x", cmd_buf[0], cmd_buf[1], cmd_buf[2], cmd_buf[3]);
+	cgsleep_ms(500);
+	err = usb_write(icarus, (char * )cmd_buf, 4, &amount, C_ANU_SEND_VOLT);
+	if (err != LIBUSB_SUCCESS || amount != 4)
+		applog(LOG_ERR, "Write voltage Comms error (werr=%d amount=%d)", err, amount);
 }
 
 static void rock_init_last_received_task_complete_time(struct ICARUS_INFO *info)
@@ -1098,11 +1185,11 @@ static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb
 	struct ICARUS_WORK workdata;
 	char *nonce_hex;
 	int baud, uninitialised_var(work_division), uninitialised_var(fpga_count);
+	bool anu_freqset = false;
 	struct cgpu_info *icarus;
 	int ret, err, amount, tries, i;
 	bool ok;
 	bool cmr2_ok[CAIRNSMORE2_INTS];
-	bool anu_freqset = false;
 	int cmr2_count;
 
 	if ((sizeof(workdata) << 1) != (sizeof(golden_ob) - 1))
@@ -1154,7 +1241,7 @@ static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb
 	info->nonce_size = ICARUS_READ_SIZE;
 // For CMR2 test each USB Interface
 
-cmr2_retry:
+retry:
 
 	tries = 2;
 	ok = false;
@@ -1162,10 +1249,26 @@ cmr2_retry:
 		icarus_clear(icarus, info);
 		icarus_initialise(icarus, baud);
 
-		if (info->ident == IDENT_ANU && !set_anu_freq(icarus, info)) {
-			applog(LOG_WARNING, "%s %i: Failed to set frequency, too much overclock?",
-			       icarus->drv->name, icarus->device_id);
-			continue;
+		if (info->u3) {
+			uint16_t anu_freq_hex = anu3_find_freqhex();
+
+			set_anu_volt(icarus);
+			if (!set_anu_freq(icarus, info, anu_freq_hex)) {
+				applog(LOG_WARNING, "%s %i: Failed to set frequency, too much overclock?",
+				       icarus->drv->name, icarus->device_id);
+				continue;
+			}
+			icarus->usbdev->ident = info->ident = IDENT_AU3;
+			info->Hs = ANTU3_HASH_TIME;
+			icarus->drv->name = "AU3";
+			applog(LOG_DEBUG, "%s %i: Detected Antminer U3", icarus->drv->name,
+			       icarus->device_id);
+		} else if (info->ident == IDENT_ANU && !info->u3) {
+			if (!set_anu_freq(icarus, info, 0)) {
+				applog(LOG_WARNING, "%s %i: Failed to set frequency, too much overclock?",
+				       icarus->drv->name, icarus->device_id);
+				continue;
+			}
 		}
 
 		err = usb_write_ii(icarus, info->intinfo,
@@ -1187,18 +1290,19 @@ cmr2_retry:
 
 		}
 		if (info->nonce_size == ICARUS_READ_SIZE && usb_buffer_size(icarus) == 1) {
+			info->ant = true;
 			usb_buffer_clear(icarus);
 			icarus->usbdev->ident = info->ident = IDENT_ANU;
 			info->nonce_size = ANT_READ_SIZE;
 			info->Hs = ANTMINERUSB_HASH_TIME;
 			icarus->drv->name = "ANU";
-			applog(LOG_DEBUG, "%s %i: Detected Antminer U1/2, changing nonce size to %d",
+			applog(LOG_DEBUG, "%s %i: Detected Antminer U1/2/3, changing nonce size to %d",
 			       icarus->drv->name, icarus->device_id, ANT_READ_SIZE);
 		}
 
 		nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
 		if (strncmp(nonce_hex, golden_nonce, 8) == 0) {
-			if (info->ident == IDENT_ANU && !anu_freqset)
+			if (info->ant && !anu_freqset)
 				anu_freqset = true;
 			else
 				ok = true;
@@ -1214,12 +1318,16 @@ cmr2_retry:
 	}
 
 	if (!ok) {
-		if (info->ident != IDENT_CMR2)
-			goto unshin;
+		if (info->ident != IDENT_CMR2) {
+			if (info->u3)
+				goto unshin;
+			info->u3 = true;
+			goto retry;
+		}
 
 		if (info->intinfo < CAIRNSMORE2_INTS-1) {
 			info->intinfo++;
-			goto cmr2_retry;
+			goto retry;
 		}
 	} else {
 		if (info->ident == IDENT_CMR2) {
@@ -1232,7 +1340,7 @@ cmr2_retry:
 			cmr2_count++;
 			if (info->intinfo < CAIRNSMORE2_INTS-1) {
 				info->intinfo++;
-				goto cmr2_retry;
+				goto retry;
 			}
 		}
 	}
@@ -1445,6 +1553,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 			info->rmdev.detect_chip_no = 0;
 		//g_detect_chip_no = (g_detect_chip_no + 1) & MAX_CHIP_NUM;
 
+		usb_buffer_clear(icarus);
 		err = usb_write_ii(icarus, info->intinfo,
 				   (char *)(&workdata), sizeof(workdata), &amount, C_SENDWORK);
 		if (err != LIBUSB_SUCCESS || amount != sizeof(workdata))
@@ -1459,6 +1568,11 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 		if (ret != ICA_NONCE_OK) {
 			applog(LOG_DEBUG, "detect_one get_gold_nonce error, tries = %d", tries);
 			continue;
+		}
+		if (usb_buffer_size(icarus) == 1) {
+			applog(LOG_INFO, "Rock detect found an ANU, skipping");
+			usb_buffer_clear(icarus);
+			break;
 		}
 
 		newname = NULL;
