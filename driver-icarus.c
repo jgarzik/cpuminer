@@ -2050,8 +2050,10 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 		if (workid < ANT_QUEUE_NUM && info->antworks[workid]) {
 			worked = info->antworks[workid];
 			info->antworks[workid] = NULL;
-		}
+		} else
+			goto out;
 	}
+
 	// aborted before becoming idle, get new work
 	if (ret == ICA_NONCE_TIMEOUT || ret == ICA_NONCE_RESTART) {
 		if (info->u3)
@@ -2081,7 +2083,7 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	memcpy((char *)&nonce, nonce_bin, ICARUS_READ_SIZE);
 	nonce = htobe32(nonce);
 	curr_hw_errors = icarus->hw_errors;
-	if (submit_nonce(thr, work, nonce))
+	if (submit_nonce(thr, worked, nonce))
 		info->failing = false;
 	was_hw_error = (curr_hw_errors < icarus->hw_errors);
 
