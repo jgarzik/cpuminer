@@ -334,6 +334,7 @@ struct ICARUS_INFO {
 	uint64_t nonces_correction[NONCE_CORRECTION_TIMES];
 
 	struct work **antworks;
+	int workid;
 	bool ant;
 	bool u3;
 };
@@ -1961,7 +1962,7 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
 	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
-	int ret, err, amount, i;
+	int ret, err, amount;
 	unsigned char nonce_bin[ICARUS_BUF_SIZE];
 	struct ICARUS_WORK workdata;
 	char *ob_hex;
@@ -2003,13 +2004,9 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	rev((void *)(&(workdata.midstate)), ICARUS_MIDSTATE_SIZE);
 	rev((void *)(&(workdata.work)), ICARUS_WORK_SIZE);
 	if (info->ant) {
-		/* Find an empty slot */
-		for (i = 0; i < 0x1F; i++) {
-			if (!info->antworks[i]) {
-				workid = i;
-				break;
-			}
-		}
+		workid = info->workid;
+		if (++info->workid >= 0x1F)
+			info->workid = 0;
 		if (info->antworks[workid])
 			free_work(info->antworks[workid]);
 		info->antworks[workid] = work;
@@ -2046,15 +2043,6 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	if (ret == ICA_NONCE_ERROR)
 		goto out;
 
-	if (info->ant) {
-		workid = nonce_bin[4] & 0x1F;
-		if (info->antworks[workid]) {
-			worked = info->antworks[workid];
-			info->antworks[workid] = NULL;
-		} else
-			goto out;
-	}
-
 	// aborted before becoming idle, get new work
 	if (ret == ICA_NONCE_TIMEOUT || ret == ICA_NONCE_RESTART) {
 		if (info->u3)
@@ -2079,6 +2067,15 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 
 		hash_count = estimate_hashes;
 		goto out;
+	}
+
+	if (info->ant) {
+		workid = nonce_bin[4] & 0x1F;
+		if (info->antworks[workid]) {
+			worked = info->antworks[workid];
+			info->antworks[workid] = NULL;
+		} else
+			goto out;
 	}
 
 	memcpy((char *)&nonce, nonce_bin, ICARUS_READ_SIZE);
