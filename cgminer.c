@@ -216,7 +216,7 @@ static bool no_work;
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 int opt_anu_volt = 750;
-float opt_anu_freq = 200;
+float opt_anu_freq;
 float opt_rock_freq = 270;
 #endif
 bool opt_worktime;

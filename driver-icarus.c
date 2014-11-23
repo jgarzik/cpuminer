@@ -361,6 +361,29 @@ struct ICARUS_WORK {
 	uint8_t work[ICARUS_WORK_SIZE];
 };
 
+#define ANT_U1_DEFFREQ 200
+#define ANT_U3_DEFFREQ 225
+#define ANT_U3_MAXFREQ 250
+struct {
+	float freq;
+	uint16_t hex;
+} u3freqtable[] = {
+	{ 100,		0x0783 },
+	{ 125,		0x0983 },
+	{ 150,		0x0b83 },
+	{ 175,		0x0d83 },
+	{ 193.75,	0x0f03 },
+	{ 196.88,	0x1f07 },
+	{ 200,		0x0782 },
+	{ 206.25,	0x1006 },
+	{ 212.5,	0x1086 },
+	{ 218.75,	0x1106 },
+	{ 225,		0x0882 },
+	{ 237.5,	0x1286 },
+	{ 243.75,	0x1306 },
+	{ 250,		0x0982 },
+};
+
 #define END_CONDITION 0x0000ffff
 
 // Looking for options in --icarus-timing and --icarus-options:
@@ -956,16 +979,16 @@ unsigned char crc5(unsigned char *ptr, unsigned char len)
 	return crc;
 }
 
-static bool anu_freqfound = false;
-static uint16_t anu_freq_hex;
-
-static void anu_find_freqhex(void)
+static uint16_t anu_find_freqhex(void)
 {
-	float fout, best_fout = opt_anu_freq;
+	float fout, anu_freq, best_fout = opt_anu_freq;
 	int od, nf, nr, no, n, m, bs;
+	uint16_t anu_freq_hex = 0;
 	float best_diff = 1000;
 
-	anu_freqfound = true;
+	if (!best_fout)
+		best_fout = ANT_U1_DEFFREQ;
+	anu_freq = best_fout;
 
 	for (od = 0; od < 4; od++) {
 		no = 1 << od;
@@ -974,36 +997,54 @@ static void anu_find_freqhex(void)
 			for (m = 0; m < 64; m++) {
 				nf = m + 1;
 				fout = 25 * (float)nf /((float)(nr) * (float)(no));
-				if (fabsf(fout - opt_anu_freq)  > best_diff)
+				if (fabsf(fout - anu_freq)  > best_diff)
 					continue;
 				if (500 <= (fout * no) && (fout * no) <= 1000)
 					bs = 1;
 				else
 					bs = 0;
-				best_diff = fabsf(fout - opt_anu_freq);
+				best_diff = fabsf(fout - anu_freq);
 				best_fout = fout;
 				anu_freq_hex = (bs << 14) | (m << 7) | (n << 2) | od;
-				if (fout == opt_anu_freq) {
+				if (fout == anu_freq) {
 					applog(LOG_DEBUG, "ANU found exact frequency %.1f with hex %04x",
-					       opt_anu_freq, anu_freq_hex);
-					return;
+					       anu_freq, anu_freq_hex);
+					goto out;
 				}
 			}
 		}
 	}
-	opt_anu_freq = best_fout;
-	applog(LOG_NOTICE, "ANU found nearest frequency %.1f with hex %04x", opt_anu_freq,
+	applog(LOG_NOTICE, "ANU found nearest frequency %.1f with hex %04x", best_fout,
 	       anu_freq_hex);
+out:
+	return anu_freq_hex;
 }
 
-static bool set_anu_freq(struct cgpu_info *icarus, struct ICARUS_INFO *info)
+static uint16_t anu3_find_freqhex(void)
+{
+	int i = 0, freq = opt_anu_freq, u3freq;
+	uint16_t anu_freq_hex = 0x0882;
+
+	if (!freq)
+		freq = ANT_U3_DEFFREQ;
+
+	do {
+		u3freq = u3freqtable[i].freq;
+		if (u3freq <= freq)
+			anu_freq_hex = u3freqtable[i].hex;
+	} while (u3freq < ANT_U3_MAXFREQ);
+
+	return anu_freq_hex;
+}
+
+static bool set_anu_freq(struct cgpu_info *icarus, struct ICARUS_INFO *info, uint16_t anu_freq_hex)
 {
 	unsigned char cmd_buf[4], rdreg_buf[4];
 	int amount, err;
 	char buf[512];
 
-	if (!anu_freqfound)
-		anu_find_freqhex();
+	if (!anu_freq_hex)
+		anu_freq_hex = anu_find_freqhex();
 	memset(cmd_buf, 0, 4);
 	memset(rdreg_buf, 0, 4);
 	cmd_buf[0] = 2 | 0x80;
@@ -1129,11 +1170,11 @@ static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb
 	struct ICARUS_WORK workdata;
 	char *nonce_hex;
 	int baud, uninitialised_var(work_division), uninitialised_var(fpga_count);
+	bool anu_freqset = false, tried_u3 = false;
 	struct cgpu_info *icarus;
 	int ret, err, amount, tries, i;
 	bool ok;
 	bool cmr2_ok[CAIRNSMORE2_INTS];
-	bool anu_freqset = false;
 	int cmr2_count;
 
 	if ((sizeof(workdata) << 1) != (sizeof(golden_ob) - 1))
@@ -1185,7 +1226,7 @@ static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb
 	info->nonce_size = ICARUS_READ_SIZE;
 // For CMR2 test each USB Interface
 
-cmr2_retry:
+retry:
 
 	tries = 2;
 	ok = false;
@@ -1193,13 +1234,21 @@ cmr2_retry:
 		icarus_clear(icarus, info);
 		icarus_initialise(icarus, baud);
 
-		if (info->ident == IDENT_ANU) {
-			if (!set_anu_freq(icarus, info)) {
+		if (tried_u3) {
+			uint16_t anu_freq_hex = anu3_find_freqhex();
+
+			set_anu_volt(icarus);
+			if (!set_anu_freq(icarus, info, anu_freq_hex)) {
 				applog(LOG_WARNING, "%s %i: Failed to set frequency, too much overclock?",
 				       icarus->drv->name, icarus->device_id);
 				continue;
 			}
-			set_anu_volt(icarus);
+		} else if (info->ident == IDENT_ANU && !tried_u3) {
+			if (!set_anu_freq(icarus, info, 0)) {
+				applog(LOG_WARNING, "%s %i: Failed to set frequency, too much overclock?",
+				       icarus->drv->name, icarus->device_id);
+				continue;
+			}
 		}
 
 		err = usb_write_ii(icarus, info->intinfo,
@@ -1248,12 +1297,16 @@ cmr2_retry:
 	}
 
 	if (!ok) {
-		if (info->ident != IDENT_CMR2)
-			goto unshin;
+		if (info->ident != IDENT_CMR2) {
+			if (tried_u3)
+				goto unshin;
+			tried_u3 = true;
+			goto retry;
+		}
 
 		if (info->intinfo < CAIRNSMORE2_INTS-1) {
 			info->intinfo++;
-			goto cmr2_retry;
+			goto retry;
 		}
 	} else {
 		if (info->ident == IDENT_CMR2) {
@@ -1266,7 +1319,7 @@ cmr2_retry:
 			cmr2_count++;
 			if (info->intinfo < CAIRNSMORE2_INTS-1) {
 				info->intinfo++;
-				goto cmr2_retry;
+				goto retry;
 			}
 		}
 	}
