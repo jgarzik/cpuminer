@@ -1520,6 +1520,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 			info->rmdev.detect_chip_no = 0;
 		//g_detect_chip_no = (g_detect_chip_no + 1) & MAX_CHIP_NUM;
 
+		usb_buffer_clear(icarus);
 		err = usb_write_ii(icarus, info->intinfo,
 				   (char *)(&workdata), sizeof(workdata), &amount, C_SENDWORK);
 		if (err != LIBUSB_SUCCESS || amount != sizeof(workdata))
@@ -1534,6 +1535,11 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 		if (ret != ICA_NONCE_OK) {
 			applog(LOG_DEBUG, "detect_one get_gold_nonce error, tries = %d", tries);
 			continue;
+		}
+		if (usb_buffer_size(icarus) == 1) {
+			applog(LOG_INFO, "Rock detect found an ANU, skipping");
+			usb_buffer_clear(icarus);
+			break;
 		}
 
 		newname = NULL;
