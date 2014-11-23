@@ -2004,7 +2004,7 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	rev((void *)(&(workdata.work)), ICARUS_WORK_SIZE);
 	if (info->ant) {
 		/* Find an empty slot */
-		for (i = 0; i < ANT_QUEUE_NUM; i++) {
+		for (i = 0; i < 0x1F; i++) {
 			if (!info->antworks[i]) {
 				workid = i;
 				break;
@@ -2021,7 +2021,8 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 		cmr2_commands(icarus);
 
 	// We only want results for the work we are about to send
-	usb_buffer_clear(icarus);
+	if (!info->ant)
+		usb_buffer_clear(icarus);
 
 	err = usb_write_ii(icarus, info->intinfo, (char *)(&workdata), sizeof(workdata), &amount, C_SENDWORK);
 	if (err < 0 || amount != sizeof(workdata)) {
@@ -2046,8 +2047,8 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 		goto out;
 
 	if (info->ant) {
-		workid = nonce_bin[4];
-		if (workid < ANT_QUEUE_NUM && info->antworks[workid]) {
+		workid = nonce_bin[4] & 0x1F;
+		if (info->antworks[workid]) {
 			worked = info->antworks[workid];
 			info->antworks[workid] = NULL;
 		} else
