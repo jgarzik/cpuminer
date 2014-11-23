@@ -363,6 +363,8 @@ struct ICARUS_INFO {
 #define ICARUS_CMR2_DATA_FLASH_ON ((uint8_t)1)
 #define ICARUS_CMR2_CHECK ((uint8_t)0x6D)
 
+#define ANT_UNUSED_SIZE 15
+
 struct ICARUS_WORK {
 	uint8_t midstate[ICARUS_MIDSTATE_SIZE];
 	// These 4 bytes are for CMR2 bitstreams that handle MHz adjustment
@@ -370,7 +372,8 @@ struct ICARUS_WORK {
 	uint8_t data;
 	uint8_t cmd;
 	uint8_t prefix;
-	uint8_t unused[ICARUS_UNUSED_SIZE];
+	uint8_t unused[ANT_UNUSED_SIZE];
+	uint8_t id; // Used only by ANT, otherwise unused by other icarus
 	uint8_t work[ICARUS_WORK_SIZE];
 };
 
@@ -1803,7 +1806,7 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 
 	workdata.unused[ICARUS_UNUSED_SIZE - 3] = info->rmdev.chip[chip_no].freq; //icarus->freq/10 - 1; ;
 	workdata.unused[ICARUS_UNUSED_SIZE - 2] = chip_no ;
-	workdata.unused[ICARUS_UNUSED_SIZE - 1] = 0x55;
+	workdata.id = 0x55;
 
 	if (opt_debug) {
 		ob_hex = bin2hex((void *)(work->data), 128);
@@ -1958,7 +1961,7 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
 	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
-	int ret, err, amount;
+	int ret, err, amount, i;
 	unsigned char nonce_bin[ICARUS_BUF_SIZE];
 	struct ICARUS_WORK workdata;
 	char *ob_hex;
@@ -1967,8 +1970,9 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	struct timeval tv_start, tv_finish, elapsed;
 	int curr_hw_errors;
 	bool was_hw_error;
-	struct work *work;
+	struct work *work, *worked;
 	int64_t estimate_hashes;
+	uint8_t workid = 0;
 
 	if (unlikely(share_work_tdiff(icarus) > info->fail_time)) {
 		if (info->failing) {
@@ -1992,12 +1996,25 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 
-	work = get_work(thr, thr->id);
+	worked = work = get_work(thr, thr->id);
 	memset((void *)(&workdata), 0, sizeof(workdata));
 	memcpy(&(workdata.midstate), work->midstate, ICARUS_MIDSTATE_SIZE);
 	memcpy(&(workdata.work), work->data + ICARUS_WORK_DATA_OFFSET, ICARUS_WORK_SIZE);
 	rev((void *)(&(workdata.midstate)), ICARUS_MIDSTATE_SIZE);
 	rev((void *)(&(workdata.work)), ICARUS_WORK_SIZE);
+	if (info->ant) {
+		/* Find an empty slot */
+		for (i = 0; i < ANT_QUEUE_NUM; i++) {
+			if (!info->antworks[i]) {
+				workid = i;
+				break;
+			}
+		}
+		if (info->antworks[workid])
+			free_work(info->antworks[workid]);
+		info->antworks[workid] = work;
+		workdata.id = workid;
+	}
 
 	if (info->speed_next_work || info->flash_next_work)
 		cmr2_commands(icarus);
@@ -2027,6 +2044,13 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	if (ret == ICA_NONCE_ERROR)
 		goto out;
 
+	if (info->ant) {
+		workid = nonce_bin[4];
+		if (workid < ANT_QUEUE_NUM && info->antworks[workid]) {
+			worked = info->antworks[workid];
+			info->antworks[workid] = NULL;
+		}
+	}
 	// aborted before becoming idle, get new work
 	if (ret == ICA_NONCE_TIMEOUT || ret == ICA_NONCE_RESTART) {
 		if (info->u3)
@@ -2097,7 +2121,7 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	if (info->do_icarus_timing && !was_hw_error)
 		process_history(icarus, info, nonce, hash_count, &elapsed, &tv_start);
 out:
-	free_work(work);
+	free_work(worked);
 
 	return hash_count;
 }
