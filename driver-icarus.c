@@ -1029,9 +1029,10 @@ static uint16_t anu3_find_freqhex(void)
 		freq = ANT_U3_DEFFREQ;
 
 	do {
-		u3freq = u3freqtable[i++].freq;
+		u3freq = u3freqtable[i].freq;
 		if (u3freq <= freq)
 			anu_freq_hex = u3freqtable[i].hex;
+		i++;
 	} while (u3freq < ANT_U3_MAXFREQ);
 
 	return anu_freq_hex;
