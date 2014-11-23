@@ -215,8 +215,9 @@ static bool no_work;
 #ifdef USE_ICARUS
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
-int opt_anu_volt = 750;
-float opt_anu_freq;
+float opt_anu_freq = 250;
+float opt_au3_freq = 225;
+int opt_au3_volt = 750;
 float opt_rock_freq = 270;
 #endif
 bool opt_worktime;
@@ -1079,6 +1080,19 @@ static char *set_float_125_to_500(const char *arg, float *i)
 	return NULL;
 }
 
+static char *set_float_100_to_250(const char *arg, float *i)
+{
+	char *err = opt_set_floatval(arg, i);
+
+	if (err)
+		return err;
+
+	if (*i < 100 || *i > 250)
+		return "Value out of range";
+
+	return NULL;
+}
+
 static char *set_null(const char __maybe_unused *arg)
 {
 	return NULL;
@@ -1089,10 +1103,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_ICARUS
 	OPT_WITH_ARG("--anu-freq",
 		     set_float_125_to_500, &opt_show_floatval, &opt_anu_freq,
-		     "Set AntminerU frequency in MHz, range 125-500"),
-	OPT_WITH_ARG("--anu-volt",
-		     set_int_0_to_9999, &opt_show_intval, &opt_anu_volt,
-		     "Set AntminerU voltage in mv, range 725-850, 0 to not set"),
+		     "Set AntminerU1/2 frequency in MHz, range 125-500"),
 #endif
 	OPT_WITH_ARG("--api-allow",
 		     opt_set_charp, NULL, &opt_api_allow,
@@ -1130,6 +1141,14 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--api-host",
 		     opt_set_charp, NULL, &opt_api_host,
 		     "Specify API listen address, default: 0.0.0.0"),
+#ifdef USE_ICARUS
+	OPT_WITH_ARG("--au3-freq",
+		     set_float_100_to_250, &opt_show_floatval, &opt_au3_freq,
+		     "Set AntminerU3 frequency in MHz, range 100-250"),
+	OPT_WITH_ARG("--au3-volt",
+		     set_int_0_to_9999, &opt_show_intval, &opt_au3_volt,
+		     "Set AntminerU3 voltage in mv, range 725-850, 0 to not set"),
+#endif
 #ifdef USE_AVALON
 	OPT_WITHOUT_ARG("--avalon-auto",
 			opt_set_bool, &opt_avalon_auto,
@@ -5072,7 +5091,8 @@ void write_config(FILE *fcfg)
 			}
 
 			if (opt->type & OPT_HASARG &&
-			    ((void *)opt->cb_arg == (void *)set_float_125_to_500)) {
+			    (((void *)opt->cb_arg == (void *)set_float_125_to_500) ||
+			     (void *)opt->cb_arg == (void *)set_float_100_to_250)) {
 				fprintf(fcfg, ",\n\"%s\" : \"%.1f\"", p+2, *(float *)opt->u.arg);
 				continue;
 			}

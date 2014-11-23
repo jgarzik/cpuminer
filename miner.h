@@ -994,8 +994,9 @@ extern bool opt_restart;
 #ifdef USE_ICARUS
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
-extern int opt_anu_volt;
 extern float opt_anu_freq;
+extern float opt_au3_freq;
+extern int opt_au3_volt;
 extern float opt_rock_freq;
 #endif
 extern bool opt_worktime;

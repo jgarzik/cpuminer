@@ -144,6 +144,7 @@ enum sub_ident {
 	IDENT_ANT,
 	IDENT_ANU,
 	IDENT_AS2,
+	IDENT_AU3,
 	IDENT_AVA,
 	IDENT_AV2,
 	IDENT_BAJ,
