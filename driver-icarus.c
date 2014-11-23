@@ -73,9 +73,11 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define ICARUS_READ_TIME(baud) (0.001)
 
 // USB ms timeout to wait - user specified timeouts are multiples of this
-#define ICARUS_WAIT_TIMEOUT 100
+#define ICA_WAIT_TIMEOUT 100
 #define ANT_WAIT_TIMEOUT 10
 #define AU3_WAIT_TIMEOUT 1
+#define ICARUS_WAIT_TIMEOUT (info->u3 ? AU3_WAIT_TIMEOUT : (info->ant ? ANT_WAIT_TIMEOUT : ICA_WAIT_TIMEOUT))
+
 #define ICARUS_CMR2_TIMEOUT 1
 
 // Defined in multiples of ICARUS_WAIT_TIMEOUT
