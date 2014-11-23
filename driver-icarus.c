@@ -2023,6 +2023,9 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 
 	// aborted before becoming idle, get new work
 	if (ret == ICA_NONCE_TIMEOUT || ret == ICA_NONCE_RESTART) {
+		if (info->u3)
+			goto out;
+
 		timersub(&tv_finish, &tv_start, &elapsed);
 
 		// ONLY up to just when it aborted
@@ -2051,8 +2054,12 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 		info->failing = false;
 	was_hw_error = (curr_hw_errors < icarus->hw_errors);
 
+	/* U3s return shares fast enough to use just that for hashrate
+	 * calculation, otherwise the result is inaccurate instead. */
 	if (was_hw_error)
 		hash_count = 0;
+	else if (info->u3)
+		hash_count =  0xffffffff;
 	else {
 		hash_count = (nonce & info->nonce_mask);
 		hash_count++;
