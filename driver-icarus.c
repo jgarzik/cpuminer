@@ -120,7 +120,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define NANOSEC 1000000000.0
 #define ANTMINERUSB_HASH_MHZ 0.000000125
 #define ANTMINERUSB_HASH_TIME (ANTMINERUSB_HASH_MHZ / (double)(opt_anu_freq))
-#define ANTU3_HASH_MHZ 0.0000000033
+#define ANTU3_HASH_MHZ 0.0000000030
 #define ANTU3_HASH_TIME (ANTU3_HASH_MHZ / (double)(opt_au3_freq))
 
 #define CAIRNSMORE2_INTS 4
@@ -817,8 +817,8 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 			timing_mode_str(info->timing_mode),
 			info->read_time, info->read_time_limit, info->Hs);
 
-	/* Set the time to detect a dead device to 25 full nonce ranges. */
-	fail_time = info->Hs * 0xffffffffull * 25.0;
+	/* Set the time to detect a dead device to 30 full nonce ranges. */
+	fail_time = info->Hs * 0xffffffffull * 30.0;
 	/* Integer accuracy is definitely enough. */
 	info->fail_time = fail_time;
 }
