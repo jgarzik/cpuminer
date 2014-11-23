@@ -1049,6 +1049,36 @@ static bool set_anu_freq(struct cgpu_info *icarus, struct ICARUS_INFO *info)
 	return true;
 }
 
+static void set_anu_volt(struct cgpu_info *icarus)
+{
+	unsigned char voltage_data[2], cmd_buf[4];
+	char volt_buf[8];
+	int err, amount;
+
+	/* Allow a zero setting to imply not to try and set voltage */
+	if (!opt_anu_volt)
+		return;
+	if (opt_anu_volt < 725 || opt_anu_volt > 850) {
+		applog(LOG_WARNING, "Invalid ANU voltage %d specified, must be 725-850", opt_anu_volt);
+		return;
+	}
+	sprintf(volt_buf, "%04d", opt_anu_volt);
+	hex2bin(voltage_data, volt_buf, 2);
+	cmd_buf[0] = 0xaa;
+	cmd_buf[1] = voltage_data[0];
+	cmd_buf[1] &=0x0f;
+	cmd_buf[1] |=0xb0;
+	cmd_buf[2] = voltage_data[1];
+	cmd_buf[3] = 0x00; //0-7
+	cmd_buf[3] = crc5(cmd_buf, 4*8 - 5);
+	cmd_buf[3] |= 0xc0;
+	applog(LOG_INFO, "Send ANU voltage %02x%02x%02x%02x", cmd_buf[0], cmd_buf[1], cmd_buf[2], cmd_buf[3]);
+	cgsleep_ms(500);
+	err = usb_write(icarus, (char * )cmd_buf, 4, &amount, C_ANU_SEND_VOLT);
+	if (err != LIBUSB_SUCCESS || amount != 4)
+		applog(LOG_ERR, "Write voltage Comms error (werr=%d amount=%d)", err, amount);
+}
+
 static void rock_init_last_received_task_complete_time(struct ICARUS_INFO *info)
 {
 	int i;
@@ -1163,10 +1193,13 @@ cmr2_retry:
 		icarus_clear(icarus, info);
 		icarus_initialise(icarus, baud);
 
-		if (info->ident == IDENT_ANU && !set_anu_freq(icarus, info)) {
-			applog(LOG_WARNING, "%s %i: Failed to set frequency, too much overclock?",
-			       icarus->drv->name, icarus->device_id);
-			continue;
+		if (info->ident == IDENT_ANU) {
+			if (!set_anu_freq(icarus, info)) {
+				applog(LOG_WARNING, "%s %i: Failed to set frequency, too much overclock?",
+				       icarus->drv->name, icarus->device_id);
+				continue;
+			}
+			set_anu_volt(icarus);
 		}
 
 		err = usb_write_ii(icarus, info->intinfo,

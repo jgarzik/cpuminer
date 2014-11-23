@@ -215,6 +215,7 @@ static bool no_work;
 #ifdef USE_ICARUS
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
+int opt_anu_volt = 750;
 float opt_anu_freq = 200;
 float opt_rock_freq = 270;
 #endif
@@ -1088,7 +1089,10 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_ICARUS
 	OPT_WITH_ARG("--anu-freq",
 		     set_float_125_to_500, &opt_show_floatval, &opt_anu_freq,
-		     "Set AntminerU1 frequency in MHz, range 125-500"),
+		     "Set AntminerU frequency in MHz, range 125-500"),
+	OPT_WITH_ARG("--anu-volt",
+		     set_int_0_to_9999, &opt_show_intval, &opt_anu_volt,
+		     "Set AntminerU voltage in mv, range 725-850, 0 to not set"),
 #endif
 	OPT_WITH_ARG("--api-allow",
 		     opt_set_charp, NULL, &opt_api_allow,
