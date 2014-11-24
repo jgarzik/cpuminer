@@ -2663,7 +2663,7 @@ static void get_statline(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
 	suffix_string(dh64, displayed_hashes, sizeof(displayed_hashes), 4);
 	suffix_string(dr64, displayed_rolling, sizeof(displayed_rolling), 4);
 
-	snprintf(buf, bufsiz, "%s%d ", cgpu->drv->name, cgpu->device_id);
+	snprintf(buf, bufsiz, "%s %d ", cgpu->drv->name, cgpu->device_id);
 	cgpu->drv->get_statline_before(buf, bufsiz, cgpu);
 	tailsprintf(buf, bufsiz, "(%ds):%s (avg):%sh/s | A:%.0f R:%.0f HW:%d WU:%.1f/m",
 		opt_log_interval,
@@ -7279,7 +7279,7 @@ static void submit_work_async(struct work *work)
 
 void inc_hw_errors(struct thr_info *thr)
 {
-	applog(LOG_INFO, "%s%d: invalid nonce - HW error", thr->cgpu->drv->name,
+	applog(LOG_INFO, "%s %d: invalid nonce - HW error", thr->cgpu->drv->name,
 	       thr->cgpu->device_id);
 
 	mutex_lock(&stats_lock);
@@ -8505,16 +8505,14 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			struct thr_info *thr = cgpu->thr[0];
 			enum dev_enable *denable;
 			char dev_str[8];
-			int gpu;
 
 			if (!thr)
 				continue;
 
 			cgpu->drv->get_stats(cgpu);
 
-			gpu = cgpu->device_id;
 			denable = &cgpu->deven;
-			snprintf(dev_str, sizeof(dev_str), "%s%d", cgpu->drv->name, gpu);
+			snprintf(dev_str, sizeof(dev_str), "%s %d", cgpu->drv->name, cgpu->device_id);
 
 			/* Thread is waiting on getwork or disabled */
 			if (thr->getwork || *denable == DEV_DISABLED)
