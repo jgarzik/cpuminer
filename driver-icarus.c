@@ -2375,7 +2375,12 @@ static void icarus_statline_before(char *buf, size_t bufsiz, struct cgpu_info *c
 {
 	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(cgpu->device_data);
 
-	if (info->ident == IDENT_CMR2 && info->cmr2_speed > 0)
+	if (info->ant) {
+		if (info->u3)
+			tailsprintf(buf, bufsiz, "%3.0fMHz %3dmV", opt_au3_freq, opt_au3_volt);
+		else
+			tailsprintf(buf, bufsiz, "%3.0fMHz", opt_anu_freq);
+	} else if (info->ident == IDENT_CMR2 && info->cmr2_speed > 0)
 		tailsprintf(buf, bufsiz, "%5.1fMhz", (float)(info->cmr2_speed) * ICARUS_CMR2_SPEED_FACTOR);
 }
 
