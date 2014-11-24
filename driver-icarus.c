@@ -120,7 +120,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define NANOSEC 1000000000.0
 #define ANTMINERUSB_HASH_MHZ 0.000000125
 #define ANTMINERUSB_HASH_TIME (ANTMINERUSB_HASH_MHZ / (double)(opt_anu_freq))
-#define ANTU3_HASH_MHZ 0.0000000030
+#define ANTU3_HASH_MHZ 0.0000000032
 #define ANTU3_HASH_TIME (ANTU3_HASH_MHZ / (double)(opt_au3_freq))
 
 #define CAIRNSMORE2_INTS 4
@@ -1971,7 +1971,7 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	struct timeval tv_start, tv_finish, elapsed;
 	int curr_hw_errors;
 	bool was_hw_error;
-	struct work *work, *worked = NULL;
+	struct work *work;
 	int64_t estimate_hashes;
 	uint8_t workid = 0;
 
@@ -2011,15 +2011,13 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 			free_work(info->antworks[workid]);
 		info->antworks[workid] = work;
 		workdata.id = workid;
-	} else
-		worked = work;
+	}
 
 	if (info->speed_next_work || info->flash_next_work)
 		cmr2_commands(icarus);
 
 	// We only want results for the work we are about to send
-	if (!info->ant)
-		usb_buffer_clear(icarus);
+	usb_buffer_clear(icarus);
 
 	err = usb_write_ii(icarus, info->intinfo, (char *)(&workdata), sizeof(workdata), &amount, C_SENDWORK);
 	if (err < 0 || amount != sizeof(workdata)) {
@@ -2036,8 +2034,10 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 			icarus->drv->name, icarus->device_id, ob_hex);
 		free(ob_hex);
 	}
-
-	/* Icarus will return 4 bytes (ICARUS_READ_SIZE) nonces or nothing */
+more_nonces:
+	/* Icarus will return nonces or nothing. If we know we have enough data
+	 * for a response in the buffer already, there will be no usb read
+	 * performed. */
 	memset(nonce_bin, 0, sizeof(nonce_bin));
 	ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, thr, info->read_time);
 	if (ret == ICA_NONCE_ERROR)
@@ -2071,27 +2071,26 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 
 	if (info->ant) {
 		workid = nonce_bin[4] & 0x1F;
-		if (info->antworks[workid]) {
-			worked = info->antworks[workid];
-			info->antworks[workid] = NULL;
-		} else
+		if (info->antworks[workid])
+			work = info->antworks[workid];
+		else
 			goto out;
 	}
 
 	memcpy((char *)&nonce, nonce_bin, ICARUS_READ_SIZE);
 	nonce = htobe32(nonce);
 	curr_hw_errors = icarus->hw_errors;
-	if (submit_nonce(thr, worked, nonce))
+	if (submit_nonce(thr, work, nonce))
 		info->failing = false;
 	was_hw_error = (curr_hw_errors < icarus->hw_errors);
 
 	/* U3s return shares fast enough to use just that for hashrate
 	 * calculation, otherwise the result is inaccurate instead. */
-	if (was_hw_error)
-		hash_count = 0;
-	else if (info->u3)
-		hash_count =  0xffffffff;
-	else {
+	if (info->ant) {
+		hash_count += 0xffffffff;
+		if (usb_buffer_size(icarus) >= ANT_READ_SIZE)
+			goto more_nonces;
+	} else {
 		hash_count = (nonce & info->nonce_mask);
 		hash_count++;
 		hash_count *= info->fpga_count;
@@ -2122,8 +2121,8 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	if (info->do_icarus_timing && !was_hw_error)
 		process_history(icarus, info, nonce, hash_count, &elapsed, &tv_start);
 out:
-	if (worked)
-		free_work(worked);
+	if (!info->ant)
+		free_work(work);
 
 	return hash_count;
 }
