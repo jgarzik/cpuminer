@@ -2045,7 +2045,7 @@ more_nonces:
 
 	// aborted before becoming idle, get new work
 	if (ret == ICA_NONCE_TIMEOUT || ret == ICA_NONCE_RESTART) {
-		if (info->u3)
+		if (info->ant)
 			goto out;
 
 		timersub(&tv_finish, &tv_start, &elapsed);
