@@ -630,7 +630,7 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 		return ICA_NONCE_ERROR;
 	}
 
-	if (amt >= ICARUS_READ_SIZE)
+	if (amt >= info->nonce_size)
 		return ICA_NONCE_OK;
 
 	rc = SECTOMS(tdiff(tv_finish, tv_start));
