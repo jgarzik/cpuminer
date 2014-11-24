@@ -334,6 +334,7 @@ struct ICARUS_INFO {
 	uint64_t nonces_correction[NONCE_CORRECTION_TIMES];
 
 	struct work **antworks;
+	int nonces;
 	int workid;
 	bool ant;
 	bool u3;
@@ -2087,7 +2088,7 @@ more_nonces:
 	/* U3s return shares fast enough to use just that for hashrate
 	 * calculation, otherwise the result is inaccurate instead. */
 	if (info->ant) {
-		hash_count += 0xffffffff;
+		info->nonces++;
 		if (usb_buffer_size(icarus) >= ANT_READ_SIZE)
 			goto more_nonces;
 	} else {
@@ -2123,6 +2124,14 @@ more_nonces:
 out:
 	if (!info->ant)
 		free_work(work);
+	else {
+		/* Ant USBs free the work themselves. Return only one full
+		 * nonce worth on each pass to smooth out displayed hashrate */
+		if (info->nonces) {
+			hash_count = 0xffffffff;
+			info->nonces--;
+		}
+	}
 
 	return hash_count;
 }
