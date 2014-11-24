@@ -6038,8 +6038,6 @@ static bool parse_stratum_response(struct pool *pool, char *s)
 	}
 
 	res_val = json_object_get(val, "result");
-	if (!res_val)
-		goto out;
 	err_val = json_object_get(val, "error");
 	id_val = json_object_get(val, "id");
 
@@ -6071,6 +6069,8 @@ static bool parse_stratum_response(struct pool *pool, char *s)
 	if (!sshare) {
 		double pool_diff;
 
+		if (!res_val)
+			goto out;
 		/* Since the share is untracked, we can only guess at what the
 		 * work difficulty is based on the current pool diff. */
 		cg_rlock(&pool->data_lock);
