@@ -349,7 +349,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 				}
 			}
 
-			submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce);
+			if (submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce))
+				info->failing = false;
 			break;
 		case AVA2_P_STATUS:
 			applog(LOG_DEBUG, "Avalon2: AVA2_P_STATUS");
@@ -928,6 +929,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 	struct timeval current_stratum;
 	struct cgpu_info *avalon2 = thr->cgpu;
 	struct avalon2_info *info = avalon2->device_data;
+	int stdiff;
 	int64_t h;
 	int i;
 
@@ -935,6 +937,21 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		applog(LOG_ERR, "%s%d: Device disappeared, shutting down thread",
 		       avalon2->drv->name, avalon2->device_id);
 		return -1;
+	}
+
+	stdiff = share_work_tdiff(avalon2);
+	if (unlikely(info->failing)) {
+		if (stdiff > 60) {
+			applog(LOG_ERR, "%s%d: No valid shares for over 1 minute, shutting down thread",
+			       avalon2->drv->name, avalon2->device_id);
+			return -1;
+		}
+	} else if (stdiff > 10) {
+		applog(LOG_ERR, "%s%d: No valid shares for over 10 seconds, issuing a USB reset",
+		       avalon2->drv->name, avalon2->device_id);
+		usb_reset(avalon2);
+		info->failing = true;
+
 	}
 
 	/* Stop polling the device if there is no stratum in 3 minutes, network is down */
