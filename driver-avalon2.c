@@ -465,8 +465,8 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 
 	/* Cap maximum diff in order to still get shares */
 	diff = pool->swork.diff;
-	if (diff > 32)
-		diff = 32;
+	if (diff > 64)
+		diff = 64;
 	else if (unlikely(diff < 1))
 		diff = 1;
 
@@ -935,27 +935,27 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		return -1;
 	}
 
-	stdiff = share_work_tdiff(avalon2);
-	if (unlikely(info->failing)) {
-		if (stdiff > 60) {
-			applog(LOG_ERR, "%s%d: No valid shares for over 1 minute, shutting down thread",
-			       avalon2->drv->name, avalon2->device_id);
-			return -1;
-		}
-	} else if (stdiff > 10) {
-		applog(LOG_ERR, "%s%d: No valid shares for over 10 seconds, issuing a USB reset",
-		       avalon2->drv->name, avalon2->device_id);
-		usb_reset(avalon2);
-		info->failing = true;
-
-	}
-
 	/* Stop polling the device if there is no stratum in 3 minutes, network is down */
 	cgtime(&current_stratum);
 	if (tdiff(&current_stratum, &(info->last_stratum)) > (double)(3.0 * 60.0))
 		return 0;
 
 	polling(thr, avalon2, info);
+
+	stdiff = share_work_tdiff(avalon2);
+	if (unlikely(info->failing)) {
+		if (stdiff > 120) {
+			applog(LOG_ERR, "%s%d: No valid shares for over 2 minutes, shutting down thread",
+			       avalon2->drv->name, avalon2->device_id);
+			return -1;
+		}
+	} else if (stdiff > 60) {
+		applog(LOG_ERR, "%s%d: No valid shares for over 1 minute, issuing a USB reset",
+		       avalon2->drv->name, avalon2->device_id);
+		usb_reset(avalon2);
+		info->failing = true;
+
+	}
 
 	h = 0;
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
