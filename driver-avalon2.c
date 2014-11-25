@@ -461,6 +461,14 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 	unsigned char target[32];
 	int job_id_len, n2size;
 	unsigned short crc;
+	int diff;
+
+	/* Cap maximum diff in order to still get shares */
+	diff = pool->swork.diff;
+	if (diff > 32)
+		diff = 32;
+	else if (unlikely(diff < 1))
+		diff = 1;
 
 	/* Send out the first stratum message STATIC */
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message STATIC: %d, %d, %d, %d, %d",
@@ -486,7 +494,7 @@ static void avalon2_stratum_pkgs(struct cgpu_info *avalon2, struct pool *pool)
 	tmp = be32toh(pool->merkles);
 	memcpy(pkg.data + 16, &tmp, 4);
 
-	tmp = be32toh((int)pool->swork.diff);
+	tmp = be32toh(diff);
 	memcpy(pkg.data + 20, &tmp, 4);
 
 	tmp = be32toh((int)pool->pool_no);
