@@ -405,6 +405,16 @@ fi
 AM_CONDITIONAL([HAS_SP30], [test x$sp30 = xyes])
 
 
+forcecombo="no"
+
+AC_ARG_ENABLE([forcecombo],
+	[AC_HELP_STRING([--enable-forcecombo],[Allow combinations of drivers not intended to be built together(default disabled)])],
+	[forcecombo=$enableval]
+	)
+if test "x$forcecombo" = xyes; then
+	standalone="no"
+fi
+
 curses="auto"
 
 AC_ARG_WITH([curses],
@@ -755,12 +765,16 @@ fi
 
 #Add any new device to this, along with a no on the end of the test
 if test "x$avalon$avalon2$bab$bflsc$bitforce$bitfury$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$sp10$sp30" = xnonononononononononononononononononononono; then
+	echo
 	AC_MSG_ERROR([No mining devices configured in])
+	echo
 fi
 
 if test "x$standalone" = xyes; then
 	if test $drivercount != x; then
+		echo
 		AC_MSG_ERROR([You have configured more than one driver in with a driver that is designed to be standalone only (see ./configure --help)])
+		echo
 	fi
 fi
 
