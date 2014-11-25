@@ -1,3 +1,49 @@
+Version 4.8.0 - 25th November 2014
+
+- Allow forcing of building driver combinations with --enable-forcecombo
+- Put spaces between name and id in avalon2 and icarus
+- Relax detection of a failing ava2 to more than 1 minute and perform the test
+after polling for results
+- Cap maximum diff on ava2 in order to still get shares
+- Put space between device name and id to prevent device names with numbers in
+them confusing the display
+- USB write errors are always fatal so they should be treated as such on ava2
+- Issue a usb reset for ava2 that is not returning valid shares and then drop it
+if it persists for over a minute
+- Process share results without a result value
+- Damp out hashrate displayed for antminer USBs
+- Add voltage and speed where relevant to antminer USBs
+- Don't estimate time on any antminer usb during a timeout
+- Return icarus nonce ok only when the nonce size matches the device or more
+- Don't discard old workids until we cycle back to them on antusb and look for
+more nonces in the buffer
+- Adjust ant usb timing for queued work
+- Use a cyclical list for the ant queued work
+- Mask and limit workid for antusb and dont clear buffer
+- Check the nonce on the worked item, not the submitted work
+- Skip over unfinished work that we can't free in ant usb
+- Use a workid and array if possible for the small ant usb work queue
+- Create an array for antworks for antminer usb devices
+- On U3 calculate hashrate purely on shares, not timeouts
+- Add switches for AU3
+- Adjust icarus wait timeout according to device
+- Differentiate U3 from U1/2 as a separate driver with different parameters and
+adjust timing accordingly
+- Skip ANUs detected in rock detect
+- Try U3 after trying other icarus options
+- Add rudimentary ANU voltage setting support for U3
+- Fix ignoring unprefixed v6 address in api allow list
+- Fix minor typos in Spondoolies SP10 and SP30 drivers
+- Implement a basic rock_flush function to discard the base work we are rolling
+work from.
+- Task_no for rockminer from the nonce bin should simply be masked
+- Change rbox default correction times to 5 in a revised frequency order
+- Change default frequency on T1 to 330
+- Reinstate last received check and resend in rockminer, being more lenient at 2
+seconds to allow for dither errors at 1
+- Roll work for the rbox when possible
+
+
 Version 4.7.1 - 4th November 2014
 
 - Selectively yield on dropping a lock only on single CPU platforms
