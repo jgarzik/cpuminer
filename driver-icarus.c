@@ -625,7 +625,7 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 	cgtime(tv_finish);
 
 	if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
-		applog(LOG_ERR, "%s%i: Comms error (rerr=%d amt=%d)", icarus->drv->name,
+		applog(LOG_ERR, "%s %i: Comms error (rerr=%d amt=%d)", icarus->drv->name,
 		       icarus->device_id, err, amt);
 		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		return ICA_NONCE_ERROR;
@@ -1081,32 +1081,32 @@ static bool set_anu_freq(struct cgpu_info *icarus, struct ICARUS_INFO *info, uin
 	rdreg_buf[2] = 0x04;	//8-15
 	rdreg_buf[3] = crc5(rdreg_buf, 27);
 
-	applog(LOG_DEBUG, "%s%i: Send frequency %02x%02x%02x%02x", icarus->drv->name, icarus->device_id,
+	applog(LOG_DEBUG, "%s %i: Send frequency %02x%02x%02x%02x", icarus->drv->name, icarus->device_id,
 	       cmd_buf[0], cmd_buf[1], cmd_buf[2], cmd_buf[3]);
 	err = usb_write_ii(icarus, info->intinfo, (char *)cmd_buf, 4, &amount, C_ANU_SEND_CMD);
 	if (err != LIBUSB_SUCCESS || amount != 4) {
-		applog(LOG_ERR, "%s%i: Write freq Comms error (werr=%d amount=%d)",
+		applog(LOG_ERR, "%s %i: Write freq Comms error (werr=%d amount=%d)",
 		       icarus->drv->name, icarus->device_id, err, amount);
 		return false;
 	}
 	err = usb_read_ii_timeout(icarus, info->intinfo, buf, 512, &amount, 100, C_GETRESULTS);
 	if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
-		applog(LOG_ERR, "%s%i: Read freq Comms error (rerr=%d amount=%d)",
+		applog(LOG_ERR, "%s %i: Read freq Comms error (rerr=%d amount=%d)",
 		       icarus->drv->name, icarus->device_id, err, amount);
 		return false;
 	}
 
-	applog(LOG_DEBUG, "%s%i: Send freq getstatus %02x%02x%02x%02x", icarus->drv->name, icarus->device_id,
+	applog(LOG_DEBUG, "%s %i: Send freq getstatus %02x%02x%02x%02x", icarus->drv->name, icarus->device_id,
 	       rdreg_buf[0], rdreg_buf[1], rdreg_buf[2], rdreg_buf[3]);
 	err = usb_write_ii(icarus, info->intinfo, (char *)cmd_buf, 4, &amount, C_ANU_SEND_RDREG);
 	if (err != LIBUSB_SUCCESS || amount != 4) {
-		applog(LOG_ERR, "%s%i: Write freq Comms error (werr=%d amount=%d)",
+		applog(LOG_ERR, "%s %i: Write freq Comms error (werr=%d amount=%d)",
 		       icarus->drv->name, icarus->device_id, err, amount);
 		return false;
 	}
 	err = usb_read_ii_timeout(icarus, info->intinfo, buf, 512, &amount, 100, C_GETRESULTS);
 	if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
-		applog(LOG_ERR, "%s%i: Read freq Comms error (rerr=%d amount=%d)",
+		applog(LOG_ERR, "%s %i: Read freq Comms error (rerr=%d amount=%d)",
 		       icarus->drv->name, icarus->device_id, err, amount);
 		return false;
 	}
@@ -1382,11 +1382,11 @@ retry:
 
 	update_usb_stats(icarus);
 
-	applog(LOG_INFO, "%s%d: Found at %s",
+	applog(LOG_INFO, "%s %d: Found at %s",
 		icarus->drv->name, icarus->device_id, icarus->device_path);
 
 	if (info->ident == IDENT_CMR2) {
-		applog(LOG_INFO, "%s%d: with %d Interface%s",
+		applog(LOG_INFO, "%s %d: with %d Interface%s",
 				icarus->drv->name, icarus->device_id,
 				cmr2_count, cmr2_count > 1 ? "s" : "");
 
@@ -1397,7 +1397,7 @@ retry:
 		}
 	}
 
-	applog(LOG_DEBUG, "%s%d: Init baud=%d work_division=%d fpga_count=%d",
+	applog(LOG_DEBUG, "%s %d: Init baud=%d work_division=%d fpga_count=%d",
 		icarus->drv->name, icarus->device_id, baud, work_division, fpga_count);
 
 	info->baud = baud;
@@ -1421,7 +1421,7 @@ retry:
 
 			cgtmp = usb_copy_cgpu(icarus);
 			if (!cgtmp) {
-				applog(LOG_ERR, "%s%d: Init failed initinfo %d",
+				applog(LOG_ERR, "%s %d: Init failed initinfo %d",
 						icarus->drv->name, icarus->device_id, i);
 				continue;
 			}
@@ -1534,7 +1534,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 	rev((void *)(&(workdata.work)), ICARUS_WORK_SIZE);
 	if (opt_debug) {
 		ob_hex = bin2hex((void *)(&workdata), sizeof(workdata));
-		applog(LOG_WARNING, "%s%d: send_gold_nonce %s",
+		applog(LOG_WARNING, "%s %d: send_gold_nonce %s",
 			icarus->drv->name, icarus->device_id, ob_hex);
 		free(ob_hex);
 	}
@@ -1691,7 +1691,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 	icarus->drv->flush_work = &rock_flush;
 	mutex_init(&info->lock);
 
-	applog(LOG_INFO, "%s%d: Found at %s",
+	applog(LOG_INFO, "%s %d: Found at %s",
 			  icarus->drv->name, icarus->device_id,
 			  icarus->device_path);
 
@@ -1812,7 +1812,7 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 
 	if (opt_debug) {
 		ob_hex = bin2hex((void *)(work->data), 128);
-		applog(LOG_WARNING, "%s%d: work->data %s",
+		applog(LOG_WARNING, "%s %d: work->data %s",
 			icarus->drv->name, icarus->device_id, ob_hex);
 		free(ob_hex);
 	}
@@ -1823,7 +1823,7 @@ void rock_send_task(unsigned char chip_no, unsigned int current_task_id, struct 
 	err = usb_write_ii(icarus, info->intinfo, (char *)(&workdata), sizeof(workdata), &amount, C_SENDWORK);
 
 	if (err < 0 || amount != sizeof(workdata)) {
-		applog(LOG_ERR, "%s%i: Comms error (werr=%d amt=%d)",
+		applog(LOG_ERR, "%s %i: Comms error (werr=%d amt=%d)",
 				icarus->drv->name, icarus->device_id, err, amount);
 		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		icarus_initialise(icarus, info->baud);
@@ -1948,7 +1948,7 @@ static void process_history(struct cgpu_info *icarus, struct ICARUS_INFO *info, 
 		else if (info->timing_mode == MODE_SHORT)
 			info->do_icarus_timing = false;
 
-		applog(LOG_WARNING, "%s%d Re-estimate: Hs=%e W=%e read_time=%dms%s fullnonce=%.3fs",
+		applog(LOG_WARNING, "%s %d Re-estimate: Hs=%e W=%e read_time=%dms%s fullnonce=%.3fs",
 				icarus->drv->name, icarus->device_id, Hs, W, read_time,
 				limited ? " (limited)" : "", fullnonce);
 	}
@@ -2022,7 +2022,7 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 
 	err = usb_write_ii(icarus, info->intinfo, (char *)(&workdata), sizeof(workdata), &amount, C_SENDWORK);
 	if (err < 0 || amount != sizeof(workdata)) {
-		applog(LOG_ERR, "%s%i: Comms error (werr=%d amt=%d)",
+		applog(LOG_ERR, "%s %i: Comms error (werr=%d amt=%d)",
 				icarus->drv->name, icarus->device_id, err, amount);
 		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		icarus_initialise(icarus, info->baud);
@@ -2031,7 +2031,7 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 
 	if (opt_debug) {
 		ob_hex = bin2hex((void *)(&workdata), sizeof(workdata));
-		applog(LOG_DEBUG, "%s%d: sent %s",
+		applog(LOG_DEBUG, "%s %d: sent %s",
 			icarus->drv->name, icarus->device_id, ob_hex);
 		free(ob_hex);
 	}
@@ -2061,7 +2061,7 @@ more_nonces:
 		if (unlikely(estimate_hashes > 0xffffffff))
 			estimate_hashes = 0xffffffff;
 
-		applog(LOG_DEBUG, "%s%d: no nonce = 0x%08lX hashes (%ld.%06lds)",
+		applog(LOG_DEBUG, "%s %d: no nonce = 0x%08lX hashes (%ld.%06lds)",
 				icarus->drv->name, icarus->device_id,
 				(long unsigned int)estimate_hashes,
 				(long)elapsed.tv_sec, (long)elapsed.tv_usec);
@@ -2102,7 +2102,7 @@ more_nonces:
 	if (usb_buffer_size(icarus) > 3) {
 		memcpy((char *)&nonce, icarus->usbdev->buffer, sizeof(nonce_bin));
 		nonce = htobe32(nonce);
-		applog(LOG_WARNING, "%s%d: attempting to submit 2nd nonce = 0x%08lX",
+		applog(LOG_WARNING, "%s %d: attempting to submit 2nd nonce = 0x%08lX",
 				icarus->drv->name, icarus->device_id,
 				(long unsigned int)nonce);
 		curr_hw_errors = icarus->hw_errors;
@@ -2114,7 +2114,7 @@ more_nonces:
 	if (opt_debug || info->do_icarus_timing)
 		timersub(&tv_finish, &tv_start, &elapsed);
 
-	applog(LOG_DEBUG, "%s%d: nonce = 0x%08x = 0x%08lX hashes (%ld.%06lds)",
+	applog(LOG_DEBUG, "%s %d: nonce = 0x%08x = 0x%08lX hashes (%ld.%06lds)",
 			icarus->drv->name, icarus->device_id,
 			nonce, (long unsigned int)hash_count,
 			(long)elapsed.tv_sec, (long)elapsed.tv_usec);
@@ -2237,7 +2237,7 @@ static int64_t rock_scanwork(struct thr_info *thr)
 		if (unlikely(estimate_hashes > 0xffffffff))
 			estimate_hashes = 0xffffffff;
 
-		applog(LOG_DEBUG, "%s%d: no nonce = 0x%08lX hashes (%ld.%06lds)",
+		applog(LOG_DEBUG, "%s %d: no nonce = 0x%08lX hashes (%ld.%06lds)",
 				icarus->drv->name, icarus->device_id,
 				(long unsigned int)estimate_hashes,
 				(long)elapsed.tv_sec, (long)elapsed.tv_usec);
@@ -2303,7 +2303,7 @@ static int64_t rock_scanwork(struct thr_info *thr)
 	if (opt_debug || info->do_icarus_timing)
 		timersub(&tv_finish, &tv_start, &elapsed);
 
-	applog(LOG_DEBUG, "%s%d: nonce = 0x%08x = 0x%08lX hashes (%ld.%06lds)",
+	applog(LOG_DEBUG, "%s %d: nonce = 0x%08x = 0x%08lX hashes (%ld.%06lds)",
 			icarus->drv->name, icarus->device_id,
 			nonce, (long unsigned int)hash_count,
 			(long)elapsed.tv_sec, (long)elapsed.tv_usec);

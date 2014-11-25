@@ -690,7 +690,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 
 	update_usb_stats(avalon2);
 
-	applog(LOG_INFO, "%s%d: Found at %s", avalon2->drv->name, avalon2->device_id,
+	applog(LOG_INFO, "%s %d: Found at %s", avalon2->drv->name, avalon2->device_id,
 	       avalon2->device_path);
 
 	avalon2->device_data = calloc(sizeof(struct avalon2_info), 1);
@@ -930,7 +930,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 	int i;
 
 	if (unlikely(avalon2->usbinfo.nodev)) {
-		applog(LOG_ERR, "%s%d: Device disappeared, shutting down thread",
+		applog(LOG_ERR, "%s %d: Device disappeared, shutting down thread",
 		       avalon2->drv->name, avalon2->device_id);
 		return -1;
 	}
@@ -945,12 +945,12 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 	stdiff = share_work_tdiff(avalon2);
 	if (unlikely(info->failing)) {
 		if (stdiff > 120) {
-			applog(LOG_ERR, "%s%d: No valid shares for over 2 minutes, shutting down thread",
+			applog(LOG_ERR, "%s %d: No valid shares for over 2 minutes, shutting down thread",
 			       avalon2->drv->name, avalon2->device_id);
 			return -1;
 		}
 	} else if (stdiff > 60) {
-		applog(LOG_ERR, "%s%d: No valid shares for over 1 minute, issuing a USB reset",
+		applog(LOG_ERR, "%s %d: No valid shares for over 1 minute, issuing a USB reset",
 		       avalon2->drv->name, avalon2->device_id);
 		usb_reset(avalon2);
 		info->failing = true;
