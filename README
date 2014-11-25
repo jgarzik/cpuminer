@@ -179,7 +179,7 @@ Usage instructions:  Run "cgminer --help" to see options:
 Usage: cgminer [-DdElmpPQqUsTouOchnV]
 
 Options for both config file and command line:
---anu-freq <arg>    Set AntminerU1 frequency in MHz, range 150-500 (default: 200)
+--anu-freq <arg>    Set AntminerU1/2 frequency in MHz, range 125-500 (default: 250.0)
 --api-allow <arg>   Allow API access only to the given list of [G:]IP[/Prefix] addresses[/subnets]
 --api-description <arg> Description placed in the API status header, default: cgminer version
 --api-groups <arg>  API one letter groups G:cmd:cmd[,P:cmd:*...] defining the cmds a groups can use
@@ -191,6 +191,8 @@ Options for both config file and command line:
 --api-mcast-port <arg> API Multicast listen port (default: 4028)
 --api-network       Allow API (if enabled) to listen on/for any address, default: only 127.0.0.1
 --api-port <arg>    Port number of miner API (default: 4028)
+--au3-freq <arg>    Set AntminerU3 frequency in MHz, range 100-250 (default: 225.0)
+--au3-volt <arg>    Set AntminerU3 voltage in mv, range 725-850, 0 to not set (default: 750)
 --avalon-auto       Adjust avalon overclock frequency dynamically for best hashrate
 --avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
 --avalon-fan <arg>  Set fanspeed percentage for avalon, single value or range (default: 20-100)
@@ -312,7 +314,9 @@ See FGPA-README or ASIC-README for more information regarding these.
 
 ASIC only options:
 
---anu-freq <arg>    Set AntminerU1 frequency in hex, range 150-500 (default: 200)
+--anu-freq <arg>    Set AntminerU1/2 frequency in MHz, range 125-500 (default: 250.0)
+--au3-freq <arg>    Set AntminerU3 frequency in MHz, range 100-250 (default: 225.0)
+--au3-volt <arg>    Set AntminerU3 voltage in mv, range 725-850, 0 to not set (default: 750)
 --avalon-auto       Adjust avalon overclock frequency dynamically for best hashrate
 --avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
 --avalon-fan <arg> Set fanspeed percentage for avalon, single value or range (default: 20-100)
@@ -357,8 +361,8 @@ Cgminer should automatically find all of your Avalon ASIC, BFL ASIC, BitForce
 FPGAs, Icarus bitstream FPGAs, Klondike ASIC, ASICMINER usb block erupters,
 KnC ASICs, BaB ASICs, Hashfast ASICs, ModMiner FPGAs, BPMC/BGMC BF1 USB ASICs,
 Bi*fury USB ASICs, Onestring miner USB ASICs, Hexfury USB ASICs, Nanofury USB
-ASICs, Antminer U1/U2/U2+ USB ASICs, Cointerra devices, BFx2 USB ASICs,
-Rockminer R-Box USB ASICs, Avalon2 USB ASICs and Hashratio USB ASICs.
+ASICs, Antminer U1/U2/U2+ U3 USB ASICs, Cointerra devices, BFx2 USB ASICs,
+Rockminer R-Box/RK-Box/T1 USB ASICs, Avalon2 USB ASICs and Hashratio USB ASICs.
 
 ---
 

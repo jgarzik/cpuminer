@@ -1,7 +1,7 @@
 SUPPORTED DEVICES
 
 Currently supported devices include:
-- Antminer U1/U2/U2+ USB
+- Antminer U1/U2/U2+/U3 USB
 - Antminer S1
 - ASICMINER block erupters
 - ASICMINER Tube/Prisma
@@ -21,7 +21,7 @@ Currently supported devices include:
 - Nanofury USB
 - Other bitfury USB devices
 - Onestring miner USB
-- Rockminer R-Box
+- Rockminer R-Box/RK-Box/T1/New R-Box
 - Spondoolies SP10, SP30
 
 
@@ -118,14 +118,17 @@ HASHRATIO devices
 Hashratio devices need the --enable-hashratio option when compiling cgminer.
 
 
-ANTMINER U1/U2+ devices
+ANTMINER U1/U2+/U3 devices
 
 Antminer devices need the --enable-icarus option when compiling cgminer.
 
-Currently the U1 USB sticks are supported and come up as ANU devices. They
-are also set up as per the USB ASICs below. They need no options to work well
-but will accept all the icarus options.
+Currently the U1/2/3 USB sticks are supported and come up as the following
+devices:
 
+ANU: Antminer U1/U2/U2+
+AU3: Antminer U3
+
+They are also set up as per the USB ASICs below.
 
 ANTMINER S1 devices
 
@@ -141,9 +144,13 @@ BITMINE A1 devices
 Bitmine A1 devices need the --enable-bitmine_A1 compile option set.
 
 
-Rockminer R-Box
+Rockminer R*Box
 
-Rockminer R-Box devices need the --enable-icarus compile option set.
+Rockminer R*Box devices need the --enable-icarus compile option set.
+
+They appear with the following names:
+LIN: R-Box
+LIR: New R-Box
 
 ---
 GETTING STARTED WITH USB ASICS
@@ -228,7 +235,9 @@ i.e.:
 
 ASIC SPECIFIC COMMANDS
 
---anu-freq <arg>    Set AntminerU1 frequency in MHz, range 150-500 (default: 200)
+--anu-freq <arg>    Set AntminerU1/2 frequency in MHz, range 125-500 (default: 250.0)
+--au3-freq <arg>    Set AntminerU3 frequency in MHz, range 100-250 (default: 225.0)
+--au3-volt <arg>    Set AntminerU3 voltage in mv, range 725-850, 0 to not set (default: 750)
 --avalon-auto       Adjust avalon overclock frequency dynamically for best hashrate
 --avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
 --avalon-fan <arg> Set fanspeed percentage for avalon, single value or range (default: 20-100)
@@ -299,9 +308,11 @@ version of cgminer as part of the flash firmware. No configuration should be
 necessary.
 
 
-ANTMINER U1/2 DEVICES
+ANTMINER U1/2/3 DEVICES
 
 --anu-freq <arg>    Set AntminerU1 frequency in MHz, range 150-500 (default: 200)
+--au3-freq <arg>    Set AntminerU3 frequency in MHz, range 100-250 (default: 225.0)
+--au3-volt <arg>    Set AntminerU3 voltage in mv, range 725-850, 0 to not set (default: 750)
 
 By default, Antminer U1 devices run at a clockspeed of 200. This command allows
 you to specify a chosen frequency to attempt to run all ANU devices at. Cgminer
