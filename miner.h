@@ -494,6 +494,7 @@ struct cgpu_info {
 	time_t last_share_pool_time;
 	double last_share_diff;
 	time_t last_device_valid_work;
+	uint32_t last_nonce;
 
 	time_t device_last_well;
 	time_t device_last_not_well;

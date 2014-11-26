@@ -7360,10 +7360,26 @@ bool submit_tested_work(struct thr_info *thr, struct work *work)
 	return true;
 }
 
-/* Returns true if nonce for work was a valid share */
+/* Rudimentary test to see if cgpu has returned the same nonce twice in a row which is
+ * always going to be a duplicate which should be reported as a hw error. */
+static bool new_nonce(struct thr_info *thr, uint32_t nonce)
+{
+	struct cgpu_info *cgpu = thr->cgpu;
+
+	if (unlikely(cgpu->last_nonce == nonce)) {
+		applog(LOG_INFO, "%s %d duplicate share detected as HW error",
+		       cgpu->drv->name, cgpu->device_id);
+		return false;
+	}
+	cgpu->last_nonce = nonce;
+	return true;
+}
+
+/* Returns true if nonce for work was a valid share and not a dupe of the very last
+ * nonce submitted by this device. */
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
-	if (test_nonce(work, nonce))
+	if (new_nonce(thr, nonce) && test_nonce(work, nonce))
 		submit_tested_work(thr, work);
 	else {
 		inc_hw_errors(thr);
