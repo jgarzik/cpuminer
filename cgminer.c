@@ -6346,6 +6346,8 @@ out:
 static void *stratum_sthread(void *userdata)
 {
 	struct pool *pool = (struct pool *)userdata;
+	uint64_t last_nonce2 = 0;
+	uint32_t last_nonce = 0;
 	char threadname[16];
 
 	pthread_detach(pthread_self());
@@ -6381,6 +6383,21 @@ static void *stratum_sthread(void *userdata)
 			continue;
 		}
 
+		nonce = *((uint32_t *)(work->data + 76));
+		nonce2_64 = (uint64_t *)nonce2;
+		*nonce2_64 = htole64(work->nonce2);
+		/* Filter out duplicate shares */
+		if (unlikely(nonce == last_nonce && *nonce2_64 == last_nonce2)) {
+			applog(LOG_INFO, "Filtering duplicate share to pool %d",
+			       pool->pool_no);
+			free_work(work);
+			continue;
+		}
+		last_nonce = nonce;
+		last_nonce2 = *nonce2_64;
+		__bin2hex(noncehex, (const unsigned char *)&nonce, 4);
+		__bin2hex(nonce2hex, nonce2, work->nonce2_len);
+
 		sshare = calloc(sizeof(struct stratum_share), 1);
 		hash32 = (uint32_t *)work->hash;
 		submitted = false;
@@ -6388,18 +6405,12 @@ static void *stratum_sthread(void *userdata)
 		sshare->sshare_time = time(NULL);
 		/* This work item is freed in parse_stratum_response */
 		sshare->work = work;
-		nonce = *((uint32_t *)(work->data + 76));
-		__bin2hex(noncehex, (const unsigned char *)&nonce, 4);
 		memset(s, 0, 1024);
 
 		mutex_lock(&sshare_lock);
 		/* Give the stratum share a unique id */
 		sshare->id = swork_id++;
 		mutex_unlock(&sshare_lock);
-
-		nonce2_64 = (uint64_t *)nonce2;
-		*nonce2_64 = htole64(work->nonce2);
-		__bin2hex(nonce2hex, nonce2, work->nonce2_len);
 
 		snprintf(s, sizeof(s),
 			"{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
