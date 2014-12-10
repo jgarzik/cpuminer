@@ -26,7 +26,7 @@
 #include "util.h"
 #include "klist.h"
 
-#if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_AVALON2) || \
+#if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_AVALON2) || defined(USE_AVALON4) || \
   defined(USE_HASHFAST) || defined(USE_BITFURY) || defined(USE_BLOCKERUPTER) || defined(USE_KLONDIKE) || \
 	defined(USE_KNC) || defined(USE_BAB) || defined(USE_DRILLBIT) || \
 	defined(USE_MINION) || defined(USE_COINTERRA) || defined(USE_BITMINE_A1) || \
