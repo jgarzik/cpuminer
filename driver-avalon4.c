@@ -898,6 +898,9 @@ static void detect_modules(struct cgpu_info *avalon4)
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM41_PREFIXSTR, 2))
 			info->mod_type[i] = AVA4_TYPE_MM41;
 
+		info->fan_pct[i] = AVA4_DEFAULT_FAN_START;
+		info->set_voltage[i] = opt_avalon4_voltage_min;
+		info->led_red[i] = 0;
 		applog(LOG_NOTICE, "%s %d: New module detect! ID[%d]",
 		       avalon4->drv->name, avalon4->device_id, i);
 	}
@@ -956,8 +959,18 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 				info->polling_err_cnt[i] = 0;
 				info->mod_type[i] = AVA4_TYPE_NULL;
 				info->enable[i] = 0;
+				info->get_voltage[i] = 0;
+				info->get_frequency[i] = 0;
+				info->power_good[i] = 0;
+				info->local_work[i] = 0;
 				info->local_works[i] = 0;
+				info->hw_work[i] = 0;
 				info->hw_works[i] = 0;
+				for (j = 0; j < 6; j++) {
+					info->lw5[i][j] = 0;
+					info->hw5[i][j] = 0;
+				}
+
 				for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
 					info->matching_work[i][j] = 0;
 					info->chipmatching_work[i][j][0] = 0;
