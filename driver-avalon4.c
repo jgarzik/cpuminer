@@ -900,7 +900,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 {
 	struct avalon4_pkg send_pkg;
 	struct avalon4_ret ar;
-	int i, j, tmp, ret, decode_err, do_polling = 0;
+	int i, j, tmp, ret, decode_err = 0, do_polling = 0;
 	struct timeval current_fan;
 	int do_adjust_fan = 0;
 	uint32_t fan_pwm;
@@ -1028,7 +1028,7 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 {
 	struct avalon4_info *info = avalon4->device_data;
 	struct avalon4_pkg send_pkg;
-	uint32_t tmp, range, start, volt;
+	uint32_t tmp = 0, range, start, volt;
 
 	info->set_frequency[0] = opt_avalon4_freq[0];
 	info->set_frequency[1] = opt_avalon4_freq[1];
