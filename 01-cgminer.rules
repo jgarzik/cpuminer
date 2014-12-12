@@ -47,3 +47,6 @@ ATTRS{idVendor}=="1cbe", ATTRS{idProduct}=="0003", SUBSYSTEM=="usb", ACTION=="ad
 
 # Drillbit Thumb
 ATTRS{idVendor}=="03eb", ATTRS{idProduct}=="2404", SUBSYSTEM=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+
+# Avalon4
+ATTRS{idVendor}=="29f1", ATTRS{idProduct}=="33f2", SUBSYSTEM=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
