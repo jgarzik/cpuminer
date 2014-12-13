@@ -796,7 +796,7 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
 		info->enable[i] = 0;
 		info->mod_type[i] = AVA4_TYPE_NULL;
-		info->fan_pct[i] = opt_avalon4_fan_min;
+		info->fan_pct[i] = AVA4_DEFAULT_FAN_START;
 		info->set_voltage[i] = opt_avalon4_voltage_min;
 	}
 
@@ -835,7 +835,7 @@ static bool avalon4_prepare(struct thr_info *thr)
 	info->set_voltage_broadcat = 1;
 
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++)
-		info->fan_pct[i] = opt_avalon4_fan_min;
+		info->fan_pct[i] = AVA4_DEFAULT_FAN_START;
 
 
 	return true;
@@ -1459,8 +1459,7 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 		}
 
 		if (set_avalon4_fan(setting)) {
-			sprintf(replybuf, "invalid fan value, valid range %d-%d",
-				AVA4_DEFAULT_FAN_MIN, AVA4_DEFAULT_FAN_MAX);
+			sprintf(replybuf, "invalid fan value, valid range 0-100");
 			return replybuf;
 		}
 

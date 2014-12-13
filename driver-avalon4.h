@@ -15,8 +15,10 @@
 
 #ifdef USE_AVALON4
 
-#define AVA4_DEFAULT_FAN_MIN	10 /* % */
-#define AVA4_DEFAULT_FAN_MAX	100
+#define AVA4_DEFAULT_FAN_MIN	5 /* % */
+#define AVA4_DEFAULT_FAN_MAX	85
+/* Percentage required to make sure fan starts spinning, then we can go down */
+#define AVA4_DEFAULT_FAN_START	15
 
 #define AVA4_DEFAULT_TEMP_TARGET	42
 #define AVA4_DEFAULT_TEMP_OVERHEAT	65
