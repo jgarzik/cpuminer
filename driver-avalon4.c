@@ -764,6 +764,9 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 		return NULL;
 	}
 
+	/* Avalon4 prefers not to use zero length packets */
+	avalon4->nozlp = true;
+
 	/* We try twice on AUC init */
 	if (avalon4_auc_init(avalon4, auc_ver) && avalon4_auc_init(avalon4, auc_ver))
 		return NULL;
@@ -771,8 +774,6 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 	/* We have an Avalon4 AUC connected */
 	avalon4->threads = 1;
 	add_cgpu(avalon4);
-	/* Avalon4 prefers not to use zero length packets */
-	avalon4->nozlp = true;
 
 	update_usb_stats(avalon4);
 	applog(LOG_INFO, "%s-%d: Found at %s", avalon4->drv->name, avalon4->device_id,
