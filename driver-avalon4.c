@@ -1176,6 +1176,15 @@ static void avalon4_update(struct cgpu_info *avalon4)
 
 			avalon4_stratum_set(avalon4, pool, i, 0);
 		}
+	} else {
+		for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+			if (!info->enable[i])
+				continue;
+			if (info->mod_type[i] == AVA4_TYPE_MM40)
+				continue;
+
+			avalon4_stratum_set(avalon4, pool, i, 0);
+		}
 	}
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
