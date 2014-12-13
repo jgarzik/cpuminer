@@ -436,6 +436,7 @@ struct cgpu_info {
 	struct cg_usb_device *usbdev;
 	struct cg_usb_info usbinfo;
 	bool blacklisted;
+	bool nozlp; // Device prefers no zero length packet
 #endif
 #if defined(USE_AVALON) || defined(USE_AVALON2)
 	struct work **works;
