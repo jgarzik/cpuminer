@@ -1565,7 +1565,7 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	int temp = get_current_temp_max(info);
 	int voltsmin = AVA4_DEFAULT_VOLTAGE_MAX, voltsmax = AVA4_DEFAULT_VOLTAGE_MIN;
 	int fanmin = AVA4_DEFAULT_FAN_MAX, fanmax = AVA4_DEFAULT_FAN_MIN;
-	int i;
+	int i, frequency;
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (!info->enable[i])
@@ -1581,11 +1581,15 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 		if (voltsmin >= info->get_voltage[i])
 			voltsmin = info->get_voltage[i];
 	}
-
+#if 0
 	tailsprintf(buf, bufsiz, "%2dMMs %.4fV-%.4fV %4dMhz %2dC %3d%%-%3d%%",
 		    info->mm_count, (float)voltsmin / 10000, (float)voltsmax / 10000,
 		    (info->set_frequency[0] * 4 + info->set_frequency[1] * 4 + info->set_frequency[2]) / 9,
 		    temp, fanmin, fanmax);
+#endif
+	frequency = (info->set_frequency[0] * 4 + info->set_frequency[1] * 4 + info->set_frequency[2]) / 9;
+	tailsprintf(buf, bufsiz, "%4dMhz %2dC %3d%% %.3fV", frequency,
+		    temp, fanmin, (float)voltsmax / 10000);
 }
 
 struct device_drv avalon4_drv = {
