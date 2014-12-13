@@ -458,14 +458,17 @@ static int avalon4_iic_xfer(struct cgpu_info *avalon4,
 			    uint8_t *wbuf, int wlen, int *write,
 			    uint8_t *rbuf, int rlen, int *read)
 {
-	int err;
+	int err = -1;
 
 	if (unlikely(avalon4->usbinfo.nodev))
-		return 1;
+		goto out;
 
 	err = usb_write(avalon4, (char *)wbuf, wlen, write, C_AVA4_WRITE);
-	if (err || *write != wlen)
+	if (err || *write != wlen) {
 		applog(LOG_DEBUG, "Avalon4: AUC xfer %d, w(%d-%d)!", err, wlen, *write);
+		usb_nodev(avalon4);
+		goto out;
+	}
 
 	cgsleep_ms(opt_avalon4_aucxdelay / 4800 + 1);
 
@@ -477,7 +480,7 @@ static int avalon4_iic_xfer(struct cgpu_info *avalon4,
 	}
 
 	*read = rbuf[0] - 4;	/* Remove 4 bytes IIC header */
-
+out:
 	return err;
 }
 
