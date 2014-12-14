@@ -349,7 +349,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 				}
 			}
 
-			if (submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce))
+			if (submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce, 0))
 				info->failing = false;
 			break;
 		case AVA2_P_STATUS:

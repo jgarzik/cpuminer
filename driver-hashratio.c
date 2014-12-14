@@ -215,7 +215,7 @@ static int decode_pkg(struct thr_info *thr, struct hashratio_ret *ar, uint8_t *p
 					break;
 				}
 			}
-			submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce);
+			submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce, 0);
 			break;
 		case HRTO_P_STATUS:
 			applog(LOG_DEBUG, "Hashratio: HRTO_P_STATUS");
