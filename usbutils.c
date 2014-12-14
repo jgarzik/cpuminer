@@ -2146,7 +2146,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 		goto cldame;
 	}
 	if (found->iManufacturer) {
-		if (strcmp((char *)man, found->iManufacturer)) {
+		if (strcasecmp((char *)man, found->iManufacturer)) {
 			applog(LOG_DEBUG, "USB init, iManufacturer mismatch %s",
 			       devstr);
 			applog(LOG_DEBUG, "Found %s vs %s", man, found->iManufacturer);
@@ -2161,7 +2161,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 
 			if (!iManufacturer)
 				continue;
-			if (!strcmp((char *)man, iManufacturer)) {
+			if (!strcasecmp((char *)man, iManufacturer)) {
 				applog(LOG_DEBUG, "USB init, alternative iManufacturer match %s",
 				       devstr);
 				applog(LOG_DEBUG, "Found %s", iManufacturer);
@@ -2181,7 +2181,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 		goto cldame;
 	}
 	if (found->iProduct) {
-		if (strcmp((char *)prod, found->iProduct)) {
+		if (strcasecmp((char *)prod, found->iProduct)) {
 			applog(LOG_DEBUG, "USB init, iProduct mismatch %s",
 			       devstr);
 			applog(LOG_DEBUG, "Found %s vs %s", prod, found->iProduct);
@@ -2195,7 +2195,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 
 			if (!iProduct)
 				continue;
-			if (!strcmp((char *)prod, iProduct)) {
+			if (!strcasecmp((char *)prod, iProduct)) {
 				applog(LOG_DEBUG, "USB init, alternative iProduct match %s",
 				       devstr);
 				applog(LOG_DEBUG, "Found %s", iProduct);
@@ -2361,7 +2361,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 
 	// Allow a name change based on the idVendor+idProduct
 	// N.B. must be done before calling add_cgpu()
-	if (strcmp(cgpu->drv->name, found->name)) {
+	if (strcasecmp(cgpu->drv->name, found->name)) {
 		if (!cgpu->drv->copy)
 			cgpu->drv = copy_drv(cgpu->drv);
 		cgpu->drv->name = (char *)(found->name);
