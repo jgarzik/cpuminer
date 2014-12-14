@@ -201,7 +201,7 @@ static int job_idcmp(uint8_t *job_id, char *pool_job_id)
 	if (crc_expect == crc)
 		return 0;
 
-	applog(LOG_DEBUG, "Avalon4: job_id not match! [%04x:%04x (%s)]",
+	applog(LOG_DEBUG, "Avalon4: job_id doesn't match! [%04x:%04x (%s)]",
 	       crc, crc_expect, pool_job_id);
 
 	return 1;
@@ -1114,7 +1114,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	/* Step 2: MM protocol check */
 	pool = current_pool();
 	if (!pool->has_stratum)
-		quit(1, "Avalon4: MM have to use stratum pool");
+		quit(1, "Avalon4: MM has to use stratum pools");
 
 	coinbase_len_prehash = pool->nonce2_offset - (pool->nonce2_offset % SHA256_BLOCK_SIZE);
 	coinbase_len_posthash = pool->coinbase_len - coinbase_len_prehash;
@@ -1125,11 +1125,11 @@ static void avalon4_update(struct cgpu_info *avalon4)
 		return;
 	}
 	if (pool->merkles > AVA4_P_MERKLES_COUNT) {
-		applog(LOG_ERR, "Avalon4: MM merkles have to less then %d", AVA4_P_MERKLES_COUNT);
+		applog(LOG_ERR, "Avalon4: MM merkles has to be less then %d", AVA4_P_MERKLES_COUNT);
 		return;
 	}
 	if (pool->n2size < 3) {
-		applog(LOG_ERR, "Avalon4: MM nonce2 size have to >= 3 (%d)", pool->n2size);
+		applog(LOG_ERR, "Avalon4: MM nonce2 size has to be >= 3 (%d)", pool->n2size);
 		return;
 	}
 
@@ -1528,7 +1528,7 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 
 		ret = sscanf(setting, "%d-%d", &val_mod, &val_volt);
 		if (ret != 2) {
-			sprintf(replybuf, "invalid valtage parameter, format: moudleid-voltage");
+			sprintf(replybuf, "invalid voltage parameter, format: moudleid-voltage");
 			return replybuf;
 		}
 
