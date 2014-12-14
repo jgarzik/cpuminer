@@ -69,6 +69,7 @@ static cgtimer_t usb11_cgt;
 #define BITFORCE_TIMEOUT_MS 999
 #define MODMINER_TIMEOUT_MS 999
 #define AVALON_TIMEOUT_MS 999
+#define AVALON4_TIMEOUT_MS 999
 #define KLONDIKE_TIMEOUT_MS 999
 #define COINTERRA_TIMEOUT_MS 999
 #define HASHFAST_TIMEOUT_MS 999
@@ -643,6 +644,8 @@ static struct usb_find_devices find_dev[] = {
 		.ident = IDENT_AV4,
 		.idVendor = 0x29f1,
 		.idProduct = 0x33f2,
+		.iManufacturer = "CANAAN",
+		.iProduct = "USB2IIC Converter",
 		.config = 1,
 		.timeout = AVALON4_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
