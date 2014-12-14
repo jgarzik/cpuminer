@@ -350,6 +350,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 				pool = pool_stratum2;
 			} else {
 				applog(LOG_ERR, "Avalon4: Cannot match to any stratum! (%s)", pool->swork.job_id);
+				inc_hw_errors(thr);
 				break;
 			}
 		}
