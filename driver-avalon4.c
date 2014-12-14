@@ -1528,7 +1528,7 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 
 		ret = sscanf(setting, "%d-%d", &val_mod, &val_volt);
 		if (ret != 2) {
-			sprintf(replybuf, "invalid voltage parameter, format: moudleid-voltage");
+			sprintf(replybuf, "invalid voltage parameter, format: moduleid-voltage");
 			return replybuf;
 		}
 
