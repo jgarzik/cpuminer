@@ -1294,6 +1294,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	return h * 0xffffffffull;
 }
 
+#define STATBUFLEN 512
 static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
@@ -1302,10 +1303,10 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	uint32_t a,b ;
 	double hwp, diff;
 	char buf[256];
-	char statbuf[AVA4_DEFAULT_MODULARS][512];
+	char statbuf[AVA4_DEFAULT_MODULARS][STATBUFLEN];
 	struct timeval current;
 
-	memset(statbuf, 0, AVA4_DEFAULT_MODULARS * 200);
+	memset(statbuf, 0, AVA4_DEFAULT_MODULARS * STATBUFLEN);
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->mod_type[i] == AVA4_TYPE_NULL)
