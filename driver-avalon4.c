@@ -213,7 +213,7 @@ static inline int get_current_temp_max(struct avalon4_info *info)
 	int t = info->temp[0];
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->temp[i] > t)
+		if (info->enable[i] && info->temp[i] > t)
 			t = info->temp[i];
 	}
 	return t;
@@ -806,6 +806,7 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 
 	info->enable[0] = 1;
 	info->mod_type[0] = AVA4_TYPE_MM40;
+	info->temp[0] = -273;
 
 	info->set_frequency[0] = opt_avalon4_freq[0];
 	info->set_frequency[1] = opt_avalon4_freq[1];
