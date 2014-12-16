@@ -320,9 +320,6 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		    pool_no >= total_pools || pool_no < 0) {
 			applog(LOG_DEBUG, "Avalon4: Wrong miner/pool_no %d/%d", miner, pool_no);
 			break;
-		} else {
-			info->matching_work[modular_id][miner]++;
-			info->chipmatching_work[modular_id][miner][chip_id]++;
 		}
 		nonce2 = be32toh(nonce2);
 		nonce = be32toh(nonce);
@@ -353,6 +350,9 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 				inc_hw_errors(thr);
 				break;
 			}
+		} else {
+			info->matching_work[modular_id][miner]++;
+			info->chipmatching_work[modular_id][miner][chip_id]++;
 		}
 
 		submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce, ntime);
@@ -1340,7 +1340,6 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		strcat(statbuf[i], buf);
 	}
 
-#if 0
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
@@ -1352,7 +1351,6 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		}
 		statbuf[i][strlen(statbuf[i]) - 1] = ']';
 	}
-#endif
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if(info->mod_type[i] == AVA4_TYPE_NULL)
