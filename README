@@ -119,6 +119,7 @@ CGMiner specific configuration options:
                           disabled)
   --enable-avalon         Compile support for Avalon (default disabled)
   --enable-avalon2        Compile support for Avalon2 (default disabled)
+  --enable-avalon4        Compile support for Avalon4 (default disabled)
   --enable-bab            Compile support for BlackArrow Bitfury (default
                           disabled)
   --enable-bflsc          Compile support for BFL ASICs (default disabled)
@@ -204,6 +205,16 @@ Options for both config file and command line:
 --avalon2-fan       Set Avalon2 target fan speed
 --avalon2-cutoff <arg> Set Avalon2 overheat cut off temperature (default: 88)
 --avalon2-fixed-speed Set Avalon2 fan to fixed speed
+--avalon4-automatic-voltage Automatic adjust voltage base on module DH
+--avalon4-voltage   Set Avalon4 core voltage, in millivolts, step: 125
+--avalon4-freq      Set frequency for Avalon4, 1 to 3 values, example: 445:385:370
+--avalon4-fan       Set Avalon4 target fan speed range
+--avalon4-temp <arg> Set Avalon4 target temperature (default: 42)
+--avalon4-cutoff <arg> Set Avalon4 overheat cut off temperature (default: 65)
+--avalon4-polling-delay <arg> Set Avalon4 polling delay value (ms) (default: 20)
+--avalon4-ntime-offset <arg> Set Avalon4 MM ntime rolling max offset (default: 4)
+--avalon4-aucspeed <arg> Set Avalon4 AUC IIC bus speed (default: 400000)
+--avalon4-aucxdelay <arg> Set Avalon4 AUC IIC xfer read delay, 4800 ~= 1ms (default: 9600)
 --bab-options <arg> Set BaB options max:def:min:up:down:hz:delay:trf
 --balance           Change multipool strategy from failover to even share balance
 --benchfile <arg>   Run cgminer in benchmark mode using a work file - produces no shares
@@ -328,6 +339,16 @@ ASIC only options:
 --avalon2-fan       Set Avalon2 target fan speed
 --avalon2-cutoff <arg> Set Avalon2 overheat cut off temperature (default: 88)
 --avalon2-fixed-speed Set Avalon2 fan to fixed speed
+--avalon4-automatic-voltage Automatic adjust voltage base on module DH
+--avalon4-voltage   Set Avalon4 core voltage, in millivolts, step: 125
+--avalon4-freq      Set frequency for Avalon4, 1 to 3 values, example: 445:385:370
+--avalon4-fan       Set Avalon4 target fan speed range
+--avalon4-temp <arg> Set Avalon4 target temperature (default: 42)
+--avalon4-cutoff <arg> Set Avalon4 overheat cut off temperature (default: 65)
+--avalon4-polling-delay <arg> Set Avalon4 polling delay value (ms) (default: 20)
+--avalon4-ntime-offset <arg> Set Avalon4 MM ntime rolling max offset (default: 4)
+--avalon4-aucspeed <arg> Set Avalon4 AUC IIC bus speed (default: 400000)
+--avalon4-aucxdelay <arg> Set Avalon4 AUC IIC xfer read delay, 4800 ~= 1ms (default: 9600)
 --bab-options <arg> Set BaB options max:def:min:up:down:hz:delay:trf
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
@@ -362,7 +383,8 @@ FPGAs, Icarus bitstream FPGAs, Klondike ASIC, ASICMINER usb block erupters,
 KnC ASICs, BaB ASICs, Hashfast ASICs, ModMiner FPGAs, BPMC/BGMC BF1 USB ASICs,
 Bi*fury USB ASICs, Onestring miner USB ASICs, Hexfury USB ASICs, Nanofury USB
 ASICs, Antminer U1/U2/U2+ U3 USB ASICs, Cointerra devices, BFx2 USB ASICs,
-Rockminer R-Box/RK-Box/T1 USB ASICs, Avalon2 USB ASICs and Hashratio USB ASICs.
+Rockminer R-Box/RK-Box/T1 USB ASICs, Avalon2/3/4 USB ASICs and Hashratio USB
+ASICs.
 
 ---
 
@@ -390,6 +412,13 @@ users may need to reboot at this point.
 
 
 LINUX:
+
+The short version:
+
+ sudo cp 01-cgminer.rules /etc/udev/rules.d/
+
+
+The long version:
 
 On linux, the direct USB support requires no drivers at all. However due to
 permissions issues, you may not be able to mine directly on the devices as a
@@ -1010,6 +1039,7 @@ USB on any hardware are the following:
 
 --enable-avalon
 --enable-avalon2
+--enable-avalon4
 --enable-bflsc
 --enable-bitfury
 --enable-blockerupter

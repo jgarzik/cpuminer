@@ -7,6 +7,7 @@ Currently supported devices include:
 - ASICMINER Tube/Prisma
 - Avalon (including BitBurner and Klondike)
 - Avalon2/3
+- Avalon4
 - BFx2 USB
 - Butterfly Labs SC 65/28nm range
 - BF1 (bitfury) USB (red and blue)
@@ -46,6 +47,10 @@ Avalon devices need the --enable-avalon option when compiling cgminer.
 Avalon2/3 will come up as AV2.
 
 Avalon2/3 devices need the --enable-avalon2 option when compiling cgminer.
+
+Avalon4 will come up as AV4.
+
+Avalon4 devies need the --enable-avalon4 option when compiling cgminer.
 
 Klondike will come up as KLN.
 
@@ -249,6 +254,16 @@ ASIC SPECIFIC COMMANDS
 --avalon2-fan       Set Avalon2 target fan speed
 --avalon2-cutoff <arg> Set Avalon2 overheat cut off temperature (default: 88)
 --avalon2-fixed-speed Set Avalon2 fan to fixed speed
+--avalon4-automatic-voltage Automatic adjust voltage base on module DH
+--avalon4-voltage   Set Avalon4 core voltage, in millivolts, step: 125
+--avalon4-freq      Set frequency for Avalon4, 1 to 3 values, example: 445:385:370
+--avalon4-fan       Set Avalon4 target fan speed range
+--avalon4-temp <arg> Set Avalon4 target temperature (default: 42)
+--avalon4-cutoff <arg> Set Avalon4 overheat cut off temperature (default: 65)
+--avalon4-polling-delay <arg> Set Avalon4 polling delay value (ms) (default: 20)
+--avalon4-ntime-offset <arg> Set Avalon4 MM ntime rolling max offset (default: 4)
+--avalon4-aucspeed <arg> Set Avalon4 AUC IIC bus speed (default: 400000)
+--avalon4-aucxdelay <arg> Set Avalon4 AUC IIC xfer read delay, 4800 ~= 1ms (default: 9600)
 --bab-options <arg> Set BaB options max:def:min:up:down:hz:delay:trf
 --bet-clk <arg>     Set clockspeed of ASICMINER Tube/Prisma to (arg+1)*10MHz (default: 23)
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
@@ -517,6 +532,20 @@ Avalon2 Devices
 --avalon2-fan       Set Avalon2 target fan speed
 --avalon2-cutoff <arg> Set Avalon2 overheat cut off temperature (default: 88)
 --avalon2-fixed-speed Set Avalon2 fan to fixed speed
+
+
+Avalon4 Devices
+
+--avalon4-automatic-voltage Automatic adjust voltage base on module DH
+--avalon4-voltage   Set Avalon4 core voltage, in millivolts, step: 125
+--avalon4-freq      Set frequency for Avalon4, 1 to 3 values, example: 445:385:370
+--avalon4-fan       Set Avalon4 target fan speed range
+--avalon4-temp <arg> Set Avalon4 target temperature (default: 42)
+--avalon4-cutoff <arg> Set Avalon4 overheat cut off temperature (default: 65)
+--avalon4-polling-delay <arg> Set Avalon4 polling delay value (ms) (default: 20)
+--avalon4-ntime-offset <arg> Set Avalon4 MM ntime rolling max offset (default: 4)
+--avalon4-aucspeed <arg> Set Avalon4 AUC IIC bus speed (default: 400000)
+--avalon4-aucxdelay <arg> Set Avalon4 AUC IIC xfer read delay, 4800 ~= 1ms (default: 9600)
 
 
 BFLSC Devices
