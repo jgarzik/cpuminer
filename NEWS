@@ -1,3 +1,31 @@
+Version 4.9.0 - 16th December 2014
+
+- Minor fix
+- Fix MM41 voltage setting
+- Fix the default settings of new module
+- Count non matching stratum as a hw error on ava4
+- Fix ava4 build incompatibilites and missing write config parameters
+- Use strcasecmp for device matching in usbutils in case of subtle manufacturer
+changes
+- Add manufacturer and product definitions for ava4
+- Cosmetic ava4 change
+- Cosmetic ava4 message fixes
+- Add sanity check for NULL data being passed to usb_perform_transfer
+- All write errors should be treated as fatal for ava4 devices
+- Change initial fan start speed, mins and max for avalon4 to ensure fan starts
+spinning but can go lower RPM
+- Disable zero length packets on ava4 before trying to init
+- Add a cgpu device option to disable zero length packets and enable it for
+avalon4
+- Display ava4 stats consistent with other devices
+- Add ava4 to udev rules file
+- Fix build warnings on ava4
+- Fix ava4 build
+- Add Avalon4 support
+- Filter duplicate stratum shares from being submitted upstream
+- Do rudimentary detection of duplicate shares per device
+
+
 Version 4.8.0 - 25th November 2014
 
 - Allow forcing of building driver combinations with --enable-forcecombo
