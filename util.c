@@ -1419,7 +1419,8 @@ void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
 }
 #endif /* WIN32 */
 
-#ifdef CLOCK_MONOTONIC /* Essentially just linux */
+#if defined(CLOCK_MONOTONIC) && !defined(__FreeBSD__) /* Essentially just linux */
+//#ifdef CLOCK_MONOTONIC /* Essentially just linux */
 void cgtimer_time(cgtimer_t *ts_start)
 {
 	clock_gettime(CLOCK_MONOTONIC, ts_start);
@@ -1475,8 +1476,8 @@ void cgtimer_time(cgtimer_t *ts_start)
 	struct timeval tv;
 
 	cgtime(&tv);
-	ts_start->tv_sec = tv->tv_sec;
-	ts_start->tv_nsec = tv->tv_usec * 1000;
+	ts_start->tv_sec = tv.tv_sec;
+	ts_start->tv_nsec = tv.tv_usec * 1000;
 }
 #endif /* __MACH__ */
 

@@ -104,6 +104,11 @@ case $target in
     PTHREAD_FLAGS=""
     RT_LIBS=""
 	;;
+  *-*-freebsd*)
+    PTHREAD_FLAGS=""
+    DLOPEN_FLAGS=""
+    RT_LIBS=""
+    ;;
 esac
 
 has_winpthread=false
