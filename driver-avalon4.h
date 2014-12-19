@@ -38,7 +38,7 @@
 #define AVA4_DEFAULT_POLLING_DELAY	20 /* ms */
 
 #define AVA4_DH_INC	0.03
-#define AVA4_DH_DEC	0.001
+#define AVA4_DH_DEC	0.002
 
 #define AVA4_PWM_MAX		0x3FF
 
