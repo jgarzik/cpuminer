@@ -41,6 +41,86 @@ int opt_avalon4_aucxdelay = AVA4_AUC_XDELAY;
 
 int opt_avalon4_ntime_offset = AVA4_DEFAULT_ASIC_COUNT;
 
+static uint32_t g_freq_array[][2] = {
+	{100, 0x1e078547},
+	{170, 0x340d0547},
+	{200, 0x1e0784c7},
+	{220, 0x200804c7},
+	{230, 0x220884c7},
+	{300, 0x2e0b84c7},
+	{340, 0x340d04c7},
+	{350, 0x360d84c7},
+	{360, 0x54550447},
+	{370, 0x747d0447},
+	{380, 0x787e0447},
+	{390, 0x5c570447},
+	{395, 0x7c7f0447},
+	{400, 0x1e078447},
+	{410, 0x60580447},
+	{411, 0x401004c7},
+	{415, 0x62588447},
+	{420, 0x62588447},
+	{425, 0x20080447},
+	{430, 0x66598447},
+	{440, 0x685a0447},
+	{450, 0x22088447},
+	{460, 0x6c5b0447},
+	{470, 0x6e5b8447},
+	{480, 0x725c8447},
+	{490, 0x745d0447},
+	{500, 0x26098447},
+	{510, 0x785e0447},
+	{520, 0x7a5e8447},
+	{530, 0x280a0447},
+	{540, 0x54350447},
+	{550, 0x2a0a8447},
+	{560, 0x58360447},
+	{570, 0x2c0b0447},
+	{580, 0x2c0b0447},
+	{590, 0x5c370447},
+	{600, 0x2e0b8447},
+	{610, 0x60380447},
+	{620, 0x300c0447},
+	{630, 0x300c0447},
+	{640, 0x64390447},
+	{650, 0x320c8447},
+	{660, 0x683a0447},
+	{670, 0x340d0447},
+	{680, 0x340d0447},
+	{690, 0x6c3b0447},
+	{700, 0x360d8447},
+	{710, 0x703c0447},
+	{720, 0x380e0447},
+	{730, 0x380e0447},
+	{740, 0x743d0447},
+	{750, 0x3a0e8447},
+	{760, 0x783e0447},
+	{770, 0x3c0f0447},
+	{780, 0x3c0f0447},
+	{790, 0x7c3f0447},
+	{800, 0x3e0f8447},
+	{810, 0x3e0f8447},
+	{820, 0x40100447},
+	{830, 0x40100447},
+	{840, 0x42108447},
+	{850, 0x42108447},
+	{860, 0x42108447},
+	{870, 0x44110447},
+	{880, 0x44110447},
+	{890, 0x46118447},
+	{900, 0x46118447},
+	{910, 0x46118447},
+	{920, 0x48120447},
+	{930, 0x48120447},
+	{940, 0x4a128447},
+	{950, 0x4a128447},
+	{960, 0x4a128447},
+	{970, 0x4c130447},
+	{980, 0x4c130447},
+	{990, 0x4e138447},
+	{1000, 0x4e138447}
+};
+
 #define UNPACK32(x, str)			\
 {						\
 	*((str) + 3) = (uint8_t) ((x)      );	\
@@ -1041,6 +1121,55 @@ static void copy_pool_stratum(struct pool *pool_stratum, struct pool *pool)
 	cg_wunlock(&pool_stratum->data_lock);
 }
 
+static inline int mm_cmp_1501(struct avalon4_info *info, int addr)
+{
+	/* >= 1501 return 1 */
+	char *mm_1501 = "1501";
+	applog(LOG_NOTICE, "mm_version %d:%s", addr, info->mm_version[addr]);
+	return strncmp(info->mm_version[addr] + 2, mm_1501, 4) >= 0 ? 1 : 0;
+}
+
+static uint32_t avalon4_get_cpm(int freq)
+{
+	int i;
+
+	for (i = 0; i < sizeof(g_freq_array) / sizeof(g_freq_array[0]); i++)
+		if (freq >= g_freq_array[i][0] && freq < g_freq_array[i+1][0])
+			return g_freq_array[i][1];
+
+	/* return the lowest freq if not found */
+	return g_freq_array[0][1];
+}
+
+static void avalon4_set_freq(struct cgpu_info *avalon4, int addr)
+{
+	struct avalon4_info *info = avalon4->device_data;
+	struct avalon4_pkg send_pkg;
+	uint32_t tmp;
+
+	info->set_frequency[0] = opt_avalon4_freq[0];
+	info->set_frequency[1] = opt_avalon4_freq[1];
+	info->set_frequency[2] = opt_avalon4_freq[2];
+
+	memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
+	tmp = avalon4_get_cpm(info->set_frequency[0]);
+	tmp = be32toh(tmp);
+	memcpy(send_pkg.data, &tmp, 4);
+	tmp = avalon4_get_cpm(info->set_frequency[1]);
+	tmp = be32toh(tmp);
+	memcpy(send_pkg.data + 4, &tmp, 4);
+	tmp = avalon4_get_cpm(info->set_frequency[2]);
+	tmp = be32toh(tmp);
+	memcpy(send_pkg.data + 8, &tmp, 4);
+
+	/* Package the data */
+	avalon4_init_pkg(&send_pkg, AVA4_P_SET_FREQ, 1, 1);
+	if (addr == AVA4_MODULE_BROADCAST)
+		avalon4_send_bc_pkgs(avalon4, &send_pkg);
+	else
+		avalon4_iic_xfer_pkg(avalon4, addr, &send_pkg, NULL);
+}
+
 static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, int addr, int cutoff)
 {
 	struct avalon4_info *info = avalon4->device_data;
@@ -1170,6 +1299,12 @@ static void avalon4_update(struct cgpu_info *avalon4)
 
 		cutoff = (info->temp[i] < opt_avalon4_overheat) ? 0 : 1;
 		avalon4_stratum_set(avalon4, pool, i, cutoff);
+		if ((info->mod_type[i] == AVA4_TYPE_MM41) &&
+			mm_cmp_1501(info, i) &&
+			!cutoff) {
+			avalon4_set_freq(avalon4, i);
+		}
+
 	}
 	info->mm_count = count;
 
