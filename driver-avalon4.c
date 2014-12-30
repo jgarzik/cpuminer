@@ -837,7 +837,7 @@ static void avalon4_stratum_pkgs(struct cgpu_info *avalon4, struct pool *pool)
 
 static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct usb_find_devices *found)
 {
-	int i;
+	int i, j;
 	struct avalon4_info *info;
 	struct cgpu_info *avalon4 = usb_alloc_cgpu(&avalon4_drv, 1);
 	char auc_ver[AVA4_AUC_VER_LEN];
@@ -880,6 +880,10 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 		info->mod_type[i] = AVA4_TYPE_NULL;
 		info->fan_pct[i] = AVA4_DEFAULT_FAN_START;
 		info->set_voltage[i] = opt_avalon4_voltage_min;
+		for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
+			info->set_voltage_i[i][j] = opt_avalon4_voltage_min;
+			info->set_voltage_offset[i][j] = 0;
+		}
 	}
 
 	info->enable[0] = 1;
@@ -930,7 +934,7 @@ static void detect_modules(struct cgpu_info *avalon4)
 	struct avalon4_pkg detect_pkg;
 	struct avalon4_ret ret_pkg;
 	uint32_t tmp;
-	int i, err;
+	int i, j, err;
 
 	/* Detect new modules here */
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
@@ -977,6 +981,10 @@ static void detect_modules(struct cgpu_info *avalon4)
 
 		info->fan_pct[i] = AVA4_DEFAULT_FAN_START;
 		info->set_voltage[i] = opt_avalon4_voltage_min;
+		for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
+			info->set_voltage_i[i][j] = opt_avalon4_voltage_min;
+			info->set_voltage_offset[i][j] = 0;
+		}
 		info->led_red[i] = 0;
 		applog(LOG_NOTICE, "%s %d: New module detect! ID[%d]",
 		       avalon4->drv->name, avalon4->device_id, i);
@@ -1125,8 +1133,31 @@ static inline int mm_cmp_1501(struct avalon4_info *info, int addr)
 {
 	/* >= 1501 return 1 */
 	char *mm_1501 = "1501";
-	applog(LOG_NOTICE, "mm_version %d:%s", addr, info->mm_version[addr]);
 	return strncmp(info->mm_version[addr] + 2, mm_1501, 4) >= 0 ? 1 : 0;
+}
+
+static void avalon4_set_voltage(struct cgpu_info *avalon4, int addr)
+{
+	struct avalon4_info *info = avalon4->device_data;
+	struct avalon4_pkg send_pkg;
+	uint16_t tmp;
+	uint8_t i;
+
+	memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
+
+	for (i = 0; i < AVA4_DEFAULT_MINERS; i++) {
+		tmp = info->set_voltage_i[addr][i] + info->set_voltage_offset[addr][i];
+		tmp = encode_voltage_ncp5392p(tmp);
+		tmp = htobe16(tmp);
+		memcpy(send_pkg.data + 2 * i, &tmp, 2);
+	}
+
+	/* Package the data */
+	avalon4_init_pkg(&send_pkg, AVA4_P_SET_VOLT, 1, 1);
+	if (addr == AVA4_MODULE_BROADCAST)
+		avalon4_send_bc_pkgs(avalon4, &send_pkg);
+	else
+		avalon4_iic_xfer_pkg(avalon4, addr, &send_pkg, NULL);
 }
 
 static uint32_t avalon4_get_cpm(int freq)
@@ -1302,6 +1333,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 		if ((info->mod_type[i] == AVA4_TYPE_MM41) &&
 			mm_cmp_1501(info, i) &&
 			!cutoff) {
+			avalon4_set_voltage(avalon4, i);
 			avalon4_set_freq(avalon4, i);
 		}
 
@@ -1553,7 +1585,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *setting, char *replybuf)
 {
-	int val, i;
+	int val, i, j;
 	struct avalon4_info *info = avalon4->device_data;
 
 	if (strcasecmp(option, "help") == 0) {
@@ -1645,24 +1677,33 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 	}
 
 	if (strcasecmp(option, "voltage") == 0) {
-		int val_mod, val_volt, ret;
+		int val_mod, val_volt, val_ch = -1, val_offset = -1;
 
 		if (!setting || !*setting) {
 			sprintf(replybuf, "missing voltage value");
 			return replybuf;
 		}
 
-		ret = sscanf(setting, "%d-%d", &val_mod, &val_volt);
-		if (ret != 2) {
-			sprintf(replybuf, "invalid voltage parameter, format: moduleid-voltage");
-			return replybuf;
-		}
-
+		sscanf(setting, "%d-%d-%d-%d", &val_mod, &val_volt, &val_ch, &val_offset);
 		if (val_mod < 0 || val_mod >= AVA4_DEFAULT_MODULARS ||
 		    val_volt < AVA4_DEFAULT_VOLTAGE_MIN || val_volt > AVA4_DEFAULT_VOLTAGE_MAX) {
 			sprintf(replybuf, "invalid module_id or voltage value, valid module_id range %d-%d, valid voltage range %d-%d",
 				0, AVA4_DEFAULT_MODULARS,
 				AVA4_DEFAULT_VOLTAGE_MIN, AVA4_DEFAULT_VOLTAGE_MAX);
+			return replybuf;
+		}
+
+		if ((val_ch != -1) && (val_ch < -1 || val_ch >= AVA4_DEFAULT_MINERS)) {
+			sprintf(replybuf, "invalid miner_id,  valid miner_id range %d-%d",
+				0, AVA4_DEFAULT_MINERS - 1);
+			return replybuf;
+		}
+
+		if ((val_offset != -1) && ((val_volt + val_offset) < AVA4_DEFAULT_VOLTAGE_MIN ||
+					((val_volt + val_offset) > AVA4_DEFAULT_VOLTAGE_MAX))) {
+			sprintf(replybuf, "invalid val_offset,  valid val_offset range %d-%d",
+					AVA4_DEFAULT_VOLTAGE_MIN - val_volt,
+					AVA4_DEFAULT_VOLTAGE_MAX - val_volt);
 			return replybuf;
 		}
 
@@ -1672,14 +1713,39 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 		}
 
 		info->set_voltage[val_mod] = val_volt;
-
-		if (val_mod == AVA4_MODULE_BROADCAST) {
-			for (i = 1; i < AVA4_DEFAULT_MODULARS; i++)
-				info->set_voltage[i] = val_volt;
+		if (val_ch == -1) {
+			for (i = 0; i < AVA4_DEFAULT_MINERS; i++) {
+				info->set_voltage_i[val_mod][i] = val_volt;
+				info->set_voltage_offset[val_mod][i] = 0;
+			}
+		} else {
+			info->set_voltage_i[val_mod][val_ch] = val_volt;
+			if (val_offset == -1)
+				info->set_voltage_offset[val_mod][val_ch] = 0;
+			else
+				info->set_voltage_offset[val_mod][val_ch] = val_offset;
 		}
 
-		applog(LOG_NOTICE, "%s %d: Update module[%d] voltage to %d",
-		       avalon4->drv->name, avalon4->device_id, val_mod, val_volt);
+		if (val_mod == AVA4_MODULE_BROADCAST) {
+			for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+				info->set_voltage[i] = val_volt;
+				if (val_ch == -1) {
+					for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
+						info->set_voltage_i[i][j] = val_volt;
+						info->set_voltage_offset[i][j] = 0;
+					}
+				} else {
+					info->set_voltage_i[i][val_ch] = val_volt;
+					if (val_offset == -1)
+						info->set_voltage_offset[i][val_ch] = 0;
+					else
+						info->set_voltage_offset[i][val_ch] = val_offset;
+				}
+			}
+		}
+
+		applog(LOG_NOTICE, "%s %d: Update module[%d] voltage to %d, val_ch:%d, val_offset:%d",
+		       avalon4->drv->name, avalon4->device_id, val_mod, val_volt, val_ch, val_offset);
 
 		return NULL;
 	}

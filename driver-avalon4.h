@@ -143,6 +143,8 @@ struct avalon4_info {
 
 	int set_frequency[3];
 	int set_voltage[AVA4_DEFAULT_MODULARS];
+	uint16_t set_voltage_i[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINERS];
+	int8_t set_voltage_offset[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINERS];
 
 	int mod_type[AVA4_DEFAULT_MODULARS];
 	bool enable[AVA4_DEFAULT_MODULARS];
