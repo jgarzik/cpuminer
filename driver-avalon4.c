@@ -478,7 +478,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 	case AVA4_P_STATUS_LW:
 		applog(LOG_DEBUG, "Avalon4: AVA4_P_STATUS_LW");
 		for (i = 0; i < AVA4_DEFAULT_MINERS; i++)
-			info->local_work_i[modular_id][i] += ((ar->data[i * 3] << 16) |
+			info->local_works_i[modular_id][i] += ((ar->data[i * 3] << 16) |
 							    (ar->data[i * 3 + 1] << 8) |
 							    (ar->data[i * 3 + 2]));
 
@@ -486,7 +486,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 	case AVA4_P_STATUS_HW:
 		applog(LOG_DEBUG, "Avalon4: AVA4_P_STATUS_HW");
 		for (i = 0; i < AVA4_DEFAULT_MINERS; i++)
-			info->hw_work_i[modular_id][i] += ((ar->data[i * 3] << 16) |
+			info->hw_works_i[modular_id][i] += ((ar->data[i * 3] << 16) |
 							    (ar->data[i * 3 + 1] << 8) |
 							    (ar->data[i * 3 + 2]));
 
@@ -1079,8 +1079,8 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 					info->chipmatching_work[i][j][1] = 0;
 					info->chipmatching_work[i][j][2] = 0;
 					info->chipmatching_work[i][j][3] = 0;
-					info->local_work_i[i][j] = 0;
-					info->hw_work_i[i][j] = 0;
+					info->local_works_i[i][j] = 0;
+					info->hw_works_i[i][j] = 0;
 				}
 				applog(LOG_NOTICE, "%s %d: Module detached! ID[%d]",
 				       avalon4->drv->name, avalon4->device_id, i);
@@ -1518,7 +1518,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 		strcat(statbuf[i], " LWI[");
 		for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
-			sprintf(buf, "%d ", info->local_work_i[i][j]);
+			sprintf(buf, "%d ", info->local_works_i[i][j]);
 			strcat(statbuf[i], buf);
 		}
 		statbuf[i][strlen(statbuf[i]) - 1] = ']';
@@ -1536,7 +1536,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 		strcat(statbuf[i], " HWI[");
 		for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
-			sprintf(buf, "%d ", info->hw_work_i[i][j]);
+			sprintf(buf, "%d ", info->hw_works_i[i][j]);
 			strcat(statbuf[i], buf);
 		}
 		statbuf[i][strlen(statbuf[i]) - 1] = ']';
