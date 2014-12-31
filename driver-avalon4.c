@@ -1500,7 +1500,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 		strcat(statbuf[i], " MW[");
 		for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
-			sprintf(buf, "%d ", info->matching_work[i][j]);
+			sprintf(buf, "%d ", info->local_works_i[i][j]);
 			strcat(statbuf[i], buf);
 		}
 		statbuf[i][strlen(statbuf[i]) - 1] = ']';
@@ -1516,9 +1516,9 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 
-		strcat(statbuf[i], " LWI[");
+		strcat(statbuf[i], " MH[");
 		for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
-			sprintf(buf, "%d ", info->local_works_i[i][j]);
+			sprintf(buf, "%d ", info->hw_works_i[i][j]);
 			strcat(statbuf[i], buf);
 		}
 		statbuf[i][strlen(statbuf[i]) - 1] = ']';
@@ -1529,17 +1529,6 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 		sprintf(buf, " HW[%"PRIu64"]", info->hw_works[i]);
 		strcat(statbuf[i], buf);
-	}
-	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->mod_type[i] == AVA4_TYPE_NULL)
-			continue;
-
-		strcat(statbuf[i], " HWI[");
-		for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
-			sprintf(buf, "%d ", info->hw_works_i[i][j]);
-			strcat(statbuf[i], buf);
-		}
-		statbuf[i][strlen(statbuf[i]) - 1] = ']';
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
