@@ -368,7 +368,9 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 	int pool_no, i;
 
 	if (ar->head[0] != AVA4_H1 && ar->head[1] != AVA4_H2) {
-		applog(LOG_DEBUG, "Avalon4: H1 %02x, H2 %02x", ar->head[0], ar->head[1]);
+		applog(LOG_DEBUG, "%s-%d-%d: H1 %02x, H2 %02x",
+				avalon4->drv->name, avalon4->device_id, modular_id,
+				ar->head[0], ar->head[1]);
 		hexdump(ar->data, 32);
 		return 1;
 	}
@@ -376,14 +378,15 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 	expected_crc = crc16(ar->data, AVA4_P_DATA_LEN);
 	actual_crc = (ar->crc[0] & 0xff) | ((ar->crc[1] & 0xff) << 8);
 	if (expected_crc != actual_crc) {
-		applog(LOG_DEBUG, "Avalon4: %02x: expected crc(%04x), actual_crc(%04x)",
+		applog(LOG_DEBUG, "%s-%d-%d: %02x: expected crc(%04x), actual_crc(%04x)",
+		       avalon4->drv->name, avalon4->device_id, modular_id,
 		       ar->type, expected_crc, actual_crc);
 		return 1;
 	}
 
 	switch(ar->type) {
 	case AVA4_P_NONCE:
-		applog(LOG_DEBUG, "Avalon4: AVA4_P_NONCE");
+		applog(LOG_DEBUG, "%s-%d-%d: AVA4_P_NONCE", avalon4->drv->name, avalon4->device_id, modular_id);
 		memcpy(&miner, ar->data + 0, 4);
 		memcpy(&pool_no, ar->data + 4, 4);
 		memcpy(&nonce2, ar->data + 8, 4);
@@ -398,7 +401,9 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		ntime = be32toh(ntime);
 		if (miner >= AVA4_DEFAULT_MINERS ||
 		    pool_no >= total_pools || pool_no < 0) {
-			applog(LOG_DEBUG, "Avalon4: Wrong miner/pool_no %d/%d", miner, pool_no);
+			applog(LOG_DEBUG, "%s-%d-%d: Wrong miner/pool_no %d/%d",
+					avalon4->drv->name, avalon4->device_id, modular_id,
+					miner, pool_no);
 			break;
 		}
 		nonce2 = be32toh(nonce2);
@@ -417,16 +422,24 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		real_pool = pool = pools[pool_no];
 		if (job_idcmp(job_id, pool->swork.job_id)) {
 			if (!job_idcmp(job_id, pool_stratum0->swork.job_id)) {
-				applog(LOG_DEBUG, "Avalon4: Match to previous stratum0! (%s)", pool_stratum0->swork.job_id);
+				applog(LOG_DEBUG, "%s-%d-%d: Match to previous stratum0! (%s)",
+						avalon4->drv->name, avalon4->device_id, modular_id,
+						pool_stratum0->swork.job_id);
 				pool = pool_stratum0;
 			} else if (!job_idcmp(job_id, pool_stratum1->swork.job_id)) {
-				applog(LOG_DEBUG, "Avalon4: Match to previous stratum1! (%s)", pool_stratum1->swork.job_id);
+				applog(LOG_DEBUG, "%s-%d-%d: Match to previous stratum1! (%s)",
+						avalon4->drv->name, avalon4->device_id, modular_id,
+						pool_stratum1->swork.job_id);
 				pool = pool_stratum1;
 			} else if (!job_idcmp(job_id, pool_stratum2->swork.job_id)) {
-				applog(LOG_DEBUG, "Avalon4: Match to previous stratum2! (%s)", pool_stratum2->swork.job_id);
+				applog(LOG_DEBUG, "%s-%d-%d: Match to previous stratum2! (%s)",
+						avalon4->drv->name, avalon4->device_id, modular_id,
+						pool_stratum2->swork.job_id);
 				pool = pool_stratum2;
 			} else {
-				applog(LOG_ERR, "Avalon4: Cannot match to any stratum! (%s)", pool->swork.job_id);
+				applog(LOG_ERR, "%s-%d-%d: Cannot match to any stratum! (%s)",
+						avalon4->drv->name, avalon4->device_id, modular_id,
+						pool->swork.job_id);
 				inc_hw_errors(thr);
 				break;
 			}
@@ -438,7 +451,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce, ntime);
 		break;
 	case AVA4_P_STATUS:
-		applog(LOG_DEBUG, "Avalon4: AVA4_P_STATUS");
+		applog(LOG_DEBUG, "%s-%d-%d: AVA4_P_STATUS", avalon4->drv->name, avalon4->device_id, modular_id);
 		hexdump(ar->data, 32);
 		memcpy(&tmp, ar->data, 4);
 		tmp = be32toh(tmp);
@@ -476,7 +489,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		avalon4->temp = get_current_temp_max(info);
 		break;
 	case AVA4_P_STATUS_LW:
-		applog(LOG_DEBUG, "Avalon4: AVA4_P_STATUS_LW");
+		applog(LOG_DEBUG, "%s-%d-%d: AVA4_P_STATUS_LW", avalon4->drv->name, avalon4->device_id, modular_id);
 		for (i = 0; i < AVA4_DEFAULT_MINERS; i++)
 			info->local_works_i[modular_id][i] += ((ar->data[i * 3] << 16) |
 							    (ar->data[i * 3 + 1] << 8) |
@@ -484,7 +497,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 
 		break;
 	case AVA4_P_STATUS_HW:
-		applog(LOG_DEBUG, "Avalon4: AVA4_P_STATUS_HW");
+		applog(LOG_DEBUG, "%s-%d-%d: AVA4_P_STATUS_HW", avalon4->drv->name, avalon4->device_id, modular_id);
 		for (i = 0; i < AVA4_DEFAULT_MINERS; i++)
 			info->hw_works_i[modular_id][i] += ((ar->data[i * 3] << 16) |
 							    (ar->data[i * 3 + 1] << 8) |
@@ -493,10 +506,10 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 
 		break;
 	case AVA4_P_ACKDETECT:
-		applog(LOG_DEBUG, "Avalon4: AVA4_P_ACKDETECT");
+		applog(LOG_DEBUG, "%s-%d-%d: AVA4_P_ACKDETECT", avalon4->drv->name, avalon4->device_id, modular_id);
 		break;
 	default:
-		applog(LOG_DEBUG, "Avalon4: Unknown response");
+		applog(LOG_DEBUG, "%s-%d-%d: Unknown response", avalon4->drv->name, avalon4->device_id, modular_id);
 		break;
 	}
 	return 0;
@@ -563,7 +576,7 @@ static int avalon4_iic_xfer(struct cgpu_info *avalon4,
 
 	err = usb_write(avalon4, (char *)wbuf, wlen, write, C_AVA4_WRITE);
 	if (err || *write != wlen) {
-		applog(LOG_DEBUG, "Avalon4: AUC xfer %d, w(%d-%d)!", err, wlen, *write);
+		applog(LOG_DEBUG, "%s-%d: AUC xfer %d, w(%d-%d)!", avalon4->drv->name, avalon4->device_id, err, wlen, *write);
 		usb_nodev(avalon4);
 		goto out;
 	}
@@ -573,7 +586,7 @@ static int avalon4_iic_xfer(struct cgpu_info *avalon4,
 	rlen += 4;		/* Add 4 bytes IIC header */
 	err = usb_read(avalon4, (char *)rbuf, rlen, read, C_AVA4_READ);
 	if (err || *read != rlen) {
-		applog(LOG_DEBUG, "Avalon4: AUC xfer %d, r(%d-%d)!", err, rlen - 4, *read);
+		applog(LOG_DEBUG, "%s-%d: AUC xfer %d, r(%d-%d)!", avalon4->drv->name, avalon4->device_id, err, rlen - 4, *read);
 		hexdump(rbuf, rlen);
 	}
 
@@ -594,7 +607,7 @@ static int avalon4_auc_init(struct cgpu_info *avalon4, char *ver)
 
 	/* Try to clean the AUC buffer */
 	err = usb_read(avalon4, (char *)rbuf, AVA4_AUC_P_SIZE, &rlen, C_AVA4_READ);
-	applog(LOG_DEBUG, "Avalon4: AUC usb_read %d, %d!", err, rlen);
+	applog(LOG_DEBUG, "%s-%d: AUC usb_read %d, %d!", avalon4->drv->name, avalon4->device_id, err, rlen);
 	hexdump(rbuf, AVA4_AUC_P_SIZE);
 
 	/* Reset */
@@ -605,7 +618,7 @@ static int avalon4_auc_init(struct cgpu_info *avalon4, char *ver)
 	memset(rbuf, 0, AVA4_AUC_P_SIZE);
 	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_AUC_P_SIZE, &wlen, rbuf, rlen, &rlen);
 	if (err) {
-		applog(LOG_ERR, "Avalon4: Failed to reset Avalon USB2IIC Converter");
+		applog(LOG_ERR, "%s-%d: Failed to reset Avalon USB2IIC Converter", avalon4->drv->name, avalon4->device_id);
 		return 1;
 	}
 
@@ -617,7 +630,7 @@ static int avalon4_auc_init(struct cgpu_info *avalon4, char *ver)
 	memset(rbuf, 0, AVA4_AUC_P_SIZE);
 	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_AUC_P_SIZE, &wlen, rbuf, rlen, &rlen);
 	if (err) {
-		applog(LOG_ERR, "Avalon4: Failed to deinit Avalon USB2IIC Converter");
+		applog(LOG_ERR, "%s-%d: Failed to deinit Avalon USB2IIC Converter", avalon4->drv->name, avalon4->device_id);
 		return 1;
 	}
 
@@ -631,7 +644,7 @@ static int avalon4_auc_init(struct cgpu_info *avalon4, char *ver)
 	memset(rbuf, 0, AVA4_AUC_P_SIZE);
 	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_AUC_P_SIZE, &wlen, rbuf, rlen, &rlen);
 	if (err) {
-		applog(LOG_ERR, "Avalon4: Failed to init Avalon USB2IIC Converter");
+		applog(LOG_ERR, "%s-%d: Failed to init Avalon USB2IIC Converter", avalon4->drv->name, avalon4->device_id);
 		return 1;
 	}
 
@@ -640,7 +653,7 @@ static int avalon4_auc_init(struct cgpu_info *avalon4, char *ver)
 	memcpy(ver, rbuf + 4, AVA4_AUC_VER_LEN);
 	ver[AVA4_AUC_VER_LEN] = '\0';
 
-	applog(LOG_DEBUG, "Avalon4: USB2IIC Converter version: %s!", ver);
+	applog(LOG_DEBUG, "%s-%d: USB2IIC Converter version: %s!", avalon4->drv->name, avalon4->device_id, ver);
 	return 0;
 }
 
@@ -665,11 +678,12 @@ static int avalon4_auc_getinfo(struct cgpu_info *avalon4)
 	memset(rbuf, 0, AVA4_AUC_P_SIZE);
 	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_AUC_P_SIZE, &wlen, rbuf, rlen, &rlen);
 	if (err) {
-		applog(LOG_ERR, "Avalon4: AUC Failed to get info ");
+		applog(LOG_ERR, "%s-%d: AUC Failed to get info ", avalon4->drv->name, avalon4->device_id);
 		return 1;
 	}
 
-	applog(LOG_DEBUG, "Avalon4: AUC tempADC(%03d), reqcnt(%d), respcnt(%d), txflag(%d), state(%d)",
+	applog(LOG_DEBUG, "%s-%d: AUC tempADC(%03d), reqcnt(%d), respcnt(%d), txflag(%d), state(%d)",
+			avalon4->drv->name, avalon4->device_id,
 			pdata[1] << 8 | pdata[0],
 			pdata[2],
 			pdata[3],
@@ -702,11 +716,13 @@ static int avalon4_iic_xfer_pkg(struct cgpu_info *avalon4, uint8_t slave_addr,
 	if ((pkg->type != AVA4_P_DETECT) && err == -7 && !rcnt && rlen) {
 		avalon4_iic_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
 		err = avalon4_iic_xfer(avalon4, wbuf, wbuf[0], &wcnt, rbuf, rlen, &rcnt);
-		applog(LOG_DEBUG, "Avalon4: IIC read again!(err:%d)", err);
+		applog(LOG_DEBUG, "%s-%d-%d: IIC read again!(err:%d)", avalon4->drv->name, avalon4->device_id, slave_addr, err);
 	}
 	if (err || rcnt != rlen) {
 		if (info->xfer_err_cnt++ == 100) {
-			applog(LOG_DEBUG, "Avalon4: AUC xfer_err_cnt reach err = %d, rcnt = %d, rlen = %d", err, rcnt, rlen);
+			applog(LOG_DEBUG, "%s-%d-%d: AUC xfer_err_cnt reach err = %d, rcnt = %d, rlen = %d",
+					avalon4->drv->name, avalon4->device_id, slave_addr,
+					err, rcnt, rlen);
 
 			cgsleep_ms(5 * 1000); /* Wait MM reset */
 			avalon4_auc_init(avalon4, info->auc_version);
@@ -747,7 +763,8 @@ static void avalon4_stratum_pkgs(struct cgpu_info *avalon4, struct pool *pool)
 	uint8_t coinbase_prehash[32];
 
 	/* Send out the first stratum message STATIC */
-	applog(LOG_DEBUG, "Avalon4: Pool stratum message STATIC: %d, %d, %d, %d, %d",
+	applog(LOG_DEBUG, "%s-%d: Pool stratum message STATIC: %d, %d, %d, %d, %d",
+	       avalon4->drv->name, avalon4->device_id,
 	       pool->coinbase_len,
 	       pool->nonce2_offset,
 	       pool->n2size,
@@ -785,7 +802,7 @@ static void avalon4_stratum_pkgs(struct cgpu_info *avalon4, struct pool *pool)
 	if (opt_debug) {
 		char *target_str;
 		target_str = bin2hex(target, 32);
-		applog(LOG_DEBUG, "Avalon4: Pool stratum target: %s", target_str);
+		applog(LOG_DEBUG, "%s-%d: Pool stratum target: %s", avalon4->drv->name, avalon4->device_id, target_str);
 		free(target_str);
 	}
 	avalon4_init_pkg(&pkg, AVA4_P_TARGET, 1, 1);
@@ -796,7 +813,8 @@ static void avalon4_stratum_pkgs(struct cgpu_info *avalon4, struct pool *pool)
 
 	job_id_len = strlen(pool->swork.job_id);
 	crc = crc16((unsigned char *)pool->swork.job_id, job_id_len);
-	applog(LOG_DEBUG, "Avalon4: Pool stratum message JOBS_ID[%04x]: %s",
+	applog(LOG_DEBUG, "%s-%d: Pool stratum message JOBS_ID[%04x]: %s",
+	       avalon4->drv->name, avalon4->device_id,
 	       crc, pool->swork.job_id);
 
 	pkg.data[0] = (crc & 0xff00) >> 8;
@@ -815,7 +833,9 @@ static void avalon4_stratum_pkgs(struct cgpu_info *avalon4, struct pool *pool)
 	avalon4_init_pkg(&pkg, AVA4_P_COINBASE, 1, a + (b ? 1 : 0));
 	if (avalon4_send_bc_pkgs(avalon4, &pkg))
 		return;
-	applog(LOG_DEBUG, "Avalon4: Pool stratum message modified COINBASE: %d %d", a, b);
+	applog(LOG_DEBUG, "%s-%d: Pool stratum message modified COINBASE: %d %d",
+			avalon4->drv->name, avalon4->device_id,
+			a, b);
 	for (i = 1; i < a; i++) {
 		memcpy(pkg.data, pool->coinbase + coinbase_len_prehash + i * 32 - 32, 32);
 		avalon4_init_pkg(&pkg, AVA4_P_COINBASE, i + 1, a + (b ? 1 : 0));
@@ -831,7 +851,7 @@ static void avalon4_stratum_pkgs(struct cgpu_info *avalon4, struct pool *pool)
 	}
 
 	b = pool->merkles;
-	applog(LOG_DEBUG, "Avalon4: Pool stratum message MERKLES: %d", b);
+	applog(LOG_DEBUG, "%s-%d: Pool stratum message MERKLES: %d", avalon4->drv->name, avalon4->device_id, b);
 	for (i = 0; i < b; i++) {
 		memset(pkg.data, 0, AVA4_P_DATA_LEN);
 		memcpy(pkg.data, pool->swork.merkle_bin[i], 32);
@@ -840,7 +860,7 @@ static void avalon4_stratum_pkgs(struct cgpu_info *avalon4, struct pool *pool)
 			return;
 	}
 
-	applog(LOG_DEBUG, "Avalon4: Pool stratum message HEADER: 4");
+	applog(LOG_DEBUG, "%s-%d: Pool stratum message HEADER: 4", avalon4->drv->name, avalon4->device_id);
 	for (i = 0; i < 4; i++) {
 		memset(pkg.data, 0, AVA4_P_DATA_LEN);
 		memcpy(pkg.data, pool->header_bin + i * 32, 32);
@@ -959,7 +979,7 @@ static void detect_modules(struct cgpu_info *avalon4)
 			continue;
 
 		/* Send out detect pkg */
-		applog(LOG_DEBUG, "%s %d: AVA4_P_DETECT ID[%d]",
+		applog(LOG_DEBUG, "%s-%d: AVA4_P_DETECT ID[%d]",
 		       avalon4->drv->name, avalon4->device_id, i);
 		memset(detect_pkg.data, 0, AVA4_P_DATA_LEN);
 		tmp = be32toh(i); /* ID */
@@ -968,19 +988,19 @@ static void detect_modules(struct cgpu_info *avalon4)
 		err = avalon4_iic_xfer_pkg(avalon4, AVA4_MODULE_BROADCAST, &detect_pkg, &ret_pkg);
 		if (err == AVA4_SEND_OK) {
 			if (decode_pkg(thr, &ret_pkg, AVA4_MODULE_BROADCAST)) {
-				applog(LOG_DEBUG, "%s %d: Should be AVA4_P_ACKDETECT(%d), but %d",
+				applog(LOG_DEBUG, "%s-%d: Should be AVA4_P_ACKDETECT(%d), but %d",
 				       avalon4->drv->name, avalon4->device_id, AVA4_P_ACKDETECT, ret_pkg.type);
 				continue;
 			}
 		}
 
 		if (err != AVA4_SEND_OK) {
-			applog(LOG_DEBUG, "%s %d: AVA4_P_DETECT: Failed AUC xfer data with err %d",
+			applog(LOG_DEBUG, "%s-%d: AVA4_P_DETECT: Failed AUC xfer data with err %d",
 					avalon4->drv->name, avalon4->device_id, err);
 			break;
 		}
 
-		applog(LOG_DEBUG, "%s %d: Module detect ID[%d]: %d",
+		applog(LOG_DEBUG, "%s-%d: Module detect ID[%d]: %d",
 		       avalon4->drv->name, avalon4->device_id, i, ret_pkg.type);
 		if (ret_pkg.type != AVA4_P_ACKDETECT)
 			break;
@@ -1003,7 +1023,7 @@ static void detect_modules(struct cgpu_info *avalon4)
 			info->set_voltage_offset[i][j] = 0;
 		}
 		info->led_red[i] = 0;
-		applog(LOG_NOTICE, "%s %d: New module detect! ID[%d]",
+		applog(LOG_NOTICE, "%s-%d: New module detect! ID[%d]",
 		       avalon4->drv->name, avalon4->device_id, i);
 	}
 }
@@ -1082,7 +1102,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 					info->local_works_i[i][j] = 0;
 					info->hw_works_i[i][j] = 0;
 				}
-				applog(LOG_NOTICE, "%s %d: Module detached! ID[%d]",
+				applog(LOG_NOTICE, "%s-%d: Module detached! ID[%d]",
 				       avalon4->drv->name, avalon4->device_id, i);
 			}
 		}
@@ -1292,7 +1312,8 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	int coinbase_len_posthash, coinbase_len_prehash;
 	int i, cutoff = 0, count = 0;
 
-	applog(LOG_DEBUG, "Avalon4: New stratum: restart: %d, update: %d",
+	applog(LOG_DEBUG, "%s-%d: New stratum: restart: %d, update: %d",
+	       avalon4->drv->name, avalon4->device_id,
 	       thr->work_restart, thr->work_update);
 	thr->work_update = false;
 	thr->work_restart = false;
@@ -1304,22 +1325,23 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	/* Step 2: MM protocol check */
 	pool = current_pool();
 	if (!pool->has_stratum)
-		quit(1, "Avalon4: MM has to use stratum pools");
+		quit(1, "%s-%d: MM has to use stratum pools", avalon4->drv->name, avalon4->device_id);
 
 	coinbase_len_prehash = pool->nonce2_offset - (pool->nonce2_offset % SHA256_BLOCK_SIZE);
 	coinbase_len_posthash = pool->coinbase_len - coinbase_len_prehash;
 
 	if (coinbase_len_posthash + SHA256_BLOCK_SIZE > AVA4_P_COINBASE_SIZE) {
-		applog(LOG_ERR, "Avalon4: MM pool modified coinbase length(%d) is more than %d",
+		applog(LOG_ERR, "%s-%d: MM pool modified coinbase length(%d) is more than %d",
+		       avalon4->drv->name, avalon4->device_id,
 		       coinbase_len_posthash + SHA256_BLOCK_SIZE, AVA4_P_COINBASE_SIZE);
 		return;
 	}
 	if (pool->merkles > AVA4_P_MERKLES_COUNT) {
-		applog(LOG_ERR, "Avalon4: MM merkles has to be less then %d", AVA4_P_MERKLES_COUNT);
+		applog(LOG_ERR, "%s-%d: MM merkles has to be less then %d", avalon4->drv->name, avalon4->device_id, AVA4_P_MERKLES_COUNT);
 		return;
 	}
 	if (pool->n2size < 3) {
-		applog(LOG_ERR, "Avalon4: MM nonce2 size has to be >= 3 (%d)", pool->n2size);
+		applog(LOG_ERR, "%s-%d: MM nonce2 size has to be >= 3 (%d)", avalon4->drv->name, avalon4->device_id, pool->n2size);
 		return;
 	}
 
@@ -1427,7 +1449,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 					info->set_voltage_i[i][j] += 125;
 				}
 
-				applog(LOG_NOTICE, "%s %d: Automatic increase module[%d] voltage to %d",
+				applog(LOG_NOTICE, "%s-%d: Automatic increase module[%d] voltage to %d",
 				       avalon4->drv->name, avalon4->device_id, i, info->set_voltage[i]);
 			}
 			if (hwp < AVA4_DH_DEC && (info->set_voltage[i] > info->set_voltage[0] - (4 * 125))) {
@@ -1436,7 +1458,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 					info->set_voltage_i[i][j] -= 125;
 				}
 
-				applog(LOG_NOTICE, "%s %d: Automatic decrease module[%d] voltage to %d",
+				applog(LOG_NOTICE, "%s-%d: Automatic decrease module[%d] voltage to %d",
 				       avalon4->drv->name, avalon4->device_id, i, info->set_voltage[i]);
 			}
 
@@ -1668,7 +1690,7 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 
 		opt_avalon4_polling_delay = val;
 
-		applog(LOG_NOTICE, "%s %d: Update polling delay to: %d",
+		applog(LOG_NOTICE, "%s-%d: Update polling delay to: %d",
 		       avalon4->drv->name, avalon4->device_id, val);
 
 		return NULL;
@@ -1685,7 +1707,7 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 			return replybuf;
 		}
 
-		applog(LOG_NOTICE, "%s %d: Update fan to %d-%d",
+		applog(LOG_NOTICE, "%s-%d: Update fan to %d-%d",
 		       avalon4->drv->name, avalon4->device_id,
 		       opt_avalon4_fan_min, opt_avalon4_fan_max);
 
@@ -1704,7 +1726,7 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 			return replybuf;
 		}
 
-		applog(LOG_NOTICE, "%s %d: Update frequency to %d",
+		applog(LOG_NOTICE, "%s-%d: Update frequency to %d",
 		       avalon4->drv->name, avalon4->device_id,
 		       (opt_avalon4_freq[0] * 4 + opt_avalon4_freq[1] * 4 + opt_avalon4_freq[2]) / 9);
 
@@ -1730,7 +1752,7 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 
 		info->led_red[val] = !info->led_red[val];
 
-		applog(LOG_NOTICE, "%s %d: Module:%d, LED: %s",
+		applog(LOG_NOTICE, "%s-%d: Module:%d, LED: %s",
 		       avalon4->drv->name, avalon4->device_id,
 		       val, info->led_red[val] ? "on" : "off");
 
@@ -1805,7 +1827,7 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 			}
 		}
 
-		applog(LOG_NOTICE, "%s %d: Update module[%d] voltage to %d, val_ch:%d, val_offset:%d",
+		applog(LOG_NOTICE, "%s-%d: Update module[%d] voltage to %d, val_ch:%d, val_offset:%d",
 		       avalon4->drv->name, avalon4->device_id, val_mod, val_volt, val_ch, val_offset);
 
 		return NULL;
