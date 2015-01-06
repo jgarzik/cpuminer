@@ -1514,7 +1514,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		strcat(statbuf[i], " MW[");
 		for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
 			if (show)
-				sprintf(buf, "%d ", info->local_works_i[i][j]);
+				sprintf(buf, "%"PRIu64" ", info->local_works_i[i][j]);
 			else
 				sprintf(buf, "%d ", info->matching_work[i][j]);
 
@@ -1541,7 +1541,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		if (show) {
 			strcat(statbuf[i], " MH[");
 			for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
-				sprintf(buf, "%d ", info->hw_works_i[i][j]);
+				sprintf(buf, "%"PRIu64" ", info->hw_works_i[i][j]);
 				strcat(statbuf[i], buf);
 			}
 			statbuf[i][strlen(statbuf[i]) - 1] = ']';
