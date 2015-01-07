@@ -490,20 +490,25 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		break;
 	case AVA4_P_STATUS_LW:
 		applog(LOG_DEBUG, "%s-%d-%d: AVA4_P_STATUS_LW", avalon4->drv->name, avalon4->device_id, modular_id);
-		for (i = 0; i < AVA4_DEFAULT_MINERS; i++)
+		for (i = 0; i < AVA4_DEFAULT_MINERS; i++) {
 			info->local_works_i[modular_id][i] += ((ar->data[i * 3] << 16) |
 							    (ar->data[i * 3 + 1] << 8) |
 							    (ar->data[i * 3 + 2]));
-
+			info->lw5_i[modular_id][i][info->i_1m] += ((ar->data[i * 3] << 16) |
+							    (ar->data[i * 3 + 1] << 8) |
+							    (ar->data[i * 3 + 2]));
+		}
 		break;
 	case AVA4_P_STATUS_HW:
 		applog(LOG_DEBUG, "%s-%d-%d: AVA4_P_STATUS_HW", avalon4->drv->name, avalon4->device_id, modular_id);
-		for (i = 0; i < AVA4_DEFAULT_MINERS; i++)
+		for (i = 0; i < AVA4_DEFAULT_MINERS; i++) {
 			info->hw_works_i[modular_id][i] += ((ar->data[i * 3] << 16) |
 							    (ar->data[i * 3 + 1] << 8) |
 							    (ar->data[i * 3 + 2]));
-
-
+			info->hw5_i[modular_id][i][info->i_1m] += ((ar->data[i * 3] << 16) |
+							    (ar->data[i * 3 + 1] << 8) |
+							    (ar->data[i * 3 + 2]));
+		}
 		break;
 	case AVA4_P_ACKDETECT:
 		applog(LOG_DEBUG, "%s-%d-%d: AVA4_P_ACKDETECT", avalon4->drv->name, avalon4->device_id, modular_id);
@@ -1088,7 +1093,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 				info->local_works[i] = 0;
 				info->hw_work[i] = 0;
 				info->hw_works[i] = 0;
-				for (j = 0; j < 6; j++) {
+				for (j = 0; j < AVA4_DEFAULT_ADJ_MINUTES; j++) {
 					info->lw5[i][j] = 0;
 					info->hw5[i][j] = 0;
 				}
@@ -1101,6 +1106,8 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 					info->chipmatching_work[i][j][3] = 0;
 					info->local_works_i[i][j] = 0;
 					info->hw_works_i[i][j] = 0;
+					memset(info->lw5_i[i][j], 0, AVA4_DEFAULT_ADJ_MINUTES * sizeof(uint32_t));
+					memset(info->hw5_i[i][j], 0, AVA4_DEFAULT_ADJ_MINUTES * sizeof(uint32_t));
 				}
 				applog(LOG_NOTICE, "%s-%d: Module detached! ID[%d]",
 				       avalon4->drv->name, avalon4->device_id, i);
@@ -1393,7 +1400,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	double device_tdiff, hwp;
 	uint32_t a = 0, b = 0;
 	uint64_t h;
-	int i, j;
+	int i, j, k;
 
 	if (unlikely(avalon4->usbinfo.nodev)) {
 		applog(LOG_ERR, "%s-%d: Device disappeared, shutting down thread",
@@ -1414,7 +1421,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	device_tdiff = tdiff(&current, &(info->last_1m));
 	if (device_tdiff >= 60.0 || device_tdiff < 0) {
 		copy_time(&info->last_1m, &current);
-		if (info->i_1m++ >= 6)
+		if (info->i_1m++ >= AVA4_DEFAULT_ADJ_MINUTES)
 			info->i_1m = 0;
 
 		for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
@@ -1423,6 +1430,11 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 
 			info->lw5[i][info->i_1m] = 0;
 			info->hw5[i][info->i_1m] = 0;
+
+			for(j = 0; j < AVA4_DEFAULT_MINERS; j++) {
+				info->lw5_i[i][j][info->i_1m] = 0;
+				info->hw5_i[i][j][info->i_1m] = 0;
+			}
 		}
 	}
 
@@ -1432,36 +1444,67 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 		copy_time(&info->last_5m, &current);
 
 		for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+			uint8_t individual = 0;
+
 			if (!info->enable[i])
 				continue;
 
-			a = 0;
-			b = 0;
-			for (j = 0; j < 6; j++) {
-				a += info->lw5[i][j];
-				b += info->hw5[i][j];
-			}
+			if ((info->mod_type[i] == AVA4_TYPE_MM41) && mm_cmp_1501(info, i))
+				individual = 1;
 
-			hwp = a ? (double)b / (double)a : 0;
-			if (hwp > AVA4_DH_INC && (info->set_voltage[i] < info->set_voltage[0] + 125)) {
-				info->set_voltage[i] += 125;
-				for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
-					info->set_voltage_i[i][j] += 125;
+			if (!individual) {
+				a = 0;
+				b = 0;
+				for (j = 0; j < AVA4_DEFAULT_ADJ_MINUTES; j++) {
+					a += info->lw5[i][j];
+					b += info->hw5[i][j];
 				}
 
-				applog(LOG_NOTICE, "%s-%d: Automatic increase module[%d] voltage to %d",
-				       avalon4->drv->name, avalon4->device_id, i, info->set_voltage[i]);
-			}
-			if (hwp < AVA4_DH_DEC && (info->set_voltage[i] > info->set_voltage[0] - (4 * 125))) {
-				info->set_voltage[i] -= 125;
-				for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
-					info->set_voltage_i[i][j] -= 125;
+				hwp = a ? (double)b / (double)a : 0;
+				if (hwp > AVA4_DH_INC && (info->set_voltage[i] < info->set_voltage[0] + 125)) {
+					info->set_voltage[i] += 125;
+					for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
+						info->set_voltage_i[i][j] += 125;
+					}
+
+					applog(LOG_NOTICE, "%s-%d: Automatic increase module[%d] voltage to %d",
+							avalon4->drv->name, avalon4->device_id, i, info->set_voltage[i]);
 				}
+				if (hwp < AVA4_DH_DEC && (info->set_voltage[i] > info->set_voltage[0] - (4 * 125))) {
+					info->set_voltage[i] -= 125;
+					for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
+						info->set_voltage_i[i][j] -= 125;
+					}
 
-				applog(LOG_NOTICE, "%s-%d: Automatic decrease module[%d] voltage to %d",
-				       avalon4->drv->name, avalon4->device_id, i, info->set_voltage[i]);
+					applog(LOG_NOTICE, "%s-%d: Automatic decrease module[%d] voltage to %d",
+							avalon4->drv->name, avalon4->device_id, i, info->set_voltage[i]);
+				}
+			} else {
+				for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
+					a = 0;
+					b = 0;
+
+					for (k = 0; k < AVA4_DEFAULT_ADJ_MINUTES; k++) {
+						a += info->lw5_i[i][j][k];
+						b += info->hw5_i[i][j][k];
+					}
+
+					hwp = a ? (double)b / (double)a : 0;
+					if (hwp > AVA4_DH_INC && (info->set_voltage_i[i][j] < info->set_voltage[0] + 125)) {
+						//FIX ME: How to deal with set_voltage ?
+						info->set_voltage_i[i][j] += 125;
+						applog(LOG_NOTICE, "%s-%d: Automatic increase module[%d-%d] voltage to %d",
+							avalon4->drv->name, avalon4->device_id, i, j, info->set_voltage_i[i][j]);
+
+					}
+					if (hwp < AVA4_DH_DEC && (info->set_voltage_i[i][j] > info->set_voltage[0] - (4 * 125))) {
+						//FIX ME: How to deal with set_voltage ?
+						info->set_voltage_i[i][j] -= 125;
+						applog(LOG_NOTICE, "%s-%d: Automatic decrease module[%d-%d] voltage to %d",
+								avalon4->drv->name, avalon4->device_id, i, j, info->set_voltage_i[i][j]);
+					}
+				}
 			}
-
 		}
 	}
 
@@ -1484,8 +1527,8 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct avalon4_info *info = cgpu->device_data;
-	int i, j;
-	uint32_t a,b ;
+	int i, j, k;
+	uint32_t a, b, lw5_i[AVA4_DEFAULT_MINERS], hw5_i[AVA4_DEFAULT_MINERS];
 	double hwp, diff;
 	char buf[256];
 	char statbuf[AVA4_DEFAULT_MODULARS][STATBUFLEN];
@@ -1530,7 +1573,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 
-		if (mm_cmp_1501(info, i))
+		if ((info->mod_type[i] == AVA4_TYPE_MM41) && mm_cmp_1501(info, i))
 			show = 1;
 
 		strcat(statbuf[i], " MW[");
@@ -1557,7 +1600,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 
-		if (mm_cmp_1501(info, i))
+		if ((info->mod_type[i] == AVA4_TYPE_MM41) && mm_cmp_1501(info, i))
 			show = 1;
 
 		if (show) {
@@ -1588,14 +1631,24 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		strcat(statbuf[i], buf);
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+		uint8_t show = 0;
+
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 
 		a = 0;
 		b = 0;
-		for (j = 0; j < 6; j++) {
+		memset(lw5_i, 0, AVA4_DEFAULT_MINERS * sizeof(uint32_t));
+		memset(hw5_i, 0, AVA4_DEFAULT_MINERS * sizeof(uint32_t));
+
+		for (j = 0; j < AVA4_DEFAULT_ADJ_MINUTES; j++) {
 			a += info->lw5[i][j];
 			b += info->hw5[i][j];
+
+			for (k = 0; k < AVA4_DEFAULT_MINERS; k++) {
+				lw5_i[k] += info->lw5_i[i][k][j];
+				hw5_i[k] += info->hw5_i[i][k][j];
+			}
 		}
 
 		cgtime(&current);
@@ -1603,8 +1656,21 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 		hwp = a ? (double)b / (double)a * 100 : 0;
 
+		if ((info->mod_type[i] == AVA4_TYPE_MM41) && mm_cmp_1501(info, i))
+			show = 1;
+
 		sprintf(buf, " GHS5m[%.2f] DH5m[%.3f%%]", ((double)a - (double)b) * 4.295 / diff, hwp);
 		strcat(statbuf[i], buf);
+
+		if (opt_debug && show) {
+			strcat(statbuf[i], " MDH5m[");
+			for (k = 0; k < AVA4_DEFAULT_MINERS; k++) {
+				hwp = lw5_i[k] ? (double)hw5_i[k] / (double)lw5_i[k] * 100 : 0;
+				sprintf(buf, "%.3f%% ", hwp);
+				strcat(statbuf[i], buf);
+			}
+			statbuf[i][strlen(statbuf[i]) - 1] = ']';
+		}
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
@@ -1626,6 +1692,24 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 		sprintf(buf, " Vol[%.4f]", (float)info->get_voltage[i] / 10000);
 		strcat(statbuf[i], buf);
+	}
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+		uint8_t show = 0;
+
+		if (info->mod_type[i] == AVA4_TYPE_NULL)
+			continue;
+
+		if ((info->mod_type[i] == AVA4_TYPE_MM41) && mm_cmp_1501(info, i))
+			show = 1;
+
+		if (opt_debug && show) {
+			strcat(statbuf[i], " MVol[");
+			for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
+				sprintf(buf, "%.4f ", (float)info->set_voltage_i[i][j] / 10000);
+				strcat(statbuf[i], buf);
+			}
+			statbuf[i][strlen(statbuf[i]) - 1] = ']';
+		}
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
