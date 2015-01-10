@@ -579,6 +579,7 @@ static int avalon4_iic_xfer(struct cgpu_info *avalon4,
 	if (unlikely(avalon4->usbinfo.nodev))
 		goto out;
 
+	usb_buffer_clear(avalon4);
 	err = usb_write(avalon4, (char *)wbuf, wlen, write, C_AVA4_WRITE);
 	if (err || *write != wlen) {
 		applog(LOG_DEBUG, "%s-%d: AUC xfer %d, w(%d-%d)!", avalon4->drv->name, avalon4->device_id, err, wlen, *write);
@@ -611,6 +612,7 @@ static int avalon4_auc_init(struct cgpu_info *avalon4, char *ver)
 		return 1;
 
 	/* Try to clean the AUC buffer */
+	usb_buffer_clear(avalon4);
 	err = usb_read(avalon4, (char *)rbuf, AVA4_AUC_P_SIZE, &rlen, C_AVA4_READ);
 	applog(LOG_DEBUG, "%s-%d: AUC usb_read %d, %d!", avalon4->drv->name, avalon4->device_id, err, rlen);
 	hexdump(rbuf, AVA4_AUC_P_SIZE);
