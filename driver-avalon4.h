@@ -84,6 +84,7 @@
 #define AVA4_P_POLLING	0x30
 #define AVA4_P_REQUIRE	0x31
 #define AVA4_P_TEST	0x32
+#define AVA4_P_RSTMMTX	0x33
 
 /* Back to host */
 #define AVA4_P_ACKDETECT	0x40

@@ -1084,6 +1084,9 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 
 		if (ret != AVA4_SEND_OK || decode_err) {
 			info->polling_err_cnt[i]++;
+			memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
+			avalon4_init_pkg(&send_pkg, AVA4_P_RSTMMTX, 1, 1);
+			avalon4_iic_xfer_pkg(avalon4, i, &send_pkg, NULL);
 			if (info->polling_err_cnt[i] >= 4) {
 				info->polling_err_cnt[i] = 0;
 				info->mod_type[i] = AVA4_TYPE_NULL;
