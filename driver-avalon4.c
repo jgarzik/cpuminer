@@ -1046,7 +1046,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 	double device_tdiff;
 
 	if (info->polling_first) {
-		cgsleep_ms(300);
+		cgsleep_ms(600);
 		info->polling_first = 0;
 	}
 
