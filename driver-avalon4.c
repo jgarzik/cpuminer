@@ -1196,11 +1196,12 @@ static void avalon4_set_voltage(struct cgpu_info *avalon4, int addr)
 
 	memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
 
+	/* Use shifter to set voltage */
 	for (i = 0; i < AVA4_DEFAULT_MINERS; i++) {
 		tmp = info->set_voltage_i[addr][i] + info->set_voltage_offset[addr][i];
 		tmp = encode_voltage_ncp5392p(tmp);
 		tmp = htobe16(tmp);
-		memcpy(send_pkg.data + 2 * i, &tmp, 2);
+		memcpy(send_pkg.data + 2 * ((4 + i / 5 * 5) - i + (i / 5 * 5)), &tmp, 2);
 	}
 
 	/* Package the data */
