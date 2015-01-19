@@ -1183,8 +1183,13 @@ static void copy_pool_stratum(struct pool *pool_stratum, struct pool *pool)
 static inline int mm_cmp_1501(struct avalon4_info *info, int addr)
 {
 	/* >= 1501 return 1 */
-	char *mm_1501 = "1501";
-	return strncmp(info->mm_version[addr] + 2, mm_1501, 4) >= 0 ? 1 : 0;
+	return strncmp(info->mm_version[addr] + 2, "1501", 4) >= 0 ? 1 : 0;
+}
+
+static inline int mm_cmp_d17f4a(struct avalon4_info *info, int addr)
+{
+	/* == d17f4a return 1 */
+	return strncmp(info->mm_version[addr] + 7, "d17f4a", 6) == 0 ? 1 : 0;
 }
 
 static void avalon4_set_voltage(struct cgpu_info *avalon4, int addr)
@@ -1199,7 +1204,11 @@ static void avalon4_set_voltage(struct cgpu_info *avalon4, int addr)
 	/* Use shifter to set voltage */
 	for (i = 0; i < AVA4_DEFAULT_MINERS; i++) {
 		tmp = info->set_voltage_i[addr][i] + info->set_voltage_offset[addr][i];
-		tmp = encode_voltage_ncp5392p(tmp);
+		if (info->mod_type[addr] == AVA4_TYPE_MM40)
+			tmp = encode_voltage_adp3208d(tmp);
+		if (info->mod_type[addr] == AVA4_TYPE_MM41)
+			tmp = encode_voltage_ncp5392p(tmp);
+
 		tmp = htobe16(tmp);
 		memcpy(send_pkg.data + 2 * ((4 + i / 5 * 5) - i + (i / 5 * 5)), &tmp, 2);
 	}
@@ -1391,6 +1400,14 @@ static void avalon4_update(struct cgpu_info *avalon4)
 			avalon4_set_freq(avalon4, i);
 		}
 
+		if ((info->mod_type[i] == AVA4_TYPE_MM40) &&
+			mm_cmp_1501(info, i) &&
+			!cutoff) {
+			if (!mm_cmp_d17f4a(info, i)) {
+				avalon4_set_voltage(avalon4, i);
+				avalon4_set_freq(avalon4, i);
+			}
+		}
 	}
 	info->mm_count = count;
 
@@ -1457,6 +1474,11 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 
 			if ((info->mod_type[i] == AVA4_TYPE_MM41) && mm_cmp_1501(info, i))
 				individual = 1;
+
+			if ((info->mod_type[i] == AVA4_TYPE_MM40) && mm_cmp_1501(info, i)) {
+				if (!mm_cmp_d17f4a(info, i))
+					individual = 1;
+			}
 
 			if (!individual) {
 				a = 0;
@@ -1582,6 +1604,11 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		if ((info->mod_type[i] == AVA4_TYPE_MM41) && mm_cmp_1501(info, i))
 			show = 1;
 
+		if ((info->mod_type[i] == AVA4_TYPE_MM40) && mm_cmp_1501(info, i)) {
+			if (!mm_cmp_d17f4a(info, i))
+				show = 1;
+		}
+
 		strcat(statbuf[i], " MW[");
 		for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
 			if (show)
@@ -1608,6 +1635,11 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 		if ((info->mod_type[i] == AVA4_TYPE_MM41) && mm_cmp_1501(info, i))
 			show = 1;
+
+		if ((info->mod_type[i] == AVA4_TYPE_MM40) && mm_cmp_1501(info, i)) {
+			if (!mm_cmp_d17f4a(info, i))
+				show = 1;
+		}
 
 		if (show) {
 			strcat(statbuf[i], " MH[");
@@ -1665,6 +1697,11 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		if ((info->mod_type[i] == AVA4_TYPE_MM41) && mm_cmp_1501(info, i))
 			show = 1;
 
+		if ((info->mod_type[i] == AVA4_TYPE_MM40) && mm_cmp_1501(info, i)) {
+			if (!mm_cmp_d17f4a(info, i))
+				show = 1;
+		}
+
 		sprintf(buf, " GHS5m[%.2f] DH5m[%.3f%%]", ((double)a - (double)b) * 4.295 / diff, hwp);
 		strcat(statbuf[i], buf);
 
@@ -1707,6 +1744,11 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 		if ((info->mod_type[i] == AVA4_TYPE_MM41) && mm_cmp_1501(info, i))
 			show = 1;
+
+		if ((info->mod_type[i] == AVA4_TYPE_MM40) && mm_cmp_1501(info, i)) {
+			if (!mm_cmp_d17f4a(info, i))
+				show = 1;
+		}
 
 		if (opt_debug && show) {
 			strcat(statbuf[i], " MVol[");
