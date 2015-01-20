@@ -1904,7 +1904,7 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 		if (!field) {
 			applog(LOG_WARNING, "%s%d: Ran out of queued IDs after %d of %d",
 			       bflsc->drv->name, bflsc->device_id, i, queued);
-			queued = i - 1;
+			queued = i;
 			goto out;
 		}
 		sscanf(field, "%04x", &uid);
