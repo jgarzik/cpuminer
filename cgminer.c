@@ -1998,11 +1998,21 @@ void clean_work(struct work *work)
 }
 
 /* All dynamically allocated work structs should be freed here to not leak any
- * ram from arrays allocated within the work struct */
-void _free_work(struct work *work)
+ * ram from arrays allocated within the work struct. Null the actual pointer
+ * used to call free_work. */
+void _free_work(struct work **workptr, const char *file, const char *func, const int line)
 {
+	struct work *work = *workptr;
+
+	if (unlikely(!work)) {
+		applog(LOG_ERR, "Free work called with null work from %s %s:%d",
+		       file, func, line);
+		return;
+	}
+
 	clean_work(work);
 	free(work);
+	*workptr = NULL;
 }
 
 static void gen_hash(unsigned char *data, unsigned char *hash, int len);
@@ -4608,8 +4618,15 @@ void switch_pools(struct pool *selected)
 
 }
 
-void _discard_work(struct work *work)
+void _discard_work(struct work **workptr, const char *file, const char *func, const int line)
 {
+	struct work *work = *workptr;
+
+	if (unlikely(!work)) {
+		applog(LOG_ERR, "Discard work called with null work from %s %s:%d",
+		       file, func, line);
+		return;
+	}
 	if (!work->clone && !work->rolls && !work->mined) {
 		if (work->pool) {
 			work->pool->discarded_work++;
@@ -4620,7 +4637,7 @@ void _discard_work(struct work *work)
 		applog(LOG_DEBUG, "Discarded work");
 	} else
 		applog(LOG_DEBUG, "Discarded cloned or rolled work");
-	free_work(work);
+	_free_work(workptr, file, func, line);
 }
 
 static void wake_gws(void)

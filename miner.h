@@ -1480,11 +1480,8 @@ extern int curses_int(const char *query);
 extern char *curses_input(const char *query);
 extern void kill_work(void);
 extern void switch_pools(struct pool *selected);
-extern void _discard_work(struct work *work);
-#define discard_work(WORK) do { \
-	_discard_work(WORK); \
-	WORK = NULL; \
-} while (0)
+extern void _discard_work(struct work **workptr, const char *file, const char *func, const int line);
+#define discard_work(WORK) _discard_work(&(WORK), __FILE__, __func__, __LINE__)
 extern void remove_pool(struct pool *pool);
 extern void write_config(FILE *fcfg);
 extern void zero_bestshare(void);
@@ -1508,11 +1505,8 @@ extern void app_restart(void);
 extern void roll_work(struct work *work);
 extern struct work *make_clone(struct work *work);
 extern void clean_work(struct work *work);
-extern void _free_work(struct work *work);
-#define free_work(WORK) do { \
-	_free_work(WORK); \
-	WORK = NULL; \
-} while (0)
+extern void _free_work(struct work **workptr, const char *file, const char *func, const int line);
+#define free_work(WORK) _free_work(&(WORK), __FILE__, __func__, __LINE__)
 extern void set_work_ntime(struct work *work, int ntime);
 extern struct work *copy_work_noffset(struct work *base_work, int noffset);
 #define copy_work(work_in) copy_work_noffset(work_in, 0)
