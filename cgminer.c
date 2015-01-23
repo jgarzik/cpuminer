@@ -8842,6 +8842,8 @@ static void *test_pool_thread(void *arg)
 	if (!pool->blocking)
 		pthread_detach(pthread_self());
 retry:
+	if (pool->removed)
+		goto out;
 	if (pool_active(pool, false)) {
 		pool_tset(pool, &pool->lagging);
 		pool_tclear(pool, &pool->idle);
@@ -8868,7 +8870,7 @@ retry:
 	}
 
 	pool->testing = false;
-
+out:
 	return NULL;
 }
 
