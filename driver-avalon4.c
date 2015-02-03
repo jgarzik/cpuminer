@@ -1,6 +1,6 @@
 /*
  * Copyright 2014 Mikeqin <Fengling.Qin@gmail.com>
- * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2015 Con Kolivas <kernel@kolivas.org>
  * Copyright 2012-2014 Xiangfu <xiangfu@openmobilefree.com>
  * Copyright 2012 Luke Dashjr
  * Copyright 2012 Andrew Smith
@@ -1221,13 +1221,14 @@ static void avalon4_set_voltage(struct cgpu_info *avalon4, int addr)
 		avalon4_iic_xfer_pkg(avalon4, addr, &send_pkg, NULL);
 }
 
-static uint32_t avalon4_get_cpm(int freq)
+static uint32_t avalon4_get_cpm(unsigned int freq)
 {
-	int i;
+	unsigned int i;
 
-	for (i = 0; i < sizeof(g_freq_array) / sizeof(g_freq_array[0]); i++)
+	for (i = 0; i < sizeof(g_freq_array) / sizeof(g_freq_array[0]); i++) {
 		if (freq >= g_freq_array[i][0] && freq < g_freq_array[i+1][0])
 			return g_freq_array[i][1];
+	}
 
 	/* return the lowest freq if not found */
 	return g_freq_array[0][1];
