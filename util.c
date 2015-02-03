@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2014 Con Kolivas
+ * Copyright 2011-2015 Con Kolivas
  * Copyright 2010 Jeff Garzik
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -2869,6 +2869,11 @@ resend:
 		free(sessionid);
 		free(nonce1);
 		goto out;
+	}
+
+	if (sessionid && pool->sessionid && !strcmp(sessionid, pool->sessionid)) {
+		applog(LOG_NOTICE, "Pool %d successfully negotiated resume with the same session ID",
+		       pool->pool_no);
 	}
 
 	cg_wlock(&pool->data_lock);
