@@ -46,10 +46,12 @@ extern char *curly;
 #ifdef HAVE_ALLOCA_H
 # include <alloca.h>
 #elif defined __GNUC__
-# ifndef WIN32
-#  define alloca __builtin_alloca
-# else
-#  include <malloc.h>
+# ifndef __FreeBSD__ /* FreeBSD has below #define in stdlib.h */
+#  ifndef WIN32
+#   define alloca __builtin_alloca
+#  else
+#   include <malloc.h>
+#  endif
 # endif
 #elif defined _AIX
 # define alloca __alloca
