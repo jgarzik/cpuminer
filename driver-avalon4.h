@@ -37,14 +37,16 @@
 #define AVA4_DEFAULT_FREQUENCY	200
 #define AVA4_DEFAULT_POLLING_DELAY	20 /* ms */
 
+#define AVA4_DEFAULT_ADJ_MINUTES	6
+
 #define AVA4_DH_INC	0.03
-#define AVA4_DH_DEC	0.001
+#define AVA4_DH_DEC	0.002
 
 #define AVA4_PWM_MAX		0x3FF
 
 #define AVA4_AUC_VER_LEN	12	/* Version length: 12 (AUC-YYYYMMDD) */
 #define AVA4_AUC_SPEED		400000
-#define AVA4_AUC_XDELAY  	9600	/* 4800 = 1ms in AUC (11U14)  */
+#define AVA4_AUC_XDELAY  	19200	/* 4800 = 1ms in AUC (11U14)  */
 #define AVA4_AUC_P_SIZE		64
 
 
@@ -75,17 +77,22 @@
 /* Broadcase or Address */
 #define AVA4_P_SET	0x20
 #define AVA4_P_FINISH	0x21
+#define AVA4_P_SET_VOLT 0x22
+#define AVA4_P_SET_FREQ 0x23
 
 /* Have to with I2C address */
 #define AVA4_P_POLLING	0x30
 #define AVA4_P_REQUIRE	0x31
 #define AVA4_P_TEST	0x32
+#define AVA4_P_RSTMMTX	0x33
 
 /* Back to host */
 #define AVA4_P_ACKDETECT	0x40
 #define AVA4_P_STATUS		0x41
 #define AVA4_P_NONCE		0x42
 #define AVA4_P_TEST_RET		0x43
+#define AVA4_P_STATUS_LW        0x44
+#define AVA4_P_STATUS_HW        0x45
 
 #define AVA4_MODULE_BROADCAST	0
 /* Endof Avalon4 protocol package type */
@@ -139,7 +146,8 @@ struct avalon4_info {
 
 	int set_frequency[3];
 	int set_voltage[AVA4_DEFAULT_MODULARS];
-	int set_voltage_broadcat;
+	uint16_t set_voltage_i[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINERS];
+	int8_t set_voltage_offset[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINERS];
 
 	int mod_type[AVA4_DEFAULT_MODULARS];
 	bool enable[AVA4_DEFAULT_MODULARS];
@@ -156,13 +164,17 @@ struct avalon4_info {
 	int led_red[AVA4_DEFAULT_MODULARS];
 
 	uint64_t local_works[AVA4_DEFAULT_MODULARS];
+	uint64_t local_works_i[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINERS];
 	uint64_t hw_works[AVA4_DEFAULT_MODULARS];
+	uint64_t hw_works_i[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINERS];
 
 	uint32_t local_work[AVA4_DEFAULT_MODULARS];
 	uint32_t hw_work[AVA4_DEFAULT_MODULARS];
 
-	uint32_t lw5[AVA4_DEFAULT_MODULARS][6];
-	uint32_t hw5[AVA4_DEFAULT_MODULARS][6];
+	uint32_t lw5[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_ADJ_MINUTES];
+	uint32_t lw5_i[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINERS][AVA4_DEFAULT_ADJ_MINUTES];
+	uint32_t hw5[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_ADJ_MINUTES];
+	uint32_t hw5_i[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINERS][AVA4_DEFAULT_ADJ_MINUTES];
 	int i_1m;
 	struct timeval last_5m;
 	struct timeval last_1m;
