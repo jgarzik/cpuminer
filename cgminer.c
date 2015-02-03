@@ -166,7 +166,6 @@ int opt_queue = 1;
 static int max_queue = 1;
 int opt_scantime = -1;
 int opt_expiry = 120;
-static const bool opt_time = true;
 unsigned long long global_hashrate;
 unsigned long global_quota_gcd = 1;
 time_t last_getwork;
@@ -4795,17 +4794,6 @@ static bool block_exists(char *hexstr)
 	if (s)
 		return true;
 	return false;
-}
-
-/* Tests if this work is from a block that has been seen before */
-static inline bool from_existing_block(struct work *work)
-{
-	char *hexstr = bin2hex(work->data + 8, 18);
-	bool ret;
-
-	ret = block_exists(hexstr);
-	free(hexstr);
-	return ret;
 }
 
 static int block_sort(struct block *blocka, struct block *blockb)

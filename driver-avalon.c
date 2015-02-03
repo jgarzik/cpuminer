@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2015 Con Kolivas <kernel@kolivas.org>
  * Copyright 2012-2013 Xiangfu <xiangfu@openmobilefree.com>
  * Copyright 2012 Luke Dashjr
  * Copyright 2012 Andrew Smith
@@ -288,13 +288,6 @@ static void wait_avalon_ready(struct cgpu_info *avalon)
 	while (avalon_buffer_full(avalon)) {
 		cgsleep_ms(40);
 	}
-}
-
-#define AVALON_CTS    (1 << 4)
-
-static inline bool avalon_cts(char c)
-{
-	return (c & AVALON_CTS);
 }
 
 static int avalon_read(struct cgpu_info *avalon, char *buf, size_t bufsize, int ep)

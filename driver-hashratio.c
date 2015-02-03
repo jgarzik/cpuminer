@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2015 Con Kolivas <kernel@kolivas.org>
  * Copyright 2012-2014 Xiangfu <xiangfu@openmobilefree.com>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -78,19 +78,6 @@ char *set_hashratio_freq(char *arg)
 	hashratio_freq = val;
 	
 	return NULL;
-}
-
-static inline uint8_t rev8(uint8_t d)
-{
-	int i;
-	uint8_t out = 0;
-
-	/* (from left to right) */
-	for (i = 0; i < 8; i++)
-		if (d & (1 << i))
-		out |= (1 << (7 - i));
-
-	return out;
 }
 
 char *set_hashratio_fan(char *arg)
