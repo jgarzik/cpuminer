@@ -1518,14 +1518,14 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 					}
 
 					hwp = a ? (double)b / (double)a : 0;
-					if (hwp > AVA4_DH_INC && (info->set_voltage_i[i][j] < info->set_voltage[0] + 125)) {
+					if (hwp > AVA4_DH_INC && (info->set_voltage_i[i][j] < info->set_voltage[0] + (2 * 125))) {
 						//FIX ME: How to deal with set_voltage ?
 						info->set_voltage_i[i][j] += 125;
 						applog(LOG_NOTICE, "%s-%d: Automatic increase module[%d-%d] voltage to %d",
 							avalon4->drv->name, avalon4->device_id, i, j, info->set_voltage_i[i][j]);
 
 					}
-					if (hwp < AVA4_DH_DEC && (info->set_voltage_i[i][j] > info->set_voltage[0] - (8 * 125))) {
+					if (hwp < AVA4_DH_DEC && (info->set_voltage_i[i][j] > info->set_voltage[0] - (12 * 125))) {
 						//FIX ME: How to deal with set_voltage ?
 						info->set_voltage_i[i][j] -= 125;
 						applog(LOG_NOTICE, "%s-%d: Automatic decrease module[%d-%d] voltage to %d",
