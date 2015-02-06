@@ -1738,6 +1738,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		uint8_t show = 0;
+		int32_t vref = 0;
 
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
@@ -1754,8 +1755,14 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 			strcat(statbuf[i], " MVol[");
 			for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
 				sprintf(buf, "%.4f ", (float)info->set_voltage_i[i][j] / 10000);
+				vref += ((info->set_voltage_i[i][j] - opt_avalon4_voltage_min) / 125);
 				strcat(statbuf[i], buf);
 			}
+			statbuf[i][strlen(statbuf[i]) - 1] = ']';
+
+			strcat(statbuf[i], " VREF[");
+			sprintf(buf, "%d ", vref);
+			strcat(statbuf[i], buf);
 			statbuf[i][strlen(statbuf[i]) - 1] = ']';
 		}
 	}
