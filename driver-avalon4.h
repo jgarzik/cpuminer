@@ -49,6 +49,10 @@
 #define AVA4_AUC_XDELAY  	19200	/* 4800 = 1ms in AUC (11U14)  */
 #define AVA4_AUC_P_SIZE		64
 
+#define AVA4_MOD_CUSTOM 0x0
+#define AVA4_MOD_ECO    0x1
+#define AVA4_MOD_NORMAL 0x2
+#define AVA4_MOD_TURBO  0x3
 
 /* Avalon4 protocol package type from MM protocol.h
  * https://github.com/Canaan-Creative/MM/blob/avalon4/firmware/protocol.h */
@@ -85,6 +89,7 @@
 #define AVA4_P_REQUIRE	0x31
 #define AVA4_P_TEST	0x32
 #define AVA4_P_RSTMMTX	0x33
+#define AVA4_P_GET_VOLT 0x34
 
 /* Back to host */
 #define AVA4_P_ACKDETECT	0x40
@@ -93,6 +98,7 @@
 #define AVA4_P_TEST_RET		0x43
 #define AVA4_P_STATUS_LW        0x44
 #define AVA4_P_STATUS_HW        0x45
+#define AVA4_P_STATUS_VOLT	0x46
 
 #define AVA4_MODULE_BROADCAST	0
 /* Endof Avalon4 protocol package type */
@@ -156,6 +162,7 @@ struct avalon4_info {
 	char mm_version[AVA4_DEFAULT_MODULARS][AVA4_MM_VER_LEN + 1];
 	uint8_t mm_dna[AVA4_DEFAULT_MODULARS][AVA4_MM_DNA_LEN + 1];
 	int get_voltage[AVA4_DEFAULT_MODULARS];
+	int get_voltage_i[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINERS];
 	int get_frequency[AVA4_DEFAULT_MODULARS];
 	int power_good[AVA4_DEFAULT_MODULARS];
 	int fan_pct[AVA4_DEFAULT_MODULARS];
@@ -208,5 +215,6 @@ extern int opt_avalon4_polling_delay;
 extern int opt_avalon4_aucspeed;
 extern int opt_avalon4_aucxdelay;
 extern int opt_avalon4_ntime_offset;
+extern int opt_avalon4_miningmode;
 #endif /* USE_AVALON4 */
 #endif	/* _AVALON4_H_ */

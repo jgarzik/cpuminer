@@ -1239,6 +1239,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalon4-aucxdelay",
 		     opt_set_intval, opt_show_intval, &opt_avalon4_aucxdelay,
 		     "Set Avalon4 AUC IIC xfer read delay, 4800 ~= 1ms"),
+	OPT_WITH_ARG("--avalon4-miningmode",
+		     opt_set_intval, opt_show_intval, &opt_avalon4_miningmode,
+		     "Set Avalon4 mining mode(0:custom, 1:eco, 2:normal, 3:turbo"),
 #endif
 #ifdef USE_BAB
 	OPT_WITH_ARG("--bab-options",
