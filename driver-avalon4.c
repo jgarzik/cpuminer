@@ -28,6 +28,7 @@ int opt_avalon4_fan_min = AVA4_DEFAULT_FAN_MIN;
 int opt_avalon4_fan_max = AVA4_DEFAULT_FAN_MAX;
 
 bool opt_avalon4_autov;
+bool opt_avalon4_freezesafe;
 int opt_avalon4_voltage_min = AVA4_DEFAULT_VOLTAGE;
 int opt_avalon4_voltage_max = AVA4_DEFAULT_VOLTAGE;
 int opt_avalon4_freq[3] = {AVA4_DEFAULT_FREQUENCY,
@@ -42,6 +43,7 @@ int opt_avalon4_aucxdelay = AVA4_AUC_XDELAY;
 int opt_avalon4_ntime_offset = AVA4_DEFAULT_ASIC_COUNT;
 int opt_avalon4_miningmode = AVA4_MOD_CUSTOM;
 
+static uint8_t avalon4_freezsafemode = 0;
 static uint32_t g_freq_array[][2] = {
 	{100, 0x1e078547},
 	{170, 0x340d0547},
@@ -332,6 +334,11 @@ static inline uint32_t adjust_fan(struct avalon4_info *info, int id)
 {
 	uint32_t pwm;
 	int t = info->temp[id];
+
+	if (avalon4_freezsafemode) {
+		pwm = get_fan_pwm(AVA4_FREEZESAFE_FAN);
+		return pwm;
+	}
 
 	if (t < opt_avalon4_temp_target - 10)
 		info->fan_pct[id] = opt_avalon4_fan_min;
@@ -1262,6 +1269,9 @@ static void avalon4_set_voltage(struct cgpu_info *avalon4, int addr, int opt, in
 	/* Use shifter to set voltage */
 	for (i = 0; i < AVA4_DEFAULT_MINERS; i++) {
 		tmp = info->set_voltage_i[addr][i] + info->set_voltage_offset[addr][i];
+		if (avalon4_freezsafemode)
+			tmp = AVA4_FREEZESAFE_VOLTAGE;
+
 		if (cutoff)
 			tmp = 0;
 
@@ -1304,6 +1314,8 @@ static void avalon4_set_freq(struct cgpu_info *avalon4, int addr)
 	info->set_frequency[0] = opt_avalon4_freq[0];
 	info->set_frequency[1] = opt_avalon4_freq[1];
 	info->set_frequency[2] = opt_avalon4_freq[2];
+	if (avalon4_freezsafemode)
+		info->set_frequency[0] = info->set_frequency[1] = info->set_frequency[2] = AVA4_FREEZESAFE_FREQUENCY;
 
 	memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
 	tmp = avalon4_get_cpm(info->set_frequency[0]);
@@ -1344,8 +1356,12 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 	}
 
 	volt = info->set_voltage[addr];
+	if (avalon4_freezsafemode)
+		volt = AVA4_FREEZESAFE_VOLTAGE;
+
 	if (cutoff)
 		volt = 0;
+
 	if (info->mod_type[addr] == AVA4_TYPE_MM40)
 		tmp = encode_voltage_adp3208d(volt);
 	if (info->mod_type[addr] == AVA4_TYPE_MM41)
@@ -1354,6 +1370,8 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 	memcpy(send_pkg.data + 4, &tmp, 4);
 
 	tmp = info->set_frequency[0] | (info->set_frequency[1] << 10) | (info->set_frequency[2] << 20);
+	if (avalon4_freezsafemode)
+		tmp = AVA4_FREEZESAFE_FREQUENCY | (AVA4_FREEZESAFE_FREQUENCY << 10) | (AVA4_FREEZESAFE_FREQUENCY << 20);
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + 8, &tmp, 4);
 
@@ -1504,8 +1522,14 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 
 	/* Stop polling the device if there is no stratum in 3 minutes, network is down */
 	cgtime(&current);
-	if (tdiff(&current, &(info->last_stratum)) > 180.0)
-		return 0;
+	avalon4_freezsafemode = 0;
+	if (tdiff(&current, &(info->last_stratum)) > 180.0) {
+		if(!opt_avalon4_freezesafe)
+			return 0;
+
+		if(opt_avalon4_freezesafe)
+			avalon4_freezsafemode = 1;
+	}
 
 	cg_rlock(&info->update_lock);
 	polling(thr, avalon4, info);
@@ -1898,8 +1922,24 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 	struct avalon4_info *info = avalon4->device_data;
 
 	if (strcasecmp(option, "help") == 0) {
-		sprintf(replybuf, "led|fan|voltage|frequency|pdelay");
+		sprintf(replybuf, "led|fan|voltage|frequency|pdelay|freezesafe");
 		return replybuf;
+	}
+
+	if (strcasecmp(option, "freezesafe") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing freezesafe mode setting");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+
+		opt_avalon4_freezesafe = val ? 1 : 0;
+
+		applog(LOG_NOTICE, "%s-%d: update freezesafe mode: %d",
+			avalon4->drv->name, avalon4->device_id, opt_avalon4_freezesafe);
+
+		return NULL;
 	}
 
 	if (strcasecmp(option, "pdelay") == 0) {

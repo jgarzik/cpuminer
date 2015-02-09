@@ -19,15 +19,18 @@
 #define AVA4_DEFAULT_FAN_MAX	85
 /* Percentage required to make sure fan starts spinning, then we can go down */
 #define AVA4_DEFAULT_FAN_START	15
+#define AVA4_FREEZESAFE_FAN	10
 
 #define AVA4_DEFAULT_TEMP_TARGET	42
 #define AVA4_DEFAULT_TEMP_OVERHEAT	65
 
 #define AVA4_DEFAULT_VOLTAGE_MIN	4000
 #define AVA4_DEFAULT_VOLTAGE_MAX	9000
+#define AVA4_FREEZESAFE_VOLTAGE		4000
 
 #define AVA4_DEFAULT_FREQUENCY_MIN	100
 #define AVA4_DEFAULT_FREQUENCY_MAX	1000
+#define AVA4_FREEZESAFE_FREQUENCY	100
 
 #define AVA4_DEFAULT_MODULARS	64
 #define AVA4_DEFAULT_MINERS	10
@@ -209,6 +212,7 @@ extern char *set_avalon4_temp(char *arg);
 extern char *set_avalon4_freq(char *arg);
 extern char *set_avalon4_voltage(char *arg);
 extern bool opt_avalon4_autov;
+extern bool opt_avalon4_freezesafe;
 extern int opt_avalon4_temp_target;
 extern int opt_avalon4_overheat;
 extern int opt_avalon4_polling_delay;
