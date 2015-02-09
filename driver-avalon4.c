@@ -1250,7 +1250,7 @@ static inline int mm_cmp_d17f4a(struct avalon4_info *info, int addr)
 	return strncmp(info->mm_version[addr] + 7, "d17f4a", 6) == 0 ? 1 : 0;
 }
 
-static void avalon4_set_voltage(struct cgpu_info *avalon4, int addr, int opt)
+static void avalon4_set_voltage(struct cgpu_info *avalon4, int addr, int opt, int cutoff)
 {
 	struct avalon4_info *info = avalon4->device_data;
 	struct avalon4_pkg send_pkg;
@@ -1262,6 +1262,9 @@ static void avalon4_set_voltage(struct cgpu_info *avalon4, int addr, int opt)
 	/* Use shifter to set voltage */
 	for (i = 0; i < AVA4_DEFAULT_MINERS; i++) {
 		tmp = info->set_voltage_i[addr][i] + info->set_voltage_offset[addr][i];
+		if (cutoff)
+			tmp = 0;
+
 		if (info->mod_type[addr] == AVA4_TYPE_MM40)
 			tmp = encode_voltage_adp3208d(tmp);
 		if (info->mod_type[addr] == AVA4_TYPE_MM41)
@@ -1453,17 +1456,15 @@ static void avalon4_update(struct cgpu_info *avalon4)
 		cutoff = (info->temp[i] < opt_avalon4_overheat) ? 0 : 1;
 		avalon4_stratum_set(avalon4, pool, i, cutoff);
 		if ((info->mod_type[i] == AVA4_TYPE_MM41) &&
-			mm_cmp_1501(info, i) &&
-			!cutoff) {
-			avalon4_set_voltage(avalon4, i, ((1 << 4) | opt_avalon4_miningmode));
+			mm_cmp_1501(info, i)) {
+			avalon4_set_voltage(avalon4, i, ((1 << 4) | opt_avalon4_miningmode), cutoff);
 			avalon4_set_freq(avalon4, i);
 		}
 
 		if ((info->mod_type[i] == AVA4_TYPE_MM40) &&
-			mm_cmp_1501(info, i) &&
-			!cutoff) {
+			mm_cmp_1501(info, i)) {
 			if (!mm_cmp_d17f4a(info, i)) {
-				avalon4_set_voltage(avalon4, i, ((1 << 4) | opt_avalon4_miningmode));
+				avalon4_set_voltage(avalon4, i, ((1 << 4) | opt_avalon4_miningmode), cutoff);
 				avalon4_set_freq(avalon4, i);
 			}
 		}
