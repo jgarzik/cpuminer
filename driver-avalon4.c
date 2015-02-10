@@ -1482,7 +1482,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	struct timeval current;
 	double device_tdiff, hwp;
 	uint32_t a = 0, b = 0;
-	uint64_t h;
+	int64_t h;
 	int i, j, k;
 
 	if (unlikely(avalon4->usbinfo.nodev)) {
