@@ -533,7 +533,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 				applog(LOG_DEBUG, "%s-%d-%d: AVA4_P_STATUS_VOLT invalid voltage %d", avalon4->drv->name, avalon4->device_id, modular_id, tmp);
 				return 1;
 			}
-			val[i] = tmp;
+			val[((4 + i / 5 * 5) - i + (i / 5 * 5))] = tmp;
 		}
 
 		if (i == AVA4_DEFAULT_MINERS) {
