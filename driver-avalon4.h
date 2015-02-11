@@ -191,6 +191,8 @@ struct avalon4_info {
 
 	int matching_work[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINERS];
 	int chipmatching_work[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINERS][4];
+	uint8_t saved[AVA4_DEFAULT_MODULARS];
+	uint8_t adjflag[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINERS];
 };
 
 struct avalon4_iic_info {

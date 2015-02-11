@@ -1061,8 +1061,10 @@ static void detect_modules(struct cgpu_info *avalon4)
 		for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
 			info->set_voltage_i[i][j] = opt_avalon4_voltage_min;
 			info->set_voltage_offset[i][j] = 0;
+			info->adjflag[i][j] = 0;
 		}
 		info->led_red[i] = 0;
+		info->saved[i] = 0;
 		applog(LOG_NOTICE, "%s-%d: New module detect! ID[%d]",
 		       avalon4->drv->name, avalon4->device_id, i);
 
@@ -1504,8 +1506,6 @@ static void avalon4_update(struct cgpu_info *avalon4)
 
 static int64_t avalon4_scanhash(struct thr_info *thr)
 {
-	static uint8_t saved[AVA4_DEFAULT_MODULARS];
-	static uint8_t adjflag[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINERS];
 	struct cgpu_info *avalon4 = thr->cgpu;
 	struct avalon4_info *info = avalon4->device_data;
 	struct timeval current;
@@ -1589,11 +1589,11 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 					for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
 						info->set_voltage_i[i][j] += 125;
 					}
-					adjflag[i][0] = 1;
+					info->adjflag[i][0] = 1;
 					applog(LOG_NOTICE, "%s-%d: Automatic increase module[%d] voltage to %d",
 							avalon4->drv->name, avalon4->device_id, i, info->set_voltage[i]);
 				}
-				if (!adjflag[i][0] && hwp < AVA4_DH_DEC && (info->set_voltage[i] > info->set_voltage[0] - (4 * 125))) {
+				if (!info->adjflag[i][0] && hwp < AVA4_DH_DEC && (info->set_voltage[i] > info->set_voltage[0] - (4 * 125))) {
 					info->set_voltage[i] -= 125;
 					for (j = 0; j < AVA4_DEFAULT_MINERS; j++) {
 						info->set_voltage_i[i][j] -= 125;
@@ -1616,12 +1616,12 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 					if (hwp > AVA4_DH_INC && (info->set_voltage_i[i][j] < info->set_voltage[0] + (2 * 125))) {
 						//FIX ME: How to deal with set_voltage ?
 						info->set_voltage_i[i][j] += 125;
-						adjflag[i][j] = 1;
+						info->adjflag[i][j] = 1;
 						applog(LOG_NOTICE, "%s-%d: Automatic increase module[%d-%d] voltage to %d",
 							avalon4->drv->name, avalon4->device_id, i, j, info->set_voltage_i[i][j]);
 
 					}
-					if (!adjflag[i][j] && hwp < AVA4_DH_DEC && (info->set_voltage_i[i][j] > info->set_voltage[0] - (12 * 125))) {
+					if (!info->adjflag[i][j] && hwp < AVA4_DH_DEC && (info->set_voltage_i[i][j] > info->set_voltage[0] - (12 * 125))) {
 						//FIX ME: How to deal with set_voltage ?
 						info->set_voltage_i[i][j] -= 125;
 						applog(LOG_NOTICE, "%s-%d: Automatic decrease module[%d-%d] voltage to %d",
@@ -1634,11 +1634,11 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 			cgtime(&current);
 			device_tdiff = tdiff(&current, &(info->elapsed[i]));
 			if (device_tdiff >= 600.0) {
-				if (!saved[i]) {
+				if (!info->saved[i]) {
 					applog(LOG_NOTICE, "%s-%d-%d: Avalon4 saved voltage !",
 						avalon4->drv->name, avalon4->device_id, i);
 					avalon4_adjust_vf(avalon4, i, 1);
-					saved[i] = 1;
+					info->saved[i] = 1;
 				} else
 					avalon4_adjust_vf(avalon4, i, 0);
 
