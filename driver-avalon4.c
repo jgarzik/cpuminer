@@ -485,8 +485,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		info->local_works[modular_id] += info->local_work[modular_id];
 		info->hw_works[modular_id] += info->hw_work[modular_id];
 
-		info->lw5[modular_id][info->i_1m] += info->local_work[modular_id];
-		info->hw5[modular_id][info->i_1m] += info->hw_work[modular_id];
+		info->lw5[modular_id][info->i_5s] += info->local_work[modular_id];
+		info->hw5[modular_id][info->i_5s] += info->hw_work[modular_id];
 
 		avalon4->temp = get_current_temp_max(info);
 		break;
@@ -496,7 +496,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 			info->local_works_i[modular_id][i] += ((ar->data[i * 3] << 16) |
 							    (ar->data[i * 3 + 1] << 8) |
 							    (ar->data[i * 3 + 2]));
-			info->lw5_i[modular_id][i][info->i_1m] += ((ar->data[i * 3] << 16) |
+			info->lw5_i[modular_id][i][info->i_5s] += ((ar->data[i * 3] << 16) |
 							    (ar->data[i * 3 + 1] << 8) |
 							    (ar->data[i * 3 + 2]));
 		}
@@ -507,7 +507,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 			info->hw_works_i[modular_id][i] += ((ar->data[i * 3] << 16) |
 							    (ar->data[i * 3 + 1] << 8) |
 							    (ar->data[i * 3 + 2]));
-			info->hw5_i[modular_id][i][info->i_1m] += ((ar->data[i * 3] << 16) |
+			info->hw5_i[modular_id][i][info->i_5s] += ((ar->data[i * 3] << 16) |
 							    (ar->data[i * 3 + 1] << 8) |
 							    (ar->data[i * 3 + 2]));
 		}
@@ -519,7 +519,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		applog(LOG_DEBUG, "%s-%d-%d: AVA4_P_STATUS_VOLT", avalon4->drv->name, avalon4->device_id, modular_id);
 		hexdump(ar->data, 32);
 		for(i = 0; i < AVA4_DEFAULT_MINERS; i++) {
-			tmp = ar->data[i * 2] << 8 + ar->data[i * 2 + 1];
+			tmp = (ar->data[i * 2] << 8) + ar->data[i * 2 + 1];
 
 			if (info->mod_type[modular_id] == AVA4_TYPE_MM40)
 				tmp = decode_voltage_adp3208d(tmp);
@@ -981,8 +981,8 @@ static bool avalon4_prepare(struct thr_info *thr)
 	info->polling_first = 1;
 
 	cgtime(&(info->last_fan));
-	cgtime(&(info->last_5m));
-	cgtime(&(info->last_1m));
+	cgtime(&(info->last_30s));
+	cgtime(&(info->last_5s));
 
 	cglock_init(&info->update_lock);
 	cglock_init(&info->pool0.data_lock);
@@ -1156,7 +1156,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 				info->local_works[i] = 0;
 				info->hw_work[i] = 0;
 				info->hw_works[i] = 0;
-				for (j = 0; j < AVA4_DEFAULT_ADJ_MINUTES; j++) {
+				for (j = 0; j < AVA4_DEFAULT_ADJ_TIMES; j++) {
 					info->lw5[i][j] = 0;
 					info->hw5[i][j] = 0;
 				}
@@ -1169,8 +1169,8 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 					info->chipmatching_work[i][j][3] = 0;
 					info->local_works_i[i][j] = 0;
 					info->hw_works_i[i][j] = 0;
-					memset(info->lw5_i[i][j], 0, AVA4_DEFAULT_ADJ_MINUTES * sizeof(uint32_t));
-					memset(info->hw5_i[i][j], 0, AVA4_DEFAULT_ADJ_MINUTES * sizeof(uint32_t));
+					memset(info->lw5_i[i][j], 0, AVA4_DEFAULT_ADJ_TIMES * sizeof(uint32_t));
+					memset(info->hw5_i[i][j], 0, AVA4_DEFAULT_ADJ_TIMES * sizeof(uint32_t));
 				}
 				applog(LOG_NOTICE, "%s-%d: Module detached! ID[%d]",
 				       avalon4->drv->name, avalon4->device_id, i);
@@ -1387,6 +1387,27 @@ static void avalon4_stratum_finish(struct cgpu_info *avalon4)
 	avalon4_send_bc_pkgs(avalon4, &send_pkg);
 }
 
+static void avalon4_adjust_vf(struct cgpu_info *avalon4, int addr, uint8_t save)
+{
+	struct avalon4_info *info = avalon4->device_data;
+	int cutoff;
+
+	cutoff = (info->temp[addr] < opt_avalon4_overheat) ? 0 : 1;
+	if ((info->mod_type[addr] == AVA4_TYPE_MM41) &&
+			mm_cmp_1501(info, addr)) {
+		avalon4_set_voltage(avalon4, addr, ((save << 4) | opt_avalon4_miningmode), cutoff);
+		avalon4_set_freq(avalon4, addr);
+	}
+
+	if ((info->mod_type[addr] == AVA4_TYPE_MM40) &&
+			mm_cmp_1501(info, addr)) {
+		if (!mm_cmp_d17f4a(info, addr)) {
+			avalon4_set_voltage(avalon4, addr, ((save << 4) | opt_avalon4_miningmode), cutoff);
+			avalon4_set_freq(avalon4, addr);
+		}
+	}
+}
+
 static void avalon4_update(struct cgpu_info *avalon4)
 {
 	struct avalon4_info *info = avalon4->device_data;
@@ -1455,19 +1476,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 
 		cutoff = (info->temp[i] < opt_avalon4_overheat) ? 0 : 1;
 		avalon4_stratum_set(avalon4, pool, i, cutoff);
-		if ((info->mod_type[i] == AVA4_TYPE_MM41) &&
-			mm_cmp_1501(info, i)) {
-			avalon4_set_voltage(avalon4, i, ((1 << 4) | opt_avalon4_miningmode), cutoff);
-			avalon4_set_freq(avalon4, i);
-		}
-
-		if ((info->mod_type[i] == AVA4_TYPE_MM40) &&
-			mm_cmp_1501(info, i)) {
-			if (!mm_cmp_d17f4a(info, i)) {
-				avalon4_set_voltage(avalon4, i, ((1 << 4) | opt_avalon4_miningmode), cutoff);
-				avalon4_set_freq(avalon4, i);
-			}
-		}
+		avalon4_adjust_vf(avalon4, i, 0);
 	}
 	info->mm_count = count;
 
@@ -1477,6 +1486,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 
 static int64_t avalon4_scanhash(struct thr_info *thr)
 {
+	static uint8_t saved[AVA4_DEFAULT_MODULARS];
 	struct cgpu_info *avalon4 = thr->cgpu;
 	struct avalon4_info *info = avalon4->device_data;
 	struct timeval current;
@@ -1501,30 +1511,30 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	cg_runlock(&info->update_lock);
 
 	cgtime(&current);
-	device_tdiff = tdiff(&current, &(info->last_1m));
-	if (device_tdiff >= 60.0 || device_tdiff < 0) {
-		copy_time(&info->last_1m, &current);
-		if (info->i_1m++ >= AVA4_DEFAULT_ADJ_MINUTES)
-			info->i_1m = 0;
+	device_tdiff = tdiff(&current, &(info->last_5s));
+	if (device_tdiff >= 5.0 || device_tdiff < 0) {
+		copy_time(&info->last_5s, &current);
+		if (info->i_5s++ >= AVA4_DEFAULT_ADJ_TIMES)
+			info->i_5s = 0;
 
 		for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 			if (!info->enable[i])
 				continue;
 
-			info->lw5[i][info->i_1m] = 0;
-			info->hw5[i][info->i_1m] = 0;
+			info->lw5[i][info->i_5s] = 0;
+			info->hw5[i][info->i_5s] = 0;
 
 			for(j = 0; j < AVA4_DEFAULT_MINERS; j++) {
-				info->lw5_i[i][j][info->i_1m] = 0;
-				info->hw5_i[i][j][info->i_1m] = 0;
+				info->lw5_i[i][j][info->i_5s] = 0;
+				info->hw5_i[i][j][info->i_5s] = 0;
 			}
 		}
 	}
 
 	cgtime(&current);
-	device_tdiff = tdiff(&current, &(info->last_5m));
-	if (opt_avalon4_autov && (device_tdiff > 480.0 || device_tdiff < 0)) {
-		copy_time(&info->last_5m, &current);
+	device_tdiff = tdiff(&current, &(info->last_30s));
+	if (opt_avalon4_autov && (device_tdiff > 30.0 || device_tdiff < 0)) {
+		copy_time(&info->last_30s, &current);
 
 		for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 			uint8_t individual = 0;
@@ -1543,7 +1553,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 			if (!individual) {
 				a = 0;
 				b = 0;
-				for (j = 0; j < AVA4_DEFAULT_ADJ_MINUTES; j++) {
+				for (j = 0; j < AVA4_DEFAULT_ADJ_TIMES; j++) {
 					a += info->lw5[i][j];
 					b += info->hw5[i][j];
 				}
@@ -1572,7 +1582,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 					a = 0;
 					b = 0;
 
-					for (k = 0; k < AVA4_DEFAULT_ADJ_MINUTES; k++) {
+					for (k = 0; k < AVA4_DEFAULT_ADJ_TIMES; k++) {
 						a += info->lw5_i[i][j][k];
 						b += info->hw5_i[i][j][k];
 					}
@@ -1593,6 +1603,21 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 					}
 				}
 			}
+
+			/* Save config when run 10m */
+			cgtime(&current);
+			device_tdiff = tdiff(&current, &(info->elapsed[i]));
+			if (device_tdiff >= 600.0) {
+				if (!saved[i]) {
+					applog(LOG_NOTICE, "%s-%d-%d: Avalon4 saved voltage !",
+						avalon4->drv->name, avalon4->device_id, i);
+					avalon4_adjust_vf(avalon4, i, 1);
+					saved[i] = 1;
+				} else
+					avalon4_adjust_vf(avalon4, i, 0);
+
+			} else
+				avalon4_adjust_vf(avalon4, i, 0);
 		}
 	}
 
@@ -1739,7 +1764,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		memset(lw5_i, 0, AVA4_DEFAULT_MINERS * sizeof(uint32_t));
 		memset(hw5_i, 0, AVA4_DEFAULT_MINERS * sizeof(uint32_t));
 
-		for (j = 0; j < AVA4_DEFAULT_ADJ_MINUTES; j++) {
+		for (j = 0; j < AVA4_DEFAULT_ADJ_TIMES; j++) {
 			a += info->lw5[i][j];
 			b += info->hw5[i][j];
 
@@ -1750,7 +1775,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		}
 
 		cgtime(&current);
-		diff = tdiff(&current, &(info->last_1m)) + 300.0;
+		diff = tdiff(&current, &(info->last_5s)) + 25.0;
 
 		hwp = a ? (double)b / (double)a * 100 : 0;
 
