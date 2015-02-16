@@ -1650,7 +1650,8 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 
 	h = 0;
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		h += info->enable[i] ? (info->local_work[i] - info->hw_work[i]) : 0;
+		if (info->enable[i] && (info->local_work[i] > info->hw_work[i]))
+			h += (info->local_work[i] - info->hw_work[i]);
 		info->local_work[i] = 0;
 		info->hw_work[i] = 0;
 	}
