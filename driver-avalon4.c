@@ -1303,7 +1303,7 @@ static uint32_t avalon4_get_cpm(int freq)
 	return g_freq_array[0][1];
 }
 
-static void avalon4_set_freq(struct cgpu_info *avalon4, int addr)
+static void avalon4_set_freq(struct cgpu_info *avalon4, int addr, int cutoff)
 {
 	struct avalon4_info *info = avalon4->device_data;
 	struct avalon4_pkg send_pkg;
@@ -1312,8 +1312,15 @@ static void avalon4_set_freq(struct cgpu_info *avalon4, int addr)
 	info->set_frequency[0] = opt_avalon4_freq[0];
 	info->set_frequency[1] = opt_avalon4_freq[1];
 	info->set_frequency[2] = opt_avalon4_freq[2];
+
 	if (avalon4_freezsafemode)
 		info->set_frequency[0] = info->set_frequency[1] = info->set_frequency[2] = AVA4_FREEZESAFE_FREQUENCY;
+
+	if (cutoff) {
+		info->set_frequency[0] = AVA4_DEFAULT_FREQUENCY_MIN;
+		info->set_frequency[1] = AVA4_DEFAULT_FREQUENCY_MIN;
+		info->set_frequency[2] = AVA4_DEFAULT_FREQUENCY_MIN;
+	}
 
 	memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
 	tmp = avalon4_get_cpm(info->set_frequency[0]);
@@ -1370,6 +1377,10 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 	tmp = info->set_frequency[0] | (info->set_frequency[1] << 10) | (info->set_frequency[2] << 20);
 	if (avalon4_freezsafemode)
 		tmp = AVA4_FREEZESAFE_FREQUENCY | (AVA4_FREEZESAFE_FREQUENCY << 10) | (AVA4_FREEZESAFE_FREQUENCY << 20);
+
+	if (cutoff)
+		tmp = AVA4_DEFAULT_FREQUENCY_MIN | (AVA4_DEFAULT_FREQUENCY_MIN << 10) | (AVA4_DEFAULT_FREQUENCY_MIN << 20);
+
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + 8, &tmp, 4);
 
@@ -1412,14 +1423,14 @@ static void avalon4_adjust_vf(struct cgpu_info *avalon4, int addr, uint8_t save)
 	if ((info->mod_type[addr] == AVA4_TYPE_MM41) &&
 			mm_cmp_1501(info, addr)) {
 		avalon4_set_voltage(avalon4, addr, ((save << 4) | opt_avalon4_miningmode), cutoff);
-		avalon4_set_freq(avalon4, addr);
+		avalon4_set_freq(avalon4, addr, cutoff);
 	}
 
 	if ((info->mod_type[addr] == AVA4_TYPE_MM40) &&
 			mm_cmp_1501(info, addr)) {
 		if (!mm_cmp_d17f4a(info, addr)) {
 			avalon4_set_voltage(avalon4, addr, ((save << 4) | opt_avalon4_miningmode), cutoff);
-			avalon4_set_freq(avalon4, addr);
+			avalon4_set_freq(avalon4, addr, cutoff);
 		}
 	}
 }
@@ -1570,6 +1581,9 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 				if (!mm_cmp_d17f4a(info, i))
 					individual = 1;
 			}
+
+			if (info->temp[i] >= opt_avalon4_overheat);
+				continue;
 
 			if (!individual) {
 				a = 0;
