@@ -1242,6 +1242,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalon4-miningmode",
 		     opt_set_intval, opt_show_intval, &opt_avalon4_miningmode,
 		     "Set Avalon4 mining mode(0:custom, 1:eco, 2:normal, 3:turbo"),
+	OPT_WITHOUT_ARG("--avalon4-freezesafe",
+			opt_set_bool, &opt_avalon4_freezesafe,
+			"Make Avalon4 running as a radiator when stratum server failed"),
 #endif
 #ifdef USE_BAB
 	OPT_WITH_ARG("--bab-options",
