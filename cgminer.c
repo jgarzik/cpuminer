@@ -7342,7 +7342,7 @@ static void submit_work_async(struct work *work)
 
 	if (work->stratum) {
 		applog(LOG_DEBUG, "Pushing pool %d work to stratum queue", pool->pool_no);
-		if (unlikely(!tq_push(pool->stratum_q, work))) {
+		if (unlikely(!pool->stratum_q || !tq_push(pool->stratum_q, work))) {
 			applog(LOG_DEBUG, "Discarding work from removed pool");
 			free_work(work);
 		}
