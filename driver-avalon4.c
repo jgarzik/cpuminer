@@ -1582,7 +1582,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 					individual = 1;
 			}
 
-			if (info->temp[i] >= opt_avalon4_overheat);
+			if (info->temp[i] >= opt_avalon4_overheat)
 				continue;
 
 			if (!individual) {
