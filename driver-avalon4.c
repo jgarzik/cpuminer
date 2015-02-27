@@ -1601,8 +1601,10 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 					individual = 1;
 			}
 
-			if (info->temp[i] >= opt_avalon4_overheat)
+			if (info->cutoff[i]) {
+				memset(info->adjflag, 0, sizeof(uint8_t) * AVA4_DEFAULT_MINERS * AVA4_DEFAULT_MODULARS);
 				continue;
+			}
 
 			if (!individual) {
 				a = 0;
