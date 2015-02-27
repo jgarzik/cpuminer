@@ -752,7 +752,7 @@ static int avalon4_iic_xfer_pkg(struct cgpu_info *avalon4, uint8_t slave_addr,
 	if ((pkg->type != AVA4_P_DETECT) && err == -7 && !rcnt && rlen) {
 		avalon4_iic_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
 		err = avalon4_iic_xfer(avalon4, wbuf, wbuf[0], &wcnt, rbuf, rlen, &rcnt);
-		applog(LOG_DEBUG, "%s-%d-%d: IIC read again!(err:%d)", avalon4->drv->name, avalon4->device_id, slave_addr, err);
+		applog(LOG_DEBUG, "%s-%d-%d: IIC read again!(type:0x%x, err:%d)", avalon4->drv->name, avalon4->device_id, slave_addr, pkg->type, err);
 	}
 	if (err || rcnt != rlen) {
 		if (info->xfer_err_cnt++ == 100) {
@@ -1077,6 +1077,7 @@ static void detect_modules(struct cgpu_info *avalon4)
 		}
 		info->led_red[i] = 0;
 		info->saved[i] = 0;
+		info->cutoff[i] = 0;
 		applog(LOG_NOTICE, "%s-%d: New module detect! ID[%d]",
 		       avalon4->drv->name, avalon4->device_id, i);
 
@@ -1271,7 +1272,7 @@ static inline int mm_cmp_d17f4a(struct avalon4_info *info, int addr)
 	return strncmp(info->mm_version[addr] + 7, "d17f4a", 6) == 0 ? 1 : 0;
 }
 
-static void avalon4_set_voltage(struct cgpu_info *avalon4, int addr, int opt, int cutoff)
+static void avalon4_set_voltage(struct cgpu_info *avalon4, int addr, int opt)
 {
 	struct avalon4_info *info = avalon4->device_data;
 	struct avalon4_pkg send_pkg;
@@ -1286,7 +1287,7 @@ static void avalon4_set_voltage(struct cgpu_info *avalon4, int addr, int opt, in
 		if (avalon4_freezsafemode)
 			tmp = AVA4_FREEZESAFE_VOLTAGE;
 
-		if (cutoff)
+		if (info->cutoff[addr])
 			tmp = 0;
 
 		if (info->mod_type[addr] == AVA4_TYPE_MM40)
@@ -1319,7 +1320,7 @@ static uint32_t avalon4_get_cpm(int freq)
 	return g_freq_array[0][1];
 }
 
-static void avalon4_set_freq(struct cgpu_info *avalon4, int addr, int cutoff)
+static void avalon4_set_freq(struct cgpu_info *avalon4, int addr)
 {
 	struct avalon4_info *info = avalon4->device_data;
 	struct avalon4_pkg send_pkg;
@@ -1332,7 +1333,7 @@ static void avalon4_set_freq(struct cgpu_info *avalon4, int addr, int cutoff)
 	if (avalon4_freezsafemode)
 		info->set_frequency[0] = info->set_frequency[1] = info->set_frequency[2] = AVA4_FREEZESAFE_FREQUENCY;
 
-	if (cutoff) {
+	if (info->cutoff[addr]) {
 		info->set_frequency[0] = AVA4_DEFAULT_FREQUENCY_MIN;
 		info->set_frequency[1] = AVA4_DEFAULT_FREQUENCY_MIN;
 		info->set_frequency[2] = AVA4_DEFAULT_FREQUENCY_MIN;
@@ -1357,7 +1358,7 @@ static void avalon4_set_freq(struct cgpu_info *avalon4, int addr, int cutoff)
 		avalon4_iic_xfer_pkg(avalon4, addr, &send_pkg, NULL);
 }
 
-static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, int addr, int cutoff)
+static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, int addr)
 {
 	struct avalon4_info *info = avalon4->device_data;
 	struct avalon4_pkg send_pkg;
@@ -1380,7 +1381,7 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 	if (avalon4_freezsafemode)
 		volt = AVA4_FREEZESAFE_VOLTAGE;
 
-	if (cutoff)
+	if (info->cutoff[addr])
 		volt = 0;
 
 	if (info->mod_type[addr] == AVA4_TYPE_MM40)
@@ -1394,7 +1395,7 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 	if (avalon4_freezsafemode)
 		tmp = AVA4_FREEZESAFE_FREQUENCY | (AVA4_FREEZESAFE_FREQUENCY << 10) | (AVA4_FREEZESAFE_FREQUENCY << 20);
 
-	if (cutoff)
+	if (info->cutoff[addr])
 		tmp = AVA4_DEFAULT_FREQUENCY_MIN | (AVA4_DEFAULT_FREQUENCY_MIN << 10) | (AVA4_DEFAULT_FREQUENCY_MIN << 20);
 
 	tmp = be32toh(tmp);
@@ -1433,20 +1434,18 @@ static void avalon4_stratum_finish(struct cgpu_info *avalon4)
 static void avalon4_adjust_vf(struct cgpu_info *avalon4, int addr, uint8_t save)
 {
 	struct avalon4_info *info = avalon4->device_data;
-	int cutoff;
 
-	cutoff = (info->temp[addr] < opt_avalon4_overheat) ? 0 : 1;
 	if ((info->mod_type[addr] == AVA4_TYPE_MM41) &&
 			mm_cmp_1501(info, addr)) {
-		avalon4_set_voltage(avalon4, addr, ((save << 4) | opt_avalon4_miningmode), cutoff);
-		avalon4_set_freq(avalon4, addr, cutoff);
+		avalon4_set_voltage(avalon4, addr, ((save << 4) | opt_avalon4_miningmode));
+		avalon4_set_freq(avalon4, addr);
 	}
 
 	if ((info->mod_type[addr] == AVA4_TYPE_MM40) &&
 			mm_cmp_1501(info, addr)) {
 		if (!mm_cmp_d17f4a(info, addr)) {
-			avalon4_set_voltage(avalon4, addr, ((save << 4) | opt_avalon4_miningmode), cutoff);
-			avalon4_set_freq(avalon4, addr, cutoff);
+			avalon4_set_voltage(avalon4, addr, ((save << 4) | opt_avalon4_miningmode));
+			avalon4_set_freq(avalon4, addr);
 		}
 	}
 }
@@ -1458,7 +1457,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	struct work *work;
 	struct pool *pool;
 	int coinbase_len_posthash, coinbase_len_prehash;
-	int i, cutoff = 0, count = 0;
+	int i, count = 0;
 
 	applog(LOG_DEBUG, "%s-%d: New stratum: restart: %d, update: %d",
 	       avalon4->drv->name, avalon4->device_id,
@@ -1517,8 +1516,10 @@ static void avalon4_update(struct cgpu_info *avalon4)
 
 		count++;
 
-		cutoff = (info->temp[i] < opt_avalon4_overheat) ? 0 : 1;
-		avalon4_stratum_set(avalon4, pool, i, cutoff);
+		info->cutoff[i] = (info->temp[i] < opt_avalon4_overheat) ? 0 : 1;
+		if (info->cutoff[i])
+			info->polling_first = 1;
+		avalon4_stratum_set(avalon4, pool, i);
 		avalon4_adjust_vf(avalon4, i, 0);
 	}
 	info->mm_count = count;
@@ -1543,7 +1544,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 		return -1;
 	}
 
-	/* Stop polling the device if there is no stratum in 3 minutes, network is down */
+	/* Step 1: Stop polling the device if there is no stratum in 3 minutes, network is down */
 	cgtime(&current);
 	avalon4_freezsafemode = 0;
 	if (tdiff(&current, &(info->last_stratum)) > 180.0) {
@@ -1554,10 +1555,12 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 			avalon4_freezsafemode = 1;
 	}
 
+	/* Step 2: Polling  */
 	cg_rlock(&info->update_lock);
 	polling(thr, avalon4, info);
 	cg_runlock(&info->update_lock);
 
+	/* Step 3: Adjust voltage */
 	cgtime(&current);
 	device_tdiff = tdiff(&current, &(info->last_5s));
 	if (device_tdiff >= 5.0 || device_tdiff < 0) {
@@ -1673,11 +1676,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 		}
 	}
 
-	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->set_voltage[i] != info->set_voltage[0])
-			break;
-	}
-
+	/* Step 4: Calculate hash */
 	h = 0;
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (info->enable[i] && (info->local_work[i] > info->hw_work[i]))
