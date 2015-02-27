@@ -995,6 +995,22 @@ static bool avalon4_prepare(struct thr_info *thr)
 	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++)
 		info->fan_pct[i] = AVA4_DEFAULT_FAN_START;
 
+	switch (opt_avalon4_miningmode) {
+		case AVA4_MOD_ECO:
+			opt_avalon4_fan_min = 20;
+			opt_avalon4_overheat = 60;
+			break;
+		case AVA4_MOD_NORMAL:
+			opt_avalon4_fan_min = 30;
+			opt_avalon4_overheat = 50;
+			break;
+		case AVA4_MOD_TURBO:
+			opt_avalon4_fan_min = 60;
+			opt_avalon4_overheat = 49;
+			break;
+		default:
+			break;
+	}
 
 	return true;
 }
