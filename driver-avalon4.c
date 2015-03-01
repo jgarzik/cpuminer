@@ -351,6 +351,9 @@ static inline uint32_t adjust_fan(struct avalon4_info *info, int id)
 		info->fan_pct[id] = opt_avalon4_fan_max;
 
 	pwm = get_fan_pwm(info->fan_pct[id]);
+	if (info->cutoff[id])
+		pwm = get_fan_pwm(opt_avalon4_fan_max);
+
 	applog(LOG_DEBUG, "[%d], Adjust_fan: %dC-%d%%(%03x)", id, t, info->fan_pct[id], pwm);
 
 	return pwm;
@@ -1516,7 +1519,12 @@ static void avalon4_update(struct cgpu_info *avalon4)
 
 		count++;
 
-		info->cutoff[i] = (info->temp[i] < opt_avalon4_overheat) ? 0 : 1;
+		if (info->temp[i] >= opt_avalon4_overheat)
+			info->cutoff[i] = 1;
+
+		if (info->cutoff[i] && (info->temp[i] <= (opt_avalon4_overheat - 10)))
+			info->cutoff[i] = 0;
+
 		if (info->cutoff[i])
 			info->polling_first = 1;
 		avalon4_stratum_set(avalon4, pool, i);
