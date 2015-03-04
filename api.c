@@ -695,13 +695,13 @@ static struct io_data *_io_new(size_t initial, bool socket_buf)
 	struct io_data *io_data;
 	struct io_list *io_list;
 
-	io_data = malloc(sizeof(*io_data));
-	io_data->ptr = malloc(initial);
+	io_data = cgmalloc(sizeof(*io_data));
+	io_data->ptr = cgmalloc(initial);
 	io_data->siz = initial;
 	io_data->sock = socket_buf;
 	io_reinit(io_data);
 
-	io_list = malloc(sizeof(*io_list));
+	io_list = cgmalloc(sizeof(*io_list));
 
 	io_list->io_data = io_data;
 
@@ -734,7 +734,7 @@ static bool io_add(struct io_data *io_data, char *buf)
 		if (new < tot)
 			new = (2 + (size_t)((float)tot / (float)SOCKBUFALLOCSIZ)) * SOCKBUFALLOCSIZ;
 
-		io_data->ptr = realloc(io_data->ptr, new);
+		io_data->ptr = cgrealloc(io_data->ptr, new);
 		io_data->cur = io_data->ptr + dif;
 		io_data->siz = new;
 	}
@@ -805,11 +805,7 @@ static char *escape_string(char *str, bool isjson)
 	if (count == 0)
 		return str;
 
-	buf = malloc(strlen(str) + count + 1);
-	if (unlikely(!buf)) {
-		quithere(1, "Failed to malloc escape buf %d",
-			    (int)(strlen(str) + count + 1));
-	}
+	buf = cgmalloc(strlen(str) + count + 1);
 
 	ptr = buf;
 	while (*str)
@@ -871,7 +867,7 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 {
 	struct api_data *api_data;
 
-	api_data = (struct api_data *)malloc(sizeof(struct api_data));
+	api_data = cgmalloc(sizeof(struct api_data));
 
 	api_data->name = strdup(name);
 	api_data->type = type;
@@ -903,46 +899,46 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 			case API_ESCAPE:
 			case API_STRING:
 			case API_CONST:
-				api_data->data = (void *)malloc(strlen((char *)data) + 1);
+				api_data->data = cgmalloc(strlen((char *)data) + 1);
 				strcpy((char*)(api_data->data), (char *)data);
 				break;
 			case API_UINT8:
 				/* Most OSs won't really alloc less than 4 */
-				api_data->data = malloc(4);
+				api_data->data = cgmalloc(4);
 				*(uint8_t *)api_data->data = *(uint8_t *)data;
 				break;
 			case API_INT16:
 				/* Most OSs won't really alloc less than 4 */
-				api_data->data = malloc(4);
+				api_data->data = cgmalloc(4);
 				*(int16_t *)api_data->data = *(int16_t *)data;
 				break;
 			case API_UINT16:
 				/* Most OSs won't really alloc less than 4 */
-				api_data->data = malloc(4);
+				api_data->data = cgmalloc(4);
 				*(uint16_t *)api_data->data = *(uint16_t *)data;
 				break;
 			case API_INT:
-				api_data->data = (void *)malloc(sizeof(int));
+				api_data->data = cgmalloc(sizeof(int));
 				*((int *)(api_data->data)) = *((int *)data);
 				break;
 			case API_UINT:
-				api_data->data = (void *)malloc(sizeof(unsigned int));
+				api_data->data = cgmalloc(sizeof(unsigned int));
 				*((unsigned int *)(api_data->data)) = *((unsigned int *)data);
 				break;
 			case API_UINT32:
-				api_data->data = (void *)malloc(sizeof(uint32_t));
+				api_data->data = cgmalloc(sizeof(uint32_t));
 				*((uint32_t *)(api_data->data)) = *((uint32_t *)data);
 				break;
 			case API_HEX32:
-				api_data->data = (void *)malloc(sizeof(uint32_t));
+				api_data->data = cgmalloc(sizeof(uint32_t));
 				*((uint32_t *)(api_data->data)) = *((uint32_t *)data);
 				break;
 			case API_UINT64:
-				api_data->data = (void *)malloc(sizeof(uint64_t));
+				api_data->data = cgmalloc(sizeof(uint64_t));
 				*((uint64_t *)(api_data->data)) = *((uint64_t *)data);
 				break;
 			case API_INT64:
-				api_data->data = (void *)malloc(sizeof(int64_t));
+				api_data->data = cgmalloc(sizeof(int64_t));
 				*((int64_t *)(api_data->data)) = *((int64_t *)data);
 				break;
 			case API_DOUBLE:
@@ -954,25 +950,25 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 			case API_HS:
 			case API_DIFF:
 			case API_PERCENT:
-				api_data->data = (void *)malloc(sizeof(double));
+				api_data->data = cgmalloc(sizeof(double));
 				*((double *)(api_data->data)) = *((double *)data);
 				break;
 			case API_BOOL:
-				api_data->data = (void *)malloc(sizeof(bool));
+				api_data->data = cgmalloc(sizeof(bool));
 				*((bool *)(api_data->data)) = *((bool *)data);
 				break;
 			case API_TIMEVAL:
-				api_data->data = (void *)malloc(sizeof(struct timeval));
+				api_data->data = cgmalloc(sizeof(struct timeval));
 				memcpy(api_data->data, data, sizeof(struct timeval));
 				break;
 			case API_TIME:
-				api_data->data = (void *)malloc(sizeof(time_t));
+				api_data->data = cgmalloc(sizeof(time_t));
 				*(time_t *)(api_data->data) = *((time_t *)data);
 				break;
 			case API_VOLTS:
 			case API_TEMP:
 			case API_AVG:
-				api_data->data = (void *)malloc(sizeof(float));
+				api_data->data = cgmalloc(sizeof(float));
 				*((float *)(api_data->data)) = *((float *)data);
 				break;
 			default:
@@ -1133,11 +1129,7 @@ static void add_item_buf(K_ITEM *item, const char *str)
 	new_siz = old_siz + siz + 1; // include '\0'
 	if (DATASB(item)->tot < new_siz) {
 		ext = (siz + 1) + SBEXTEND - ((siz + 1) % SBEXTEND);
-		DATASB(item)->buf = buf = realloc(DATASB(item)->buf, DATASB(item)->tot + ext);
-		if (!buf) {
-			quithere(1, "OOM buf siz=%d tot=%d ext=%d",
-				    (int)siz, (int)(DATASB(item)->tot), (int)ext);
-		}
+		DATASB(item)->buf = buf = cgrealloc(DATASB(item)->buf, DATASB(item)->tot + ext);
 		DATASB(item)->tot += ext;
 	}
 	memcpy(buf + old_siz, str, siz + 1);
@@ -1604,12 +1596,8 @@ static LOCKLIST *newlock(void *lock, enum cglock_typ typ, const char *file, cons
 {
 	LOCKLIST *list;
 
-	list = calloc(1, sizeof(*list));
-	if (!list)
-		quithere(1, "OOM list");
-	list->info = calloc(1, sizeof(*(list->info)));
-	if (!list->info)
-		quithere(1, "OOM info");
+	list = cgcalloc(1, sizeof(*list));
+	list->info = cgcalloc(1, sizeof(*(list->info)));
 	list->next = lockhead;
 	lockhead = list;
 
@@ -1644,12 +1632,8 @@ static void addgettry(LOCKINFO *info, uint64_t id, const char *file, const char 
 	LOCKSTAT *stat;
 	LOCKLINE *line;
 
-	stat = calloc(1, sizeof(*stat));
-	if (!stat)
-		quithere(1, "OOM stat");
-	line = calloc(1, sizeof(*line));
-	if (!line)
-		quithere(1, "OOM line");
+	stat = cgcalloc(1, sizeof(*stat));
+	line = cgcalloc(1, sizeof(*line));
 
 	if (get)
 		info->gets++;
@@ -2725,9 +2709,7 @@ static bool pooldetails(char *param, char **url, char **user, char **pass)
 {
 	char *ptr, *buf;
 
-	ptr = buf = malloc(strlen(param)+1);
-	if (unlikely(!buf))
-		quit(1, "Failed to malloc pooldetails buf");
+	ptr = buf = cgmalloc(strlen(param)+1);
 
 	*url = buf;
 
@@ -4305,9 +4287,7 @@ static void setup_groups()
 	bool addstar, did;
 	int i;
 
-	buf = malloc(strlen(api_groups) + 1);
-	if (unlikely(!buf))
-		quit(1, "Failed to malloc ipgroups buf");
+	buf = cgmalloc(strlen(api_groups) + 1);
 
 	strcpy(buf, api_groups);
 
@@ -4395,9 +4375,7 @@ static void setup_groups()
 			}
 		}
 
-		ptr = apigroups[GROUPOFFSET(group)].commands = malloc(strlen(commands) + 1);
-		if (unlikely(!ptr))
-			quit(1, "Failed to malloc group commands buf");
+		ptr = apigroups[GROUPOFFSET(group)].commands = cgmalloc(strlen(commands) + 1);
 
 		strcpy(ptr, commands);
 	}
@@ -4415,9 +4393,7 @@ static void setup_groups()
 		}
 	}
 
-	ptr = apigroups[GROUPOFFSET(NOPRIVGROUP)].commands = malloc(strlen(commands) + 1);
-	if (unlikely(!ptr))
-		quit(1, "Failed to malloc noprivgroup commands buf");
+	ptr = apigroups[GROUPOFFSET(NOPRIVGROUP)].commands = cgmalloc(strlen(commands) + 1);
 
 	strcpy(ptr, commands);
 
@@ -4444,9 +4420,7 @@ static void setup_ipaccess()
 	char group;
 	char tmp[30];
 
-	buf = malloc(strlen(opt_api_allow) + 1);
-	if (unlikely(!buf))
-		quit(1, "Failed to malloc ipaccess buf");
+	buf = cgmalloc(strlen(opt_api_allow) + 1);
 
 	strcpy(buf, opt_api_allow);
 
@@ -4457,9 +4431,7 @@ static void setup_ipaccess()
 			ipcount++;
 
 	// possibly more than needed, but never less
-	ipaccess = calloc(ipcount, sizeof(struct IPACCESS));
-	if (unlikely(!ipaccess))
-		quit(1, "Failed to calloc ipaccess");
+	ipaccess = cgcalloc(ipcount, sizeof(struct IPACCESS));
 
 	ips = 0;
 	ptr = buf;
@@ -4588,7 +4560,7 @@ static bool check_connect(struct sockaddr_storage *cli, char **connectaddr, char
 	char tmp[30];
 	struct in6_addr client_ip;
 
-	*connectaddr = (char *)malloc(INET6_ADDRSTRLEN);
+	*connectaddr = cgmalloc(INET6_ADDRSTRLEN);
 	getnameinfo((struct sockaddr *)cli, sizeof(*cli),
 			*connectaddr, INET6_ADDRSTRLEN, NULL, 0, NI_NUMERICHOST);
 
@@ -4727,9 +4699,7 @@ static void mcast()
 	freeaddrinfo(res);
 
 	expect_code_len = sizeof(expect) + strlen(opt_api_mcast_code);
-	expect_code = malloc(expect_code_len+1);
-	if (!expect_code)
-		quit(1, "Failed to malloc mcast expect_code");
+	expect_code = cgmalloc(expect_code_len + 1);
 	snprintf(expect_code, expect_code_len+1, "%s%s-", expect, opt_api_mcast_code);
 
 	count = 0;
@@ -4833,9 +4803,7 @@ void mcast_init()
 {
 	struct thr_info *thr;
 
-	thr = calloc(1, sizeof(*thr));
-	if (!thr)
-		quit(1, "Failed to calloc mcast thr");
+	thr = cgcalloc(1, sizeof(*thr));
 
 	if (thr_info_create(thr, NULL, mcast_thread, thr))
 		quit(1, "API mcast thread create failed");
@@ -4871,7 +4839,7 @@ void api(int api_thr_id)
 
 	SOCKETTYPE *apisock;
 
-	apisock = malloc(sizeof(*apisock));
+	apisock = cgmalloc(sizeof(*apisock));
 	*apisock = INVSOCK;
 
 	if (!opt_api_listen) {
@@ -5070,9 +5038,7 @@ void api(int api_thr_id)
 					if (strchr(cmd, CMDJOIN)) {
 						firstjoin = isjoin = true;
 						// cmd + leading+tailing '|' + '\0'
-						cmdsbuf = malloc(strlen(cmd) + 3);
-						if (!cmdsbuf)
-							quithere(1, "OOM cmdsbuf");
+						cmdsbuf = cgmalloc(strlen(cmd) + 3);
 						strcpy(cmdsbuf, "|");
 						param = NULL;
 					} else
