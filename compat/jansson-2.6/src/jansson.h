@@ -21,11 +21,11 @@ extern "C" {
 /* version */
 
 #define JANSSON_MAJOR_VERSION  2
-#define JANSSON_MINOR_VERSION  5
+#define JANSSON_MINOR_VERSION  6
 #define JANSSON_MICRO_VERSION  0
 
 /* Micro version is omitted if it's 0 */
-#define JANSSON_VERSION  "2.5"
+#define JANSSON_VERSION  "2.6"
 
 /* Version as a 3-byte hex number, e.g. 0x010201 == 1.2.1. Use this
    for numeric comparisons, e.g. #if JANSSON_VERSION_HEX >= ... */
@@ -126,6 +126,7 @@ typedef struct {
 
 /* getters, setters, manipulation */
 
+void json_object_seed(size_t seed);
 size_t json_object_size(const json_t *object);
 json_t *json_object_get(const json_t *object, const char *key);
 int json_object_set_new(json_t *object, const char *key, json_t *value);
@@ -259,6 +260,8 @@ json_t *json_load_callback(json_load_callback_t callback, void *data, size_t fla
 #define JSON_PRESERVE_ORDER 0x100
 #define JSON_ENCODE_ANY     0x200
 #define JSON_ESCAPE_SLASH   0x400
+#define JSON_NO_UTF8        0x800
+#define JSON_EOL            0x1000
 
 typedef int (*json_dump_callback_t)(const char *buffer, size_t size, void *data);
 
