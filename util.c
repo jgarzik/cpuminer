@@ -253,6 +253,33 @@ int Inet_Pton(int af, const char *src, void *dst)
 }
 #endif
 
+void *_cgmalloc(const int size, const char *file, const char *func, const int line)
+{
+	void *ret = malloc(size);
+
+	if (unlikely(!ret))
+		quit(1, "Failed to malloc size %d from %s %s:%d", size, file, func, line);
+	return ret;
+}
+
+void *_cgcalloc(const int memb, const int size, const char *file, const char *func, const int line)
+{
+	void *ret = calloc(memb, size);
+
+	if (unlikely(!ret))
+		quit(1, "Failed to calloc memb %d size %d from %s %s:%d", memb, size, file, func, line);
+	return ret;
+}
+
+void *_cgrealloc(void *ptr, const int size, const char *file, const char *func, const int line)
+{
+	void *ret = realloc(ptr, size);
+
+	if (unlikely(!ret))
+		quit(1, "Failed to realloc size %d from %s %s:%d", size, file, func, line);
+	return ret;
+}
+
 struct tq_ent {
 	void			*data;
 	struct list_head	q_node;

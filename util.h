@@ -104,6 +104,12 @@ typedef struct timespec cgtimer_t;
 
 int no_yield(void);
 int (*selective_yield)(void);
+void *_cgmalloc(const int size, const char *file, const char *func, const int line);
+void *_cgcalloc(const int memb, const int size, const char *file, const char *func, const int line);
+void *_cgrealloc(void *ptr, const int size, const char *file, const char *func, const int line);
+#define cgmalloc(_size) _cgmalloc(_size, __FILE__, __func__, __LINE__)
+#define cgcalloc(_memb, _size) _cgcalloc(_memb, _size, __FILE__, __func__, __LINE__)
+#define cgrealloc(_ptr, _size) _cgrealloc(_ptr, _size, __FILE__, __func__, __LINE__)
 struct thr_info;
 struct pool;
 enum dev_reason;
