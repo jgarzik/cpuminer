@@ -253,30 +253,36 @@ int Inet_Pton(int af, const char *src, void *dst)
 }
 #endif
 
-void *_cgmalloc(const int size, const char *file, const char *func, const int line)
+void *_cgmalloc(size_t size, const char *file, const char *func, const int line)
 {
-	void *ret = malloc(size);
+	void *ret;
 
+	align_len(&size);
+	ret = malloc(size);
 	if (unlikely(!ret))
-		quit(1, "Failed to malloc size %d from %s %s:%d", size, file, func, line);
+		quit(1, "Failed to malloc size %d from %s %s:%d", (int)size, file, func, line);
 	return ret;
 }
 
-void *_cgcalloc(const int memb, const int size, const char *file, const char *func, const int line)
+void *_cgcalloc(const size_t memb, size_t size, const char *file, const char *func, const int line)
 {
-	void *ret = calloc(memb, size);
+	void *ret;
 
+	align_len(&size);
+	ret = calloc(memb, size);
 	if (unlikely(!ret))
-		quit(1, "Failed to calloc memb %d size %d from %s %s:%d", memb, size, file, func, line);
+		quit(1, "Failed to calloc memb %d size %d from %s %s:%d", (int)memb, (int)size, file, func, line);
 	return ret;
 }
 
-void *_cgrealloc(void *ptr, const int size, const char *file, const char *func, const int line)
+void *_cgrealloc(void *ptr, size_t size, const char *file, const char *func, const int line)
 {
-	void *ret = realloc(ptr, size);
+	void *ret;
 
+	align_len(&size);
+	ret = realloc(ptr, size);
 	if (unlikely(!ret))
-		quit(1, "Failed to realloc size %d from %s %s:%d", size, file, func, line);
+		quit(1, "Failed to realloc size %d from %s %s:%d", (int)size, file, func, line);
 	return ret;
 }
 
@@ -2056,7 +2062,6 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		goto out_unlock;
 	}
 	free(pool->coinbase);
-	align_len(&alloc_len);
 	pool->coinbase = cgcalloc(alloc_len, 1);
 	memcpy(pool->coinbase, cb1, cb1_len);
 	memcpy(pool->coinbase + cb1_len, pool->nonce1bin, pool->n1_len);
@@ -2993,8 +2998,6 @@ void *realloc_strcat(char *ptr, char *s)
 		old = strlen(ptr);
 
 	len += old + 1;
-	align_len(&len);
-
 	ret = cgmalloc(len);
 
 	if (ptr) {

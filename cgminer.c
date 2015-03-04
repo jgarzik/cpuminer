@@ -2188,7 +2188,6 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	pool->n2size = 8;
 	pool->coinbase_len = cbt_len + pool->n2size;
 	cal_len = pool->coinbase_len + 1;
-	align_len(&cal_len);
 	free(pool->coinbase);
 	pool->coinbase = cgcalloc(cal_len, 1);
 	hex2bin(pool->coinbase, pool->coinbasetxn, 42);
