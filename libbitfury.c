@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 Con Kolivas
+ * Copyright 2014-2015 Con Kolivas
  * Copyright 2013 Andrew Smith
  * Copyright 2013 bitfury
  *
@@ -85,7 +85,7 @@ static bool atrvec_set;
 
 void bitfury_work_to_payload(struct bitfury_payload *p, struct work *work)
 {
-	memcpy(p->midstate, work->midstate, 32);
+	cg_memcpy(p->midstate, work->midstate, 32);
 	p->m7 = *(unsigned int *)(work->data + 64);
 	p->ntime = *(unsigned int *)(work->data + 68);
 	p->nbits = *(unsigned int *)(work->data + 72);
@@ -172,7 +172,7 @@ void spi_add_buf(struct bitfury_info *info, const void *buf, const int sz)
 		applog(LOG_WARNING, "SPI bufsize overflow!");
 		return;
 	}
-	memcpy(&info->spibuf[info->spibufsz], buf, sz);
+	cg_memcpy(&info->spibuf[info->spibufsz], buf, sz);
 	info->spibufsz += sz;
 }
 
@@ -293,7 +293,7 @@ bool ftdi_spi_txrx(struct cgpu_info *bitfury, struct bitfury_info *info)
 	buf[0] = READ_WRITE_BYTES_SPI0;
 	buf[1] = length & 0x00FF;
 	buf[2] = (length & 0xFF00) >> 8;
-	memcpy(&buf[3], info->spibuf, info->spibufsz);
+	cg_memcpy(&buf[3], info->spibuf, info->spibufsz);
 	info->spibufsz += 3;
 	err = usb_write(bitfury, buf, info->spibufsz, &amount, C_BXM_SPITX);
 	if (err || amount != (int)info->spibufsz) {
@@ -347,7 +347,7 @@ bool libbitfury_sendHashData(struct thr_info *thr, struct cgpu_info *bitfury,
 	unsigned int localvec[20];
 
 	/* Programming next value */
-	memcpy(localvec, p, 20 * 4);
+	cg_memcpy(localvec, p, 20 * 4);
 	ms3steps(localvec);
 
 	spi_clear_buf(info);
@@ -357,7 +357,7 @@ bool libbitfury_sendHashData(struct thr_info *thr, struct cgpu_info *bitfury,
 	if (!info->spi_txrx(bitfury, info))
 		return false;
 
-	memcpy(newbuf, info->spibuf + 4 + chip_n, 17 * 4);
+	cg_memcpy(newbuf, info->spibuf + 4 + chip_n, 17 * 4);
 
 	info->job_switched[chip_n] = newbuf[16] != oldbuf[16];
 
@@ -376,7 +376,7 @@ bool libbitfury_sendHashData(struct thr_info *thr, struct cgpu_info *bitfury,
 					}
 				}
 			}
-			memcpy(oldbuf, newbuf, 17 * 4);
+			cg_memcpy(oldbuf, newbuf, 17 * 4);
 		}
 	} else
 		info->second_run[chip_n] = true;

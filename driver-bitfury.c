@@ -163,8 +163,8 @@ static bool bf1_getinfo(struct cgpu_info *bitfury, struct bitfury_info *info)
 		return false;
 	}
 	info->version = buf[1];
-	memcpy(&info->product, buf + 2, 8);
-	memcpy(&info->serial, buf + 10, 4);
+	cg_memcpy(&info->product, buf + 2, 8);
+	cg_memcpy(&info->serial, buf + 10, 4);
 	bitfury->unique_id = bin2hex((unsigned char *)buf + 10, 4);
 
 	applog(LOG_INFO, "%s %d: Getinfo returned version %d, product %s serial %s", bitfury->drv->name,
@@ -731,8 +731,8 @@ static bool bxm_reset_bitfury(struct cgpu_info *bitfury)
 	buf[0] = WRITE_BYTES_SPI0;
 	buf[1] = (uint8_t)16 - (uint8_t)1;
 	buf[2] = 0;
-	memcpy(&buf[3], rst_buf, 8);
-	memcpy(&buf[11], rst_buf, 8);
+	cg_memcpy(&buf[3], rst_buf, 8);
+	cg_memcpy(&buf[11], rst_buf, 8);
 	err = usb_write(bitfury, buf, 19, &amount, C_BXM_RESET);
 	if (err || amount != 19)
 		return false;
@@ -1204,8 +1204,8 @@ static int64_t bf1_scan(struct thr_info *thr, struct cgpu_info *bitfury,
 	}
 
 	buf[0] = 'W';
-	memcpy(buf + 1, work->midstate, 32);
-	memcpy(buf + 33, work->data + 64, 12);
+	cg_memcpy(buf + 1, work->midstate, 32);
+	cg_memcpy(buf + 33, work->data + 64, 12);
 
 	/* New results may spill out from the latest work, making us drop out
 	 * too early so read whatever we get for the first half nonce and then
@@ -1254,7 +1254,7 @@ out:
 		uint32_t nonce;
 
 		/* Ignore state & switched data in results for now. */
-		memcpy(&nonce, readbuf + i + 3, 4);
+		cg_memcpy(&nonce, readbuf + i + 3, 4);
 		nonce = decnonce(nonce);
 
 		rd_lock(&bitfury->qlock);
