@@ -325,11 +325,9 @@ static bool bxf_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
 		bitfury->drv->name = "HXF";
 	else if (info->chips > 6 && info->ident == IDENT_BXF)
 		bitfury->drv->name = "MXF";
-	info->filtered_hw = calloc(sizeof(int), info->chips);
-	info->job = calloc(sizeof(int), info->chips);
-	info->submits = calloc(sizeof(int), info->chips);
-	if (!info->filtered_hw || !info->job || !info->submits)
-		quit(1, "Failed to calloc bxf chip arrays");
+	info->filtered_hw = cgcalloc(sizeof(int), info->chips);
+	info->job = cgcalloc(sizeof(int), info->chips);
+	info->submits = cgcalloc(sizeof(int), info->chips);
 	info->total_nonces = 1;
 	info->temp_target = opt_bxf_temp_target * 10;
 	/* This unsets it to make sure it gets set on the first pass */
@@ -417,13 +415,13 @@ static bool nfu_set_spi_settings(struct cgpu_info *bitfury, struct bitfury_info 
 
 static void nfu_alloc_arrays(struct bitfury_info *info)
 {
-	info->payload = calloc(sizeof(struct bitfury_payload), info->chips);
-	info->oldbuf = calloc(sizeof(unsigned int) * 17, info->chips);
-	info->job_switched = calloc(sizeof(bool), info->chips);
-	info->second_run = calloc(sizeof(bool), info->chips);
-	info->work = calloc(sizeof(struct work *), info->chips);
-	info->owork = calloc(sizeof(struct work *), info->chips);
-	info->submits = calloc(sizeof(int *), info->chips);
+	info->payload = cgcalloc(sizeof(struct bitfury_payload), info->chips);
+	info->oldbuf = cgcalloc(sizeof(unsigned int) * 17, info->chips);
+	info->job_switched = cgcalloc(sizeof(bool), info->chips);
+	info->second_run = cgcalloc(sizeof(bool), info->chips);
+	info->work = cgcalloc(sizeof(struct work *), info->chips);
+	info->owork = cgcalloc(sizeof(struct work *), info->chips);
+	info->submits = cgcalloc(sizeof(int *), info->chips);
 }
 
 static bool nfu_detect_one(struct cgpu_info *bitfury, struct bitfury_info *info)
@@ -826,9 +824,7 @@ static struct cgpu_info *bitfury_detect_one(struct libusb_device *dev, struct us
 	applog(LOG_INFO, "%s %d: Found at %s", bitfury->drv->name,
 	       bitfury->device_id, bitfury->device_path);
 
-	info = calloc(sizeof(struct bitfury_info), 1);
-	if (!info)
-		quit(1, "Failed to calloc info in bitfury_detect_one");
+	info = cgcalloc(sizeof(struct bitfury_info), 1);
 	bitfury->device_data = info;
 	info->ident = ident = usb_ident(bitfury);
 	switch (ident) {
