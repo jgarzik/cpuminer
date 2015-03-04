@@ -573,7 +573,7 @@ static inline void string_elist_add(const char *s, struct list_head *head)
 {
 	struct string_elist *n;
 
-	n = calloc(1, sizeof(*n));
+	n = cgcalloc(1, sizeof(*n));
 	n->string = strdup(s);
 	n->free_me = true;
 	list_add_tail(&n->list, head);
