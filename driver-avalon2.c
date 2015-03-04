@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2015 Con Kolivas <kernel@kolivas.org>
  * Copyright 2012-2014 Xiangfu <xiangfu@openmobilefree.com>
  * Copyright 2012 Luke Dashjr
  * Copyright 2012 Andrew Smith
@@ -693,9 +693,7 @@ static struct cgpu_info *avalon2_detect_one(struct libusb_device *dev, struct us
 	applog(LOG_INFO, "%s %d: Found at %s", avalon2->drv->name, avalon2->device_id,
 	       avalon2->device_path);
 
-	avalon2->device_data = calloc(sizeof(struct avalon2_info), 1);
-	if (unlikely(!(avalon2->device_data)))
-		quit(1, "Failed to calloc avalon2_info");
+	avalon2->device_data = cgcalloc(sizeof(struct avalon2_info), 1);
 
 	info = avalon2->device_data;
 
@@ -795,22 +793,16 @@ static void copy_pool_stratum(struct avalon2_info *info, struct pool *pool)
 	free(pool_stratum->nonce1);
 	free(pool_stratum->coinbase);
 
-	align_len(&coinbase_len);
-	pool_stratum->coinbase = calloc(coinbase_len, 1);
-	if (unlikely(!pool_stratum->coinbase))
-		quit(1, "Failed to calloc pool_stratum coinbase in avalon2");
+	pool_stratum->coinbase = cgcalloc(coinbase_len, 1);
 	memcpy(pool_stratum->coinbase, pool->coinbase, coinbase_len);
-
 
 	for (i = 0; i < pool_stratum->merkles; i++)
 		free(pool_stratum->swork.merkle_bin[i]);
 	if (merkles) {
-		pool_stratum->swork.merkle_bin = realloc(pool_stratum->swork.merkle_bin,
-						 sizeof(char *) * merkles + 1);
+		pool_stratum->swork.merkle_bin = cgrealloc(pool_stratum->swork.merkle_bin,
+							   sizeof(char *) * merkles + 1);
 		for (i = 0; i < merkles; i++) {
-			pool_stratum->swork.merkle_bin[i] = malloc(32);
-			if (unlikely(!pool_stratum->swork.merkle_bin[i]))
-				quit(1, "Failed to malloc pool_stratum swork merkle_bin");
+			pool_stratum->swork.merkle_bin[i] = cgmalloc(32);
 			memcpy(pool_stratum->swork.merkle_bin[i], pool->swork.merkle_bin[i], 32);
 		}
 	}

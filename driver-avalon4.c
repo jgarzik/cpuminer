@@ -1143,7 +1143,6 @@ static void copy_pool_stratum(struct pool *pool_stratum, struct pool *pool)
 	free(pool_stratum->nonce1);
 	free(pool_stratum->coinbase);
 
-	align_len(&coinbase_len);
 	pool_stratum->coinbase = cgcalloc(coinbase_len, 1);
 	memcpy(pool_stratum->coinbase, pool->coinbase, coinbase_len);
 

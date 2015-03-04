@@ -175,11 +175,4 @@ void _cg_memcpy(void *dest, const void *src, unsigned int n, const char *file, c
 #define cgsem_mswait(_sem, _timeout) _cgsem_mswait(_sem, _timeout, __FILE__, __func__, __LINE__)
 #define cg_memcpy(dest, src, n) _cg_memcpy(dest, src, n, __FILE__, __func__, __LINE__)
 
-/* Align a size_t to 4 byte boundaries for fussy arches */
-static inline void align_len(size_t *len)
-{
-	if (*len % 4)
-		*len += 4 - (*len % 4);
-}
-
 #endif /* __UTIL_H__ */

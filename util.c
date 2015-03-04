@@ -253,6 +253,13 @@ int Inet_Pton(int af, const char *src, void *dst)
 }
 #endif
 
+/* Align a size_t to 4 byte boundaries for fussy arches */
+static inline void align_len(size_t *len)
+{
+	if (*len % 4)
+		*len += 4 - (*len % 4);
+}
+
 void *_cgmalloc(size_t size, const char *file, const char *func, const int line)
 {
 	void *ret;
