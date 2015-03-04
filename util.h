@@ -102,8 +102,8 @@ typedef LARGE_INTEGER cgtimer_t;
 typedef struct timespec cgtimer_t;
 #endif
 
-int no_yield(void);
-int (*selective_yield)(void);
+extern int no_yield(void);
+extern int (*selective_yield)(void);
 void *_cgmalloc(size_t size, const char *file, const char *func, const int line);
 void *_cgcalloc(const size_t memb, size_t size, const char *file, const char *func, const int line);
 void *_cgrealloc(void *ptr, size_t size, const char *file, const char *func, const int line);
