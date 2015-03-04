@@ -1,4 +1,5 @@
 /*
+ * Copyright 2015 Con Kolivas <kernel@kolivas.org>
  * Copyright 2014 Zvi (Zvisha) Shteingart - Spondoolies-tech.com
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -21,8 +22,7 @@
 
 minergate_req_packet_sp30 *allocate_minergate_packet_req_sp30(uint8_t requester_id,
                                                         uint8_t request_id) {
-  minergate_req_packet_sp30 *p =
-      (minergate_req_packet_sp30 *)malloc(sizeof(minergate_req_packet_sp30));
+  minergate_req_packet_sp30 *p = cgmalloc(sizeof(minergate_req_packet_sp30));
   p->requester_id = requester_id;
   p->req_count = 0;
   p->protocol_version = MINERGATE_PROTOCOL_VERSION_SP30;
@@ -35,8 +35,7 @@ minergate_req_packet_sp30 *allocate_minergate_packet_req_sp30(uint8_t requester_
 minergate_rsp_packet_sp30 *allocate_minergate_packet_rsp_sp30(uint8_t requester_id,
                                                     uint8_t request_id) {
 
-  minergate_rsp_packet_sp30 *p =
-      (minergate_rsp_packet_sp30 *)malloc(sizeof(minergate_rsp_packet_sp30));
+  minergate_rsp_packet_sp30 *p = cgmalloc(sizeof(minergate_rsp_packet_sp30));
   p->requester_id = requester_id;
   p->rsp_count = 0;
   p->protocol_version = MINERGATE_PROTOCOL_VERSION_SP30;
