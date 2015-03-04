@@ -672,11 +672,9 @@ struct pool *add_pool(void)
 {
 	struct pool *pool;
 
-	pool = calloc(sizeof(struct pool), 1);
-	if (!pool)
-		quit(1, "Failed to malloc pool in add_pool");
+	pool = cgcalloc(sizeof(struct pool), 1);
 	pool->pool_no = pool->prio = total_pools;
-	pools = realloc(pools, sizeof(struct pool *) * (total_pools + 2));
+	pools = cgrealloc(pools, sizeof(struct pool *) * (total_pools + 2));
 	pools[total_pools++] = pool;
 	mutex_init(&pool->pool_lock);
 	if (unlikely(pthread_cond_init(&pool->cr_cond, NULL)))
@@ -877,9 +875,7 @@ static void setup_url(struct pool *pool, char *arg)
 	    strncmp(arg, "https://", 8)) {
 		char *httpinput;
 
-		httpinput = malloc(256);
-		if (!httpinput)
-			quit(1, "Failed to malloc httpinput");
+		httpinput = cgmalloc(256);
 		strcpy(httpinput, "stratum+tcp://");
 		strncat(httpinput, arg, 242);
 		detect_stratum(pool, httpinput);
@@ -1779,10 +1775,7 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	config = json_load_file(arg, 0, &err);
 	if (!json_is_object(config)) {
 		siz = JSON_LOAD_ERROR_LEN + strlen(arg) + strlen(err.text);
-		json_error = malloc(siz);
-		if (!json_error)
-			quit(1, "Malloc failure in json error");
-
+		json_error = cgmalloc(siz);
 		snprintf(json_error, siz, JSON_LOAD_ERROR, arg, err.text);
 		return json_error;
 	}
@@ -1805,7 +1798,7 @@ void default_save_file(char *filename);
 
 static void load_default_config(void)
 {
-	cnfbuf = malloc(PATH_MAX);
+	cnfbuf = cgmalloc(PATH_MAX);
 
 	default_save_file(cnfbuf);
 
@@ -1975,13 +1968,9 @@ static int total_work_inc(void)
 
 static struct work *make_work(void)
 {
-	struct work *work = calloc(1, sizeof(struct work));
-
-	if (unlikely(!work))
-		quit(1, "Failed to calloc work in make_work");
+	struct work *work = cgcalloc(1, sizeof(struct work));
 
 	work->id = total_work_inc();
-
 	return work;
 }
 
@@ -2201,9 +2190,7 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	cal_len = pool->coinbase_len + 1;
 	align_len(&cal_len);
 	free(pool->coinbase);
-	pool->coinbase = calloc(cal_len, 1);
-	if (unlikely(!pool->coinbase))
-		quit(1, "Failed to calloc pool coinbase in gbt_decode");
+	pool->coinbase = cgcalloc(cal_len, 1);
 	hex2bin(pool->coinbase, pool->coinbasetxn, 42);
 	extra_len = (uint8_t *)(pool->coinbase + 41);
 	orig_len = *extra_len;
@@ -2296,9 +2283,7 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 			len += strlen(txn);
 		}
 
-		pool->txn_data = malloc(len + 1);
-		if (unlikely(!pool->txn_data))
-			quit(1, "Failed to calloc txn_data in gbt_merkle_bins");
+		pool->txn_data = cgmalloc(len + 1);
 		pool->txn_data[len] = '\0';
 
 		for (i = 0; i < pool->transactions; i++) {
@@ -2316,9 +2301,7 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 				int txn_len;
 
 				txn_len = len / 2;
-				txn_bin = malloc(txn_len);
-				if (!txn_bin)
-					quit(1, "Failed to malloc txn_bin in gbt_merkle_bins");
+				txn_bin = cgmalloc(txn_len);
 				hex2bin(txn_bin, txn, txn_len);
 				/* This is needed for pooled mining since only
 				 * transaction data and not hashes are sent */
@@ -2479,10 +2462,7 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 		+ 1 + 25 // txout
 		+ 4; // lock
 	free(pool->coinbase);
-	pool->coinbase = calloc(len, 1);
-	if (unlikely(!pool->coinbase))
-		quit(1, "Failed to calloc coinbase in gbt_solo_decode");
-
+	pool->coinbase = cgcalloc(len, 1);
 	memcpy(pool->coinbase + 41, pool->scriptsig_base, ofs);
 	memcpy(pool->coinbase + 41 + ofs, "\xff\xff\xff\xff", 4);
 	pool->coinbase[41 + ofs + 4] = 1;
@@ -3307,9 +3287,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		strcat(gbt_block, varint); // +8 max
 		strcat(gbt_block, work->coinbase);
 
-		s = malloc(1024);
-		if (unlikely(!s))
-			quit(1, "Failed to malloc s in submit_upstream_work");
+		s = cgmalloc(1024);
 		sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s", gbt_block);
 		/* Has submit/coinbase support */
 		if (!pool->has_gbt) {
@@ -4102,10 +4080,7 @@ struct work *make_clone(struct work *work)
  * this pool. */
 static void recruit_curl(struct pool *pool)
 {
-	struct curl_ent *ce = calloc(sizeof(struct curl_ent), 1);
-
-	if (unlikely(!ce))
-		quit(1, "Failed to calloc in recruit_curl");
+	struct curl_ent *ce = cgcalloc(sizeof(struct curl_ent), 1);
 
 	ce->curl = curl_easy_init();
 	if (unlikely(!ce->curl))
@@ -4833,7 +4808,7 @@ static bool test_work_current(struct work *work)
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
 	if (!block_exists(hexstr)) {
-		struct block *s = calloc(sizeof(struct block), 1);
+		struct block *s = cgcalloc(sizeof(struct block), 1);
 		int deleted_block = 0;
 
 		if (unlikely(!s))
@@ -5067,10 +5042,8 @@ static char *json_escape(char *str)
 	char *buf, *ptr;
 
 	/* 2x is the max, may as well just allocate that */
-	ptr = buf = malloc(strlen(str) * 2 + 1);
-
-	jeptr = malloc(sizeof(*jeptr));
-
+	ptr = buf = cgmalloc(strlen(str) * 2 + 1);
+	jeptr = cgmalloc(sizeof(*jeptr));
 	jeptr->buf = buf;
 	jeptr->next = jedata;
 	jedata = jeptr;
@@ -6459,7 +6432,7 @@ static void *stratum_sthread(void *userdata)
 		__bin2hex(noncehex, (const unsigned char *)&nonce, 4);
 		__bin2hex(nonce2hex, nonce2, work->nonce2_len);
 
-		sshare = calloc(sizeof(struct stratum_share), 1);
+		sshare = cgcalloc(sizeof(struct stratum_share), 1);
 		hash32 = (uint32_t *)work->hash;
 		submitted = false;
 
@@ -6808,12 +6781,7 @@ retry_stratum:
 					need_slash = true;
 
 				siz = strlen(pool->rpc_url) + strlen(copy_start) + 2;
-				pool->lp_url = malloc(siz);
-				if (!pool->lp_url) {
-					applog(LOG_ERR, "Malloc failure in pool_active");
-					return false;
-				}
-
+				pool->lp_url = cgmalloc(siz);
 				snprintf(pool->lp_url, siz, "%s%s%s", pool->rpc_url, need_slash ? "/" : "", copy_start);
 			}
 		} else
@@ -8807,9 +8775,7 @@ char *curses_input(const char *query)
 	char *input;
 
 	echo();
-	input = malloc(255);
-	if (!input)
-		quit(1, "Failed to malloc input");
+	input = cgmalloc(255);
 	leaveok(logwin, false);
 	wlogprint("%s:\n", query);
 	wgetnstr(logwin, input, 255);
@@ -8875,9 +8841,7 @@ bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char 
 	pool->rpc_user = user;
 	pool->rpc_pass = pass;
 	siz = strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2;
-	pool->rpc_userpass = malloc(siz);
-	if (!pool->rpc_userpass)
-		quit(1, "Failed to malloc userpass");
+	pool->rpc_userpass = cgmalloc(siz);
 	snprintf(pool->rpc_userpass, siz, "%s:%s", pool->rpc_user, pool->rpc_pass);
 
 	pool->testing = true;
@@ -8923,9 +8887,7 @@ static bool input_pool(bool live)
 	    strncmp(url, "https://", 8)) {
 		char *httpinput;
 
-		httpinput = malloc(256);
-		if (!httpinput)
-			quit(1, "Failed to malloc httpinput");
+		httpinput = cgmalloc(256);
 		strcpy(httpinput, "http://");
 		strncat(httpinput, url, 248);
 		free(url);
@@ -9247,14 +9209,14 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	if (d)
 		cgpu->device_id = ++d->lastid;
 	else {
-		d = malloc(sizeof(*d));
+		d = cgmalloc(sizeof(*d));
 		memcpy(d->name, cgpu->drv->name, sizeof(d->name));
 		cgpu->device_id = d->lastid = 0;
 		HASH_ADD_STR(devids, name, d);
 	}
 
 	wr_lock(&devices_lock);
-	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + new_devices + 2));
+	devices = cgrealloc(devices, sizeof(struct cgpu_info *) * (total_devices + new_devices + 2));
 	wr_unlock(&devices_lock);
 
 	mutex_lock(&stats_lock);
@@ -9279,10 +9241,7 @@ struct device_drv *copy_drv(struct device_drv *drv)
 {
 	struct device_drv *copy;
 
-	if (unlikely(!(copy = malloc(sizeof(*copy))))) {
-		quit(1, "Failed to allocate device_drv copy of %s (%s)",
-				drv->name, drv->copy ? "copy" : "original");
-	}
+	copy = cgmalloc(sizeof(*copy));
 	memcpy(copy, drv, sizeof(*copy));
 	copy->copy = true;
 	return copy;
@@ -9305,20 +9264,14 @@ static void hotplug_process(void)
 	}
 
 	wr_lock(&mining_thr_lock);
-	mining_thr = realloc(mining_thr, sizeof(thr) * (mining_threads + new_threads + 1));
-
-	if (!mining_thr)
-		quit(1, "Failed to hotplug realloc mining_thr");
-	for (i = 0; i < new_threads; i++) {
-		mining_thr[mining_threads + i] = calloc(1, sizeof(*thr));
-		if (!mining_thr[mining_threads + i])
-			quit(1, "Failed to hotplug calloc mining_thr[%d]", i);
-	}
+	mining_thr = cgrealloc(mining_thr, sizeof(thr) * (mining_threads + new_threads + 1));
+	for (i = 0; i < new_threads; i++)
+		mining_thr[mining_threads + i] = cgcalloc(1, sizeof(*thr));
 
 	// Start threads
 	for (i = 0; i < new_devices; ++i) {
 		struct cgpu_info *cgpu = devices[total_devices];
-		cgpu->thr = malloc(sizeof(*cgpu->thr) * (cgpu->threads+1));
+		cgpu->thr = cgmalloc(sizeof(*cgpu->thr) * (cgpu->threads+1));
 		cgpu->thr[cgpu->threads] = NULL;
 		cgpu->status = LIFE_INIT;
 		cgtime(&(cgpu->dev_start_tv));
@@ -9480,7 +9433,7 @@ int main(int argc, char *argv[])
 		quithere(1, "Failed to pthread_mutex_init lockstat_lock errno=%d", errno);
 #endif
 
-	initial_args = malloc(sizeof(char *) * (argc + 1));
+	initial_args = cgmalloc(sizeof(char *) * (argc + 1));
 	for  (i = 0; i < argc; i++)
 		initial_args[i] = strdup(argv[i]);
 	initial_args[argc] = NULL;
@@ -9541,9 +9494,7 @@ int main(int argc, char *argv[])
 	logstart = devcursor + 1;
 	logcursor = logstart + 1;
 
-	block = calloc(sizeof(struct block), 1);
-	if (unlikely(!block))
-		quit (1, "main OOM");
+	block = cgcalloc(sizeof(struct block), 1);
 	for (i = 0; i < 36; i++)
 		strcat(block->hash, "0");
 	HASH_ADD_STR(blocks, hash, block);
@@ -9568,7 +9519,7 @@ int main(int argc, char *argv[])
 		struct pool *pool;
 
 		pool = add_pool();
-		pool->rpc_url = malloc(255);
+		pool->rpc_url = cgmalloc(255);
 		if (opt_benchfile)
 			strcpy(pool->rpc_url, "Benchfile");
 		else
@@ -9627,9 +9578,7 @@ int main(int argc, char *argv[])
 		opt_scantime = 60;
 
 	total_control_threads = 8;
-	control_thr = calloc(total_control_threads, sizeof(*thr));
-	if (!control_thr)
-		early_quit(1, "Failed to calloc control_thr");
+	control_thr = cgcalloc(total_control_threads, sizeof(*thr));
 
 	gwsched_thr_id = 0;
 
@@ -9713,9 +9662,7 @@ int main(int argc, char *argv[])
 			if (!pool->rpc_user)
 				early_quit(1, "No login credentials supplied for pool %u %s", i, pool->rpc_url);
 			siz = strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2;
-			pool->rpc_userpass = malloc(siz);
-			if (!pool->rpc_userpass)
-				early_quit(1, "Failed to malloc userpass");
+			pool->rpc_userpass = cgmalloc(siz);
 			snprintf(pool->rpc_userpass, siz, "%s:%s", pool->rpc_user, pool->rpc_pass);
 		}
 	}
@@ -9732,20 +9679,15 @@ int main(int argc, char *argv[])
 			fork_monitor();
 	#endif // defined(unix)
 
-	mining_thr = calloc(mining_threads, sizeof(thr));
-	if (!mining_thr)
-		early_quit(1, "Failed to calloc mining_thr");
-	for (i = 0; i < mining_threads; i++) {
-		mining_thr[i] = calloc(1, sizeof(*thr));
-		if (!mining_thr[i])
-			early_quit(1, "Failed to calloc mining_thr[%d]", i);
-	}
+	mining_thr = cgcalloc(mining_threads, sizeof(thr));
+	for (i = 0; i < mining_threads; i++)
+		mining_thr[i] = cgcalloc(1, sizeof(*thr));
 
 	// Start threads
 	k = 0;
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = devices[i];
-		cgpu->thr = malloc(sizeof(*cgpu->thr) * (cgpu->threads+1));
+		cgpu->thr = cgmalloc(sizeof(*cgpu->thr) * (cgpu->threads+1));
 		cgpu->thr[cgpu->threads] = NULL;
 		cgpu->status = LIFE_INIT;
 
