@@ -1,6 +1,6 @@
 /*
  * Copyright 2013 Andrew Smith
- * Copyright 2013-2014 Con Kolivas
+ * Copyright 2013-2015 Con Kolivas
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -101,9 +101,7 @@ static bool tolines(struct cgpu_info *bflsc, int dev, char *buf, int *lines, cha
 
 	ptr = strdup(buf);
 	while (ptr && *ptr) {
-		p_items = realloc(p_items, ++p_lines * sizeof(*p_items));
-		if (unlikely(!p_items))
-			quit(1, "Failed to realloc p_items in tolines");
+		p_items = cgrealloc(p_items, ++p_lines * sizeof(*p_items));
 		p_items[p_lines-1] = ptr;
 		ptr = strchr(ptr, '\n');
 		if (ptr)
@@ -180,9 +178,7 @@ static bool breakdown(enum breakmode mode, char *buf, int *count, char **firstna
 		comma = strchr(ptr, ',');
 		if (comma)
 			*(comma++) = '\0';
-		p_fields = realloc(p_fields, ++p_count * sizeof(*p_fields));
-		if (unlikely(!p_fields))
-			quit(1, "Failed to realloc p_fields in breakdown");
+		p_fields = cgrealloc(p_fields, ++p_count * sizeof(*p_fields));
 		p_fields[p_count-1] = ptr;
 		ptr = comma;
 	}
@@ -675,9 +671,7 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 		goto ne;
 	}
 
-	sc_info->sc_devs = calloc(sc_info->sc_count, sizeof(struct bflsc_dev));
-	if (unlikely(!sc_info->sc_devs))
-		quit(1, "Failed to calloc in getinfo");
+	sc_info->sc_devs = cgcalloc(sc_info->sc_count, sizeof(struct bflsc_dev));
 	memcpy(&(sc_info->sc_devs[0]), &sc_dev, sizeof(sc_dev));
 	// TODO: do we care about getting this info for the rest if > 0 x-link
 
@@ -707,9 +701,7 @@ static struct cgpu_info *bflsc_detect_one(struct libusb_device *dev, struct usb_
 
 	struct cgpu_info *bflsc = usb_alloc_cgpu(&bflsc_drv, 1);
 
-	sc_info = calloc(1, sizeof(*sc_info));
-	if (unlikely(!sc_info))
-		quit(1, "Failed to calloc sc_info in bflsc_detect_one");
+	sc_info = cgcalloc(1, sizeof(*sc_info));
 	// TODO: fix ... everywhere ...
 	bflsc->device_data = (FILE *)sc_info;
 
@@ -1908,7 +1900,7 @@ static bool bflsc28_queue_full(struct cgpu_info *bflsc)
 			goto out;
 		}
 		sscanf(field, "%04x", &uid);
-		bwork = calloc(sizeof(struct bflsc_work), 1);
+		bwork = cgcalloc(sizeof(struct bflsc_work), 1);
 		bwork->id = uid;
 		bwork->work = work;
 
