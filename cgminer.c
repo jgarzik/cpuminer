@@ -667,7 +667,7 @@ void adjust_quota_gcd(void)
 	applog(LOG_DEBUG, "Global quota greatest common denominator set to %lu", gcd);
 }
 
-/* Return value is ignored if not called from add_pool_details */
+/* Return value is ignored if not called from input_pool */
 struct pool *add_pool(void)
 {
 	struct pool *pool;
@@ -863,12 +863,12 @@ static struct pool *add_url(void)
 	return pools[total_urls - 1];
 }
 
-static void setup_url(struct pool *pool, char *arg)
+static char *setup_url(struct pool *pool, char *arg)
 {
 	arg = get_proxy(arg, pool);
 
 	if (detect_stratum(pool, arg))
-		return;
+		goto out;
 
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
@@ -880,6 +880,8 @@ static void setup_url(struct pool *pool, char *arg)
 		strncat(httpinput, arg, 242);
 		detect_stratum(pool, httpinput);
 	}
+out:
+	return pool->rpc_url;
 }
 
 static char *set_url(char *arg)
@@ -8818,8 +8820,10 @@ retry:
 		switch_pools(NULL);
 	} else {
 		pool_died(pool);
-		sleep(5);
-		goto retry;
+		if (!pool->blocking) {
+			sleep(5);
+			goto retry;
+		}
 	}
 
 	pool->testing = false;
@@ -8833,8 +8837,6 @@ out:
 bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass)
 {
 	size_t siz;
-
-	url = get_proxy(url, pool);
 
 	pool->rpc_url = url;
 	pool->rpc_user = user;
@@ -8866,34 +8868,36 @@ static bool input_pool(bool live)
 	immedok(logwin, true);
 	wlogprint("Input server details.\n");
 
+retry:
 	url = curses_input("URL");
-	if (!strcmp(url, "-1"))
+	if (!strcmp(url, "-1")) {
+		wlogprint("Invalid input\n");
 		goto out;
+	}
 
 	user = curses_input("Username");
-	if (!strcmp(user, "-1"))
+	if (!strcmp(user, "-1")) {
+		wlogprint("Invalid input\n");
 		goto out;
+	}
 
-	pass = curses_input("Password");
+	pass = curses_input("Password [enter for none]");
 	if (!strcmp(pass, "-1")) {
 		free(pass);
 		pass = strdup("");
 	}
 
 	pool = add_pool();
-
-	if (!detect_stratum(pool, url) && strncmp(url, "http://", 7) &&
-	    strncmp(url, "https://", 8)) {
-		char *httpinput;
-
-		httpinput = cgmalloc(256);
-		strcpy(httpinput, "http://");
-		strncat(httpinput, url, 248);
-		free(url);
-		url = httpinput;
-	}
-
+	url = setup_url(pool, url);
 	ret = add_pool_details(pool, live, url, user, pass);
+	if (!ret) {
+		remove_pool(pool);
+		wlogprint("URL %s failed alive testing, reinput details\n", url);
+		free(url);
+		free(user);
+		free(pass);
+		goto retry;
+	}
 out:
 	immedok(logwin, false);
 
