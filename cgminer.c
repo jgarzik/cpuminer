@@ -9374,11 +9374,11 @@ static void probe_pools(void)
 #ifdef USE_USBUTILS
 static void *libusb_poll_thread(void __maybe_unused *arg)
 {
-	struct timeval tv_end = {1, 0};
+	struct timeval tv_end = {0, 100000};
 
 	RenameThread("USBPoll");
 
-	while (usb_polling)
+	while (likely(usb_polling))
 		libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
 
 	/* Cancel any cancellable usb transfers */
@@ -9386,9 +9386,10 @@ static void *libusb_poll_thread(void __maybe_unused *arg)
 
 	/* Keep event handling going until there are no async transfers in
 	 * flight. */
-	do {
+	tv_end.tv_sec = 0;
+	while (async_usb_transfers()) {
 		libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
-	} while (async_usb_transfers());
+	};
 
 	return NULL;
 }
