@@ -8861,7 +8861,7 @@ bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char 
 #ifdef HAVE_CURSES
 static bool input_pool(bool live)
 {
-	char *url = NULL, *user = NULL, *pass = NULL;
+	char *url, *user, *pass;
 	struct pool *pool;
 	bool ret = false;
 
@@ -8869,6 +8869,9 @@ static bool input_pool(bool live)
 	wlogprint("Input server details.\n");
 
 retry:
+	url = NULL;
+	user = NULL;
+	pass = NULL;
 	url = curses_input("URL");
 	if (!strcmp(url, "-1")) {
 		wlogprint("Invalid input\n");
