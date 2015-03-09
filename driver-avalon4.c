@@ -1610,7 +1610,8 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 			}
 
 			if (info->cutoff[i]) {
-				memset(info->adjflag, 0, sizeof(uint8_t) * AVA4_DEFAULT_MINERS * AVA4_DEFAULT_MODULARS);
+				for (j = 0; j < AVA4_DEFAULT_MINERS; j++)
+					info->adjflag[i][j] = 0;
 				continue;
 			}
 
@@ -1683,6 +1684,11 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 
 			} else
 				avalon4_adjust_vf(avalon4, i, 0);
+
+			if (((int)device_tdiff % 3600) >= 0 || ((int)device_tdiff % 3600) < 3) {
+				for (j = 0; j < AVA4_DEFAULT_MINERS; j++)
+					info->adjflag[i][j] = 0;
+			}
 		}
 	}
 
