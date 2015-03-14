@@ -789,7 +789,7 @@ else
 fi
 
 #Add any new device to this, along with a no on the end of the test
-if test "x$avalon$avalon2$bab$bflsc$bitforce$bitfury$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$sp10$sp30" = xnononononononononononononononononononononono; then
+if test "x$avalon$avalon2$avalon4$bab$bflsc$bitforce$bitfury$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$sp10$sp30" = xnononononononononononononononononononononono; then
 	echo
 	AC_MSG_ERROR([No mining devices configured in])
 	echo
