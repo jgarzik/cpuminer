@@ -50,7 +50,9 @@ AC_PROG_CC
 gl_EARLY
 AC_PROG_GCC_TRADITIONAL
 AM_PROG_CC_C_O
-LT_INIT([disable-shared])
+
+# This breaks autoreconf so disable it
+# LT_INIT([disable-shared])
 
 gl_INIT
 
