@@ -432,9 +432,9 @@ static struct usb_intinfo ants2_ints[] = {
 #define THISIF(_found, _this) (_found->intinfos[_this].interface)
 #define USBIF(_usbdev, _this) THISIF(_usbdev->found, _this)
 
-// TODO: Add support for (at least) Isochronous endpoints
 static struct usb_find_devices find_dev[] = {
 #ifdef USE_BFLSC
+	/* Wish these guys would be more consistent with setting these fields */
 	{
 		.drv = DRIVER_bflsc,
 		.name = "BAS",
@@ -442,6 +442,18 @@ static struct usb_find_devices find_dev[] = {
 		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6014,
 		.iManufacturer = "Butterfly Labs",
+		.iProduct = "BitFORCE SHA256 SC",
+		.config = 1,
+		.timeout = BFLSC_TIMEOUT_MS,
+		.latency = LATENCY_STD,
+		INTINFO(bflsc_ints) },
+	{
+		.drv = DRIVER_bflsc,
+		.name = "BMA",
+		.ident = IDENT_BMA,
+		.idVendor = IDVENDOR_FTDI,
+		.idProduct = 0x6014,
+		.iManufacturer = "BUTTERFLY LABS",
 		.iProduct = "BitFORCE SHA256 SC",
 		.config = 1,
 		.timeout = BFLSC_TIMEOUT_MS,
@@ -2129,7 +2141,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 		goto cldame;
 	}
 	if (found->iManufacturer) {
-		if (strcasecmp((char *)man, found->iManufacturer)) {
+		if (strcmp((char *)man, found->iManufacturer)) {
 			applog(LOG_DEBUG, "USB init, iManufacturer mismatch %s",
 			       devstr);
 			applog(LOG_DEBUG, "Found %s vs %s", man, found->iManufacturer);
@@ -2144,7 +2156,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 
 			if (!iManufacturer)
 				continue;
-			if (!strcasecmp((char *)man, iManufacturer)) {
+			if (!strcmp((char *)man, iManufacturer)) {
 				applog(LOG_DEBUG, "USB init, alternative iManufacturer match %s",
 				       devstr);
 				applog(LOG_DEBUG, "Found %s", iManufacturer);
