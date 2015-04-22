@@ -387,6 +387,6 @@ struct SaveString {
 // Keep trying up to this many us
 #define REINIT_TIME_MAX 3000000
 
-int opt_bflsc_overheat;
+extern int opt_bflsc_overheat;
 
 #endif /* BFLSC_H */

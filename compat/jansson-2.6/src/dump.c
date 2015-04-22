@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2009-2013 Petri Lehtinen <petri@digip.org>
+ * Copyright (c) 2015 Con Kolivas <kernel@kolivas.org>
  *
  * Jansson is free software; you can redistribute it and/or modify
  * it under the terms of the MIT license. See LICENSE for details.
@@ -65,6 +66,21 @@ static int dump_indent(size_t flags, int depth, int space, json_dump_callback_t 
     return 0;
 }
 
+static inline const char *noutf8_iterate(const char *buffer, int32_t *codepoint)
+{
+    int32_t value;
+
+    if(!*buffer)
+        return buffer;
+
+    value = (unsigned char)buffer[0];
+
+    if(codepoint)
+        *codepoint = value;
+
+    return buffer + 1;
+}
+
 static int dump_string(const char *str, json_dump_callback_t dump, void *data, size_t flags)
 {
     const char *pos, *end;
@@ -82,7 +98,10 @@ static int dump_string(const char *str, json_dump_callback_t dump, void *data, s
 
         while(*end)
         {
-            end = utf8_iterate(pos, &codepoint);
+            if(flags & JSON_NO_UTF8)
+		    end = noutf8_iterate(pos, &codepoint);
+	    else
+		    end = utf8_iterate(pos, &codepoint);
             if(!end)
                 return -1;
 
@@ -419,10 +438,11 @@ char *json_dumps(const json_t *json, size_t flags)
 
     if(json_dump_callback(json, dump_to_strbuffer, (void *)&strbuff, flags))
         result = NULL;
+    else if (flags & JSON_EOL)
+	result = jsonp_eolstrsteal(&strbuff);
     else
-        result = jsonp_strdup(strbuffer_value(&strbuff));
+	result = jsonp_strsteal(&strbuff);
 
-    strbuffer_close(&strbuff);
     return result;
 }
 

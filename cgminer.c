@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2014 Con Kolivas
+ * Copyright 2011-2015 Con Kolivas
  * Copyright 2011-2012 Luke Dashjr
  * Copyright 2010 Jeff Garzik
  *
@@ -166,7 +166,6 @@ int opt_queue = 1;
 static int max_queue = 1;
 int opt_scantime = -1;
 int opt_expiry = 120;
-static const bool opt_time = true;
 unsigned long long global_hashrate;
 unsigned long global_quota_gcd = 1;
 time_t last_getwork;
@@ -668,16 +667,14 @@ void adjust_quota_gcd(void)
 	applog(LOG_DEBUG, "Global quota greatest common denominator set to %lu", gcd);
 }
 
-/* Return value is ignored if not called from add_pool_details */
+/* Return value is ignored if not called from input_pool */
 struct pool *add_pool(void)
 {
 	struct pool *pool;
 
-	pool = calloc(sizeof(struct pool), 1);
-	if (!pool)
-		quit(1, "Failed to malloc pool in add_pool");
+	pool = cgcalloc(sizeof(struct pool), 1);
 	pool->pool_no = pool->prio = total_pools;
-	pools = realloc(pools, sizeof(struct pool *) * (total_pools + 2));
+	pools = cgrealloc(pools, sizeof(struct pool *) * (total_pools + 2));
 	pools[total_pools++] = pool;
 	mutex_init(&pool->pool_lock);
 	if (unlikely(pthread_cond_init(&pool->cr_cond, NULL)))
@@ -866,25 +863,25 @@ static struct pool *add_url(void)
 	return pools[total_urls - 1];
 }
 
-static void setup_url(struct pool *pool, char *arg)
+static char *setup_url(struct pool *pool, char *arg)
 {
 	arg = get_proxy(arg, pool);
 
 	if (detect_stratum(pool, arg))
-		return;
+		goto out;
 
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
 	    strncmp(arg, "https://", 8)) {
 		char *httpinput;
 
-		httpinput = malloc(256);
-		if (!httpinput)
-			quit(1, "Failed to malloc httpinput");
+		httpinput = cgmalloc(256);
 		strcpy(httpinput, "stratum+tcp://");
 		strncat(httpinput, arg, 242);
 		detect_stratum(pool, httpinput);
 	}
+out:
+	return pool->rpc_url;
 }
 
 static char *set_url(char *arg)
@@ -1786,10 +1783,7 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	config = json_load_file(arg, 0, &err);
 	if (!json_is_object(config)) {
 		siz = JSON_LOAD_ERROR_LEN + strlen(arg) + strlen(err.text);
-		json_error = malloc(siz);
-		if (!json_error)
-			quit(1, "Malloc failure in json error");
-
+		json_error = cgmalloc(siz);
 		snprintf(json_error, siz, JSON_LOAD_ERROR, arg, err.text);
 		return json_error;
 	}
@@ -1812,7 +1806,7 @@ void default_save_file(char *filename);
 
 static void load_default_config(void)
 {
-	cnfbuf = malloc(PATH_MAX);
+	cnfbuf = cgmalloc(PATH_MAX);
 
 	default_save_file(cnfbuf);
 
@@ -1964,7 +1958,7 @@ static void calc_midstate(struct work *work)
 	flip64(data32, work->data);
 	sha256_init(&ctx);
 	sha256_update(&ctx, data, 64);
-	memcpy(work->midstate, ctx.h, 32);
+	cg_memcpy(work->midstate, ctx.h, 32);
 	endian_flip32(work->midstate, work->midstate);
 }
 
@@ -1982,13 +1976,9 @@ static int total_work_inc(void)
 
 static struct work *make_work(void)
 {
-	struct work *work = calloc(1, sizeof(struct work));
-
-	if (unlikely(!work))
-		quit(1, "Failed to calloc work in make_work");
+	struct work *work = cgcalloc(1, sizeof(struct work));
 
 	work->id = total_work_inc();
-
 	return work;
 }
 
@@ -2004,11 +1994,21 @@ void clean_work(struct work *work)
 }
 
 /* All dynamically allocated work structs should be freed here to not leak any
- * ram from arrays allocated within the work struct */
-void _free_work(struct work *work)
+ * ram from arrays allocated within the work struct. Null the actual pointer
+ * used to call free_work. */
+void _free_work(struct work **workptr, const char *file, const char *func, const int line)
 {
+	struct work *work = *workptr;
+
+	if (unlikely(!work)) {
+		applog(LOG_ERR, "Free work called with null work from %s %s:%d",
+		       file, func, line);
+		return;
+	}
+
 	clean_work(work);
 	free(work);
+	*workptr = NULL;
 }
 
 static void gen_hash(unsigned char *data, unsigned char *hash, int len);
@@ -2036,11 +2036,11 @@ static void __gbt_merkleroot(struct pool *pool, unsigned char *merkle_root)
 	int i;
 
 	gen_hash(pool->coinbase, merkle_root, pool->coinbase_len);
-	memcpy(merkle_sha, merkle_root, 32);
+	cg_memcpy(merkle_sha, merkle_root, 32);
 	for (i = 0; i < pool->merkles; i++) {
-		memcpy(merkle_sha + 32, pool->merklebin + i * 32, 32);
+		cg_memcpy(merkle_sha + 32, pool->merklebin + i * 32, 32);
 		gen_hash(merkle_sha, merkle_root, 64);
-		memcpy(merkle_sha, merkle_root, 32);
+		cg_memcpy(merkle_sha, merkle_root, 32);
 	}
 }
 
@@ -2095,17 +2095,17 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 
 	cg_wlock(&pool->gbt_lock);
 	nonce2le = htole64(pool->nonce2);
-	memcpy(pool->coinbase + pool->nonce2_offset, &nonce2le, pool->n2size);
+	cg_memcpy(pool->coinbase + pool->nonce2_offset, &nonce2le, pool->n2size);
 	pool->nonce2++;
 	cg_dwlock(&pool->gbt_lock);
 	__gbt_merkleroot(pool, merkleroot);
 
-	memcpy(work->data, &pool->gbt_version, 4);
-	memcpy(work->data + 4, pool->previousblockhash, 32);
-	memcpy(work->data + 4 + 32 + 32, &pool->curtime, 4);
-	memcpy(work->data + 4 + 32 + 32 + 4, &pool->gbt_bits, 4);
+	cg_memcpy(work->data, &pool->gbt_version, 4);
+	cg_memcpy(work->data + 4, pool->previousblockhash, 32);
+	cg_memcpy(work->data + 4 + 32 + 32, &pool->curtime, 4);
+	cg_memcpy(work->data + 4 + 32 + 32 + 4, &pool->gbt_bits, 4);
 
-	memcpy(work->target, pool->gbt_target, 32);
+	cg_memcpy(work->target, pool->gbt_target, 32);
 
 	work->coinbase = bin2hex(pool->coinbase, pool->coinbase_len);
 
@@ -2196,11 +2196,8 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	pool->n2size = 8;
 	pool->coinbase_len = cbt_len + pool->n2size;
 	cal_len = pool->coinbase_len + 1;
-	align_len(&cal_len);
 	free(pool->coinbase);
-	pool->coinbase = calloc(cal_len, 1);
-	if (unlikely(!pool->coinbase))
-		quit(1, "Failed to calloc pool coinbase in gbt_decode");
+	pool->coinbase = cgcalloc(cal_len, 1);
 	hex2bin(pool->coinbase, pool->coinbasetxn, 42);
 	extra_len = (uint8_t *)(pool->coinbase + 41);
 	orig_len = *extra_len;
@@ -2293,9 +2290,7 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 			len += strlen(txn);
 		}
 
-		pool->txn_data = malloc(len + 1);
-		if (unlikely(!pool->txn_data))
-			quit(1, "Failed to calloc txn_data in gbt_merkle_bins");
+		pool->txn_data = cgmalloc(len + 1);
 		pool->txn_data[len] = '\0';
 
 		for (i = 0; i < pool->transactions; i++) {
@@ -2306,16 +2301,14 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 			hash = json_string_value(json_object_get(arr_val, "hash"));
 			txn = json_string_value(json_object_get(arr_val, "data"));
 			len = strlen(txn);
-			memcpy(pool->txn_data + ofs, txn, len);
+			cg_memcpy(pool->txn_data + ofs, txn, len);
 			ofs += len;
 			if (!hash) {
 				unsigned char *txn_bin;
 				int txn_len;
 
 				txn_len = len / 2;
-				txn_bin = malloc(txn_len);
-				if (!txn_bin)
-					quit(1, "Failed to malloc txn_bin in gbt_merkle_bins");
+				txn_bin = cgmalloc(txn_len);
 				hex2bin(txn_bin, txn, txn_len);
 				/* This is needed for pooled mining since only
 				 * transaction data and not hashes are sent */
@@ -2333,10 +2326,10 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 		while (42) {
 			if (binleft == 1)
 				break;
-			memcpy(pool->merklebin + (pool->merkles * 32), hashbin + 32, 32);
+			cg_memcpy(pool->merklebin + (pool->merkles * 32), hashbin + 32, 32);
 			pool->merkles++;
 			if (binleft % 2) {
-				memcpy(hashbin + binlen, hashbin + binlen - 32, 32);
+				cg_memcpy(hashbin + binlen, hashbin + binlen - 32, 32);
 				binlen += 32;
 				binleft++;
 			}
@@ -2448,7 +2441,7 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	*u32 = htole32(now.tv_usec);
 	ofs += 4; // sizeof uint32_t
 
-	memcpy(pool->scriptsig_base + ofs, "\x09\x63\x67\x6d\x69\x6e\x65\x72\x34\x32", 10);
+	cg_memcpy(pool->scriptsig_base + ofs, "\x09\x63\x67\x6d\x69\x6e\x65\x72\x34\x32", 10);
 	ofs += 10;
 
 	/* Followed by extranonce size, fixed at 8 */
@@ -2461,7 +2454,7 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 		if (len > 32)
 			len = 32;
 		pool->scriptsig_base[ofs++] = len;
-		memcpy(pool->scriptsig_base + ofs, opt_btc_sig, len);
+		cg_memcpy(pool->scriptsig_base + ofs, opt_btc_sig, len);
 		ofs += len;
 	}
 
@@ -2476,12 +2469,9 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 		+ 1 + 25 // txout
 		+ 4; // lock
 	free(pool->coinbase);
-	pool->coinbase = calloc(len, 1);
-	if (unlikely(!pool->coinbase))
-		quit(1, "Failed to calloc coinbase in gbt_solo_decode");
-
-	memcpy(pool->coinbase + 41, pool->scriptsig_base, ofs);
-	memcpy(pool->coinbase + 41 + ofs, "\xff\xff\xff\xff", 4);
+	pool->coinbase = cgcalloc(len, 1);
+	cg_memcpy(pool->coinbase + 41, pool->scriptsig_base, ofs);
+	cg_memcpy(pool->coinbase + 41 + ofs, "\xff\xff\xff\xff", 4);
 	pool->coinbase[41 + ofs + 4] = 1;
 	u64 = (uint64_t *)&(pool->coinbase[41 + ofs + 4 + 1]);
 	*u64 = htole64(coinbasevalue);
@@ -2853,7 +2843,7 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int devno, int count)
 	adj_width(devno, &devno_width);
 	if (cgpu->unique_id) {
 		unique_id[8] = '\0';
-		memcpy(unique_id, blanks, 8);
+		cg_memcpy(unique_id, blanks, 8);
 		strncpy(unique_id, cgpu->unique_id, 8);
 	} else
 		sprintf(unique_id, "%-8d", cgpu->device_id);
@@ -3175,9 +3165,9 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 				if (reasonLen > 28)
 					reasonLen = 28;
 				reason[0] = ' '; reason[1] = '(';
-				memcpy(2 + reason, reasontmp, reasonLen);
+				cg_memcpy(2 + reason, reasontmp, reasonLen);
 				reason[reasonLen + 2] = ')'; reason[reasonLen + 3] = '\0';
-				memcpy(disposition + 7, reasontmp, reasonLen);
+				cg_memcpy(disposition + 7, reasontmp, reasonLen);
 				disposition[6] = ':'; disposition[reasonLen + 7] = '\0';
 			} else if (work->stratum && err) {
 				if (json_is_array(err)) {
@@ -3304,9 +3294,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		strcat(gbt_block, varint); // +8 max
 		strcat(gbt_block, work->coinbase);
 
-		s = malloc(1024);
-		if (unlikely(!s))
-			quit(1, "Failed to malloc s in submit_upstream_work");
+		s = cgmalloc(1024);
 		sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s", gbt_block);
 		/* Has submit/coinbase support */
 		if (!pool->has_gbt) {
@@ -3380,10 +3368,10 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 			time_t tmp_time = work->tv_getwork.tv_sec;
 			tm = localtime(&tmp_time);
-			memcpy(&tm_getwork, tm, sizeof(struct tm));
+			cg_memcpy(&tm_getwork, tm, sizeof(struct tm));
 			tmp_time = tv_submit_reply.tv_sec;
 			tm = localtime(&tmp_time);
-			memcpy(&tm_submit_reply, tm, sizeof(struct tm));
+			cg_memcpy(&tm_submit_reply, tm, sizeof(struct tm));
 
 			if (work->clone) {
 				snprintf(workclone, sizeof(workclone), "C:%1.3f",
@@ -3696,7 +3684,7 @@ static unsigned char bench_target[32];
 static void get_benchmark_work(struct work *work)
 {
 	work->work_difficulty = 32;
-	memcpy(work->target, bench_target, 32);
+	cg_memcpy(work->target, bench_target, 32);
 	work->drv_rolllimit = 0;
 	work->mandatory = true;
 	work->pool = pools[0];
@@ -4099,10 +4087,7 @@ struct work *make_clone(struct work *work)
  * this pool. */
 static void recruit_curl(struct pool *pool)
 {
-	struct curl_ent *ce = calloc(sizeof(struct curl_ent), 1);
-
-	if (unlikely(!ce))
-		quit(1, "Failed to calloc in recruit_curl");
+	struct curl_ent *ce = cgcalloc(sizeof(struct curl_ent), 1);
 
 	ce->curl = curl_easy_init();
 	if (unlikely(!ce->curl))
@@ -4324,7 +4309,7 @@ static void _copy_work(struct work *work, const struct work *base_work, int noff
 	uint32_t id = work->id;
 
 	clean_work(work);
-	memcpy(work, base_work, sizeof(struct work));
+	cg_memcpy(work, base_work, sizeof(struct work));
 	/* Keep the unique new id assigned during make_work to prevent copied
 	 * work from having the same id. */
 	work->id = id;
@@ -4614,8 +4599,15 @@ void switch_pools(struct pool *selected)
 
 }
 
-void _discard_work(struct work *work)
+void _discard_work(struct work **workptr, const char *file, const char *func, const int line)
 {
+	struct work *work = *workptr;
+
+	if (unlikely(!work)) {
+		applog(LOG_ERR, "Discard work called with null work from %s %s:%d",
+		       file, func, line);
+		return;
+	}
 	if (!work->clone && !work->rolls && !work->mined) {
 		if (work->pool) {
 			work->pool->discarded_work++;
@@ -4626,7 +4618,7 @@ void _discard_work(struct work *work)
 		applog(LOG_DEBUG, "Discarded work");
 	} else
 		applog(LOG_DEBUG, "Discarded cloned or rolled work");
-	free_work(work);
+	_free_work(workptr, file, func, line);
 }
 
 static void wake_gws(void)
@@ -4758,7 +4750,7 @@ static void set_curblock(char *hexstr, unsigned char *bedata)
 	cg_wlock(&ch_lock);
 	cgtime(&block_timeval);
 	strcpy(current_hash, hexstr);
-	memcpy(current_block, bedata, 32);
+	cg_memcpy(current_block, bedata, 32);
 	get_timestamp(blocktime, sizeof(blocktime), &block_timeval);
 	cg_wunlock(&ch_lock);
 
@@ -4784,17 +4776,6 @@ static bool block_exists(char *hexstr)
 	if (s)
 		return true;
 	return false;
-}
-
-/* Tests if this work is from a block that has been seen before */
-static inline bool from_existing_block(struct work *work)
-{
-	char *hexstr = bin2hex(work->data + 8, 18);
-	bool ret;
-
-	ret = block_exists(hexstr);
-	free(hexstr);
-	return ret;
 }
 
 static int block_sort(struct block *blocka, struct block *blockb)
@@ -4834,7 +4815,7 @@ static bool test_work_current(struct work *work)
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
 	if (!block_exists(hexstr)) {
-		struct block *s = calloc(sizeof(struct block), 1);
+		struct block *s = cgcalloc(sizeof(struct block), 1);
 		int deleted_block = 0;
 
 		if (unlikely(!s))
@@ -4864,7 +4845,7 @@ static bool test_work_current(struct work *work)
 		set_curblock(hexstr, bedata);
 		/* Copy the information to this pool's prev_block since it
 		 * knows the new block exists. */
-		memcpy(pool->prev_block, bedata, 32);
+		cg_memcpy(pool->prev_block, bedata, 32);
 		if (unlikely(new_blocks == 1)) {
 			ret = false;
 			goto out;
@@ -4899,7 +4880,7 @@ static bool test_work_current(struct work *work)
 				/* Work is from new block and pool is up now
 				 * current. */
 				applog(LOG_INFO, "Pool %d now up to date", pool->pool_no);
-				memcpy(pool->prev_block, bedata, 32);
+				cg_memcpy(pool->prev_block, bedata, 32);
 			}
 		}
 #if 0
@@ -5068,10 +5049,8 @@ static char *json_escape(char *str)
 	char *buf, *ptr;
 
 	/* 2x is the max, may as well just allocate that */
-	ptr = buf = malloc(strlen(str) * 2 + 1);
-
-	jeptr = malloc(sizeof(*jeptr));
-
+	ptr = buf = cgmalloc(strlen(str) * 2 + 1);
+	jeptr = cgmalloc(sizeof(*jeptr));
 	jeptr->buf = buf;
 	jeptr->next = jedata;
 	jedata = jeptr;
@@ -6460,7 +6439,7 @@ static void *stratum_sthread(void *userdata)
 		__bin2hex(noncehex, (const unsigned char *)&nonce, 4);
 		__bin2hex(nonce2hex, nonce2, work->nonce2_len);
 
-		sshare = calloc(sizeof(struct stratum_share), 1);
+		sshare = cgcalloc(sizeof(struct stratum_share), 1);
 		hash32 = (uint32_t *)work->hash;
 		submitted = false;
 
@@ -6575,9 +6554,9 @@ static bool stratum_works(struct pool *pool)
 static void __setup_gbt_solo(struct pool *pool)
 {
 	cg_wlock(&pool->gbt_lock);
-	memcpy(pool->coinbase, scriptsig_header_bin, 41);
+	cg_memcpy(pool->coinbase, scriptsig_header_bin, 41);
 	pool->coinbase[41 + pool->n1_len + 4 + 1 + 8] = 25;
-	memcpy(pool->coinbase + 41 + pool->n1_len + 4 + 1 + 8 + 1, pool->script_pubkey, 25);
+	cg_memcpy(pool->coinbase + 41 + pool->n1_len + 4 + 1 + 8 + 1, pool->script_pubkey, 25);
 	cg_wunlock(&pool->gbt_lock);
 }
 
@@ -6809,12 +6788,7 @@ retry_stratum:
 					need_slash = true;
 
 				siz = strlen(pool->rpc_url) + strlen(copy_start) + 2;
-				pool->lp_url = malloc(siz);
-				if (!pool->lp_url) {
-					applog(LOG_ERR, "Malloc failure in pool_active");
-					return false;
-				}
-
+				pool->lp_url = cgmalloc(siz);
 				snprintf(pool->lp_url, siz, "%s%s%s", pool->rpc_url, need_slash ? "/" : "", copy_start);
 			}
 		} else
@@ -6979,7 +6953,7 @@ void set_target(unsigned char *dest_target, double diff)
 		applog(LOG_DEBUG, "Generated target %s", htarget);
 		free(htarget);
 	}
-	memcpy(dest_target, target, 32);
+	cg_memcpy(dest_target, target, 32);
 }
 
 #if defined (USE_AVALON2) || defined (USE_AVALON4) || defined (USE_HASHRATIO)
@@ -7032,7 +7006,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	/* Update coinbase. Always use an LE encoded nonce2 to fill in values
 	 * from left to right and prevent overflow errors with small n2sizes */
 	nonce2le = htole64(pool->nonce2);
-	memcpy(pool->coinbase + pool->nonce2_offset, &nonce2le, pool->n2size);
+	cg_memcpy(pool->coinbase + pool->nonce2_offset, &nonce2le, pool->n2size);
 	work->nonce2 = pool->nonce2++;
 	work->nonce2_len = pool->n2size;
 
@@ -7041,19 +7015,19 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	/* Generate merkle root */
 	gen_hash(pool->coinbase, merkle_root, pool->coinbase_len);
-	memcpy(merkle_sha, merkle_root, 32);
+	cg_memcpy(merkle_sha, merkle_root, 32);
 	for (i = 0; i < pool->merkles; i++) {
-		memcpy(merkle_sha + 32, pool->swork.merkle_bin[i], 32);
+		cg_memcpy(merkle_sha + 32, pool->swork.merkle_bin[i], 32);
 		gen_hash(merkle_sha, merkle_root, 64);
-		memcpy(merkle_sha, merkle_root, 32);
+		cg_memcpy(merkle_sha, merkle_root, 32);
 	}
 	data32 = (uint32_t *)merkle_sha;
 	swap32 = (uint32_t *)merkle_root;
 	flip32(swap32, data32);
 
 	/* Copy the data template from header_bin */
-	memcpy(work->data, pool->header_bin, 112);
-	memcpy(work->data + 36, merkle_root, 32);
+	cg_memcpy(work->data, pool->header_bin, 112);
+	cg_memcpy(work->data + 36, merkle_root, 32);
 
 	/* Store the stratum work diff to check it still matches the pool's
 	 * stratum diff when submitting shares */
@@ -7173,7 +7147,7 @@ static void gen_solo_work(struct pool *pool, struct work *work)
 	/* Update coinbase. Always use an LE encoded nonce2 to fill in values
 	 * from left to right and prevent overflow errors with small n2sizes */
 	nonce2le = htole64(pool->nonce2);
-	memcpy(pool->coinbase + pool->nonce2_offset, &nonce2le, pool->n2size);
+	cg_memcpy(pool->coinbase + pool->nonce2_offset, &nonce2le, pool->n2size);
 	work->nonce2 = pool->nonce2++;
 	work->nonce2_len = pool->n2size;
 	work->gbt_txns = pool->transactions + 1;
@@ -7183,28 +7157,28 @@ static void gen_solo_work(struct pool *pool, struct work *work)
 	work->coinbase = bin2hex(pool->coinbase, pool->coinbase_len);
 	/* Generate merkle root */
 	gen_hash(pool->coinbase, merkle_root, pool->coinbase_len);
-	memcpy(merkle_sha, merkle_root, 32);
+	cg_memcpy(merkle_sha, merkle_root, 32);
 	for (i = 0; i < pool->merkles; i++) {
 		unsigned char *merkle_bin;
 
 		merkle_bin = pool->merklebin + (i * 32);
-		memcpy(merkle_sha + 32, merkle_bin, 32);
+		cg_memcpy(merkle_sha + 32, merkle_bin, 32);
 		gen_hash(merkle_sha, merkle_root, 64);
-		memcpy(merkle_sha, merkle_root, 32);
+		cg_memcpy(merkle_sha, merkle_root, 32);
 	}
 	data32 = (uint32_t *)merkle_sha;
 	swap32 = (uint32_t *)merkle_root;
 	flip32(swap32, data32);
 
 	/* Copy the data template from header_bin */
-	memcpy(work->data, pool->header_bin, 112);
-	memcpy(work->data + 36, merkle_root, 32);
+	cg_memcpy(work->data, pool->header_bin, 112);
+	cg_memcpy(work->data + 36, merkle_root, 32);
 
 	work->sdiff = pool->sdiff;
 
 	/* Copy parameters required for share submission */
 	work->ntime = strdup(pool->ntime);
-	memcpy(work->target, pool->gbt_target, 32);
+	cg_memcpy(work->target, pool->gbt_target, 32);
 	cg_runlock(&pool->gbt_lock);
 
 	if (opt_debug) {
@@ -7253,9 +7227,9 @@ static void set_benchmark_work(struct cgpu_info *cgpu, struct work *work)
 		cgpu->direction = -1;
 		if (++cgpu->hidiff > 15)
 			cgpu->hidiff = 0;
-		memcpy(work, &bench_hidiff_bins[cgpu->hidiff][0], 160);
+		cg_memcpy(work, &bench_hidiff_bins[cgpu->hidiff][0], 160);
 	} else
-		memcpy(work, &bench_lodiff_bins[cgpu->lodiff][0], 160);
+		cg_memcpy(work, &bench_lodiff_bins[cgpu->lodiff][0], 160);
 }
 
 struct work *get_work(struct thr_info *thr, const int thr_id)
@@ -7343,7 +7317,7 @@ static void submit_work_async(struct work *work)
 
 	if (work->stratum) {
 		applog(LOG_DEBUG, "Pushing pool %d work to stratum queue", pool->pool_no);
-		if (unlikely(!tq_push(pool->stratum_q, work))) {
+		if (unlikely(!pool->stratum_q || !tq_push(pool->stratum_q, work))) {
 			applog(LOG_DEBUG, "Discarding work from removed pool");
 			free_work(work);
 		}
@@ -8808,9 +8782,7 @@ char *curses_input(const char *query)
 	char *input;
 
 	echo();
-	input = malloc(255);
-	if (!input)
-		quit(1, "Failed to malloc input");
+	input = cgmalloc(255);
 	leaveok(logwin, false);
 	wlogprint("%s:\n", query);
 	wgetnstr(logwin, input, 255);
@@ -8831,6 +8803,8 @@ static void *test_pool_thread(void *arg)
 	if (!pool->blocking)
 		pthread_detach(pthread_self());
 retry:
+	if (pool->removed)
+		goto out;
 	if (pool_active(pool, false)) {
 		pool_tset(pool, &pool->lagging);
 		pool_tclear(pool, &pool->idle);
@@ -8852,12 +8826,14 @@ retry:
 		switch_pools(NULL);
 	} else {
 		pool_died(pool);
-		sleep(5);
-		goto retry;
+		if (!pool->blocking) {
+			sleep(5);
+			goto retry;
+		}
 	}
 
 	pool->testing = false;
-
+out:
 	return NULL;
 }
 
@@ -8868,15 +8844,11 @@ bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char 
 {
 	size_t siz;
 
-	url = get_proxy(url, pool);
-
 	pool->rpc_url = url;
 	pool->rpc_user = user;
 	pool->rpc_pass = pass;
 	siz = strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2;
-	pool->rpc_userpass = malloc(siz);
-	if (!pool->rpc_userpass)
-		quit(1, "Failed to malloc userpass");
+	pool->rpc_userpass = cgmalloc(siz);
 	snprintf(pool->rpc_userpass, siz, "%s:%s", pool->rpc_user, pool->rpc_pass);
 
 	pool->testing = true;
@@ -8895,43 +8867,46 @@ bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char 
 #ifdef HAVE_CURSES
 static bool input_pool(bool live)
 {
-	char *url = NULL, *user = NULL, *pass = NULL;
+	char *url, *user, *pass;
 	struct pool *pool;
 	bool ret = false;
 
 	immedok(logwin, true);
 	wlogprint("Input server details.\n");
 
+retry:
+	url = NULL;
+	user = NULL;
+	pass = NULL;
 	url = curses_input("URL");
-	if (!strcmp(url, "-1"))
+	if (!strcmp(url, "-1")) {
+		wlogprint("Invalid input\n");
 		goto out;
+	}
 
 	user = curses_input("Username");
-	if (!strcmp(user, "-1"))
+	if (!strcmp(user, "-1")) {
+		wlogprint("Invalid input\n");
 		goto out;
+	}
 
-	pass = curses_input("Password");
+	pass = curses_input("Password [enter for none]");
 	if (!strcmp(pass, "-1")) {
 		free(pass);
 		pass = strdup("");
 	}
 
 	pool = add_pool();
-
-	if (!detect_stratum(pool, url) && strncmp(url, "http://", 7) &&
-	    strncmp(url, "https://", 8)) {
-		char *httpinput;
-
-		httpinput = malloc(256);
-		if (!httpinput)
-			quit(1, "Failed to malloc httpinput");
-		strcpy(httpinput, "http://");
-		strncat(httpinput, url, 248);
-		free(url);
-		url = httpinput;
-	}
-
+	url = setup_url(pool, url);
 	ret = add_pool_details(pool, live, url, user, pass);
+	if (!ret) {
+		remove_pool(pool);
+		wlogprint("URL %s failed alive testing, reinput details\n", url);
+		free(url);
+		free(user);
+		free(pass);
+		goto retry;
+	}
 out:
 	immedok(logwin, false);
 
@@ -9246,14 +9221,14 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	if (d)
 		cgpu->device_id = ++d->lastid;
 	else {
-		d = malloc(sizeof(*d));
-		memcpy(d->name, cgpu->drv->name, sizeof(d->name));
+		d = cgmalloc(sizeof(*d));
+		cg_memcpy(d->name, cgpu->drv->name, sizeof(d->name));
 		cgpu->device_id = d->lastid = 0;
 		HASH_ADD_STR(devids, name, d);
 	}
 
 	wr_lock(&devices_lock);
-	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + new_devices + 2));
+	devices = cgrealloc(devices, sizeof(struct cgpu_info *) * (total_devices + new_devices + 2));
 	wr_unlock(&devices_lock);
 
 	mutex_lock(&stats_lock);
@@ -9278,11 +9253,8 @@ struct device_drv *copy_drv(struct device_drv *drv)
 {
 	struct device_drv *copy;
 
-	if (unlikely(!(copy = malloc(sizeof(*copy))))) {
-		quit(1, "Failed to allocate device_drv copy of %s (%s)",
-				drv->name, drv->copy ? "copy" : "original");
-	}
-	memcpy(copy, drv, sizeof(*copy));
+	copy = cgmalloc(sizeof(*copy));
+	cg_memcpy(copy, drv, sizeof(*copy));
 	copy->copy = true;
 	return copy;
 }
@@ -9304,20 +9276,14 @@ static void hotplug_process(void)
 	}
 
 	wr_lock(&mining_thr_lock);
-	mining_thr = realloc(mining_thr, sizeof(thr) * (mining_threads + new_threads + 1));
-
-	if (!mining_thr)
-		quit(1, "Failed to hotplug realloc mining_thr");
-	for (i = 0; i < new_threads; i++) {
-		mining_thr[mining_threads + i] = calloc(1, sizeof(*thr));
-		if (!mining_thr[mining_threads + i])
-			quit(1, "Failed to hotplug calloc mining_thr[%d]", i);
-	}
+	mining_thr = cgrealloc(mining_thr, sizeof(thr) * (mining_threads + new_threads + 1));
+	for (i = 0; i < new_threads; i++)
+		mining_thr[mining_threads + i] = cgcalloc(1, sizeof(*thr));
 
 	// Start threads
 	for (i = 0; i < new_devices; ++i) {
 		struct cgpu_info *cgpu = devices[total_devices];
-		cgpu->thr = malloc(sizeof(*cgpu->thr) * (cgpu->threads+1));
+		cgpu->thr = cgmalloc(sizeof(*cgpu->thr) * (cgpu->threads+1));
 		cgpu->thr[cgpu->threads] = NULL;
 		cgpu->status = LIFE_INIT;
 		cgtime(&(cgpu->dev_start_tv));
@@ -9414,11 +9380,11 @@ static void probe_pools(void)
 #ifdef USE_USBUTILS
 static void *libusb_poll_thread(void __maybe_unused *arg)
 {
-	struct timeval tv_end = {1, 0};
+	struct timeval tv_end = {0, 100000};
 
 	RenameThread("USBPoll");
 
-	while (usb_polling)
+	while (likely(usb_polling))
 		libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
 
 	/* Cancel any cancellable usb transfers */
@@ -9426,9 +9392,10 @@ static void *libusb_poll_thread(void __maybe_unused *arg)
 
 	/* Keep event handling going until there are no async transfers in
 	 * flight. */
-	do {
+	tv_end.tv_sec = 0;
+	while (async_usb_transfers()) {
 		libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
-	} while (async_usb_transfers());
+	};
 
 	return NULL;
 }
@@ -9479,7 +9446,7 @@ int main(int argc, char *argv[])
 		quithere(1, "Failed to pthread_mutex_init lockstat_lock errno=%d", errno);
 #endif
 
-	initial_args = malloc(sizeof(char *) * (argc + 1));
+	initial_args = cgmalloc(sizeof(char *) * (argc + 1));
 	for  (i = 0; i < argc; i++)
 		initial_args[i] = strdup(argv[i]);
 	initial_args[argc] = NULL;
@@ -9540,9 +9507,7 @@ int main(int argc, char *argv[])
 	logstart = devcursor + 1;
 	logcursor = logstart + 1;
 
-	block = calloc(sizeof(struct block), 1);
-	if (unlikely(!block))
-		quit (1, "main OOM");
+	block = cgcalloc(sizeof(struct block), 1);
 	for (i = 0; i < 36; i++)
 		strcat(block->hash, "0");
 	HASH_ADD_STR(blocks, hash, block);
@@ -9567,7 +9532,7 @@ int main(int argc, char *argv[])
 		struct pool *pool;
 
 		pool = add_pool();
-		pool->rpc_url = malloc(255);
+		pool->rpc_url = cgmalloc(255);
 		if (opt_benchfile)
 			strcpy(pool->rpc_url, "Benchfile");
 		else
@@ -9626,9 +9591,7 @@ int main(int argc, char *argv[])
 		opt_scantime = 60;
 
 	total_control_threads = 8;
-	control_thr = calloc(total_control_threads, sizeof(*thr));
-	if (!control_thr)
-		early_quit(1, "Failed to calloc control_thr");
+	control_thr = cgcalloc(total_control_threads, sizeof(*thr));
 
 	gwsched_thr_id = 0;
 
@@ -9712,9 +9675,7 @@ int main(int argc, char *argv[])
 			if (!pool->rpc_user)
 				early_quit(1, "No login credentials supplied for pool %u %s", i, pool->rpc_url);
 			siz = strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2;
-			pool->rpc_userpass = malloc(siz);
-			if (!pool->rpc_userpass)
-				early_quit(1, "Failed to malloc userpass");
+			pool->rpc_userpass = cgmalloc(siz);
 			snprintf(pool->rpc_userpass, siz, "%s:%s", pool->rpc_user, pool->rpc_pass);
 		}
 	}
@@ -9731,20 +9692,15 @@ int main(int argc, char *argv[])
 			fork_monitor();
 	#endif // defined(unix)
 
-	mining_thr = calloc(mining_threads, sizeof(thr));
-	if (!mining_thr)
-		early_quit(1, "Failed to calloc mining_thr");
-	for (i = 0; i < mining_threads; i++) {
-		mining_thr[i] = calloc(1, sizeof(*thr));
-		if (!mining_thr[i])
-			early_quit(1, "Failed to calloc mining_thr[%d]", i);
-	}
+	mining_thr = cgcalloc(mining_threads, sizeof(thr));
+	for (i = 0; i < mining_threads; i++)
+		mining_thr[i] = cgcalloc(1, sizeof(*thr));
 
 	// Start threads
 	k = 0;
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = devices[i];
-		cgpu->thr = malloc(sizeof(*cgpu->thr) * (cgpu->threads+1));
+		cgpu->thr = cgmalloc(sizeof(*cgpu->thr) * (cgpu->threads+1));
 		cgpu->thr[cgpu->threads] = NULL;
 		cgpu->status = LIFE_INIT;
 

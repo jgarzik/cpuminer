@@ -1,3 +1,23 @@
+Version 4.9.1 - 3rd February 2015
+
+- Fix various unused warnings
+- Fix avalon4 warnings
+- Display notice if pool successfully negotiates stratum resume
+- Support auto adjust voltage individually
+- Don't keep retrying to connect to a pool that has been removed
+- Null the actual pointer used to call discard and free_work and safely handle
+being called with a null pointer, giving a verbose warning about the call site
+- Fix off by one error when running out of queued IDs in bflsc28_queue_full
+- Uninit BET driver when it fails to initialise any boards
+- Fix detection of butterfly labs sc 65nm devices with the addition of the 28nm
+device imanufacturers trumping their detection
+- Remove compilation warnings. Cast overly-specific #def'd values to the
+destination type, unsigned int.
+- Basic ability to compile and run on FreeBSD 10.  Only tested compilation with
+avalon, avalon2, bflsc, and icarus; only tested functionality of bflsc and
+icarus.
+
+
 Version 4.9.0 - 16th December 2014
 
 - Minor fix

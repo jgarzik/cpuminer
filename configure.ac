@@ -2,7 +2,7 @@
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [4])
 m4_define([v_min], [9])
-m4_define([v_mic], [0])
+m4_define([v_mic], [1])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
 m4_define([lt_rev], m4_eval(v_maj + v_min))
@@ -50,7 +50,9 @@ AC_PROG_CC
 gl_EARLY
 AC_PROG_GCC_TRADITIONAL
 AM_PROG_CC_C_O
-LT_INIT([disable-shared])
+
+# This breaks autoreconf so disable it
+# LT_INIT([disable-shared])
 
 gl_INIT
 
@@ -104,6 +106,11 @@ case $target in
     PTHREAD_FLAGS=""
     RT_LIBS=""
 	;;
+  *-*-freebsd*)
+    PTHREAD_FLAGS=""
+    DLOPEN_FLAGS=""
+    RT_LIBS=""
+    ;;
 esac
 
 has_winpthread=false
@@ -782,7 +789,7 @@ else
 fi
 
 #Add any new device to this, along with a no on the end of the test
-if test "x$avalon$avalon2$bab$bflsc$bitforce$bitfury$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$sp10$sp30" = xnononononononononononononononononononononono; then
+if test "x$avalon$avalon2$avalon4$bab$bflsc$bitforce$bitfury$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$sp10$sp30" = xnononononononononononononononononononononono; then
 	echo
 	AC_MSG_ERROR([No mining devices configured in])
 	echo

@@ -1,6 +1,6 @@
 /*
  * Copyright 2014 Mikeqin <Fengling.Qin@gmail.com>
- * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2015 Con Kolivas <kernel@kolivas.org>
  * Copyright 2012-2014 Xiangfu <xiangfu@openmobilefree.com>
  * Copyright 2012 Luke Dashjr
  * Copyright 2012 Andrew Smith
@@ -939,10 +939,7 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 	applog(LOG_INFO, "%s-%d: Found at %s", avalon4->drv->name, avalon4->device_id,
 	       avalon4->device_path);
 
-	avalon4->device_data = calloc(sizeof(struct avalon4_info), 1);
-	if (unlikely(!(avalon4->device_data)))
-		quit(1, "Failed to calloc avalon4_info");
-
+	avalon4->device_data = cgcalloc(sizeof(struct avalon4_info), 1);
 	info = avalon4->device_data;
 	memcpy(info->auc_version, auc_ver, AVA4_AUC_VER_LEN);
 	info->auc_version[AVA4_AUC_VER_LEN] = '\0';
@@ -1229,22 +1226,16 @@ static void copy_pool_stratum(struct pool *pool_stratum, struct pool *pool)
 	free(pool_stratum->nonce1);
 	free(pool_stratum->coinbase);
 
-	align_len(&coinbase_len);
-	pool_stratum->coinbase = calloc(coinbase_len, 1);
-	if (unlikely(!pool_stratum->coinbase))
-		quit(1, "Failed to calloc pool_stratum coinbase in avalon4");
+	pool_stratum->coinbase = cgcalloc(coinbase_len, 1);
 	memcpy(pool_stratum->coinbase, pool->coinbase, coinbase_len);
-
 
 	for (i = 0; i < pool_stratum->merkles; i++)
 		free(pool_stratum->swork.merkle_bin[i]);
 	if (merkles) {
-		pool_stratum->swork.merkle_bin = realloc(pool_stratum->swork.merkle_bin,
-						 sizeof(char *) * merkles + 1);
+		pool_stratum->swork.merkle_bin = cgrealloc(pool_stratum->swork.merkle_bin,
+							   sizeof(char *) * merkles + 1);
 		for (i = 0; i < merkles; i++) {
-			pool_stratum->swork.merkle_bin[i] = malloc(32);
-			if (unlikely(!pool_stratum->swork.merkle_bin[i]))
-				quit(1, "Failed to malloc pool_stratum swork merkle_bin");
+			pool_stratum->swork.merkle_bin[i] = cgmalloc(32);
 			memcpy(pool_stratum->swork.merkle_bin[i], pool->swork.merkle_bin[i], 32);
 		}
 	}
@@ -1460,7 +1451,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	struct work *work;
 	struct pool *pool;
 	int coinbase_len_posthash, coinbase_len_prehash;
-	int i, count = 0;
+	int i, cutoff = 0, count = 0;
 
 	applog(LOG_DEBUG, "%s-%d: New stratum: restart: %d, update: %d",
 	       avalon4->drv->name, avalon4->device_id,
