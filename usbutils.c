@@ -287,7 +287,16 @@ static struct usb_intinfo ava4_ints[] = {
 	USB_EPS(1, ava4_epinfos)
 };
 #endif
+#ifdef USE_AVALON4_MINI
+static struct usb_epinfo avau_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	40,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	40,	EPO(1), 0, 0 }
+};
 
+static struct usb_intinfo avau_ints[] = {
+	USB_EPS(0, avau_epinfos)
+};
+#endif
 #ifdef USE_KLONDIKE
 static struct usb_epinfo kln_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
@@ -674,6 +683,20 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = AVALON4_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
 		INTINFO(ava4_ints) },
+#endif
+#ifdef USE_AVALON4_MINI
+	{
+		.drv = DRIVER_avalonu,
+		.name = "AVU",
+		.ident = IDENT_AVU,
+		.idVendor = 0x29f1,
+		.idProduct = 0x33f1,
+		.iManufacturer = "CANAAN",
+		.iProduct = "Avalon4 Mini",
+		.config = 1,
+		.timeout = AVALON4_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		INTINFO(avau_ints) },
 #endif
 #ifdef USE_HASHFAST
 	{
@@ -3702,6 +3725,7 @@ void usb_cleanup(void)
 			case DRIVER_avalon:
 			case DRIVER_avalon2:
 			case DRIVER_avalon4:
+			case DRIVER_avalonu:
 			case DRIVER_klondike:
 			case DRIVER_hashfast:
 				DEVWLOCK(cgpu, pstate);
