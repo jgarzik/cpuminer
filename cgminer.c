@@ -9581,6 +9581,13 @@ int main(int argc, char *argv[])
 	if (want_per_device_stats)
 		opt_log_output = true;
 
+#ifdef HAVE_SYSLOG_H
+	if (opt_log_output)
+		setlogmask(LOG_UPTO(LOG_DEBUG));
+	else
+		setlogmask(LOG_UPTO(LOG_NOTICE));
+#endif
+
 	if (opt_scantime < 0)
 		opt_scantime = 60;
 
