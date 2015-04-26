@@ -60,7 +60,7 @@ static int decode_pkg(struct thr_info *thr, struct avalonu_ret *ar)
 	}
 
 	expected_crc = crc16(ar->data, AVAU_P_DATA_LEN);
-	actual_crc = (ar->crc[0] & 0xff) | ((ar->crc[1] & 0xff) << 8);
+	actual_crc = (ar->crc[1] & 0xff) | ((ar->crc[0] & 0xff) << 8);
 	if (expected_crc != actual_crc) {
 		applog(LOG_DEBUG, "%s-%d: %02x: expected crc(%04x), actual_crc(%04x)",
 		       avalonu->drv->name, avalonu->device_id,
