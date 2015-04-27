@@ -46,9 +46,9 @@ static int decode_pkg(struct thr_info *thr, struct avalonu_ret *ar)
 	struct avalonu_info *info = avalonu->device_data;
 	unsigned int expected_crc;
 	unsigned int actual_crc;
-	uint32_t nonce, nonce2, ntime, tmp;
+	uint32_t nonce, nonce2, ntime;
 	uint32_t job_id;
-	int pool_no, i;
+	int pool_no;
 	struct pool *pool, *real_pool;
 
 	if (ar->head[0] != AVAU_H1 && ar->head[1] != AVAU_H2) {
@@ -83,11 +83,13 @@ static int decode_pkg(struct thr_info *thr, struct avalonu_ret *ar)
 					pool_no);
 			break;
 		}
+		/* TODO: it should fix in firmware */
+		nonce = be32toh(nonce);
 		nonce -= 0x4000;
 
-		applog(LOG_DEBUG, "%s-%d: Found! P:%d - N2:%08x N:%08x NR:%d",
+		applog(LOG_DEBUG, "%s-%d: Found! P:%d - J:%08x N2:%08x N:%08x NR:%d",
 		       avalonu->drv->name, avalonu->device_id,
-		       pool_no, nonce2, nonce, ntime);
+		       pool_no, job_id, nonce2, nonce, ntime);
 
 		real_pool = pool = pools[pool_no];
 		submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce, ntime);
@@ -213,6 +215,8 @@ static void *avalonu_get_reports(void *userdata)
 
 		cgsleep_ms(20);
 	}
+
+	return NULL;
 }
 
 static bool avalonu_prepare(struct thr_info *thr)
@@ -221,19 +225,30 @@ static bool avalonu_prepare(struct thr_info *thr)
 	struct avalonu_info *info = avalonu->device_data;
 
 	info->mainthr = thr;
+
 	if (pthread_create(&info->read_thr, NULL, avalonu_get_reports, (void*)avalonu))
 		quit(1, "Failed to create avalonu read_thr");
 
 	return true;
 }
 
+static void rev(unsigned char *s, size_t l)
+{
+	size_t i, j;
+	unsigned char t;
+
+	for (i = 0, j = l - 1; i < j; i++, j--) {
+		t = s[i];
+		s[i] = s[j];
+		s[j] = t;
+	}
+}
+
 static int64_t avalonu_scanhash(struct thr_info *thr)
 {
-	static uint8_t job_id;
 	struct cgpu_info *avalonu = thr->cgpu;
 	struct avalonu_info *info = avalonu->device_data;
 	int64_t h;
-	int i;
 	struct work *work;
 	struct avalonu_pkg send_pkg;
 	struct pool *pool;
@@ -246,12 +261,16 @@ static int64_t avalonu_scanhash(struct thr_info *thr)
 
 	info->workinit = 1;
 	work = get_work(thr, thr->id);
+	/* send job */
 	memcpy(send_pkg.data, work->midstate, AVAU_P_DATA_LEN);
+	rev((void *)(send_pkg.data), AVAU_P_DATA_LEN);
 	avalonu_init_pkg(&send_pkg, AVAU_P_WORK, 1, 2);
 	avalonu_send_pkg(avalonu, &send_pkg);
+	cgsleep_ms(50);
 
+	/* job_id(1)+ntime(1)+pool_no(2)+nonce2(4) + reserved(14) + data(12) */
 	memset(send_pkg.data, 0, AVAU_P_DATA_LEN);
-	send_pkg.data[0] = job_id++; /* job_id */
+	send_pkg.data[0] = 0xaa; /* TODO: job_id */
 	send_pkg.data[1] = 0; /* rolling ntime */
 	pool = current_pool();
 	send_pkg.data[2] = pool->pool_no >> 8; /* pool no */
@@ -261,8 +280,11 @@ static int64_t avalonu_scanhash(struct thr_info *thr)
 	send_pkg.data[6] = (work->nonce2 >> 8) & 0xff;
 	send_pkg.data[7] = (work->nonce2) & 0xff;
 	memcpy(send_pkg.data + 20, work->data + 64, 12);
+
+	rev((void *)(send_pkg.data + 20), 12);
 	avalonu_init_pkg(&send_pkg, AVAU_P_WORK, 2, 2);
 	avalonu_send_pkg(avalonu, &send_pkg);
+	cgsleep_ms(50);
 
 	h = info->nonce_cnts;
 	info->nonce_cnts = 0;
