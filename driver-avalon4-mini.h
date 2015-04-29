@@ -14,30 +14,32 @@
 
 #ifdef USE_AVALON4_MINI
 
-#define AVAU_DEFAULT_MINERS	1
 #define AVAU_DEFAULT_ASIC_COUNT	5
 
-#define AVAU_VERSION_LEN        15
+/* Avalon4 protocol package type from MM protocol.h
+ * https://github.com/Canaan-Creative/MM/blob/avalon4/firmware/protocol.h */
+#define AVAU_MM_VER_LEN	15
+
 #define AVAU_H1 'C'
 #define AVAU_H2 'N'
 
 #define AVAU_P_COUNT    40
-#define AVAU_P_DATA_LEN (AVAU_P_COUNT - 8)      //32Bytes
+#define AVAU_P_DATA_LEN 32
 
 #define AVAU_P_DETECT   0x10
-#define AVAU_P_SET_VOLT 0x11
-#define AVAU_P_SET_FREQ 0x12
-#define AVAU_P_WORK             0x13
-#define AVAU_P_POLLING  0x14
-#define AVAU_P_REQUIRE  0x15
-#define AVAU_P_TEST     0x16
 
-#define AVAU_P_ACKDETECT 0x20
-#define AVAU_P_GET_VOLT  0x21
-#define AVAU_P_GET_FREQ  0x22
-#define AVAU_P_NONCE     0x23
-#define AVAU_P_STATUS    0x24
-#define AVAU_P_TEST_RET  0x25
+#define AVAU_P_SET_VOLT 0x22
+#define AVAU_P_SET_FREQ 0x23
+#define AVAU_P_WORK     0x24
+
+#define AVAU_P_POLLING	0x30
+#define AVAU_P_REQUIRE	0x31
+#define AVAU_P_TEST	0x32
+
+#define AVAU_P_ACKDETECT	0x40
+#define AVAU_P_STATUS		0x41
+#define AVAU_P_NONCE		0x42
+#define AVAU_P_TEST_RET		0x43
 
 struct avalonu_pkg {
 	uint8_t head[2];

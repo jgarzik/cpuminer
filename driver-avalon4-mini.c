@@ -266,6 +266,7 @@ static int64_t avalonu_scanhash(struct thr_info *thr)
 	struct work *work;
 	struct avalonu_pkg send_pkg;
 	struct pool *pool;
+	static int count = 0;
 
 	if (unlikely(avalonu->usbinfo.nodev)) {
 		applog(LOG_ERR, "%s-%d: Device disappeared, shutting down thread",
@@ -297,6 +298,11 @@ static int64_t avalonu_scanhash(struct thr_info *thr)
 	rev((void *)(send_pkg.data + 20), 12);
 	avalonu_init_pkg(&send_pkg, AVAU_P_WORK, 2, 2);
 	avalonu_send_pkg(avalonu, &send_pkg);
+
+	if (++count == 4) {
+		count = 0;
+		cgsleep_ms(100);
+	}
 
 	h = info->nonce_cnts;
 	info->nonce_cnts = 0;
