@@ -1,4 +1,6 @@
 /*
+ * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2012-2014 Xiangfu <xiangfu@openmobilefree.com>
  * Copyright 2014-2015 Mikeqin <Fengling.Qin@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -266,7 +268,6 @@ static int64_t avalonu_scanhash(struct thr_info *thr)
 	rev((void *)(send_pkg.data), AVAU_P_DATA_LEN);
 	avalonu_init_pkg(&send_pkg, AVAU_P_WORK, 1, 2);
 	avalonu_send_pkg(avalonu, &send_pkg);
-	cgsleep_ms(50);
 
 	/* job_id(1)+ntime(1)+pool_no(2)+nonce2(4) + reserved(14) + data(12) */
 	memset(send_pkg.data, 0, AVAU_P_DATA_LEN);
@@ -284,7 +285,6 @@ static int64_t avalonu_scanhash(struct thr_info *thr)
 	rev((void *)(send_pkg.data + 20), 12);
 	avalonu_init_pkg(&send_pkg, AVAU_P_WORK, 2, 2);
 	avalonu_send_pkg(avalonu, &send_pkg);
-	cgsleep_ms(50);
 
 	h = info->nonce_cnts;
 	info->nonce_cnts = 0;
@@ -299,10 +299,18 @@ static void avalonu_shutdown(struct thr_info *thr)
 	pthread_join(info->read_thr, NULL);
 }
 
+static struct api_data *avalonu_api_stats(struct cgpu_info *cgpu)
+{
+	struct api_data *root = NULL;
+	struct avalonu_info *info = cgpu->device_data;
+
+}
+
 struct device_drv avalonu_drv = {
 	.drv_id = DRIVER_avalonu,
 	.dname = "avalonu",
 	.name = "AVU",
+	.get_api_stats = avalonu_api_stats,
 	.drv_detect = avalonu_detect,
 	.thread_prepare = avalonu_prepare,
 	.hash_work = hash_driver_work,
