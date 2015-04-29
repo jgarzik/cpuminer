@@ -53,7 +53,7 @@ struct avalonu_pkg {
 #define avalonu_ret avalonu_pkg
 
 struct avalonu_info {
-	char avau_ver[AVAU_VERSION_LEN];
+	char avau_ver[AVAU_MM_VER_LEN];
 	struct thr_info *mainthr;
 	pthread_t read_thr;
 	uint8_t workinit;

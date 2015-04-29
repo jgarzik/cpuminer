@@ -194,7 +194,7 @@ static struct cgpu_info *avalonu_detect_one(struct libusb_device *dev, struct us
 	info->mainthr = NULL;
 	info->workinit = 0;
 	info->nonce_cnts = 0;
-	memcpy(info->avau_ver, ar.data, AVAU_VERSION_LEN);
+	memcpy(info->avau_ver, ar.data, AVAU_MM_VER_LEN);
 	return avalonu;
 }
 
