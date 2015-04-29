@@ -109,42 +109,6 @@ static int decode_pkg(struct thr_info *thr, struct avalonu_ret *ar)
 	return 0;
 }
 
-static struct cgpu_info *avalonu_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
-{
-	struct cgpu_info *avalonu = usb_alloc_cgpu(&avalonu_drv, 1);
-	struct avalonu_info *info;
-
-	if (!usb_init(avalonu, dev, found)) {
-		applog(LOG_ERR, "Avalonu failed usb_init");
-		avalonu = usb_free_cgpu(avalonu);
-		return NULL;
-	}
-
-	/* Avalonu prefers not to use zero length packets */
-	avalonu->nozlp = true;
-
-	/* We have an Avalonu connected */
-	avalonu->threads = 1;
-	add_cgpu(avalonu);
-
-	usb_buffer_clear(avalonu);
-	update_usb_stats(avalonu);
-	applog(LOG_INFO, "%s-%d: Found at %s", avalonu->drv->name, avalonu->device_id,
-	       avalonu->device_path);
-
-	avalonu->device_data = cgcalloc(sizeof(struct avalonu_info), 1);
-	info = avalonu->device_data;
-	info->mainthr = NULL;
-	info->workinit = 0;
-	info->nonce_cnts = 0;
-	return avalonu;
-}
-
-static inline void avalonu_detect(bool __maybe_unused hotplug)
-{
-	usb_detect(&avalonu_drv, avalonu_detect_one);
-}
-
 static int avalonu_send_pkg(struct cgpu_info *avalonu, const struct avalonu_pkg *pkg)
 {
 	int err = -1;
@@ -189,6 +153,54 @@ static int avalonu_xfer_pkg(struct cgpu_info *avalonu, const struct avalonu_pkg 
 		return AVAU_SEND_ERROR;
 
 	return AVAU_SEND_OK;
+}
+
+static struct cgpu_info *avalonu_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
+{
+	struct cgpu_info *avalonu = usb_alloc_cgpu(&avalonu_drv, 1);
+	struct avalonu_info *info;
+	struct avalonu_pkg send_pkg;
+	struct avalonu_ret ar;
+	int ret;
+
+	if (!usb_init(avalonu, dev, found)) {
+		applog(LOG_ERR, "Avalonu failed usb_init");
+		avalonu = usb_free_cgpu(avalonu);
+		return NULL;
+	}
+
+	/* Avalonu prefers not to use zero length packets */
+	avalonu->nozlp = true;
+
+	/* We have an Avalonu connected */
+	avalonu->threads = 1;
+	memset(send_pkg.data, 0, AVAU_P_DATA_LEN);
+	avalonu_init_pkg(&send_pkg, AVAU_P_DETECT, 1, 1);
+	ret = avalonu_xfer_pkg(avalonu, &send_pkg, &ar);
+	if ((ret != AVAU_SEND_OK) && (ar.type != AVAU_P_ACKDETECT)) {
+		applog(LOG_DEBUG, "%s-%d: Failed to detect Avalon4 mini!", avalonu->drv->name, avalonu->device_id);
+		return NULL;
+	}
+
+	add_cgpu(avalonu);
+
+	usb_buffer_clear(avalonu);
+	update_usb_stats(avalonu);
+	applog(LOG_INFO, "%s-%d: Found at %s", avalonu->drv->name, avalonu->device_id,
+	       avalonu->device_path);
+
+	avalonu->device_data = cgcalloc(sizeof(struct avalonu_info), 1);
+	info = avalonu->device_data;
+	info->mainthr = NULL;
+	info->workinit = 0;
+	info->nonce_cnts = 0;
+	memcpy(info->avau_ver, ar.data, AVAU_VERSION_LEN);
+	return avalonu;
+}
+
+static inline void avalonu_detect(bool __maybe_unused hotplug)
+{
+	usb_detect(&avalonu_drv, avalonu_detect_one);
 }
 
 static void *avalonu_get_reports(void *userdata)
@@ -304,6 +316,8 @@ static struct api_data *avalonu_api_stats(struct cgpu_info *cgpu)
 	struct api_data *root = NULL;
 	struct avalonu_info *info = cgpu->device_data;
 
+	root = api_add_string(root, "AVAU VER", info->avau_ver, false);
+	return root;
 }
 
 struct device_drv avalonu_drv = {
