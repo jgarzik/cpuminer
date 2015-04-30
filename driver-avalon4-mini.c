@@ -152,6 +152,7 @@ static int decode_pkg(struct thr_info *thr, struct avalonu_ret *ar)
 	switch(ar->type) {
 	case AVAU_P_NONCE:
 		applog(LOG_DEBUG, "%s-%d: AVAU_P_NONCE", avalonu->drv->name, avalonu->device_id);
+		hexdump(ar->data, 32);
 		job_id = ar->data[0];
 		ntime = ar->data[1];
 		pool_no = (ar->data[2] << 8) | ar->data[3];
@@ -350,8 +351,13 @@ static void *avalonu_get_reports(void *userdata)
 		memset(send_pkg.data, 0, AVAU_P_DATA_LEN);
 		avalonu_init_pkg(&send_pkg, AVAU_P_POLLING, 1, 1);
 		ret = avalonu_xfer_pkg(avalonu, &send_pkg, &ar);
-		if (ret == AVAU_SEND_OK)
+		if (ret == AVAU_SEND_OK) {
+			applog(LOG_ERR, "%s-%d: Get report 4 %02x%02x%02x%02x ...................",
+			       avalonu->drv->name, avalonu->device_id,
+			       ar.data[4], ar.data[5], ar.data[6], ar.data[7]);
+
 			decode_pkg(thr, &ar);
+		}
 
 		cgsleep_ms(20);
 	}
@@ -400,16 +406,17 @@ static int64_t avalonu_scanhash(struct thr_info *thr)
 		return -1;
 	}
 
-	info->workinit = 1;
-
 	/* configuration */
 	avalonu_set_freq(avalonu);
 
 	work = get_work(thr, thr->id);
+	applog(LOG_ERR, "%s-%d: Get work %08x ----------------------------------",
+	       avalonu->drv->name, avalonu->device_id, work->nonce2);
 	/* send job */
 	memcpy(send_pkg.data, work->midstate, AVAU_P_DATA_LEN);
 	rev((void *)(send_pkg.data), AVAU_P_DATA_LEN);
 	avalonu_init_pkg(&send_pkg, AVAU_P_WORK, 1, 2);
+	hexdump(send_pkg.data, 32);
 	avalonu_send_pkg(avalonu, &send_pkg);
 
 	/* job_id(1)+ntime(1)+pool_no(2)+nonce2(4) + reserved(14) + data(12) */
@@ -427,11 +434,15 @@ static int64_t avalonu_scanhash(struct thr_info *thr)
 
 	rev((void *)(send_pkg.data + 20), 12);
 	avalonu_init_pkg(&send_pkg, AVAU_P_WORK, 2, 2);
+	hexdump(send_pkg.data, 32);
 	avalonu_send_pkg(avalonu, &send_pkg);
+	info->workinit = 1;
 
 	if (++count == 4) {
 		count = 0;
-		cgsleep_ms(100);
+		applog(LOG_ERR, "%s-%d: Get work 4 Delay =================",
+		       avalonu->drv->name, avalonu->device_id);
+		cgsleep_ms(50);
 	}
 
 	h = info->nonce_cnts;
