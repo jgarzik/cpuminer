@@ -14,8 +14,11 @@
 
 #ifdef USE_AVALON4_MINI
 
-#define AVAU_DEFAULT_ASIC_COUNT	5
+#define AVAU_DEFAULT_ASIC_COUNT		5
 
+#define AVAU_DEFAULT_FREQUENCY_MIN	100
+#define AVAU_DEFAULT_FREQUENCY_MAX	1000
+#define AVAU_DEFAULT_FREQUENCY		100
 /* Avalon4 protocol package type from MM protocol.h
  * https://github.com/Canaan-Creative/MM/blob/avalon4/firmware/protocol.h */
 #define AVAU_MM_VER_LEN	15
@@ -54,6 +57,7 @@ struct avalonu_pkg {
 
 struct avalonu_info {
 	char avau_ver[AVAU_MM_VER_LEN];
+	int set_frequency[3];
 	struct thr_info *mainthr;
 	pthread_t read_thr;
 	uint8_t workinit;
@@ -66,5 +70,6 @@ struct avalonu_info {
 #define AVAU_SEND_OK 0
 #define AVAU_SEND_ERROR -1
 
+extern char *set_avalonu_freq(char *arg);
 #endif /* USE_AVALON4_MINI */
 #endif	/* _AVALON4_MINI_H_ */

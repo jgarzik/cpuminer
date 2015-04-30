@@ -23,6 +23,85 @@
 	*((str) + 0) = (uint8_t) ((x) >> 24);	\
 }
 
+int opt_avalonu_freq[3] = {AVAU_DEFAULT_FREQUENCY,
+			   AVAU_DEFAULT_FREQUENCY,
+			   AVAU_DEFAULT_FREQUENCY};
+static uint32_t g_freq_array[][2] = {
+	{100, 0x1e678447},
+	{113, 0x22688447},
+	{125, 0x1c470447},
+	{138, 0x2a6a8447},
+	{150, 0x22488447},
+	{163, 0x326c8447},
+	{175, 0x1a268447},
+	{188, 0x1c270447},
+	{200, 0x1e278447},
+	{213, 0x20280447},
+	{225, 0x22288447},
+	{238, 0x24290447},
+	{250, 0x26298447},
+	{263, 0x282a0447},
+	{275, 0x2a2a8447},
+	{288, 0x2c2b0447},
+	{300, 0x2e2b8447},
+	{313, 0x302c0447},
+	{325, 0x322c8447},
+	{338, 0x342d0447},
+	{350, 0x1a068447},
+	{363, 0x382e0447},
+	{375, 0x1c070447},
+	{388, 0x3c2f0447},
+	{400, 0x1e078447},
+	{413, 0x40300447},
+	{425, 0x20080447},
+	{438, 0x44310447},
+	{450, 0x22088447},
+	{463, 0x48320447},
+	{475, 0x24090447},
+	{488, 0x4c330447},
+	{500, 0x26098447},
+	{513, 0x50340447},
+	{525, 0x280a0447},
+	{538, 0x54350447},
+	{550, 0x2a0a8447},
+	{563, 0x58360447},
+	{575, 0x2c0b0447},
+	{588, 0x5c370447},
+	{600, 0x2e0b8447},
+	{613, 0x60380447},
+	{625, 0x300c0447},
+	{638, 0x64390447},
+	{650, 0x320c8447},
+	{663, 0x683a0447},
+	{675, 0x340d0447},
+	{688, 0x6c3b0447},
+	{700, 0x360d8447},
+	{713, 0x703c0447},
+	{725, 0x380e0447},
+	{738, 0x743d0447},
+	{750, 0x3a0e8447},
+	{763, 0x783e0447},
+	{775, 0x3c0f0447},
+	{788, 0x7c3f0447},
+	{800, 0x3e0f8447},
+	{813, 0x3e0f8447},
+	{825, 0x40100447},
+	{838, 0x40100447},
+	{850, 0x42108447},
+	{863, 0x42108447},
+	{875, 0x44110447},
+	{888, 0x44110447},
+	{900, 0x46118447},
+	{913, 0x46118447},
+	{925, 0x48120447},
+	{938, 0x48120447},
+	{950, 0x4a128447},
+	{963, 0x4a128447},
+	{975, 0x4c130447},
+	{988, 0x4c130447},
+	{1000, 0x4e138447}
+};
+
 static int avalonu_init_pkg(struct avalonu_pkg *pkg, uint8_t type, uint8_t idx, uint8_t cnt)
 {
 	unsigned short crc;
@@ -198,6 +277,53 @@ static struct cgpu_info *avalonu_detect_one(struct libusb_device *dev, struct us
 	return avalonu;
 }
 
+static uint32_t avalonu_get_cpm(int freq)
+{
+	int i;
+
+	for (i = 0; i < sizeof(g_freq_array) / sizeof(g_freq_array[0]); i++)
+		if (freq >= g_freq_array[i][0] && freq < g_freq_array[i+1][0])
+			return g_freq_array[i][1];
+
+	/* return the lowest freq if not found */
+	return g_freq_array[0][1];
+}
+
+static void avalonu_set_freq(struct cgpu_info *avalonu)
+{
+	struct avalonu_info *info = avalonu->device_data;
+	struct avalonu_pkg send_pkg;
+	uint32_t tmp;
+
+	if ((info->set_frequency[0] == opt_avalonu_freq[0]) &&
+		(info->set_frequency[1] == opt_avalonu_freq[1]) &&
+			(info->set_frequency[2] == opt_avalonu_freq[2]))
+		return;
+
+	info->set_frequency[0] = opt_avalonu_freq[0];
+	info->set_frequency[1] = opt_avalonu_freq[1];
+	info->set_frequency[2] = opt_avalonu_freq[2];
+
+	memset(send_pkg.data, 0, AVAU_P_DATA_LEN);
+	tmp = avalonu_get_cpm(info->set_frequency[0]);
+	tmp = be32toh(tmp);
+	memcpy(send_pkg.data, &tmp, 4);
+	tmp = avalonu_get_cpm(info->set_frequency[1]);
+	tmp = be32toh(tmp);
+	memcpy(send_pkg.data + 4, &tmp, 4);
+	tmp = avalonu_get_cpm(info->set_frequency[2]);
+	tmp = be32toh(tmp);
+	memcpy(send_pkg.data + 8, &tmp, 4);
+
+	avalonu_init_pkg(&send_pkg, AVAU_P_SET_FREQ, 1, 1);
+	avalonu_send_pkg(avalonu, &send_pkg);
+	applog(LOG_DEBUG, "%s-%d: Avalonu set freq %d,%d,%d",
+			avalonu->drv->name, avalonu->device_id,
+			info->set_frequency[0],
+			info->set_frequency[1],
+			info->set_frequency[2]);
+}
+
 static inline void avalonu_detect(bool __maybe_unused hotplug)
 {
 	usb_detect(&avalonu_drv, avalonu_detect_one);
@@ -275,6 +401,10 @@ static int64_t avalonu_scanhash(struct thr_info *thr)
 	}
 
 	info->workinit = 1;
+
+	/* configuration */
+	avalonu_set_freq(avalonu);
+
 	work = get_work(thr, thr->id);
 	/* send job */
 	memcpy(send_pkg.data, work->midstate, AVAU_P_DATA_LEN);
@@ -317,6 +447,88 @@ static void avalonu_shutdown(struct thr_info *thr)
 	pthread_join(info->read_thr, NULL);
 }
 
+char *set_avalonu_freq(char *arg)
+{
+	char *colon1, *colon2;
+	int val1 = 0, val2 = 0, val3 = 0;
+
+	if (!(*arg))
+		return NULL;
+
+	colon1 = strchr(arg, ':');
+	if (colon1)
+		*(colon1++) = '\0';
+
+	if (*arg) {
+		val1 = atoi(arg);
+		if (val1 < AVAU_DEFAULT_FREQUENCY_MIN || val1 > AVAU_DEFAULT_FREQUENCY_MAX)
+			return "Invalid value1 passed to avalonu-freq";
+	}
+
+	if (colon1 && *colon1) {
+		colon2 = strchr(colon1, ':');
+		if (colon2)
+			*(colon2++) = '\0';
+
+		if (*colon1) {
+			val2 = atoi(colon1);
+			if (val2 < AVAU_DEFAULT_FREQUENCY_MIN || val2 > AVAU_DEFAULT_FREQUENCY_MAX)
+				return "Invalid value2 passed to avalonu-freq";
+		}
+
+		if (colon2 && *colon2) {
+			val3 = atoi(colon2);
+			if (val3 < AVAU_DEFAULT_FREQUENCY_MIN || val3 > AVAU_DEFAULT_FREQUENCY_MAX)
+				return "Invalid value3 passed to avalonu-freq";
+		}
+	}
+
+	if (!val1)
+		val3 = val2 = val1 = AVAU_DEFAULT_FREQUENCY;
+
+	if (!val2)
+		val3 = val2 = val1;
+
+	if (!val3)
+		val3 = val2;
+
+	opt_avalonu_freq[0] = val1;
+	opt_avalonu_freq[1] = val2;
+	opt_avalonu_freq[2] = val3;
+
+	return NULL;
+}
+
+static char *avalonu_set_device(struct cgpu_info *avalonu, char *option, char *setting, char *replybuf)
+{
+	if (strcasecmp(option, "help") == 0) {
+		sprintf(replybuf, "frequency");
+		return replybuf;
+	}
+
+	if (strcasecmp(option, "frequency") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing frequency value");
+			return replybuf;
+		}
+
+		if (set_avalonu_freq(setting)) {
+			sprintf(replybuf, "invalid frequency value, valid range %d-%d",
+				AVAU_DEFAULT_FREQUENCY_MIN, AVAU_DEFAULT_FREQUENCY_MAX);
+			return replybuf;
+		}
+
+		applog(LOG_NOTICE, "%s-%d: Update frequency to %d",
+		       avalonu->drv->name, avalonu->device_id,
+		       (opt_avalonu_freq[0] * 4 + opt_avalonu_freq[1] * 4 + opt_avalonu_freq[2]) / 9);
+
+		return NULL;
+	}
+
+	sprintf(replybuf, "Unknown option: %s", option);
+	return replybuf;
+}
+
 static struct api_data *avalonu_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
@@ -326,11 +538,22 @@ static struct api_data *avalonu_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
+static void avalonu_statline_before(char *buf, size_t bufsiz, struct cgpu_info *avalonu)
+{
+	struct avalonu_info *info = avalonu->device_data;
+	int frequency;
+
+	frequency = (info->set_frequency[0] * 4 + info->set_frequency[1] * 4 + info->set_frequency[2]) / 9;
+	tailsprintf(buf, bufsiz, "%4dMhz", frequency);
+}
+
 struct device_drv avalonu_drv = {
 	.drv_id = DRIVER_avalonu,
 	.dname = "avalonu",
 	.name = "AVU",
+	.set_device = avalonu_set_device,
 	.get_api_stats = avalonu_api_stats,
+	.get_statline_before = avalonu_statline_before,
 	.drv_detect = avalonu_detect,
 	.thread_prepare = avalonu_prepare,
 	.hash_work = hash_driver_work,
