@@ -399,6 +399,8 @@ static int64_t avalonu_scanhash(struct thr_info *thr)
 	struct avalonu_pkg send_pkg;
 	struct pool *pool;
 	static int count = 0;
+	int job_id_len;
+	unsigned short crc;
 
 	if (unlikely(avalonu->usbinfo.nodev)) {
 		applog(LOG_ERR, "%s-%d: Device disappeared, shutting down thread",
@@ -408,6 +410,8 @@ static int64_t avalonu_scanhash(struct thr_info *thr)
 
 	/* configuration */
 	avalonu_set_freq(avalonu);
+
+	pool = current_pool();
 
 	work = get_work(thr, thr->id);
 	applog(LOG_ERR, "%s-%d: Get work %08x ----------------------------------",
@@ -421,11 +425,18 @@ static int64_t avalonu_scanhash(struct thr_info *thr)
 
 	/* job_id(1)+ntime(1)+pool_no(2)+nonce2(4) + reserved(14) + data(12) */
 	memset(send_pkg.data, 0, AVAU_P_DATA_LEN);
-	send_pkg.data[0] = 0; /* TODO: job_id */
+
+	job_id_len = strlen(pool->swork.job_id);
+	crc = crc16((unsigned char *)pool->swork.job_id, job_id_len);
+	applog(LOG_DEBUG, "%s-%d: Pool stratum message JOBS_ID[%04x]: %s",
+	       avalonu->drv->name, avalonu->device_id,
+	       crc, pool->swork.job_id);
+
+	send_pkg.data[0] = crc & 0x00ff; /* TODO: job_id */
 	send_pkg.data[1] = 0; /* rolling ntime */
-	pool = current_pool();
 	send_pkg.data[2] = pool->pool_no >> 8; /* pool no */
 	send_pkg.data[3] = pool->pool_no & 0xff;
+
 	send_pkg.data[4] = (work->nonce2 >> 24) & 0xff;
 	send_pkg.data[5] = (work->nonce2 >> 16) & 0xff;
 	send_pkg.data[6] = (work->nonce2 >> 8) & 0xff;
@@ -442,7 +453,7 @@ static int64_t avalonu_scanhash(struct thr_info *thr)
 		count = 0;
 		applog(LOG_ERR, "%s-%d: Get work 4 Delay =================",
 		       avalonu->drv->name, avalonu->device_id);
-		cgsleep_ms(50);
+		cgsleep_ms(500);
 	}
 
 	h = info->nonce_cnts;
