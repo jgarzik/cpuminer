@@ -421,7 +421,7 @@ static int64_t avalonu_scanhash(struct thr_info *thr)
 
 	/* job_id(1)+ntime(1)+pool_no(2)+nonce2(4) + reserved(14) + data(12) */
 	memset(send_pkg.data, 0, AVAU_P_DATA_LEN);
-	send_pkg.data[0] = 0xaa; /* TODO: job_id */
+	send_pkg.data[0] = 0; /* TODO: job_id */
 	send_pkg.data[1] = 0; /* rolling ntime */
 	pool = current_pool();
 	send_pkg.data[2] = pool->pool_no >> 8; /* pool no */
