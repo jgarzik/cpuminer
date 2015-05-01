@@ -529,8 +529,29 @@ fi
 
 AM_CONDITIONAL([WANT_STATIC_LIBUSB], [test x$dlibusb = xno])
 
-AC_CONFIG_SUBDIRS([compat/jansson-2.6])
-JANSSON_LIBS="compat/jansson-2.6/src/.libs/libjansson.a"
+djansson="no"
+AC_ARG_WITH([system-jansson],
+	[AC_HELP_STRING([--with-system-jansson],[NOT RECOMMENDED! Compile against dynamic system jansson. (Default use included static jansson)])],
+	[djansson=$withval]
+)
+
+if test "x$djansson" != xno; then
+	case $target in
+		*-*-freebsd*)
+			JANSSON_LIBS="-ljansson"
+			JANSSON_CFLAGS=""
+			AC_DEFINE(HAVE_JANSSON, 1, [Define if you have jansson >= 2.6])
+			;;
+		*)
+			PKG_CHECK_MODULES(JANSSON, jansson >= 2.6, [AC_DEFINE(HAVE_JANSSON, 1, [Define if you have jansson >= 2.6])], [AC_MSG_ERROR([Could not find jansson library - please install jansson >= 2.6])])
+			;;
+	esac
+else
+	AC_CONFIG_SUBDIRS([compat/jansson-2.6])
+	JANSSON_LIBS="compat/jansson-2.6/src/.libs/libjansson.a"
+fi
+
+AM_CONDITIONAL([WANT_STATIC_JANSSON], [test x$djansson = xno])
 
 PKG_PROG_PKG_CONFIG()
 
@@ -815,5 +836,9 @@ echo "  prefix...............: $prefix"
 echo
 if test "x$want_usbutils$dlibusb" = xyesyes; then
 echo "*** SYSTEM LIBUSB BEING ADDED - NOT RECOMMENDED UNLESS YOU ARE UNABLE TO COMPILE THE INCLUDED LIBUSB ***"
+echo
+fi
+if test "x$djansson" = xyes; then
+echo "*** SYSTEM JANSSON BEING ADDED - NOT RECOMMENDED UNLESS YOU ARE UNABLE TO COMPILE THE INCLUDED JANSSON ***"
 echo
 fi
