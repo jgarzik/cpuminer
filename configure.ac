@@ -566,6 +566,23 @@ else
 fi
 AC_SUBST(LIBCURL_LIBS)
 
+libsystemd="no"
+
+AC_ARG_ENABLE([libsystemd],
+	[AC_HELP_STRING([--enable-libsystemd],[Enable building with libsystemd for watchdog and status notification support])],
+	[libsystemd=$enableval]
+)
+
+if test "x$libsystemd" != xno; then
+	if test "x$have_linux" != xtrue; then
+		AC_MSG_ERROR([libsystemd is only supported on Linux platforms])
+	fi
+
+	PKG_CHECK_MODULES(LIBSYSTEMD, libsystemd, , AC_MSG_ERROR(Could not find libsystemd dev))
+	AC_DEFINE([USE_LIBSYSTEMD], [1], [Defined to 1 if libsystemd support is wanted])
+else
+	LIBSYSTEMD_LIBS=""
+fi
 
 #check execv signature
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([
@@ -648,6 +665,12 @@ if test "x$libcurl" != xno; then
 	echo "  libcurl(GBT+getwork).: Enabled: $LIBCURL_LIBS"
 else
 	echo "  libcurl(GBT+getwork).: Disabled"
+fi
+
+if test "x$libsystemd" != xno; then
+	echo "  libsystemd...........: Enabled: $LIBSYSTEMD_LIBS"
+else
+	echo "  libsystemd...........: Disabled"
 fi
 
 echo "  curses.TUI...........: $cursesmsg"
@@ -808,7 +831,7 @@ echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS"
 echo "  CFLAGS...............: $CFLAGS"
 echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS"
-echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $LIBUSB_LIBS $RT_LIBS"
+echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $LIBSYSTEMD_LIBS $JANSSON_LIBS $PTHREAD_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $LIBUSB_LIBS $RT_LIBS"
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
