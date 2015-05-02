@@ -8484,6 +8484,21 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 	const unsigned int interval = WATCHDOG_INTERVAL;
 	struct timeval zero_tv;
 
+#ifdef USE_LIBSYSTEMD
+	uint64_t notify_usec;
+	struct timeval notify_interval, notify_tv;
+
+	if (sd_watchdog_enabled(false, &notify_usec)) {
+		notify_usec = notify_usec / 2;
+		us_to_timeval(&notify_interval, notify_usec);
+		cgtime(&notify_tv);
+		addtime(&notify_interval, &notify_tv);
+
+		applog(LOG_DEBUG, "Watchdog notify interval: %.3gs",
+				notify_usec / 1000000.0);
+	}
+#endif
+
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	RenameThread("Watchdog");
@@ -8535,6 +8550,15 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 #endif
 
 		cgtime(&now);
+
+#if USE_LIBSYSTEMD
+		if (notify_usec && !time_more(&notify_tv, &now)) {
+			sd_notify(false, "WATCHDOG=1");
+			copy_time(&notify_tv, &now);
+			addtime(&notify_interval, &notify_tv);
+			applog(LOG_DEBUG, "Notified watchdog");
+		}
+#endif
 
 		if (!sched_paused && !should_run()) {
 			applog(LOG_WARNING, "Pausing execution as per stop time %02d:%02d scheduled",
