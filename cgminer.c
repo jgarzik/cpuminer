@@ -442,7 +442,7 @@ static int include_count;
 	static int forkpid;
 #endif // defined(unix)
 
-struct sigaction termhandler, inthandler;
+struct sigaction termhandler, inthandler, abrthandler;
 
 struct thread_q *getq;
 
@@ -4021,6 +4021,7 @@ static void sighandler(int __maybe_unused sig)
 	/* Restore signal handlers so we can still quit if kill_work fails */
 	sigaction(SIGTERM, &termhandler, NULL);
 	sigaction(SIGINT, &inthandler, NULL);
+	sigaction(SIGABRT, &abrthandler, NULL);
 	kill_work();
 }
 
@@ -9488,6 +9489,7 @@ int main(int argc, char *argv[])
 	sigemptyset(&handler.sa_mask);
 	sigaction(SIGTERM, &handler, &termhandler);
 	sigaction(SIGINT, &handler, &inthandler);
+	sigaction(SIGABRT, &handler, &abrthandler);
 #ifndef WIN32
 	signal(SIGPIPE, SIG_IGN);
 #else
