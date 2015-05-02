@@ -439,7 +439,7 @@ static int bitmain_set_txtask(struct bitmain_info *info, uint8_t *sendbuf,
 			      unsigned int *last_work_block, int *sentcount)
 {
 	uint16_t crc = 0;
-	uint32_t work_id = 0;
+	uint32_t wid = 0;
 	int datalen = 0;
 	uint8_t new_block = 0;
 	//char *ob_hex = NULL;
@@ -478,11 +478,11 @@ static int bitmain_set_txtask(struct bitmain_info *info, uint8_t *sendbuf,
 			new_block = 1;
 			*last_work_block = DATAW(witem)->work->work_block;
 		}
-		work_id = DATAW(witem)->wid;
-		bm->works[cursentcount].work_id = htole32(work_id);
+		wid = DATAW(witem)->wid;
+		bm->works[cursentcount].work_id = htole32(wid);
 		applog(LOG_DEBUG, "%s: send task work id:%"PRIu32" %"PRIu32,
 				  ANTDRV.dname,
-				  bm->works[cursentcount].work_id, work_id);
+				  wid, bm->works[cursentcount].work_id);
 		memcpy(bm->works[cursentcount].midstate, DATAW(witem)->work->midstate, 32);
 		memcpy(bm->works[cursentcount].data2, DATAW(witem)->work->data + 64, 12);
 
@@ -908,7 +908,6 @@ static int bitmain_parse_rxnonce(const uint8_t * data, int datalen, struct bitma
 	for (i = 0; i < curnoncenum; i++) {
 		bm->nonces[i].work_id = htole32(bm->nonces[i].work_id);
 		bm->nonces[i].nonce = htole32(bm->nonces[i].nonce);
-
 		applog(LOG_DEBUG, "%s: RxNonce Data %d: work_id(%"PRIu32") nonce(%08x)(%d)",
 				  ANTDRV.dname,
 				  i, bm->nonces[i].work_id,
@@ -1241,12 +1240,13 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 						__func__, buf[i+1]+2);
 			} else {
 				for (j = 0; j < nonce_num; j++) {
+					uint32_t wid = rxnoncedata.nonces[j].work_id;
 					searches = 0;
 					mutex_lock(&info->qlock);
 					witem = info->work_list->head;
 					while (witem) {
 						searches++;
-						if (DATAW(witem)->work->id == rxnoncedata.nonces[j].work_id)
+						if (DATAW(witem)->wid == wid)
 							break;
 						witem = witem->next;
 					}
@@ -1266,10 +1266,10 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 
 						work = DATAW(witem)->work;
 						applog(LOG_DEBUG, "%s%d: %s() RxNonce Data find "
-								  "work(%"PRIu32"-%"PRIu32")(%08x)",
-								  bitmain->drv->name, bitmain->device_id,
-								  __func__, work->id,
-								  rxnoncedata.nonces[j].work_id,
+								  "work(%"PRIu32")(%08x)",
+								  bitmain->drv->name,
+								  bitmain->device_id,
+								  __func__, wid,
 								  rxnoncedata.nonces[j].nonce);
 
 						applog(LOG_DEBUG, "%s%d: %s() nonce = %08x",
@@ -1317,10 +1317,12 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 							count = info->work_list->count;
 						}
 						mutex_unlock(&info->qlock);
-						applog(LOG_ERR, "%s%d: %s() Work not found for id (%"PRIu32")"
-								" (min=%"PRIu32" max=%"PRIu32" count=%d)",
-								bitmain->drv->name, bitmain->device_id,
-								__func__, rxnoncedata.nonces[j].work_id,
+						applog(LOG_ERR, "%s%d: %s() Work not found"
+								" for id (%"PRIu32") (min=%"
+								PRIu32" max=%"PRIu32" count=%d)",
+								bitmain->drv->name,
+								bitmain->device_id,
+								__func__, wid,
 								min, max, count);
 					}
 				}
@@ -1518,12 +1520,13 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 						__func__, packethead.length+4);
 			} else {
 				for (j = 0; j < nonce_num; j++) {
+					uint32_t wid = rxnoncedata.nonces[j].work_id;
 					searches = 0;
 					mutex_lock(&info->qlock);
 					witem = info->work_list->head;
 					while (witem && DATAW(witem)->work) {
 						searches++;
-						if (DATAW(witem)->wid == rxnoncedata.nonces[j].work_id)
+						if (DATAW(witem)->wid == wid)
 							break;
 						witem = witem->next;
 					}
@@ -1543,10 +1546,9 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 						info->tot_search += searches;
 
 						applog(LOG_DEBUG, "%s%d: %s() RxNonce Data find "
-								  "work(%"PRIu32"-%"PRIu32")(%08x)",
+								  "work(%"PRIu32")(%08x)",
 								  bitmain->drv->name, bitmain->device_id,
-								  __func__, work->id,
-								  rxnoncedata.nonces[j].work_id,
+								  __func__, wid,
 								  rxnoncedata.nonces[j].nonce);
 
 						applog(LOG_DEBUG, "%s%d: %s() nonce = %08x",
@@ -1586,9 +1588,11 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 						info->failed_search++;
 						info->tot_failed += searches;
 
-						applog(LOG_ERR, "%s%d: %s() Work not found for id (%"PRIu32")",
-								bitmain->drv->name, bitmain->device_id,
-								__func__, rxnoncedata.nonces[j].work_id);
+						applog(LOG_ERR, "%s%d: %s() Work not found "
+								"for id (%"PRIu32")",
+								bitmain->drv->name,
+								bitmain->device_id,
+								__func__, wid);
 					}
 				}
 				mutex_lock(&info->qlock);
