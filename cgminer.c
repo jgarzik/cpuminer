@@ -4001,6 +4001,10 @@ static void clean_up(bool restarting);
 void app_restart(void)
 {
 	applog(LOG_WARNING, "Attempting to restart %s", packagename);
+#ifdef USE_LIBSYSTEMD
+	sd_notify(false, "RELOADING=1\n"
+		"STATUS=Restarting...");
+#endif
 
 	cg_completion_timeout(&__kill_work, NULL, 5000);
 	clean_up(true);
@@ -6034,6 +6038,10 @@ static void hashmeter(int thr_id, uint64_t hashes_done)
 			displayed_r15, displayed_hashes);
 	}
 	mutex_unlock(&hash_lock);
+
+#ifdef USE_LIBSYSTEMD
+	sd_notifyf(false, "STATUS=%s", statusline);
+#endif
 
 	if (showlog) {
 		if (!curses_active) {
@@ -8749,6 +8757,11 @@ void __quit(int status, bool clean)
 {
 	pthread_t killall_t;
 
+#ifdef USE_LIBSYSTEMD
+	sd_notify(false, "STOPPING=1\n"
+		"STATUS=Shutting down...");
+#endif
+
 	if (unlikely(pthread_create(&killall_t, NULL, killall_thread, NULL)))
 		exit(1);
 
@@ -9431,6 +9444,10 @@ int main(int argc, char *argv[])
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
 		early_quit(1, "Failed to curl_global_init");
 
+#ifdef USE_LIBSYSTEMD
+	sd_notify(false, "STATUS=Starting up...");
+#endif
+
 # ifdef __linux
 	/* If we're on a small lowspec platform with only one CPU, we should
 	 * yield after dropping a lock to allow a thread waiting for it to be
@@ -9836,6 +9853,11 @@ begin_bench:
 		early_quit(1, "incorrect total_control_threads (%d) should be 8", total_control_threads);
 
 	set_highprio();
+
+#ifdef USE_LIBSYSTEMD
+	sd_notify(false, "READY=1\n"
+		"STATUS=Started");
+#endif
 
 	/* Once everything is set up, main() becomes the getwork scheduler */
 	while (42) {
