@@ -686,7 +686,7 @@ static struct usb_find_devices find_dev[] = {
 #endif
 #ifdef USE_AVALON4_MINI
 	{
-		.drv = DRIVER_avalonu,
+		.drv = DRIVER_avalonm,
 		.name = "AVU",
 		.ident = IDENT_AVU,
 		.idVendor = 0x29f1,
@@ -3725,7 +3725,7 @@ void usb_cleanup(void)
 			case DRIVER_avalon:
 			case DRIVER_avalon2:
 			case DRIVER_avalon4:
-			case DRIVER_avalonu:
+			case DRIVER_avalonm:
 			case DRIVER_klondike:
 			case DRIVER_hashfast:
 				DEVWLOCK(cgpu, pstate);

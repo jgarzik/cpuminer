@@ -236,7 +236,7 @@ static inline int fsync (int fd)
 	DRIVER_ADD_COMMAND(avalon) \
 	DRIVER_ADD_COMMAND(avalon2) \
 	DRIVER_ADD_COMMAND(avalon4) \
-	DRIVER_ADD_COMMAND(avalonu) \
+	DRIVER_ADD_COMMAND(avalonm) \
 	DRIVER_ADD_COMMAND(bflsc) \
 	DRIVER_ADD_COMMAND(bitfury) \
 	DRIVER_ADD_COMMAND(blockerupter) \

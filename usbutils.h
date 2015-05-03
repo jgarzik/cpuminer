@@ -384,8 +384,8 @@ struct cg_usb_info {
 	USB_ADD_COMMAND(C_AVA2_WRITE, "Ava2Write") \
 	USB_ADD_COMMAND(C_AVA4_READ, "Ava4Read") \
 	USB_ADD_COMMAND(C_AVA4_WRITE, "Ava4Write") \
-	USB_ADD_COMMAND(C_AVAU_READ, "AvauRead") \
-	USB_ADD_COMMAND(C_AVAU_WRITE, "AvauWrite") \
+	USB_ADD_COMMAND(C_AVAM_READ, "AvamRead") \
+	USB_ADD_COMMAND(C_AVAM_WRITE, "AvamWrite") \
         USB_ADD_COMMAND(C_BET_WRITE, "BlockErupterWrite") \
         USB_ADD_COMMAND(C_BET_READ, "BlockErupterRead") \
 	USB_ADD_COMMAND(C_BF1_REQINFO, "BF1RequestInfo") \

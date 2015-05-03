@@ -245,7 +245,7 @@ static char *opt_set_avalon4_voltage;
 static char *opt_set_avalon4_freq;
 #endif
 #ifdef USE_AVALON4_MINI
-static char *opt_set_avalonu_freq;
+static char *opt_set_avalonm_freq;
 #endif
 #ifdef USE_BLOCKERUPTER
 int opt_bet_clk = 0;
@@ -1251,8 +1251,8 @@ static struct opt_table opt_config_table[] = {
 			"Make Avalon4 running as a radiator when stratum server failed"),
 #endif
 #ifdef USE_AVALON4_MINI
-	OPT_WITH_CBARG("--avalonu-freq",
-		     set_avalonu_freq, NULL, &opt_set_avalonu_freq,
+	OPT_WITH_CBARG("--avalonm-freq",
+		     set_avalonm_freq, NULL, &opt_set_avalonm_freq,
 		     "Set frequency for Avalon4 Mini, 1 to 3 values, example: 445:385:370"),
 #endif
 #ifdef USE_BAB
