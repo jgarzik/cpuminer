@@ -59,7 +59,7 @@ struct avalonm_info {
 	struct thr_info *mainthr;
 	pthread_t read_thr;
 
-	char avau_ver[AVAM_MM_VER_LEN];
+	char avam_ver[AVAM_MM_VER_LEN];
 	int set_frequency[3];
 
 	uint8_t workinit;

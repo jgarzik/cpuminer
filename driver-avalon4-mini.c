@@ -328,7 +328,7 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 	info->mainthr = NULL;
 	info->workinit = 0;
 	info->nonce_cnts = 0;
-	memcpy(info->avau_ver, ar.data, AVAM_MM_VER_LEN);
+	memcpy(info->avam_ver, ar.data, AVAM_MM_VER_LEN);
 	return avalonm;
 }
 
@@ -398,7 +398,7 @@ static void *avalonm_get_reports(void *userdata)
 	while (!info->workinit)
 		cgsleep_ms(200);
 
-	snprintf(threadname, sizeof(threadname), "%d/AvauRecv", avalonm->device_id);
+	snprintf(threadname, sizeof(threadname), "%d/AvamRecv", avalonm->device_id);
 	RenameThread(threadname);
 
 	while (likely(!avalonm->shutdown)) {
@@ -665,7 +665,7 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 	struct api_data *root = NULL;
 	struct avalonm_info *info = cgpu->device_data;
 
-	root = api_add_string(root, "AVAM VER", info->avau_ver, false);
+	root = api_add_string(root, "AVAM VER", info->avam_ver, false);
 	return root;
 }
 

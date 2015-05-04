@@ -288,13 +288,13 @@ static struct usb_intinfo ava4_ints[] = {
 };
 #endif
 #ifdef USE_AVALON4_MINI
-static struct usb_epinfo avau_epinfos[] = {
+static struct usb_epinfo avam_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	40,	EPI(1), 0, 0 },
 	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	40,	EPO(1), 0, 0 }
 };
 
-static struct usb_intinfo avau_ints[] = {
-	USB_EPS(0, avau_epinfos)
+static struct usb_intinfo avam_ints[] = {
+	USB_EPS(0, avam_epinfos)
 };
 #endif
 #ifdef USE_KLONDIKE
@@ -696,7 +696,7 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.timeout = AVALON4_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
-		INTINFO(avau_ints) },
+		INTINFO(avam_ints) },
 #endif
 #ifdef USE_HASHFAST
 	{
