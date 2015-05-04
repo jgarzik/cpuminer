@@ -1255,7 +1255,7 @@ static struct opt_table opt_config_table[] = {
 		     set_avalonm_freq, NULL, &opt_set_avalonm_freq,
 		     "Set frequency for Avalon4 Mini, 1 to 3 values, example: 445:385:370"),
 	OPT_WITH_ARG("--avalonm-ntime-offset",
-		     set_int_1_to_65535, opt_show_intval, &opt_avalonm_ntime_offset,
+		     set_int_0_to_9999, opt_show_intval, &opt_avalonm_ntime_offset,
 		     "Set Avalon4 Mini ntime rolling max offset"),
 #endif
 #ifdef USE_BAB
