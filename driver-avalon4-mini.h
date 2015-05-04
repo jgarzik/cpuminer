@@ -56,12 +56,18 @@ struct avalonm_pkg {
 #define avalonm_ret avalonm_pkg
 
 struct avalonm_info {
-	char avau_ver[AVAM_MM_VER_LEN];
-	int set_frequency[3];
 	struct thr_info *mainthr;
 	pthread_t read_thr;
+
+	char avau_ver[AVAM_MM_VER_LEN];
+	int set_frequency[3];
+
 	uint8_t workinit;
 	uint32_t nonce_cnts;
+
+	struct pool pool0;
+	struct pool pool1;
+	struct pool pool2;
 };
 
 #define AVAM_WRITE_SIZE (sizeof(struct avalonm_pkg))
