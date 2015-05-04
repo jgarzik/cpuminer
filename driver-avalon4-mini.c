@@ -26,6 +26,7 @@
 int opt_avalonm_freq[3] = {AVAM_DEFAULT_FREQUENCY,
 			   AVAM_DEFAULT_FREQUENCY,
 			   AVAM_DEFAULT_FREQUENCY};
+uint16_t opt_avalonm_ntime_offset = AVAM_DEFAULT_ASIC_COUNT;
 static uint32_t g_freq_array[][2] = {
 	{100, 0x1e678447},
 	{113, 0x22688447},
@@ -548,6 +549,9 @@ static int64_t avalonm_scanhash(struct thr_info *thr)
 	send_pkg.data[5] = (work->nonce2 >> 16) & 0xff;
 	send_pkg.data[6] = (work->nonce2 >> 8) & 0xff;
 	send_pkg.data[7] = (work->nonce2) & 0xff;
+	send_pkg.data[8] = opt_avalonm_ntime_offset >> 8;
+	send_pkg.data[9] = opt_avalonm_ntime_offset & 0xff;
+
 	memcpy(send_pkg.data + 20, work->data + 64, 12);
 	rev((void *)(send_pkg.data + 20), 12);
 

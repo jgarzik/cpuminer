@@ -77,5 +77,6 @@ struct avalonm_info {
 #define AVAM_SEND_ERROR -1
 
 extern char *set_avalonm_freq(char *arg);
+extern uint16_t opt_avalonm_ntime_offset;
 #endif /* USE_AVALON4_MINI */
 #endif	/* _AVALON4_MINI_H_ */
