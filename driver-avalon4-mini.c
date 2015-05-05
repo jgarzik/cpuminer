@@ -441,9 +441,8 @@ static void *avalonm_process_tasks(void *userdata)
 		for (i = start_count, j = 0; i < end_count; i++, j++) {
 			work = avalonm->works[i];
 
-			applog(LOG_ERR, "SC: %d, EC: %d -- %d ", start_count, end_count, avalonm->queued);
+			applog(LOG_ERR, "SC: %d, EC: %d -- %d,%d ", start_count, end_count, avalonm->queued, avalonm->queued_count);
 			if (likely(j < avalonm->queued && avalonm->works[i])) {
-				info->auto_queued++;
 				/* Configuration */
 				avalonm_set_freq(avalonm);
 

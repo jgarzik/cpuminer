@@ -15,7 +15,7 @@
 #ifdef USE_AVALON4_MINI
 
 #define AVAM_DEFAULT_ASIC_COUNT		4
-#define AVAM_DEFAULT_ARRAY_SIZE		(3 + 1) /* This is from the A3222 datasheet */
+#define AVAM_DEFAULT_ARRAY_SIZE		(3 + 2) /* This is from the A3222 datasheet */
 
 #define AVAM_DEFAULT_FREQUENCY_MIN	100
 #define AVAM_DEFAULT_FREQUENCY_MAX	1000
@@ -63,8 +63,6 @@ struct avalonm_info {
 	pthread_mutex_t lock;
 	pthread_mutex_t qlock;
 	cgsem_t qsem;
-
-	int auto_queued;
 
 	char avam_ver[AVAM_MM_VER_LEN];
 	int set_frequency[3];
