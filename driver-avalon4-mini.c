@@ -301,8 +301,8 @@ static void avalonm_set_freq(struct cgpu_info *avalonm)
 	uint32_t tmp;
 
 	if ((info->set_frequency[0] == opt_avalonm_freq[0]) &&
-		(info->set_frequency[1] == opt_avalonm_freq[1]) &&
-			(info->set_frequency[2] == opt_avalonm_freq[2]))
+	    (info->set_frequency[1] == opt_avalonm_freq[1]) &&
+	    (info->set_frequency[2] == opt_avalonm_freq[2]))
 		return;
 
 	info->set_frequency[0] = opt_avalonm_freq[0];
@@ -322,7 +322,7 @@ static void avalonm_set_freq(struct cgpu_info *avalonm)
 
 	avalonm_init_pkg(&send_pkg, AVAM_P_SET_FREQ, 1, 1);
 	avalonm_send_pkg(avalonm, &send_pkg);
-	applog(LOG_DEBUG, "%s-%d: Avalonm set freq %d,%d,%d",
+	applog(LOG_ERR, "%s-%d: Avalonm set freq %d,%d,%d",
 			avalonm->drv->name, avalonm->device_id,
 			info->set_frequency[0],
 			info->set_frequency[1],
