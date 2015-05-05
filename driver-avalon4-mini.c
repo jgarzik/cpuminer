@@ -411,10 +411,6 @@ static void *avalonm_process_tasks(void *userdata)
 	int start_count, end_count, i, j, ret;
 	int avalon_get_work_count = AVAM_DEFAULT_ASIC_COUNT;
 
-	cgtimer_t ts_start;
-	bool idled = false;
-	int64_t us_timeout;
-
 	snprintf(threadname, sizeof(threadname), "%d/AvmProc", avalonm->device_id);
 	RenameThread(threadname);
 
