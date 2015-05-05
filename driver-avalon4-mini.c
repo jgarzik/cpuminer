@@ -150,8 +150,10 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 
 	switch(ar->type) {
 	case AVAM_P_NONCE:
+		ret = ar->type;
 		applog(LOG_DEBUG, "%s-%d: AVAM_P_NONCE", avalonm->drv->name, avalonm->device_id);
 		hexdump(ar->data, 32);
+
 		nonce2 = (ar->data[0] << 24) | (ar->data[1] << 16) | (ar->data[2] << 8) | ar->data[3];
 		id = (ar->data[4] << 24) | (ar->data[5] << 16) | (ar->data[6] << 8) | ar->data[7];
 		nonce = (ar->data[11] << 24) | (ar->data[10] << 16) | (ar->data[9] << 8) | ar->data[8];
@@ -170,12 +172,11 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 		submit_nonce(thr, work, nonce);
 		free_work(work);
 		info->nonce_cnts++;
-		ret = ar->type;
 		break;
 	case AVAM_P_STATUS:
+		ret = ar->type;
 		applog(LOG_DEBUG, "%s-%d: AVAM_P_STATUS", avalonm->drv->name, avalonm->device_id);
 		hexdump(ar->data, 32);
-		ret = ar->type;
 		break;
 	default:
 		applog(LOG_DEBUG, "%s-%d: Unknown response (%x)", avalonm->drv->name, avalonm->device_id,
@@ -447,7 +448,7 @@ static void *avalonm_process_tasks(void *userdata)
 				avalonm_send_pkg(avalonm, &send_pkg);
 
 				/* P_WORK part 2:
-				 * job_id(2)+pool_no(2)+nonce2(4)+reserved(14)+data(12) */
+				 * nonce2(4)+id(4)+ntime(2)+reserved(12)+data(12) */
 				memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
 				send_pkg.data[0] = (work->nonce2 >> 24) & 0xff;
 				send_pkg.data[1] = (work->nonce2 >> 16) & 0xff;
@@ -468,11 +469,6 @@ static void *avalonm_process_tasks(void *userdata)
 				avalonm_send_pkg(avalonm, &send_pkg);
 
 				cgsleep_ms(1);
-
-				/* Get result */
-				while (avalonm_get_reports(avalonm) == AVAM_P_NONCE)
-					avalonm_get_reports(avalonm);
-
 			} else {
 			}
 		}
@@ -481,6 +477,11 @@ static void *avalonm_process_tasks(void *userdata)
 		avalonm_rotate_array(avalonm, info);
 
 		cgsem_post(&info->qsem);
+
+		/* Get result */
+		do {
+			ret = avalonm_get_reports(avalonm);
+		} while (ret != AVAM_P_STATUS);
 
 		cgsleep_ms(500);
 	}
