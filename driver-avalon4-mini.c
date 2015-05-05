@@ -23,6 +23,14 @@
 	*((str) + 0) = (uint8_t) ((x) >> 24);	\
 }
 
+#define PACK32(str, x)                        \
+{                                             \
+    *(x) =   ((uint32_t) *((str) + 3)      )    \
+           | ((uint32_t) *((str) + 2) <<  8)    \
+           | ((uint32_t) *((str) + 1) << 16)    \
+           | ((uint32_t) *((str) + 0) << 24);   \
+}
+
 int opt_avalonm_freq[3] = {AVAM_DEFAULT_FREQUENCY,
 			   AVAM_DEFAULT_FREQUENCY,
 			   AVAM_DEFAULT_FREQUENCY};
@@ -154,12 +162,11 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 		applog(LOG_DEBUG, "%s-%d: AVAM_P_NONCE", avalonm->drv->name, avalonm->device_id);
 		hexdump(ar->data, 32);
 
-		nonce2 = (ar->data[0] << 24) | (ar->data[1] << 16) | (ar->data[2] << 8) | ar->data[3];
-		id = (ar->data[4] << 24) | (ar->data[5] << 16) | (ar->data[6] << 8) | ar->data[7];
-		nonce = (ar->data[11] << 24) | (ar->data[10] << 16) | (ar->data[9] << 8) | ar->data[8];
-		nonce = be32toh(nonce);
-		nonce -= 0x4000;
 		ntime = 0;
+		PACK32(ar->data, &nonce2);
+		PACK32(ar->data + 4, &id);
+		PACK32(ar->data + 8, &nonce);
+		nonce -= 0x4000;
 
 		applog(LOG_DEBUG, "%s-%d: Found! - N2:%08x ID: %08x N:%08x NR:%d",
 		       avalonm->drv->name, avalonm->device_id,
@@ -450,14 +457,9 @@ static void *avalonm_process_tasks(void *userdata)
 				/* P_WORK part 2:
 				 * nonce2(4)+id(4)+ntime(2)+reserved(12)+data(12) */
 				memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
-				send_pkg.data[0] = (work->nonce2 >> 24) & 0xff;
-				send_pkg.data[1] = (work->nonce2 >> 16) & 0xff;
-				send_pkg.data[2] = (work->nonce2 >> 8) & 0xff;
-				send_pkg.data[3] = (work->nonce2) & 0xff;
-				send_pkg.data[4] = (work->id >> 24) & 0xff;
-				send_pkg.data[5] = (work->id >> 16) & 0xff;
-				send_pkg.data[6] = (work->id >> 8) & 0xff;
-				send_pkg.data[7] = (work->id) & 0xff;
+
+				UNPACK32(work->nonce2, send_pkg.data);
+				UNPACK32(work->id, send_pkg.data + 4);
 
 				send_pkg.data[8] = opt_avalonm_ntime_offset >> 8;
 				send_pkg.data[9] = opt_avalonm_ntime_offset & 0xff;
