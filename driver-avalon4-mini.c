@@ -129,16 +129,14 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 
 	unsigned int expected_crc;
 	unsigned int actual_crc;
-	uint32_t nonce, nonce2, ntime, id;
-	uint8_t job_id[2];
+	uint32_t nonce, nonce2, ntime, id, ret;
 	struct work *work;
 
 	if (ar->head[0] != AVAM_H1 && ar->head[1] != AVAM_H2) {
 		applog(LOG_DEBUG, "%s-%d: H1 %02x, H2 %02x",
 				avalonm->drv->name, avalonm->device_id,
 				ar->head[0], ar->head[1]);
-		hexdump(ar->data, 32);
-		return 1;
+		return 0;
 	}
 
 	expected_crc = crc16(ar->data, AVAM_P_DATA_LEN);
@@ -147,7 +145,7 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 		applog(LOG_DEBUG, "%s-%d: %02x: expected crc(%04x), actual_crc(%04x)",
 		       avalonm->drv->name, avalonm->device_id,
 		       ar->type, expected_crc, actual_crc);
-		return 1;
+		return 0;
 	}
 
 	switch(ar->type) {
@@ -172,17 +170,21 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 		submit_nonce(thr, work, nonce);
 		free_work(work);
 		info->nonce_cnts++;
+		ret = ar->type;
 		break;
 	case AVAM_P_STATUS:
 		applog(LOG_DEBUG, "%s-%d: AVAM_P_STATUS", avalonm->drv->name, avalonm->device_id);
 		hexdump(ar->data, 32);
+		ret = ar->type;
 		break;
 	default:
 		applog(LOG_DEBUG, "%s-%d: Unknown response (%x)", avalonm->drv->name, avalonm->device_id,
 				ar->type);
+		ret = 0;
 		break;
 	}
-	return 0;
+
+	return ret;
 }
 
 static int avalonm_send_pkg(struct cgpu_info *avalonm, const struct avalonm_pkg *pkg)
@@ -324,14 +326,14 @@ static inline void avalonm_detect(bool __maybe_unused hotplug)
 	usb_detect(&avalonm_drv, avalonm_detect_one);
 }
 
-static void *avalonm_get_reports(void *userdata)
+static int avalonm_get_reports(void *userdata)
 {
 	struct cgpu_info *avalonm = (struct cgpu_info *)userdata;
 	struct avalonm_info *info = avalonm->device_data;
 	struct thr_info *thr = info->thr;
 	struct avalonm_pkg send_pkg;
 	struct avalonm_ret ar;
-	int ret;
+	int ret = 0;
 
 	memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
 	avalonm_init_pkg(&send_pkg, AVAM_P_POLLING, 1, 1);
@@ -341,10 +343,10 @@ static void *avalonm_get_reports(void *userdata)
 		       avalonm->drv->name, avalonm->device_id,
 		       ar.data[4], ar.data[5], ar.data[6], ar.data[7]);
 
-		decode_pkg(thr, &ar);
+		ret = decode_pkg(thr, &ar);
 	}
 
-	return NULL;
+	return ret;
 }
 
 static void rev(unsigned char *s, size_t l)
@@ -419,8 +421,7 @@ static void *avalonm_process_tasks(void *userdata)
 		i = 0;
 		do {
 			cgsleep_ms(40);
-		} while (!avalonm->shutdown
-			&& avalonm->queued < avalon_get_work_count);
+		} while (!avalonm->shutdown && avalonm->queued < avalon_get_work_count);
 
 		mutex_lock(&info->qlock);
 
@@ -441,7 +442,6 @@ static void *avalonm_process_tasks(void *userdata)
 				/* P_WORK part 1: midstate */
 				memcpy(send_pkg.data, work->midstate, AVAM_P_DATA_LEN);
 				rev((void *)(send_pkg.data), AVAM_P_DATA_LEN);
-
 				avalonm_init_pkg(&send_pkg, AVAM_P_WORK, 1, 2);
 				hexdump(send_pkg.data, 32);
 				avalonm_send_pkg(avalonm, &send_pkg);
@@ -463,17 +463,15 @@ static void *avalonm_process_tasks(void *userdata)
 
 				memcpy(send_pkg.data + 20, work->data + 64, 12);
 				rev((void *)(send_pkg.data + 20), 12);
-
 				avalonm_init_pkg(&send_pkg, AVAM_P_WORK, 2, 2);
 				hexdump(send_pkg.data, 32);
 				avalonm_send_pkg(avalonm, &send_pkg);
+
 				cgsleep_ms(1);
 
 				/* Get result */
-				avalonm_get_reports(avalonm);
-				avalonm_get_reports(avalonm);
-				avalonm_get_reports(avalonm);
-				avalonm_get_reports(avalonm);
+				while (avalonm_get_reports(avalonm) == AVAM_P_NONCE)
+					avalonm_get_reports(avalonm);
 
 			} else {
 			}
@@ -634,8 +632,6 @@ static bool avalonm_fill(struct cgpu_info *avalonm)
 	int subid, slot, ac;
 	struct work *work;
 	bool ret = true;
-
-	applog(LOG_ERR, " -- %d ",  avalonm->queued);
 
 	ac = AVAM_DEFAULT_ASIC_COUNT;
 	mutex_lock(&info->qlock);
