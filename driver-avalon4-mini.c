@@ -129,8 +129,9 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 
 	unsigned int expected_crc;
 	unsigned int actual_crc;
-	uint32_t nonce, nonce2, ntime;
+	uint32_t nonce, nonce2, ntime, id;
 	uint8_t job_id[2];
+	struct work *work;
 
 	if (ar->head[0] != AVAM_H1 && ar->head[1] != AVAM_H2) {
 		applog(LOG_DEBUG, "%s-%d: H1 %02x, H2 %02x",
@@ -153,21 +154,23 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 	case AVAM_P_NONCE:
 		applog(LOG_DEBUG, "%s-%d: AVAM_P_NONCE", avalonm->drv->name, avalonm->device_id);
 		hexdump(ar->data, 32);
-		job_id[0] = ar->data[0];
-		job_id[1] = ar->data[1];
-		//pool_no = (ar->data[2] << 8) | ar->data[3];
-		nonce2 = (ar->data[4] << 24) | (ar->data[5] << 16) | (ar->data[6] << 8) | ar->data[7];
+		nonce2 = (ar->data[0] << 24) | (ar->data[1] << 16) | (ar->data[2] << 8) | ar->data[3];
+		id = (ar->data[4] << 24) | (ar->data[5] << 16) | (ar->data[6] << 8) | ar->data[7];
 		nonce = (ar->data[11] << 24) | (ar->data[10] << 16) | (ar->data[9] << 8) | ar->data[8];
-
 		nonce = be32toh(nonce);
 		nonce -= 0x4000;
 		ntime = 0;
 
-		applog(LOG_DEBUG, "%s-%d: Found! - J:%02x%02x N2:%08x N:%08x NR:%d",
+		applog(LOG_DEBUG, "%s-%d: Found! - N2:%08x ID: %08x N:%08x NR:%d",
 		       avalonm->drv->name, avalonm->device_id,
-		       job_id[0], job_id[1], nonce2, nonce, ntime);
+		       nonce2, id, nonce, ntime);
 
-		//submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce, ntime);
+		work = clone_queued_work_byid(avalonm, id);
+		if (!work)
+			break;
+
+		submit_nonce(thr, work, nonce);
+		free_work(work);
 		info->nonce_cnts++;
 		break;
 	case AVAM_P_STATUS:
@@ -259,7 +262,7 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 
 	usb_buffer_clear(avalonm);
 	update_usb_stats(avalonm);
-	applog(LOG_INFO, "%s-%d: Found at %s", avalonm->drv->name, avalonm->device_id,
+	applog(LOG_ERR, "%s-%d: Found at %s", avalonm->drv->name, avalonm->device_id,
 	       avalonm->device_path);
 
 	avalonm->device_data = cgcalloc(sizeof(struct avalonm_info), 1);
@@ -335,7 +338,7 @@ static void *avalonm_get_reports(void *userdata)
 	avalonm_init_pkg(&send_pkg, AVAM_P_POLLING, 1, 1);
 	ret = avalonm_xfer_pkg(avalonm, &send_pkg, &ar);
 	if (ret == AVAM_SEND_OK) {
-		applog(LOG_ERR, "%s-%d: Get report 4 %02x%02x%02x%02x ...................",
+		applog(LOG_ERR, "%s-%d: Get report %02x%02x%02x%02x ...................",
 		       avalonm->drv->name, avalonm->device_id,
 		       ar.data[4], ar.data[5], ar.data[6], ar.data[7]);
 
@@ -359,9 +362,32 @@ static void rev(unsigned char *s, size_t l)
 
 static int64_t avalonm_scanhash(struct thr_info *thr)
 {
-	int64_t h = 0;
+	struct cgpu_info *avalonm = thr->cgpu;
+	struct avalonm_info *info = avalonm->device_data;
 
-	return  h * 0xffffffffull;
+	int64_t hash_count, ms_timeout;
+
+	/* Half nonce range */
+	ms_timeout = 0x80000000ll / 1000;
+
+	/* Wait until avalon_send_tasks signals us that it has completed
+	 * sending its work or a full nonce range timeout has occurred. We use
+	 * cgsems to never miss a wakeup. */
+	cgsem_mswait(&info->qsem, ms_timeout);
+
+	hash_count = info->nonce_cnts++;
+	info->nonce_cnts = 0;
+
+	return hash_count * 0xffffffffull;
+}
+
+static void avalonm_rotate_array(struct cgpu_info *avalonm, struct avalonm_info *info)
+{
+	mutex_lock(&info->qlock);
+	avalonm->queued = 0;
+	if (++avalonm->work_array >= AVAM_DEFAULT_ARRAY_SIZE)
+		avalonm->work_array = 0;
+	mutex_unlock(&info->qlock);
 }
 
 static void *avalonm_process_tasks(void *userdata)
@@ -372,17 +398,13 @@ static void *avalonm_process_tasks(void *userdata)
 	struct avalonm_info *info = avalonm->device_data;
 	struct work *work;
 	struct avalonm_pkg send_pkg;
-	struct pool *pool;
-	static int count = 0;
-	int job_id_len;
-	unsigned short crc;
+
 	int start_count, end_count, i, j, ret;
 	int avalon_get_work_count = AVAM_DEFAULT_ASIC_COUNT;
 
-		cgtimer_t ts_start;
-		bool idled = false;
-		int64_t us_timeout;
-
+	cgtimer_t ts_start;
+	bool idled = false;
+	int64_t us_timeout;
 
 	snprintf(threadname, sizeof(threadname), "%d/AvmProc", avalonm->device_id);
 	RenameThread(threadname);
@@ -394,13 +416,24 @@ static void *avalonm_process_tasks(void *userdata)
 			goto out;
 		}
 
+		/* Give other threads a chance to acquire qlock. */
+		i = 0;
+		do {
+			cgsleep_ms(40);
+		} while (!avalonm->shutdown && i++ < 15
+			&& avalonm->queued < avalon_get_work_count);
+
+		mutex_lock(&info->qlock);
+
 		start_count = avalonm->work_array * avalon_get_work_count;
 		end_count = start_count + avalon_get_work_count;
 
+		applog(LOG_ERR, "SC: %d, EC: %d ", start_count, end_count);
+
 		for (i = start_count, j = 0; i < end_count; i++, j++) {
-			mutex_lock(&info->qlock);
 			work = avalonm->works[i];
 
+			applog(LOG_ERR, "SC: %d, EC: %d -- %d ", start_count, end_count, avalonm->queued);
 			if (likely(j < avalonm->queued && avalonm->works[i])) {
 				info->auto_queued++;
 				/* Configuration */
@@ -417,20 +450,15 @@ static void *avalonm_process_tasks(void *userdata)
 				/* P_WORK part 2:
 				 * job_id(2)+pool_no(2)+nonce2(4)+reserved(14)+data(12) */
 				memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
+				send_pkg.data[0] = (work->nonce2 >> 24) & 0xff;
+				send_pkg.data[1] = (work->nonce2 >> 16) & 0xff;
+				send_pkg.data[2] = (work->nonce2 >> 8) & 0xff;
+				send_pkg.data[3] = (work->nonce2) & 0xff;
+				send_pkg.data[4] = (work->id >> 24) & 0xff;
+				send_pkg.data[5] = (work->id >> 16) & 0xff;
+				send_pkg.data[6] = (work->id >> 8) & 0xff;
+				send_pkg.data[7] = (work->id) & 0xff;
 
-				job_id_len = strlen(pool->swork.job_id);
-				crc = crc16((unsigned char *)pool->swork.job_id, job_id_len);
-				applog(LOG_DEBUG, "%s-%d: Pool stratum message JOBS_ID[%04x]: %s",
-				       avalonm->drv->name, avalonm->device_id,
-				       crc, pool->swork.job_id);
-				send_pkg.data[0] = (crc & 0xff00) >> 8;
-				send_pkg.data[1] = crc & 0x00ff;
-				send_pkg.data[2] = pool->pool_no >> 8;
-				send_pkg.data[3] = pool->pool_no & 0xff;
-				send_pkg.data[4] = (work->nonce2 >> 24) & 0xff;
-				send_pkg.data[5] = (work->nonce2 >> 16) & 0xff;
-				send_pkg.data[6] = (work->nonce2 >> 8) & 0xff;
-				send_pkg.data[7] = (work->nonce2) & 0xff;
 				send_pkg.data[8] = opt_avalonm_ntime_offset >> 8;
 				send_pkg.data[9] = opt_avalonm_ntime_offset & 0xff;
 
@@ -439,15 +467,25 @@ static void *avalonm_process_tasks(void *userdata)
 
 				avalonm_init_pkg(&send_pkg, AVAM_P_WORK, 2, 2);
 				hexdump(send_pkg.data, 32);
-
 				avalonm_send_pkg(avalonm, &send_pkg);
 				cgsleep_ms(1);
+
+				/* Get result */
+				avalonm_get_reports(avalonm);
+				avalonm_get_reports(avalonm);
+				avalonm_get_reports(avalonm);
+				avalonm_get_reports(avalonm);
+
 			} else {
 			}
-
 		}
 
-		cgsleep_us_r(&ts_start, us_timeout);
+		mutex_unlock(&info->qlock);
+		avalonm_rotate_array(avalonm, info);
+
+		cgsem_post(&info->qsem);
+
+		cgsleep_ms(200);
 	}
 out:
 	return NULL;
@@ -479,6 +517,14 @@ static void avalonm_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *avalonm = thr->cgpu;
 	struct avalonm_info *info = avalonm->device_data;
+
+	pthread_join(info->process_thr, NULL);
+
+	cgsem_destroy(&info->qsem);
+	mutex_destroy(&info->qlock);
+	mutex_destroy(&info->lock);
+	free(avalonm->works);
+	avalonm->works = NULL;
 }
 
 char *set_avalonm_freq(char *arg)
@@ -590,6 +636,8 @@ static bool avalonm_fill(struct cgpu_info *avalonm)
 	struct work *work;
 	bool ret = true;
 
+	applog(LOG_ERR, " -- %d ",  avalonm->queued);
+
 	ac = AVAM_DEFAULT_ASIC_COUNT;
 	mutex_lock(&info->qlock);
 	if (avalonm->queued >= ac)
@@ -610,11 +658,14 @@ static bool avalonm_fill(struct cgpu_info *avalonm)
 out_unlock:
 	mutex_unlock(&info->qlock);
 
+	applog(LOG_ERR, "%d -- %d ", ret, avalonm->queued);
+
 	return ret;
 }
 
 static void avalonm_flush_work(struct cgpu_info *avalonm)
 {
+
 	struct avalonm_info *info = avalonm->device_data;
 
 	/* Will overwrite any work queued. Do this unlocked since it's just

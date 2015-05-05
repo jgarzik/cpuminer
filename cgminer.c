@@ -7831,6 +7831,19 @@ struct work *find_queued_work_byid(struct cgpu_info *cgpu, uint32_t id)
 	return ret;
 }
 
+struct work *clone_queued_work_byid(struct cgpu_info *cgpu, uint32_t id)
+{
+	struct work *work, *ret = NULL;
+
+	rd_lock(&cgpu->qlock);
+	work = __find_work_byid(cgpu->queued_work, id);
+	if (work)
+		ret = copy_work(work);
+	rd_unlock(&cgpu->qlock);
+
+	return ret;
+}
+
 void __work_completed(struct cgpu_info *cgpu, struct work *work)
 {
 	cgpu->queued_count--;
