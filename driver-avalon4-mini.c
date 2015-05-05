@@ -224,7 +224,6 @@ static int avalonm_xfer_pkg(struct cgpu_info *avalonm, const struct avalonm_pkg 
 	if (sizeof(struct avalonm_pkg) != avalonm_send_pkg(avalonm, pkg))
 		return AVAM_SEND_ERROR;
 
-	cgsleep_ms(50);
 	if (sizeof(struct avalonm_ret) != avalonm_receive_pkg(avalonm, ret))
 		return AVAM_SEND_ERROR;
 
@@ -420,7 +419,7 @@ static void *avalonm_process_tasks(void *userdata)
 		i = 0;
 		do {
 			cgsleep_ms(40);
-		} while (!avalonm->shutdown && i++ < 15
+		} while (!avalonm->shutdown
 			&& avalonm->queued < avalon_get_work_count);
 
 		mutex_lock(&info->qlock);
@@ -485,7 +484,7 @@ static void *avalonm_process_tasks(void *userdata)
 
 		cgsem_post(&info->qsem);
 
-		cgsleep_ms(200);
+		cgsleep_ms(500);
 	}
 out:
 	return NULL;
