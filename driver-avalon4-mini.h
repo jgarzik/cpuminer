@@ -15,6 +15,7 @@
 #ifdef USE_AVALON4_MINI
 
 #define AVAM_DEFAULT_ASIC_COUNT		5
+#define AVAM_DEFAULT_ARRAY_SIZE		3 /* This is from the A3222 datasheet */
 
 #define AVAM_DEFAULT_FREQUENCY_MIN	100
 #define AVAM_DEFAULT_FREQUENCY_MAX	1000
@@ -56,18 +57,18 @@ struct avalonm_pkg {
 #define avalonm_ret avalonm_pkg
 
 struct avalonm_info {
-	struct thr_info *mainthr;
-	pthread_t read_thr;
+	struct thr_info *thr;
+
+	pthread_t process_thr;
+	pthread_mutex_t lock;
+	pthread_mutex_t qlock;
+	cgsem_t qsem;
+
+	int auto_queued;
 
 	char avam_ver[AVAM_MM_VER_LEN];
 	int set_frequency[3];
-
-	uint8_t workinit;
 	uint32_t nonce_cnts;
-
-	struct pool pool0;
-	struct pool pool1;
-	struct pool pool2;
 };
 
 #define AVAM_WRITE_SIZE (sizeof(struct avalonm_pkg))

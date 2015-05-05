@@ -26,7 +26,7 @@
 int opt_avalonm_freq[3] = {AVAM_DEFAULT_FREQUENCY,
 			   AVAM_DEFAULT_FREQUENCY,
 			   AVAM_DEFAULT_FREQUENCY};
-uint16_t opt_avalonm_ntime_offset = AVAM_DEFAULT_ASIC_COUNT;
+uint16_t opt_avalonm_ntime_offset = 0;
 static uint32_t g_freq_array[][2] = {
 	{100, 0x1e678447},
 	{113, 0x22688447},
@@ -122,28 +122,6 @@ static int avalonm_init_pkg(struct avalonm_pkg *pkg, uint8_t type, uint8_t idx, 
 	return 0;
 }
 
-static int job_idcmp(uint8_t *job_id, char *pool_job_id)
-{
-	int job_id_len;
-	unsigned short crc, crc_expect;
-
-	if (!pool_job_id)
-		return 1;
-
-	job_id_len = strlen(pool_job_id);
-	crc_expect = crc16((unsigned char *)pool_job_id, job_id_len);
-
-	crc = job_id[0] << 8 | job_id[1];
-
-	if (crc_expect == crc)
-		return 0;
-
-	applog(LOG_DEBUG, "Avalon4 mini: job_id doesn't match! [%04x:%04x (%s)]",
-	       crc, crc_expect, pool_job_id);
-
-	return 1;
-}
-
 static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 {
 	struct cgpu_info *avalonm = thr->cgpu;
@@ -153,12 +131,6 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 	unsigned int actual_crc;
 	uint32_t nonce, nonce2, ntime;
 	uint8_t job_id[2];
-	int pool_no;
-	struct pool *pool, *real_pool;
-	struct pool *pool_stratum0 = &info->pool0;
-	struct pool *pool_stratum1 = &info->pool1;
-	struct pool *pool_stratum2 = &info->pool2;
-
 
 	if (ar->head[0] != AVAM_H1 && ar->head[1] != AVAM_H2) {
 		applog(LOG_DEBUG, "%s-%d: H1 %02x, H2 %02x",
@@ -183,53 +155,19 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 		hexdump(ar->data, 32);
 		job_id[0] = ar->data[0];
 		job_id[1] = ar->data[1];
-		pool_no = (ar->data[2] << 8) | ar->data[3];
+		//pool_no = (ar->data[2] << 8) | ar->data[3];
 		nonce2 = (ar->data[4] << 24) | (ar->data[5] << 16) | (ar->data[6] << 8) | ar->data[7];
 		nonce = (ar->data[11] << 24) | (ar->data[10] << 16) | (ar->data[9] << 8) | ar->data[8];
-
-		if (pool_no >= total_pools || pool_no < 0) {
-			applog(LOG_DEBUG, "%s-%d: Wrong pool_no %d",
-					avalonm->drv->name, avalonm->device_id,
-					pool_no);
-			break;
-		}
 
 		nonce = be32toh(nonce);
 		nonce -= 0x4000;
 		ntime = 0;
 
-		applog(LOG_DEBUG, "%s-%d: Found! P:%d - J:%02x%02x N2:%08x N:%08x NR:%d",
+		applog(LOG_DEBUG, "%s-%d: Found! - J:%02x%02x N2:%08x N:%08x NR:%d",
 		       avalonm->drv->name, avalonm->device_id,
-		       pool_no, job_id[0], job_id[1], nonce2, nonce, ntime);
+		       job_id[0], job_id[1], nonce2, nonce, ntime);
 
-		real_pool = pool = pools[pool_no];
-
-		if (job_idcmp(job_id, pool->swork.job_id)) {
-			if (!job_idcmp(job_id, pool_stratum0->swork.job_id)) {
-				applog(LOG_DEBUG, "%s-%d: Match to previous stratum0! (%s)",
-				       		avalonm->drv->name, avalonm->device_id,
-						pool_stratum0->swork.job_id);
-				pool = pool_stratum0;
-			} else if (!job_idcmp(job_id, pool_stratum1->swork.job_id)) {
-				applog(LOG_DEBUG, "%s-%d: Match to previous stratum1! (%s)",
-						avalonm->drv->name, avalonm->device_id,
-						pool_stratum1->swork.job_id);
-				pool = pool_stratum1;
-			} else if (!job_idcmp(job_id, pool_stratum2->swork.job_id)) {
-				applog(LOG_DEBUG, "%s-%d: Match to previous stratum2! (%s)",
-						avalonm->drv->name, avalonm->device_id,
-						pool_stratum2->swork.job_id);
-				pool = pool_stratum2;
-			} else {
-				applog(LOG_ERR, "%s-%d: Cannot match to any stratum! (%s)",
-						avalonm->drv->name, avalonm->device_id,
-						pool->swork.job_id);
-				inc_hw_errors(thr);
-				break;
-			}
-		}
-
-		submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce, ntime);
+		//submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce, ntime);
 		info->nonce_cnts++;
 		break;
 	case AVAM_P_STATUS:
@@ -326,8 +264,7 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 
 	avalonm->device_data = cgcalloc(sizeof(struct avalonm_info), 1);
 	info = avalonm->device_data;
-	info->mainthr = NULL;
-	info->workinit = 0;
+	info->thr = NULL;
 	info->nonce_cnts = 0;
 	memcpy(info->avam_ver, ar.data, AVAM_MM_VER_LEN);
 	return avalonm;
@@ -389,52 +326,23 @@ static void *avalonm_get_reports(void *userdata)
 {
 	struct cgpu_info *avalonm = (struct cgpu_info *)userdata;
 	struct avalonm_info *info = avalonm->device_data;
-	struct thr_info *thr = info->mainthr;
-	char threadname[16];
+	struct thr_info *thr = info->thr;
 	struct avalonm_pkg send_pkg;
 	struct avalonm_ret ar;
 	int ret;
 
-	/* wait miner thread start */
-	while (!info->workinit)
-		cgsleep_ms(200);
+	memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
+	avalonm_init_pkg(&send_pkg, AVAM_P_POLLING, 1, 1);
+	ret = avalonm_xfer_pkg(avalonm, &send_pkg, &ar);
+	if (ret == AVAM_SEND_OK) {
+		applog(LOG_ERR, "%s-%d: Get report 4 %02x%02x%02x%02x ...................",
+		       avalonm->drv->name, avalonm->device_id,
+		       ar.data[4], ar.data[5], ar.data[6], ar.data[7]);
 
-	snprintf(threadname, sizeof(threadname), "%d/AvamRecv", avalonm->device_id);
-	RenameThread(threadname);
-
-	while (likely(!avalonm->shutdown)) {
-		memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
-		avalonm_init_pkg(&send_pkg, AVAM_P_POLLING, 1, 1);
-		ret = avalonm_xfer_pkg(avalonm, &send_pkg, &ar);
-		if (ret == AVAM_SEND_OK) {
-			applog(LOG_ERR, "%s-%d: Get report 4 %02x%02x%02x%02x ...................",
-			       avalonm->drv->name, avalonm->device_id,
-			       ar.data[4], ar.data[5], ar.data[6], ar.data[7]);
-
-			decode_pkg(thr, &ar);
-		}
-
-		cgsleep_ms(20);
+		decode_pkg(thr, &ar);
 	}
 
 	return NULL;
-}
-
-static bool avalonm_prepare(struct thr_info *thr)
-{
-	struct cgpu_info *avalonm = thr->cgpu;
-	struct avalonm_info *info = avalonm->device_data;
-
-	info->mainthr = thr;
-
-	cglock_init(&info->pool0.data_lock);
-	cglock_init(&info->pool1.data_lock);
-	cglock_init(&info->pool2.data_lock);
-
-	if (pthread_create(&info->read_thr, NULL, avalonm_get_reports, (void*)avalonm))
-		quit(1, "Failed to create avalonm read_thr");
-
-	return true;
 }
 
 static void rev(unsigned char *s, size_t l)
@@ -449,137 +357,128 @@ static void rev(unsigned char *s, size_t l)
 	}
 }
 
-static void copy_pool_stratum(struct pool *pool_stratum, struct pool *pool)
-{
-	int i;
-	int merkles = pool->merkles;
-	size_t coinbase_len = pool->coinbase_len;
-
-	if (!pool->swork.job_id)
-		return;
-
-	if (!job_idcmp((unsigned char *)pool->swork.job_id, pool_stratum->swork.job_id))
-		return;
-
-	cg_wlock(&pool_stratum->data_lock);
-	free(pool_stratum->swork.job_id);
-	free(pool_stratum->nonce1);
-	free(pool_stratum->coinbase);
-
-	pool_stratum->coinbase = cgcalloc(coinbase_len, 1);
-	memcpy(pool_stratum->coinbase, pool->coinbase, coinbase_len);
-
-	for (i = 0; i < pool_stratum->merkles; i++)
-		free(pool_stratum->swork.merkle_bin[i]);
-	if (merkles) {
-		pool_stratum->swork.merkle_bin = cgrealloc(pool_stratum->swork.merkle_bin,
-							   sizeof(char *) * merkles + 1);
-		for (i = 0; i < merkles; i++) {
-			pool_stratum->swork.merkle_bin[i] = cgmalloc(32);
-			memcpy(pool_stratum->swork.merkle_bin[i], pool->swork.merkle_bin[i], 32);
-		}
-	}
-
-	pool_stratum->sdiff = pool->sdiff;
-	pool_stratum->coinbase_len = pool->coinbase_len;
-	pool_stratum->nonce2_offset = pool->nonce2_offset;
-	pool_stratum->n2size = pool->n2size;
-	pool_stratum->merkles = pool->merkles;
-
-	pool_stratum->swork.job_id = strdup(pool->swork.job_id);
-	pool_stratum->nonce1 = strdup(pool->nonce1);
-
-	memcpy(pool_stratum->ntime, pool->ntime, sizeof(pool_stratum->ntime));
-	memcpy(pool_stratum->header_bin, pool->header_bin, sizeof(pool_stratum->header_bin));
-	cg_wunlock(&pool_stratum->data_lock);
-}
-
 static int64_t avalonm_scanhash(struct thr_info *thr)
 {
-	struct cgpu_info *avalonm = thr->cgpu;
+	int64_t h = 0;
+
+	return  h * 0xffffffffull;
+}
+
+static void *avalonm_process_tasks(void *userdata)
+{
+	char threadname[16];
+
+	struct cgpu_info *avalonm = userdata;
 	struct avalonm_info *info = avalonm->device_data;
-	int64_t h;
 	struct work *work;
 	struct avalonm_pkg send_pkg;
 	struct pool *pool;
 	static int count = 0;
 	int job_id_len;
 	unsigned short crc;
+	int start_count, end_count, i, j, ret;
+	int avalon_get_work_count = AVAM_DEFAULT_ASIC_COUNT;
 
-	if (unlikely(avalonm->usbinfo.nodev)) {
-		applog(LOG_ERR, "%s-%d: Device disappeared, shutting down thread",
-		       avalonm->drv->name, avalonm->device_id);
-		return -1;
+		cgtimer_t ts_start;
+		bool idled = false;
+		int64_t us_timeout;
+
+
+	snprintf(threadname, sizeof(threadname), "%d/AvmProc", avalonm->device_id);
+	RenameThread(threadname);
+
+	while (likely(!avalonm->shutdown)) {
+		if (unlikely(avalonm->usbinfo.nodev)) {
+			applog(LOG_ERR, "%s-%d: Device disappeared, shutting down thread",
+			       avalonm->drv->name, avalonm->device_id);
+			goto out;
+		}
+
+		start_count = avalonm->work_array * avalon_get_work_count;
+		end_count = start_count + avalon_get_work_count;
+
+		for (i = start_count, j = 0; i < end_count; i++, j++) {
+			mutex_lock(&info->qlock);
+			work = avalonm->works[i];
+
+			if (likely(j < avalonm->queued && avalonm->works[i])) {
+				info->auto_queued++;
+				/* Configuration */
+				avalonm_set_freq(avalonm);
+
+				/* P_WORK part 1: midstate */
+				memcpy(send_pkg.data, work->midstate, AVAM_P_DATA_LEN);
+				rev((void *)(send_pkg.data), AVAM_P_DATA_LEN);
+
+				avalonm_init_pkg(&send_pkg, AVAM_P_WORK, 1, 2);
+				hexdump(send_pkg.data, 32);
+				avalonm_send_pkg(avalonm, &send_pkg);
+
+				/* P_WORK part 2:
+				 * job_id(2)+pool_no(2)+nonce2(4)+reserved(14)+data(12) */
+				memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
+
+				job_id_len = strlen(pool->swork.job_id);
+				crc = crc16((unsigned char *)pool->swork.job_id, job_id_len);
+				applog(LOG_DEBUG, "%s-%d: Pool stratum message JOBS_ID[%04x]: %s",
+				       avalonm->drv->name, avalonm->device_id,
+				       crc, pool->swork.job_id);
+				send_pkg.data[0] = (crc & 0xff00) >> 8;
+				send_pkg.data[1] = crc & 0x00ff;
+				send_pkg.data[2] = pool->pool_no >> 8;
+				send_pkg.data[3] = pool->pool_no & 0xff;
+				send_pkg.data[4] = (work->nonce2 >> 24) & 0xff;
+				send_pkg.data[5] = (work->nonce2 >> 16) & 0xff;
+				send_pkg.data[6] = (work->nonce2 >> 8) & 0xff;
+				send_pkg.data[7] = (work->nonce2) & 0xff;
+				send_pkg.data[8] = opt_avalonm_ntime_offset >> 8;
+				send_pkg.data[9] = opt_avalonm_ntime_offset & 0xff;
+
+				memcpy(send_pkg.data + 20, work->data + 64, 12);
+				rev((void *)(send_pkg.data + 20), 12);
+
+				avalonm_init_pkg(&send_pkg, AVAM_P_WORK, 2, 2);
+				hexdump(send_pkg.data, 32);
+
+				avalonm_send_pkg(avalonm, &send_pkg);
+				cgsleep_ms(1);
+			} else {
+			}
+
+		}
+
+		cgsleep_us_r(&ts_start, us_timeout);
 	}
+out:
+	return NULL;
+}
 
-	work = get_work(thr, thr->id);
-	applog(LOG_ERR, "%s-%d: Get work %08x ----------------------------------",
-	       avalonm->drv->name, avalonm->device_id, work->nonce2);
+static bool avalonm_prepare(struct thr_info *thr)
+{
+	struct cgpu_info *avalonm = thr->cgpu;
+	struct avalonm_info *info = avalonm->device_data;
 
-	pool = current_pool();
-	copy_pool_stratum(&info->pool2, &info->pool1);
-	copy_pool_stratum(&info->pool1, &info->pool0);
-	copy_pool_stratum(&info->pool0, pool);
+	free(avalonm->works);
+	avalonm->works = calloc(AVAM_DEFAULT_ASIC_COUNT * sizeof(struct work *),
+			       AVAM_DEFAULT_ARRAY_SIZE);
+	if (!avalonm->works)
+		quit(1, "Failed to calloc avalon4 mini works in avalonm_prepare");
 
-	/* Configuration */
-	avalonm_set_freq(avalonm);
+	info->thr = thr;
+	mutex_init(&info->lock);
+	mutex_init(&info->qlock);
+	cgsem_init(&info->qsem);
 
-	/* P_WORK part 1: midstate */
-	memcpy(send_pkg.data, work->midstate, AVAM_P_DATA_LEN);
-	rev((void *)(send_pkg.data), AVAM_P_DATA_LEN);
+	if (pthread_create(&info->process_thr, NULL, avalonm_process_tasks, (void *)avalonm))
+		quit(1, "Failed to create avalonm process_thr");
 
-	avalonm_init_pkg(&send_pkg, AVAM_P_WORK, 1, 2);
-	hexdump(send_pkg.data, 32);
-	avalonm_send_pkg(avalonm, &send_pkg);
-
-	/* P_WORK part 2:
-	 * job_id(2)+pool_no(2)+nonce2(4)+reserved(14)+data(12) */
-	memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
-
-	job_id_len = strlen(pool->swork.job_id);
-	crc = crc16((unsigned char *)pool->swork.job_id, job_id_len);
-	applog(LOG_DEBUG, "%s-%d: Pool stratum message JOBS_ID[%04x]: %s",
-	       avalonm->drv->name, avalonm->device_id,
-	       crc, pool->swork.job_id);
-	send_pkg.data[0] = (crc & 0xff00) >> 8;
-	send_pkg.data[1] = crc & 0x00ff;
-	send_pkg.data[2] = pool->pool_no >> 8;
-	send_pkg.data[3] = pool->pool_no & 0xff;
-	send_pkg.data[4] = (work->nonce2 >> 24) & 0xff;
-	send_pkg.data[5] = (work->nonce2 >> 16) & 0xff;
-	send_pkg.data[6] = (work->nonce2 >> 8) & 0xff;
-	send_pkg.data[7] = (work->nonce2) & 0xff;
-	send_pkg.data[8] = opt_avalonm_ntime_offset >> 8;
-	send_pkg.data[9] = opt_avalonm_ntime_offset & 0xff;
-
-	memcpy(send_pkg.data + 20, work->data + 64, 12);
-	rev((void *)(send_pkg.data + 20), 12);
-
-	avalonm_init_pkg(&send_pkg, AVAM_P_WORK, 2, 2);
-	hexdump(send_pkg.data, 32);
-	avalonm_send_pkg(avalonm, &send_pkg);
-
-	info->workinit = 1;
-
-	cgsleep_ms(1);
-	if (++count == 4) {
-		count = 0;
-		applog(LOG_ERR, "%s-%d: Get work 4 Delay =================",
-		       avalonm->drv->name, avalonm->device_id);
-		cgsleep_ms(200);
-	}
-
-	h = info->nonce_cnts;
-	info->nonce_cnts = 0;
-	return  h * 0xffffffffull;
+	return true;
 }
 
 static void avalonm_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *avalonm = thr->cgpu;
 	struct avalonm_info *info = avalonm->device_data;
-
-	pthread_join(info->read_thr, NULL);
 }
 
 char *set_avalonm_freq(char *arg)
@@ -682,6 +581,50 @@ static void avalonm_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	tailsprintf(buf, bufsiz, "%4dMhz", frequency);
 }
 
+/* We use a replacement algorithm to only remove references to work done from
+ * the buffer when we need the extra space for new work. */
+static bool avalonm_fill(struct cgpu_info *avalonm)
+{
+	struct avalonm_info *info = avalonm->device_data;
+	int subid, slot, ac;
+	struct work *work;
+	bool ret = true;
+
+	ac = AVAM_DEFAULT_ASIC_COUNT;
+	mutex_lock(&info->qlock);
+	if (avalonm->queued >= ac)
+		goto out_unlock;
+	work = get_queued(avalonm);
+	if (unlikely(!work)) {
+		ret = false;
+		goto out_unlock;
+	}
+	subid = avalonm->queued++;
+	work->subid = subid;
+	slot = avalonm->work_array * ac + subid;
+	if (likely(avalonm->works[slot]))
+		work_completed(avalonm, avalonm->works[slot]);
+	avalonm->works[slot] = work;
+	if (avalonm->queued < ac)
+		ret = false;
+out_unlock:
+	mutex_unlock(&info->qlock);
+
+	return ret;
+}
+
+static void avalonm_flush_work(struct cgpu_info *avalonm)
+{
+	struct avalonm_info *info = avalonm->device_data;
+
+	/* Will overwrite any work queued. Do this unlocked since it's just
+	 * changing a single non-critical value and prevents deadlocks */
+	avalonm->queued = 0;
+
+	/* Signal main loop we need more work */
+	cgsem_post(&info->qsem);
+}
+
 struct device_drv avalonm_drv = {
 	.drv_id = DRIVER_avalonm,
 	.dname = "avalonm",
@@ -691,7 +634,11 @@ struct device_drv avalonm_drv = {
 	.get_statline_before = avalonm_statline_before,
 	.drv_detect = avalonm_detect,
 	.thread_prepare = avalonm_prepare,
-	.hash_work = hash_driver_work,
+
+	.hash_work = hash_queued_work,
 	.scanwork = avalonm_scanhash,
+	.queue_full = avalonm_fill,
+	.flush_work = avalonm_flush_work,
+
 	.thread_shutdown = avalonm_shutdown,
 };

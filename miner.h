@@ -441,7 +441,7 @@ struct cgpu_info {
 	bool blacklisted;
 	bool nozlp; // Device prefers no zero length packet
 #endif
-#if defined(USE_AVALON) || defined(USE_AVALON2)
+#if defined(USE_AVALON) || defined(USE_AVALON2) || defined (USE_AVALON4_MINI)
 	struct work **works;
 	int work_array;
 	int queued;
