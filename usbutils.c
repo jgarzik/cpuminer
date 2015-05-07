@@ -687,10 +687,10 @@ static struct usb_find_devices find_dev[] = {
 #ifdef USE_AVALON4_MINI
 	{
 		.drv = DRIVER_avalonm,
-		.name = "AVU",
-		.ident = IDENT_AVU,
+		.name = "AVM",
+		.ident = IDENT_AVM,
 		.idVendor = 0x29f1,
-		.idProduct = 0x33f1,
+		.idProduct = 0x40f1,
 		.iManufacturer = "CANAAN",
 		.iProduct = "Avalon4 Mini",
 		.config = 1,
