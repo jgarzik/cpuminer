@@ -31,10 +31,11 @@
            | ((uint32_t) *((str) + 0) << 24);   \
 }
 
-int opt_avalonm_freq[3] = {AVAM_DEFAULT_FREQUENCY,
+uint32_t opt_avalonm_freq[3] = {AVAM_DEFAULT_FREQUENCY,
 			   AVAM_DEFAULT_FREQUENCY,
 			   AVAM_DEFAULT_FREQUENCY};
 uint16_t opt_avalonm_ntime_offset = 0;
+static uint32_t g_delay_ms = 100 * AVAM_ASIC_TIMEOUT_100M / AVAM_DEFAULT_FREQUENCY / 4;
 static uint32_t g_freq_array[][2] = {
 	{100, 0x1e678447},
 	{113, 0x22688447},
@@ -277,6 +278,7 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 	avalonm->device_data = cgcalloc(sizeof(struct avalonm_info), 1);
 	info = avalonm->device_data;
 	info->thr = NULL;
+	info->set_frequency[0] = info->set_frequency[1] = info->set_frequency[2] = AVAM_DEFAULT_FREQUENCY;
 	info->nonce_cnts = 0;
 	memcpy(info->avam_ver, ar.data, AVAM_MM_VER_LEN);
 	return avalonm;
@@ -299,6 +301,7 @@ static void avalonm_set_freq(struct cgpu_info *avalonm)
 	struct avalonm_info *info = avalonm->device_data;
 	struct avalonm_pkg send_pkg;
 	uint32_t tmp;
+	uint32_t max_freq, i;
 
 	if ((info->set_frequency[0] == opt_avalonm_freq[0]) &&
 	    (info->set_frequency[1] == opt_avalonm_freq[1]) &&
@@ -308,6 +311,14 @@ static void avalonm_set_freq(struct cgpu_info *avalonm)
 	info->set_frequency[0] = opt_avalonm_freq[0];
 	info->set_frequency[1] = opt_avalonm_freq[1];
 	info->set_frequency[2] = opt_avalonm_freq[2];
+
+	max_freq = opt_avalonm_freq[0];
+	for (i = 1; i < 3; i++) {
+		if (max_freq < opt_avalonm_freq[i])
+			max_freq = opt_avalonm_freq[i];
+	}
+
+	g_delay_ms = 100 * AVAM_ASIC_TIMEOUT_100M / max_freq / 4;
 
 	memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
 	tmp = avalonm_get_cpm(info->set_frequency[0]);
@@ -480,7 +491,7 @@ static void *avalonm_process_tasks(void *userdata)
 			ret = avalonm_get_reports(avalonm);
 		} while (ret != AVAM_P_STATUS);
 
-		cgsleep_ms(500);
+		cgsleep_ms(g_delay_ms);
 	}
 out:
 	return NULL;

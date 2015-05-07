@@ -20,6 +20,9 @@
 #define AVAM_DEFAULT_FREQUENCY_MIN	100
 #define AVAM_DEFAULT_FREQUENCY_MAX	1000
 #define AVAM_DEFAULT_FREQUENCY		100
+
+/* 2 ^ 32 * 1000 / (10 ^ 8 * 3968 / 65.0) ~= 703 ms */
+#define AVAM_ASIC_TIMEOUT_100M	703
 /* Avalon4 protocol package type from MM protocol.h
  * https://github.com/Canaan-Creative/MM/blob/avalon4/firmware/protocol.h */
 #define AVAM_MM_VER_LEN	15
