@@ -35,7 +35,7 @@ uint32_t opt_avalonm_freq[3] = {AVAM_DEFAULT_FREQUENCY,
 			   AVAM_DEFAULT_FREQUENCY,
 			   AVAM_DEFAULT_FREQUENCY};
 uint16_t opt_avalonm_ntime_offset = 0;
-static uint32_t g_delay_ms = 100 * AVAM_ASIC_TIMEOUT_100M / AVAM_DEFAULT_FREQUENCY / 4;
+static uint32_t g_delay_ms = CAL_DELAY(AVAM_DEFAULT_FREQUENCY);
 int opt_avalonm_voltage = AVAM_DEFAULT_VOLTAGE;
 static uint32_t g_freq_array[][2] = {
 	{100, 0x1e678447},
@@ -319,7 +319,7 @@ static void avalonm_set_freq(struct cgpu_info *avalonm)
 			max_freq = opt_avalonm_freq[i];
 	}
 
-	g_delay_ms = 100 * AVAM_ASIC_TIMEOUT_100M / max_freq / 4;
+	g_delay_ms = CAL_DELAY(max_freq);
 
 	memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
 	tmp = avalonm_get_cpm(info->set_frequency[0]);

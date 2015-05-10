@@ -25,6 +25,8 @@
 #define AVAM_DEFAULT_VOLTAGE_MAX	9000
 #define AVAM_DEFAULT_VOLTAGE	6875
 
+#define CAL_DELAY(freq)	(100 * AVAM_ASIC_TIMEOUT_100M / (freq) / 4)
+
 /* 2 ^ 32 * 1000 / (10 ^ 8 * 3968 / 65.0) ~= 703 ms */
 #define AVAM_ASIC_TIMEOUT_100M	703
 /* Avalon4 protocol package type from MM protocol.h
