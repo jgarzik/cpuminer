@@ -21,6 +21,10 @@
 #define AVAM_DEFAULT_FREQUENCY_MAX	1000
 #define AVAM_DEFAULT_FREQUENCY		100
 
+#define AVAM_DEFAULT_VOLTAGE_MIN	4000
+#define AVAM_DEFAULT_VOLTAGE_MAX	9000
+#define AVAM_DEFAULT_VOLTAGE	6875
+
 /* 2 ^ 32 * 1000 / (10 ^ 8 * 3968 / 65.0) ~= 703 ms */
 #define AVAM_ASIC_TIMEOUT_100M	703
 /* Avalon4 protocol package type from MM protocol.h
@@ -69,6 +73,7 @@ struct avalonm_info {
 
 	char avam_ver[AVAM_MM_VER_LEN];
 	int set_frequency[3];
+	int set_voltage;
 	uint32_t nonce_cnts;
 };
 
@@ -80,5 +85,6 @@ struct avalonm_info {
 
 extern char *set_avalonm_freq(char *arg);
 extern uint16_t opt_avalonm_ntime_offset;
+extern char *set_avalonm_voltage(char *arg);
 #endif /* USE_AVALON4_MINI */
 #endif	/* _AVALON4_MINI_H_ */

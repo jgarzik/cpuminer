@@ -36,6 +36,7 @@ uint32_t opt_avalonm_freq[3] = {AVAM_DEFAULT_FREQUENCY,
 			   AVAM_DEFAULT_FREQUENCY};
 uint16_t opt_avalonm_ntime_offset = 0;
 static uint32_t g_delay_ms = 100 * AVAM_ASIC_TIMEOUT_100M / AVAM_DEFAULT_FREQUENCY / 4;
+int opt_avalonm_voltage = AVAM_DEFAULT_VOLTAGE;
 static uint32_t g_freq_array[][2] = {
 	{100, 0x1e678447},
 	{113, 0x22688447},
@@ -340,6 +341,39 @@ static void avalonm_set_freq(struct cgpu_info *avalonm)
 			info->set_frequency[2]);
 }
 
+static uint16_t encode_voltage(uint32_t v)
+{
+	if (v == 0)
+		return 0xff;
+
+	return (((0x59 - (v - 5000) / 125) & 0xff) << 1 | 1);
+}
+
+static void avalonm_set_voltage(struct cgpu_info *avalonm)
+{
+	struct avalonm_info *info = avalonm->device_data;
+	struct avalonm_pkg send_pkg;
+	uint16_t tmp;
+
+	if (info->set_voltage == opt_avalonm_voltage)
+		return;
+
+	info->set_voltage = opt_avalonm_voltage;
+	memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
+	/* Use shifter to set voltage */
+	tmp = info->set_voltage;
+	tmp = encode_voltage(tmp);
+	tmp = htobe16(tmp);
+	memcpy(send_pkg.data, &tmp, 2);
+
+	/* Package the data */
+	avalonm_init_pkg(&send_pkg, AVAM_P_SET_VOLT, 1, 1);
+	avalonm_send_pkg(avalonm, &send_pkg);
+	applog(LOG_ERR, "%s-%d: Avalonm set volt %d",
+			avalonm->drv->name, avalonm->device_id,
+			info->set_voltage);
+}
+
 static inline void avalonm_detect(bool __maybe_unused hotplug)
 {
 	usb_detect(&avalonm_drv, avalonm_detect_one);
@@ -452,6 +486,7 @@ static void *avalonm_process_tasks(void *userdata)
 			if (likely(j < avalonm->queued && avalonm->works[i])) {
 				/* Configuration */
 				avalonm_set_freq(avalonm);
+				avalonm_set_voltage(avalonm);
 
 				/* P_WORK part 1: midstate */
 				memcpy(send_pkg.data, work->midstate, AVAM_P_DATA_LEN);
@@ -585,10 +620,25 @@ char *set_avalonm_freq(char *arg)
 	return NULL;
 }
 
+char *set_avalonm_voltage(char *arg)
+{
+	int val, ret;
+
+	ret = sscanf(arg, "%d", &val);
+	if (ret < 1)
+		return "No values passed to avalonm-voltage";
+
+	if (val < AVAM_DEFAULT_VOLTAGE_MIN || val > AVAM_DEFAULT_VOLTAGE_MAX)
+		return "Invalid value passed to avalonm-voltage";
+
+	opt_avalonm_voltage = val;
+
+	return NULL;
+}
 static char *avalonm_set_device(struct cgpu_info *avalonm, char *option, char *setting, char *replybuf)
 {
 	if (strcasecmp(option, "help") == 0) {
-		sprintf(replybuf, "frequency");
+		sprintf(replybuf, "frequency|voltage");
 		return replybuf;
 	}
 
@@ -607,6 +657,24 @@ static char *avalonm_set_device(struct cgpu_info *avalonm, char *option, char *s
 		applog(LOG_NOTICE, "%s-%d: Update frequency to %d",
 		       avalonm->drv->name, avalonm->device_id,
 		       (opt_avalonm_freq[0] * 4 + opt_avalonm_freq[1] * 4 + opt_avalonm_freq[2]) / 9);
+
+		return NULL;
+	}
+
+	if (strcasecmp(option, "voltage") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing voltage value");
+			return replybuf;
+		}
+
+		if (set_avalonm_voltage(setting)) {
+			sprintf(replybuf, "invalid voltage value, valid range %d-%d",
+					AVAM_DEFAULT_VOLTAGE_MIN, AVAM_DEFAULT_VOLTAGE_MAX);
+			return replybuf;
+		}
+
+		applog(LOG_NOTICE, "%s-%d: Update voltage to %d",
+		       avalonm->drv->name, avalonm->device_id, opt_avalonm_voltage);
 
 		return NULL;
 	}
