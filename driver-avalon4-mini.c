@@ -37,6 +37,7 @@ uint32_t opt_avalonm_freq[3] = {AVAM_DEFAULT_FREQUENCY,
 uint16_t opt_avalonm_ntime_offset = 0;
 static uint32_t g_delay_ms = CAL_DELAY(AVAM_DEFAULT_FREQUENCY);
 int opt_avalonm_voltage = AVAM_DEFAULT_VOLTAGE;
+static int g_power_on = 1;
 static uint32_t g_freq_array[][2] = {
 	{100, 0x1e678447},
 	{113, 0x22688447},
@@ -372,6 +373,11 @@ static void avalonm_set_voltage(struct cgpu_info *avalonm)
 	applog(LOG_ERR, "%s-%d: Avalonm set volt %d",
 			avalonm->drv->name, avalonm->device_id,
 			info->set_voltage);
+
+	if (g_power_on) {
+		cgsleep_ms(1000);
+		g_power_on = 0;
+	}
 }
 
 static inline void avalonm_detect(bool __maybe_unused hotplug)
@@ -485,8 +491,8 @@ static void *avalonm_process_tasks(void *userdata)
 			applog(LOG_ERR, "SC: %d, EC: %d -- %d,%d ", start_count, end_count, avalonm->queued, avalonm->queued_count);
 			if (likely(j < avalonm->queued && avalonm->works[i])) {
 				/* Configuration */
-				avalonm_set_freq(avalonm);
 				avalonm_set_voltage(avalonm);
+				avalonm_set_freq(avalonm);
 
 				/* P_WORK part 1: midstate */
 				memcpy(send_pkg.data, work->midstate, AVAM_P_DATA_LEN);
