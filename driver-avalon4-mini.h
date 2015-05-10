@@ -14,7 +14,7 @@
 
 #ifdef USE_AVALON4_MINI
 
-#define AVAM_DEFAULT_ASIC_COUNT		4
+#define AVAM_DEFAULT_ASIC_COUNT		5
 #define AVAM_DEFAULT_ARRAY_SIZE		(3 + 1) /* This is from the A3222 datasheet. 3 quequed work + 1 new work */
 
 #define AVAM_DEFAULT_FREQUENCY_MIN	100
