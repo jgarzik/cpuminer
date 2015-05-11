@@ -401,10 +401,6 @@ static int avalonm_get_reports(void *userdata)
 	avalonm_init_pkg(&send_pkg, AVAM_P_POLLING, 1, 1);
 	ret = avalonm_xfer_pkg(avalonm, &send_pkg, &ar);
 	if (ret == AVAM_SEND_OK) {
-		applog(LOG_ERR, "%s-%d: Get report %02x%02x%02x%02x ...................",
-		       avalonm->drv->name, avalonm->device_id,
-		       ar.data[4], ar.data[5], ar.data[6], ar.data[7]);
-
 		ret = decode_pkg(thr, &ar);
 	}
 
@@ -486,12 +482,9 @@ static void *avalonm_process_tasks(void *userdata)
 		start_count = avalonm->work_array * avalon_get_work_count;
 		end_count = start_count + avalon_get_work_count;
 
-		applog(LOG_ERR, "SC: %d, EC: %d ", start_count, end_count);
-
 		for (i = start_count, j = 0; i < end_count; i++, j++) {
 			work = avalonm->works[i];
 
-			applog(LOG_ERR, "SC: %d, EC: %d -- %d,%d ", start_count, end_count, avalonm->queued, avalonm->queued_count);
 			if (likely(j < avalonm->queued && avalonm->works[i])) {
 				/* Configuration */
 				avalonm_set_voltage(avalonm);
@@ -757,8 +750,6 @@ static bool avalonm_fill(struct cgpu_info *avalonm)
 		ret = false;
 out_unlock:
 	mutex_unlock(&info->qlock);
-
-	applog(LOG_ERR, "%d -- %d ", ret, avalonm->queued);
 
 	return ret;
 }
