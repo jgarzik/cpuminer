@@ -307,6 +307,9 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 	memcpy(info->avam_ver, ar.data + AVAM_MM_DNA_LEN, AVAM_MM_VER_LEN);
 	memcpy(&info->avam_asic_cnts, ar.data + AVAM_MM_DNA_LEN + AVAM_MM_VER_LEN, 4);
 	info->avam_asic_cnts = be32toh(info->avam_asic_cnts);
+	info->avam_usbfifo_cnt = 0;
+	info->avam_workfifo_cnt = 0;
+	info->avam_noncefifo_cnt = 0;
 	info->avam_crcerr_cnt = 0;
 	return avalonm;
 }
