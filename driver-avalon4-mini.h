@@ -83,6 +83,7 @@ struct avalonm_info {
 	uint8_t avam_usbfifo_cnt;
 	uint8_t avam_workfifo_cnt;
 	uint8_t avam_noncefifo_cnt;
+	uint32_t avam_crcerr_cnt;
 };
 
 #define AVAM_WRITE_SIZE (sizeof(struct avalonm_pkg))

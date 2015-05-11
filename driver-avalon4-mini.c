@@ -181,6 +181,7 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 		applog(LOG_DEBUG, "%s-%d: H1 %02x, H2 %02x",
 				avalonm->drv->name, avalonm->device_id,
 				ar->head[0], ar->head[1]);
+		info->avam_crcerr_cnt++;
 		return 0;
 	}
 
@@ -306,6 +307,7 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 	memcpy(info->avam_ver, ar.data + AVAM_MM_DNA_LEN, AVAM_MM_VER_LEN);
 	memcpy(&info->avam_asic_cnts, ar.data + AVAM_MM_DNA_LEN + AVAM_MM_VER_LEN, 4);
 	info->avam_asic_cnts = be32toh(info->avam_asic_cnts);
+	info->avam_crcerr_cnt = 0;
 	return avalonm;
 }
 
@@ -732,6 +734,10 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 
 	sprintf(buf, " Chips[%d]", info->avam_asic_cnts);
 	strcat(statbuf, buf);
+
+	sprintf(buf, " Crc[%d]", info->avam_crcerr_cnt);
+	strcat(statbuf, buf);
+
 	root = api_add_string(root, "AVAM Dev", statbuf, true);
 
 	sprintf(buf, "%d %d %d",
