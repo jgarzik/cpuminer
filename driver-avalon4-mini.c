@@ -282,7 +282,10 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 	info->thr = NULL;
 	info->set_frequency[0] = info->set_frequency[1] = info->set_frequency[2] = AVAM_DEFAULT_FREQUENCY;
 	info->nonce_cnts = 0;
-	memcpy(info->avam_ver, ar.data, AVAM_MM_VER_LEN);
+	memcpy(info->avam_dna, ar.data, AVAM_MM_DNA_LEN);
+	memcpy(info->avam_ver, ar.data + AVAM_MM_DNA_LEN, AVAM_MM_VER_LEN);
+	memcpy(&info->avam_asic_cnts, ar.data + AVAM_MM_DNA_LEN + AVAM_MM_VER_LEN, 4);
+	info->avam_asic_cnts = be32toh(info->avam_asic_cnts);
 	return avalonm;
 }
 
@@ -689,12 +692,31 @@ static char *avalonm_set_device(struct cgpu_info *avalonm, char *option, char *s
 	return replybuf;
 }
 
+#define STATBUFLEN 512
 static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct avalonm_info *info = cgpu->device_data;
+	char buf[256];
+	char statbuf[STATBUFLEN];
 
-	root = api_add_string(root, "AVAM VER", info->avam_ver, false);
+	memset(statbuf, 0, STATBUFLEN);
+
+	sprintf(buf, "AVAM VER[%s]", info->avam_ver);
+	strcat(statbuf, buf);
+
+	sprintf(buf, " AVAM DNA[%02x%02x%02x%02x%02x%02x%02x%02x]",
+				info->avam_dna[0],
+				info->avam_dna[1],
+				info->avam_dna[2],
+				info->avam_dna[3],
+				info->avam_dna[4],
+				info->avam_dna[5],
+				info->avam_dna[6],
+				info->avam_dna[7]);
+	strcat(statbuf, buf);
+	root = api_add_string(root, "AVAM DEV", statbuf, true);
+	root = api_add_uint32(root, "AVAM ASICS", &info->avam_asic_cnts, false);
 	return root;
 }
 

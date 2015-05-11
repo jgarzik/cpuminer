@@ -32,6 +32,7 @@
 /* Avalon4 protocol package type from MM protocol.h
  * https://github.com/Canaan-Creative/MM/blob/avalon4/firmware/protocol.h */
 #define AVAM_MM_VER_LEN	15
+#define AVAM_MM_DNA_LEN	8
 
 #define AVAM_H1 'C'
 #define AVAM_H2 'N'
@@ -73,7 +74,9 @@ struct avalonm_info {
 	pthread_mutex_t qlock;
 	cgsem_t qsem;
 
+	char avam_dna[AVAM_MM_DNA_LEN];
 	char avam_ver[AVAM_MM_VER_LEN];
+	uint32_t avam_asic_cnts;
 	int set_frequency[3];
 	int set_voltage;
 	uint32_t nonce_cnts;
