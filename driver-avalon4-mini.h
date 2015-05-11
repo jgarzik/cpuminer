@@ -74,16 +74,16 @@ struct avalonm_info {
 	pthread_mutex_t qlock;
 	cgsem_t qsem;
 
-	char avam_dna[AVAM_MM_DNA_LEN];
-	char avam_ver[AVAM_MM_VER_LEN];
-	uint32_t avam_asic_cnts;
+	char dna[AVAM_MM_DNA_LEN];
+	char ver[AVAM_MM_VER_LEN];
+	uint32_t asic_cnts;
 	int set_frequency[3];
 	int set_voltage;
 	uint32_t nonce_cnts;
-	uint8_t avam_usbfifo_cnt;
-	uint8_t avam_workfifo_cnt;
-	uint8_t avam_noncefifo_cnt;
-	uint32_t avam_crcerr_cnt;
+	uint8_t usbfifo_cnt;
+	uint8_t workfifo_cnt;
+	uint8_t noncefifo_cnt;
+	uint32_t crcerr_cnt;
 };
 
 #define AVAM_WRITE_SIZE (sizeof(struct avalonm_pkg))

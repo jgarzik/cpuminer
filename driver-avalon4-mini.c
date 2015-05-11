@@ -142,21 +142,21 @@ static void process_nonce(struct cgpu_info *avalonm, uint8_t *report)
 
 	PACK32(report, &id);
 	chip_id = report[6];
-	if (chip_id >= info->avam_asic_cnts) {
-		applog(LOG_ERR, "%s-%d: chip_id >= info->avam_asic_cnts(%d > %d)",
+	if (chip_id >= info->asic_cnts) {
+		applog(LOG_ERR, "%s-%d: chip_id >= info->asic_cnts(%d > %d)",
 				avalonm->drv->name, avalonm->device_id,
-				chip_id, info->avam_asic_cnts);
+				chip_id, info->asic_cnts);
 		return;
 	}
 
 	ntime = report[7];
 	PACK32(report + 8, &nonce);
 	nonce -= 0x4000;
-	info->avam_usbfifo_cnt = report[13];
-	info->avam_workfifo_cnt = report[14];
-	info->avam_noncefifo_cnt = report[15];
+	info->usbfifo_cnt = report[13];
+	info->workfifo_cnt = report[14];
+	info->noncefifo_cnt = report[15];
 
-	applog(LOG_DEBUG, "%s-%d: Found! - ID: %08x CID: %02x  N:%08x NR:%d",
+	applog(LOG_DEBUG, "%s-%d: Found! - ID: %08x CID: %02x N:%08x NR:%d",
 			avalonm->drv->name, avalonm->device_id,
 			id, chip_id, nonce, ntime);
 
@@ -181,7 +181,7 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 		applog(LOG_DEBUG, "%s-%d: H1 %02x, H2 %02x",
 				avalonm->drv->name, avalonm->device_id,
 				ar->head[0], ar->head[1]);
-		info->avam_crcerr_cnt++;
+		info->crcerr_cnt++;
 		return 0;
 	}
 
@@ -303,11 +303,14 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 	info->thr = NULL;
 	info->set_frequency[0] = info->set_frequency[1] = info->set_frequency[2] = AVAM_DEFAULT_FREQUENCY;
 	info->nonce_cnts = 0;
-	memcpy(info->avam_dna, ar.data, AVAM_MM_DNA_LEN);
-	memcpy(info->avam_ver, ar.data + AVAM_MM_DNA_LEN, AVAM_MM_VER_LEN);
-	memcpy(&info->avam_asic_cnts, ar.data + AVAM_MM_DNA_LEN + AVAM_MM_VER_LEN, 4);
-	info->avam_asic_cnts = be32toh(info->avam_asic_cnts);
-	info->avam_crcerr_cnt = 0;
+	memcpy(info->dna, ar.data, AVAM_MM_DNA_LEN);
+	memcpy(info->ver, ar.data + AVAM_MM_DNA_LEN, AVAM_MM_VER_LEN);
+	memcpy(&info->asic_cnts, ar.data + AVAM_MM_DNA_LEN + AVAM_MM_VER_LEN, 4);
+	info->asic_cnts = be32toh(info->asic_cnts);
+	info->usbfifo_cnt = 0;
+	info->workfifo_cnt = 0;
+	info->noncefifo_cnt = 0;
+	info->crcerr_cnt = 0;
 	return avalonm;
 }
 
@@ -718,32 +721,32 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 
 	memset(statbuf, 0, STATBUFLEN);
 
-	sprintf(buf, "VER[%s]", info->avam_ver);
+	sprintf(buf, "VER[%s]", info->ver);
 	strcat(statbuf, buf);
 
 	sprintf(buf, " DNA[%02x%02x%02x%02x%02x%02x%02x%02x]",
-				info->avam_dna[0],
-				info->avam_dna[1],
-				info->avam_dna[2],
-				info->avam_dna[3],
-				info->avam_dna[4],
-				info->avam_dna[5],
-				info->avam_dna[6],
-				info->avam_dna[7]);
+				info->dna[0],
+				info->dna[1],
+				info->dna[2],
+				info->dna[3],
+				info->dna[4],
+				info->dna[5],
+				info->dna[6],
+				info->dna[7]);
 	strcat(statbuf, buf);
 
-	sprintf(buf, " Chips[%d]", info->avam_asic_cnts);
+	sprintf(buf, " Chips[%d]", info->asic_cnts);
 	strcat(statbuf, buf);
 
-	sprintf(buf, " Crc[%d]", info->avam_crcerr_cnt);
+	sprintf(buf, " Crc[%d]", info->crcerr_cnt);
 	strcat(statbuf, buf);
 
 	root = api_add_string(root, "AVAM Dev", statbuf, true);
 
 	sprintf(buf, "%d %d %d",
-			info->avam_usbfifo_cnt,
-			info->avam_workfifo_cnt,
-			info->avam_noncefifo_cnt);
+			info->usbfifo_cnt,
+			info->workfifo_cnt,
+			info->noncefifo_cnt);
 
 	root = api_add_string(root, "AVAM Fifo", buf, true);
 	return root;
