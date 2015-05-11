@@ -133,15 +133,49 @@ static int avalonm_init_pkg(struct avalonm_pkg *pkg, uint8_t type, uint8_t idx, 
 	return 0;
 }
 
+static void process_nonce(struct cgpu_info *avalonm, uint8_t *report)
+{
+	struct avalonm_info *info = avalonm->device_data;
+	struct work *work;
+	uint8_t ntime, chip_id;
+	uint32_t nonce, id;
+
+	PACK32(report, &id);
+	chip_id = report[6];
+	if (chip_id >= info->avam_asic_cnts) {
+		applog(LOG_ERR, "%s-%d: chip_id >= info->avam_asic_cnts(%d > %d)",
+				avalonm->drv->name, avalonm->device_id,
+				chip_id, info->avam_asic_cnts);
+		return;
+	}
+
+	ntime = report[7];
+	PACK32(report + 8, &nonce);
+	nonce -= 0x4000;
+	info->avam_usbfifo_cnt = report[13];
+	info->avam_workfifo_cnt = report[14];
+	info->avam_noncefifo_cnt = report[15];
+
+	applog(LOG_DEBUG, "%s-%d: Found! - ID: %08x CID: %02x  N:%08x NR:%d",
+			avalonm->drv->name, avalonm->device_id,
+			id, chip_id, nonce, ntime);
+
+	work = clone_queued_work_byid(avalonm, id);
+	if (!work)
+		return;
+
+	submit_noffset_nonce(info->thr, work, nonce, ntime);
+	free_work(work);
+	info->nonce_cnts++;
+}
+
 static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 {
 	struct cgpu_info *avalonm = thr->cgpu;
 	struct avalonm_info *info = avalonm->device_data;
-
+	uint32_t ret;
 	unsigned int expected_crc;
 	unsigned int actual_crc;
-	uint32_t nonce, nonce2, ntime, id, ret;
-	struct work *work;
 
 	if (ar->head[0] != AVAM_H1 && ar->head[1] != AVAM_H2) {
 		applog(LOG_DEBUG, "%s-%d: H1 %02x, H2 %02x",
@@ -160,28 +194,14 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 	}
 
 	switch(ar->type) {
-	case AVAM_P_NONCE:
+	case AVAM_P_NONCE_M:
 		ret = ar->type;
 		applog(LOG_DEBUG, "%s-%d: AVAM_P_NONCE", avalonm->drv->name, avalonm->device_id);
 		hexdump(ar->data, 32);
-
-		ntime = 0;
-		PACK32(ar->data, &nonce2);
-		PACK32(ar->data + 4, &id);
-		PACK32(ar->data + 8, &nonce);
-		nonce -= 0x4000;
-
-		applog(LOG_DEBUG, "%s-%d: Found! - N2:%08x ID: %08x N:%08x NR:%d",
-		       avalonm->drv->name, avalonm->device_id,
-		       nonce2, id, nonce, ntime);
-
-		work = clone_queued_work_byid(avalonm, id);
-		if (!work)
-			break;
-
-		submit_nonce(thr, work, nonce);
-		free_work(work);
-		info->nonce_cnts++;
+		process_nonce(avalonm, ar->data);
+		if (ar->data[22] != 0xff) {
+			process_nonce(avalonm, ar->data + 16);
+		}
 		break;
 	case AVAM_P_STATUS:
 		ret = ar->type;
@@ -508,11 +528,12 @@ static void *avalonm_process_tasks(void *userdata)
 				 * nonce2(4)+id(4)+ntime(2)+reserved(12)+data(12) */
 				memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
 
-				UNPACK32(work->nonce2, send_pkg.data);
-				UNPACK32(work->id, send_pkg.data + 4);
+				UNPACK32(work->id, send_pkg.data);
 
-				send_pkg.data[8] = opt_avalonm_ntime_offset >> 8;
-				send_pkg.data[9] = opt_avalonm_ntime_offset & 0xff;
+				send_pkg.data[9] = opt_avalonm_ntime_offset;
+
+				/* TODO led */
+				UNPACK32(0, send_pkg.data + 12);
 
 				memcpy(send_pkg.data + 20, work->data + 64, 12);
 				rev((void *)(send_pkg.data + 20), 12);
@@ -702,10 +723,10 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 
 	memset(statbuf, 0, STATBUFLEN);
 
-	sprintf(buf, "AVAM VER[%s]", info->avam_ver);
+	sprintf(buf, "VER[%s]", info->avam_ver);
 	strcat(statbuf, buf);
 
-	sprintf(buf, " AVAM DNA[%02x%02x%02x%02x%02x%02x%02x%02x]",
+	sprintf(buf, " DNA[%02x%02x%02x%02x%02x%02x%02x%02x]",
 				info->avam_dna[0],
 				info->avam_dna[1],
 				info->avam_dna[2],
@@ -715,8 +736,17 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 				info->avam_dna[6],
 				info->avam_dna[7]);
 	strcat(statbuf, buf);
-	root = api_add_string(root, "AVAM DEV", statbuf, true);
-	root = api_add_uint32(root, "AVAM ASICS", &info->avam_asic_cnts, false);
+
+	sprintf(buf, " Chips[%d]", info->avam_asic_cnts);
+	strcat(statbuf, buf);
+	root = api_add_string(root, "AVAM Dev", statbuf, true);
+
+	sprintf(buf, "%d %d %d",
+			info->avam_usbfifo_cnt,
+			info->avam_workfifo_cnt,
+			info->avam_noncefifo_cnt);
+
+	root = api_add_string(root, "AVAM Fifo", buf, true);
 	return root;
 }
 

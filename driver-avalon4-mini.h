@@ -52,7 +52,7 @@
 
 #define AVAM_P_ACKDETECT	0x40
 #define AVAM_P_STATUS		0x41
-#define AVAM_P_NONCE		0x42
+#define AVAM_P_NONCE_M		0x42
 #define AVAM_P_TEST_RET		0x43
 
 struct avalonm_pkg {
@@ -80,6 +80,9 @@ struct avalonm_info {
 	int set_frequency[3];
 	int set_voltage;
 	uint32_t nonce_cnts;
+	uint8_t avam_usbfifo_cnt;
+	uint8_t avam_workfifo_cnt;
+	uint8_t avam_noncefifo_cnt;
 };
 
 #define AVAM_WRITE_SIZE (sizeof(struct avalonm_pkg))
