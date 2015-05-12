@@ -25,6 +25,8 @@
 #define AVAM_DEFAULT_VOLTAGE_MAX	9000
 #define AVAM_DEFAULT_VOLTAGE		6500
 
+#define AVAM_ASIC_ALL	0
+
 #define CAL_DELAY(freq)	(100 * AVAM_ASIC_TIMEOUT_100M / (freq) / 4)
 
 /* 2 ^ 32 * 1000 / (10 ^ 8 * 3968 / 65.0) ~= 703 ms */
@@ -49,11 +51,13 @@
 #define AVAM_P_POLLING	0x30
 #define AVAM_P_REQUIRE	0x31
 #define AVAM_P_TEST	0x32
+#define AVAM_P_GET_FREQ	0x33
 
 #define AVAM_P_ACKDETECT	0x40
 #define AVAM_P_STATUS_M		0x41
 #define AVAM_P_NONCE_M		0x42
 #define AVAM_P_TEST_RET		0x43
+#define AVAM_P_STATUS_FREQ	0x44
 
 struct avalonm_pkg {
 	uint8_t head[2];
@@ -80,7 +84,9 @@ struct avalonm_info {
 	char dna[AVAM_MM_DNA_LEN];
 	char ver[AVAM_MM_VER_LEN];
 	uint32_t asic_cnts;
-	int set_frequency[3];
+	uint32_t set_frequency[AVAM_DEFAULT_ASIC_COUNT][3];
+	uint32_t opt_freq[AVAM_DEFAULT_ASIC_COUNT][3];
+	uint32_t get_frequency[AVAM_DEFAULT_ASIC_COUNT][3];
 	int set_voltage;
 	uint32_t nonce_cnts;
 	uint8_t usbfifo_cnt;
@@ -92,6 +98,8 @@ struct avalonm_info {
 	uint32_t led_status;
 	uint32_t fan_pwm;
 	uint32_t get_voltage;
+	uint8_t freq_update;
+	uint8_t freq_set;
 };
 
 #define AVAM_WRITE_SIZE (sizeof(struct avalonm_pkg))
@@ -99,6 +107,10 @@ struct avalonm_info {
 
 #define AVAM_SEND_OK 0
 #define AVAM_SEND_ERROR -1
+
+#define FLAG_SET(val, bit)	((val) |= (1 << bit))
+#define FLAG_CLEAR(val, bit)	((val) &= ~(1 << bit))
+#define FLAG_GET(val, bit)	(((val) >> (bit)) & 1)
 
 extern char *set_avalonm_freq(char *arg);
 extern uint16_t opt_avalonm_ntime_offset;
