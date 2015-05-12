@@ -36,7 +36,6 @@ uint32_t opt_avalonm_freq[3] = {AVAM_DEFAULT_FREQUENCY,
 			   AVAM_DEFAULT_FREQUENCY};
 uint16_t opt_avalonm_ntime_offset = 0;
 int opt_avalonm_voltage = AVAM_DEFAULT_VOLTAGE;
-static int g_power_on = 1;
 static uint32_t g_freq_array[][2] = {
 	{100, 0x1e678447},
 	{113, 0x22688447},
@@ -237,10 +236,7 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 		/* power off notice */
 		if (!info->get_voltage) {
 			applog(LOG_ERR, "%s-%d: AVAM_P_STATUS_M Power off notice", avalonm->drv->name, avalonm->device_id);
-			g_power_on = 1;
-			info->set_frequency[0] = 0;
-			info->set_frequency[1] = 0;
-			info->set_frequency[2] = 0;
+			info->power_on = 1;
 		}
 		break;
 	default:
@@ -373,11 +369,6 @@ static void avalonm_set_freq(struct cgpu_info *avalonm)
 	uint32_t tmp;
 	uint32_t max_freq, i;
 
-	if ((info->set_frequency[0] == opt_avalonm_freq[0]) &&
-	    (info->set_frequency[1] == opt_avalonm_freq[1]) &&
-	    (info->set_frequency[2] == opt_avalonm_freq[2]))
-		return;
-
 	info->set_frequency[0] = opt_avalonm_freq[0];
 	info->set_frequency[1] = opt_avalonm_freq[1];
 	info->set_frequency[2] = opt_avalonm_freq[2];
@@ -416,27 +407,26 @@ static void avalonm_set_voltage(struct cgpu_info *avalonm)
 	struct avalonm_pkg send_pkg;
 	uint16_t tmp;
 
-	if ((info->set_voltage != opt_avalonm_voltage) || g_power_on) {
-		info->set_voltage = opt_avalonm_voltage;
-		memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
-		/* Use shifter to set voltage */
-		tmp = info->set_voltage;
-		tmp = encode_voltage(tmp);
-		tmp = htobe16(tmp);
-		memcpy(send_pkg.data, &tmp, 2);
+	if (!info->power_on)
+		return;
 
-		/* Package the data */
-		avalonm_init_pkg(&send_pkg, AVAM_P_SET_VOLT, 1, 1);
-		avalonm_send_pkg(avalonm, &send_pkg);
-		applog(LOG_ERR, "%s-%d: Avalonm set volt %d",
-				avalonm->drv->name, avalonm->device_id,
-				info->set_voltage);
+	info->set_voltage = opt_avalonm_voltage;
+	memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
+	/* Use shifter to set voltage */
+	tmp = info->set_voltage;
+	tmp = encode_voltage(tmp);
+	tmp = htobe16(tmp);
+	memcpy(send_pkg.data, &tmp, 2);
 
-		if (g_power_on) {
-			cgsleep_ms(500);
-			g_power_on = 0;
-		}
-	}
+	/* Package the data */
+	avalonm_init_pkg(&send_pkg, AVAM_P_SET_VOLT, 1, 1);
+	avalonm_send_pkg(avalonm, &send_pkg);
+	applog(LOG_ERR, "%s-%d: Avalonm set volt %d",
+	       avalonm->drv->name, avalonm->device_id,
+	       info->set_voltage);
+
+	info->power_on = 0;
+	cgsleep_ms(500);
 }
 
 static inline void avalonm_detect(bool __maybe_unused hotplug)
@@ -604,6 +594,7 @@ static bool avalonm_prepare(struct thr_info *thr)
 
 	info->thr = thr;
 	info->delay_ms = CAL_DELAY(AVAM_DEFAULT_FREQUENCY);
+	info->power_on = 1;
 
 	mutex_init(&info->lock);
 	mutex_init(&info->qlock);
