@@ -114,6 +114,22 @@ static uint32_t g_freq_array[][2] = {
 	{1000, 0x4e138447}
 };
 
+static uint16_t encode_voltage(uint32_t v)
+{
+	if (v == 0)
+		return 0xff;
+
+	return (((0x59 - (v - 5000) / 125) & 0xff) << 1 | 1);
+}
+
+static uint32_t decode_voltage(uint8_t v)
+{
+	if (v == 0xff)
+		return 0;
+
+	return (0x59 - (v >> 1)) * 125 + 5000;
+}
+
 static int avalonm_init_pkg(struct avalonm_pkg *pkg, uint8_t type, uint8_t idx, uint8_t cnt)
 {
 	unsigned short crc;
@@ -173,7 +189,7 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 {
 	struct cgpu_info *avalonm = thr->cgpu;
 	struct avalonm_info *info = avalonm->device_data;
-	uint32_t ret;
+	uint32_t ret, tmp;
 	unsigned int expected_crc;
 	unsigned int actual_crc;
 
@@ -204,10 +220,20 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 			process_nonce(avalonm, ar->data + 16);
 		}
 		break;
-	case AVAM_P_STATUS:
+	case AVAM_P_STATUS_M:
 		ret = ar->type;
-		applog(LOG_DEBUG, "%s-%d: AVAM_P_STATUS", avalonm->drv->name, avalonm->device_id);
+		applog(LOG_DEBUG, "%s-%d: AVAM_P_STATUS_M", avalonm->drv->name, avalonm->device_id);
 		hexdump(ar->data, 32);
+		memcpy(&tmp, ar->data, 4);
+		info->spi_speed = be32toh(tmp);
+		memcpy(&tmp, ar->data + 4, 4);
+		info->led_status = be32toh(tmp);
+		memcpy(&tmp, ar->data + 8, 4);
+		info->fan_pwm = be32toh(tmp);
+		memcpy(&tmp, ar->data + 12, 4);
+		info->get_voltage = decode_voltage((uint8_t)be32toh(tmp));
+		memcpy(&tmp, ar->data + 28 , 4);
+		info->power_good = be32toh(tmp);
 		break;
 	default:
 		applog(LOG_DEBUG, "%s-%d: Unknown response (%x)", avalonm->drv->name, avalonm->device_id,
@@ -311,6 +337,12 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 	info->workfifo_cnt = 0;
 	info->noncefifo_cnt = 0;
 	info->crcerr_cnt = 0;
+	info->power_good = 0;
+	info->spi_speed = 0;
+	info->led_status = 0;
+	info->fan_pwm = 0;
+	info->get_voltage = 0;
+
 	return avalonm;
 }
 
@@ -368,14 +400,6 @@ static void avalonm_set_freq(struct cgpu_info *avalonm)
 			info->set_frequency[0],
 			info->set_frequency[1],
 			info->set_frequency[2]);
-}
-
-static uint16_t encode_voltage(uint32_t v)
-{
-	if (v == 0)
-		return 0xff;
-
-	return (((0x59 - (v - 5000) / 125) & 0xff) << 1 | 1);
 }
 
 static void avalonm_set_voltage(struct cgpu_info *avalonm)
@@ -552,7 +576,7 @@ static void *avalonm_process_tasks(void *userdata)
 		/* Get result */
 		do {
 			ret = avalonm_get_reports(avalonm);
-		} while (ret != AVAM_P_STATUS);
+		} while (ret != AVAM_P_STATUS_M);
 
 		cgsleep_ms(g_delay_ms);
 	}
@@ -741,6 +765,18 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 	sprintf(buf, " Crc[%d]", info->crcerr_cnt);
 	strcat(statbuf, buf);
 
+	sprintf(buf, " Speed[%d]", info->spi_speed);
+	strcat(statbuf, buf);
+
+	sprintf(buf, " Vol[%.4f]", (float)info->get_voltage / 10000);
+	strcat(statbuf, buf);
+
+	sprintf(buf, " Led[%d]", info->led_status);
+	strcat(statbuf, buf);
+
+	sprintf(buf, " PG[%d]", info->power_good);
+	strcat(statbuf, buf);
+
 	root = api_add_string(root, "AVAM Dev", statbuf, true);
 
 	sprintf(buf, "%d %d %d",
@@ -758,7 +794,7 @@ static void avalonm_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	int frequency;
 
 	frequency = (info->set_frequency[0] * 4 + info->set_frequency[1] * 4 + info->set_frequency[2]) / 9;
-	tailsprintf(buf, bufsiz, "%4dMhz", frequency);
+	tailsprintf(buf, bufsiz, "%4dMhz %.4fV", frequency, (float)info->get_voltage / 10000);
 }
 
 /* We use a replacement algorithm to only remove references to work done from
