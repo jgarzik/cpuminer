@@ -35,7 +35,6 @@ uint32_t opt_avalonm_freq[3] = {AVAM_DEFAULT_FREQUENCY,
 			   AVAM_DEFAULT_FREQUENCY,
 			   AVAM_DEFAULT_FREQUENCY};
 uint16_t opt_avalonm_ntime_offset = 0;
-static uint32_t g_delay_ms = CAL_DELAY(AVAM_DEFAULT_FREQUENCY);
 int opt_avalonm_voltage = AVAM_DEFAULT_VOLTAGE;
 static int g_power_on = 1;
 static uint32_t g_freq_array[][2] = {
@@ -389,7 +388,7 @@ static void avalonm_set_freq(struct cgpu_info *avalonm)
 			max_freq = opt_avalonm_freq[i];
 	}
 
-	g_delay_ms = CAL_DELAY(max_freq);
+	info->delay_ms = CAL_DELAY(max_freq);
 
 	memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
 	tmp = avalonm_get_cpm(info->set_frequency[0]);
@@ -434,7 +433,7 @@ static void avalonm_set_voltage(struct cgpu_info *avalonm)
 				info->set_voltage);
 
 		if (g_power_on) {
-			cgsleep_ms(1000);
+			cgsleep_ms(500);
 			g_power_on = 0;
 		}
 	}
@@ -586,7 +585,7 @@ static void *avalonm_process_tasks(void *userdata)
 			ret = avalonm_get_reports(avalonm);
 		} while (ret != AVAM_P_STATUS_M);
 
-		cgsleep_ms(g_delay_ms);
+		cgsleep_ms(info->delay_ms);
 	}
 out:
 	return NULL;
@@ -604,6 +603,8 @@ static bool avalonm_prepare(struct thr_info *thr)
 		quit(1, "Failed to calloc avalon4 mini works in avalonm_prepare");
 
 	info->thr = thr;
+	info->delay_ms = CAL_DELAY(AVAM_DEFAULT_FREQUENCY);
+
 	mutex_init(&info->lock);
 	mutex_init(&info->qlock);
 	cgsem_init(&info->qsem);

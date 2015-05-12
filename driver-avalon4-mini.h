@@ -74,6 +74,7 @@ struct avalonm_info {
 	pthread_mutex_t qlock;
 	cgsem_t qsem;
 
+	uint32_t delay_ms;
 	char dna[AVAM_MM_DNA_LEN];
 	char ver[AVAM_MM_VER_LEN];
 	uint32_t asic_cnts;
