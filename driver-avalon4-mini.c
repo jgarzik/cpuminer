@@ -331,7 +331,9 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 	avalonm->device_data = cgcalloc(sizeof(struct avalonm_info), 1);
 	info = avalonm->device_data;
 	info->thr = NULL;
-	info->set_frequency[0] = info->set_frequency[1] = info->set_frequency[2] = AVAM_DEFAULT_FREQUENCY;
+	info->set_frequency[0] = AVAM_DEFAULT_FREQUENCY;
+	info->set_frequency[1] = AVAM_DEFAULT_FREQUENCY;
+	info->set_frequency[2] = AVAM_DEFAULT_FREQUENCY;
 	info->nonce_cnts = 0;
 	memcpy(info->dna, ar.data, AVAM_MM_DNA_LEN);
 	memcpy(info->ver, ar.data + AVAM_MM_DNA_LEN, AVAM_MM_VER_LEN);
