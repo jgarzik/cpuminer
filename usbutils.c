@@ -294,7 +294,7 @@ static struct usb_epinfo avam_epinfos[] = {
 };
 
 static struct usb_intinfo avam_ints[] = {
-	USB_EPS(0, avam_epinfos)
+	USB_EPS(1, avam_epinfos)
 };
 #endif
 #ifdef USE_KLONDIKE
