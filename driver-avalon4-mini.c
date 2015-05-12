@@ -234,6 +234,15 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 		info->get_voltage = decode_voltage((uint8_t)be32toh(tmp));
 		memcpy(&tmp, ar->data + 28 , 4);
 		info->power_good = be32toh(tmp);
+
+		/* power off notice */
+		if (!info->get_voltage) {
+			applog(LOG_ERR, "%s-%d: AVAM_P_STATUS_M Power off notice", avalonm->drv->name, avalonm->device_id);
+			g_power_on = 1;
+			info->set_frequency[0] = 0;
+			info->set_frequency[1] = 0;
+			info->set_frequency[2] = 0;
+		}
 		break;
 	default:
 		applog(LOG_DEBUG, "%s-%d: Unknown response (%x)", avalonm->drv->name, avalonm->device_id,
@@ -408,27 +417,26 @@ static void avalonm_set_voltage(struct cgpu_info *avalonm)
 	struct avalonm_pkg send_pkg;
 	uint16_t tmp;
 
-	if (info->set_voltage == opt_avalonm_voltage)
-		return;
+	if ((info->set_voltage != opt_avalonm_voltage) || g_power_on) {
+		info->set_voltage = opt_avalonm_voltage;
+		memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
+		/* Use shifter to set voltage */
+		tmp = info->set_voltage;
+		tmp = encode_voltage(tmp);
+		tmp = htobe16(tmp);
+		memcpy(send_pkg.data, &tmp, 2);
 
-	info->set_voltage = opt_avalonm_voltage;
-	memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
-	/* Use shifter to set voltage */
-	tmp = info->set_voltage;
-	tmp = encode_voltage(tmp);
-	tmp = htobe16(tmp);
-	memcpy(send_pkg.data, &tmp, 2);
+		/* Package the data */
+		avalonm_init_pkg(&send_pkg, AVAM_P_SET_VOLT, 1, 1);
+		avalonm_send_pkg(avalonm, &send_pkg);
+		applog(LOG_ERR, "%s-%d: Avalonm set volt %d",
+				avalonm->drv->name, avalonm->device_id,
+				info->set_voltage);
 
-	/* Package the data */
-	avalonm_init_pkg(&send_pkg, AVAM_P_SET_VOLT, 1, 1);
-	avalonm_send_pkg(avalonm, &send_pkg);
-	applog(LOG_ERR, "%s-%d: Avalonm set volt %d",
-			avalonm->drv->name, avalonm->device_id,
-			info->set_voltage);
-
-	if (g_power_on) {
-		cgsleep_ms(1000);
-		g_power_on = 0;
+		if (g_power_on) {
+			cgsleep_ms(1000);
+			g_power_on = 0;
+		}
 	}
 }
 
