@@ -530,8 +530,9 @@ static void avalonm_set_voltage(struct cgpu_info *avalonm)
 	       avalonm->drv->name, avalonm->device_id,
 	       info->set_voltage);
 
+	if (info->power_on)
+		cgsleep_ms(500);
 	info->power_on = 0;
-	cgsleep_ms(500);
 }
 
 static inline void avalonm_detect(bool __maybe_unused hotplug)
