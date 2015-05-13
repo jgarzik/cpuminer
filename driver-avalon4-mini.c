@@ -684,6 +684,9 @@ static void *avalonm_process_tasks(void *userdata)
 
 		cgsem_post(&info->qsem);
 
+		/* little delay, let asics process more job */
+		cgsleep_ms(1);
+
 		/* Get result */
 		do {
 			ret = avalonm_get_reports(avalonm);
