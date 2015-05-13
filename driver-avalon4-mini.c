@@ -532,6 +532,7 @@ static void avalonm_set_voltage(struct cgpu_info *avalonm)
 
 	if (info->power_on)
 		cgsleep_ms(500);
+
 	info->power_on = 0;
 }
 
@@ -661,7 +662,7 @@ static void *avalonm_process_tasks(void *userdata)
 				avalonm_send_pkg(avalonm, &send_pkg);
 
 				/* P_WORK part 2:
-				 * nonce2(4)+id(4)+ntime(2)+reserved(12)+data(12) */
+				 * id(6)+reserved(2)+ntime(1)+fan(3)+led(4)+reserved(4)+data(12) */
 				memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
 
 				UNPACK32(work->id, send_pkg.data);
@@ -920,6 +921,8 @@ char *set_avalonm_device_voltage(struct cgpu_info *avalonm, char *arg)
 		return "Invalid value passed to avalonm-voltage";
 
 	info->opt_voltage = val;
+	applog(LOG_NOTICE, "%s-%d: Update voltage to %d",
+			avalonm->drv->name, avalonm->device_id, info->opt_voltage);
 
 	return NULL;
 }
@@ -957,9 +960,6 @@ static char *avalonm_set_device(struct cgpu_info *avalonm, char *option, char *s
 					AVAM_DEFAULT_VOLTAGE_MIN, AVAM_DEFAULT_VOLTAGE_MAX);
 			return replybuf;
 		}
-
-		applog(LOG_NOTICE, "%s-%d: Update voltage to %d",
-		       avalonm->drv->name, avalonm->device_id, opt_avalonm_voltage);
 
 		return NULL;
 	}
