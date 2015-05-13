@@ -637,11 +637,9 @@ static void *avalonm_process_tasks(void *userdata)
 
 		for (i = start_count, j = 0; i < end_count; i++, j++) {
 			work = avalonm->works[i];
-
 			if (likely(j < avalonm->queued && avalonm->works[i])) {
 				/* Configuration */
-				avalonm_set_voltage(avalonm);
-
+				/* FIXME: change voltage before frequency will cause the chip works at the default frequency (100Mhz) */
 				if (FLAG_GET(info->freq_set, 0)) {
 					avalonm_set_freq(avalonm, AVAM_ASIC_ALL, info->opt_freq[0]);
 					FLAG_CLEAR(info->freq_set, 0);
@@ -653,6 +651,7 @@ static void *avalonm_process_tasks(void *userdata)
 						FLAG_CLEAR(info->freq_set, k);
 					}
 				}
+				avalonm_set_voltage(avalonm);
 
 				/* P_WORK part 1: midstate */
 				memcpy(send_pkg.data, work->midstate, AVAM_P_DATA_LEN);
