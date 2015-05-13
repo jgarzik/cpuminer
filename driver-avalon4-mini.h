@@ -88,6 +88,7 @@ struct avalonm_info {
 	uint32_t opt_freq[AVAM_DEFAULT_ASIC_COUNT][3];
 	uint32_t get_frequency[AVAM_DEFAULT_ASIC_COUNT][3];
 	int set_voltage;
+	int opt_voltage;
 	uint32_t nonce_cnts;
 	uint8_t usbfifo_cnt;
 	uint8_t workfifo_cnt;

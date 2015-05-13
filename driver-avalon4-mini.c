@@ -396,6 +396,8 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 		info->opt_freq[i][1] = opt_avalonm_freq[1];
 		info->opt_freq[i][2] = opt_avalonm_freq[2];
 	}
+	info->set_voltage = 0;
+	info->opt_voltage = opt_avalonm_voltage;
 	info->nonce_cnts = 0;
 	memcpy(info->dna, ar.data, AVAM_MM_DNA_LEN);
 	memcpy(info->ver, ar.data + AVAM_MM_DNA_LEN, AVAM_MM_VER_LEN);
@@ -510,10 +512,10 @@ static void avalonm_set_voltage(struct cgpu_info *avalonm)
 	struct avalonm_pkg send_pkg;
 	uint16_t tmp;
 
-	if (!info->power_on)
+	if (!info->power_on && (info->set_voltage == info->opt_voltage))
 		return;
 
-	info->set_voltage = opt_avalonm_voltage;
+	info->set_voltage = info->opt_voltage;
 	memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
 	/* Use shifter to set voltage */
 	tmp = info->set_voltage;
@@ -886,7 +888,6 @@ char *set_avalonm_device_freq(struct cgpu_info *avalonm, char *arg)
 	}
 
 	return NULL;
-
 }
 
 char *set_avalonm_voltage(char *arg)
@@ -901,6 +902,23 @@ char *set_avalonm_voltage(char *arg)
 		return "Invalid value passed to avalonm-voltage";
 
 	opt_avalonm_voltage = val;
+
+	return NULL;
+}
+
+char *set_avalonm_device_voltage(struct cgpu_info *avalonm, char *arg)
+{
+	struct avalonm_info *info = avalonm->device_data;
+	int val, ret;
+
+	ret = sscanf(arg, "%d", &val);
+	if (ret < 1)
+		return "No values passed to avalonm-voltage";
+
+	if (val < AVAM_DEFAULT_VOLTAGE_MIN || val > AVAM_DEFAULT_VOLTAGE_MAX)
+		return "Invalid value passed to avalonm-voltage";
+
+	info->opt_voltage = val;
 
 	return NULL;
 }
@@ -933,7 +951,7 @@ static char *avalonm_set_device(struct cgpu_info *avalonm, char *option, char *s
 			return replybuf;
 		}
 
-		if (set_avalonm_voltage(setting)) {
+		if (set_avalonm_device_voltage(avalonm, setting)) {
 			sprintf(replybuf, "invalid voltage value, valid range %d-%d",
 					AVAM_DEFAULT_VOLTAGE_MIN, AVAM_DEFAULT_VOLTAGE_MAX);
 			return replybuf;
