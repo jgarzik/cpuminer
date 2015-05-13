@@ -677,8 +677,6 @@ static void *avalonm_process_tasks(void *userdata)
 				avalonm_init_pkg(&send_pkg, AVAM_P_WORK, 2, 2);
 				hexdump(send_pkg.data, 32);
 				avalonm_send_pkg(avalonm, &send_pkg);
-
-				cgsleep_ms(1);
 			}
 		}
 
