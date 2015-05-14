@@ -188,7 +188,10 @@ static void process_nonce(struct cgpu_info *avalonm, uint8_t *report)
 	if (!work)
 		return;
 
-	submit_noffset_nonce(info->thr, work, nonce, ntime);
+	if(!submit_noffset_nonce(info->thr, work, nonce, ntime)) {
+		info->hw_work[chip_id]++;
+	}
+
 	free_work(work);
 	info->nonce_cnts++;
 }
@@ -415,6 +418,7 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 	info->freq_update = 0;
 	info->freq_set = 0;
 	FLAG_SET(info->freq_set, AVAM_ASIC_ALL);
+	memset(info->hw_work, 0, sizeof(int) * AVAM_DEFAULT_ASIC_COUNT);
 
 	return avalonm;
 }
@@ -1011,6 +1015,13 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 				info->get_frequency[i][0],
 				info->get_frequency[i][1],
 				info->get_frequency[i][2]);
+		strcat(statbuf, buf);
+	}
+	statbuf[strlen(statbuf) - 1] = ']';
+
+	strcat(statbuf, " HW[");
+	for (i = 0; i < AVAM_DEFAULT_ASIC_COUNT; i++) {
+		sprintf(buf, "%d ", info->hw_work[i]);
 		strcat(statbuf, buf);
 	}
 	statbuf[strlen(statbuf) - 1] = ']';
