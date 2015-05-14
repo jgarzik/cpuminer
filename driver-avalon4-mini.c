@@ -369,9 +369,6 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 		return NULL;
 	}
 
-	/* Avalonm prefers not to use zero length packets */
-	avalonm->nozlp = true;
-
 	/* We have an Avalonm connected */
 	avalonm->threads = 1;
 	memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
