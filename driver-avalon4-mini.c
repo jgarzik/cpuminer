@@ -369,20 +369,24 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 		return NULL;
 	}
 
+	usb_buffer_clear(avalonm);
+	update_usb_stats(avalonm);
+
+	/* Cleanup the usb fifo */
+	while (avalonm_receive_pkg(avalonm, &ar) != -1);
+
 	/* We have an Avalonm connected */
 	avalonm->threads = 1;
 	memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
 	avalonm_init_pkg(&send_pkg, AVAM_P_DETECT, 1, 1);
 	ret = avalonm_xfer_pkg(avalonm, &send_pkg, &ar);
-	if ((ret != AVAM_SEND_OK) && (ar.type != AVAM_P_ACKDETECT)) {
+	if ((ret != AVAM_SEND_OK) || (ar.type != AVAM_P_ACKDETECT)) {
 		applog(LOG_DEBUG, "%s-%d: Failed to detect Avalon4 mini!", avalonm->drv->name, avalonm->device_id);
 		return NULL;
 	}
 
 	add_cgpu(avalonm);
 
-	usb_buffer_clear(avalonm);
-	update_usb_stats(avalonm);
 	applog(LOG_ERR, "%s-%d: Found at %s", avalonm->drv->name, avalonm->device_id,
 	       avalonm->device_path);
 
