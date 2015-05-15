@@ -70,6 +70,7 @@ static cgtimer_t usb11_cgt;
 #define MODMINER_TIMEOUT_MS 999
 #define AVALON_TIMEOUT_MS 999
 #define AVALON4_TIMEOUT_MS 999
+#define AVALONM_TIMEOUT_MS 999
 #define KLONDIKE_TIMEOUT_MS 999
 #define COINTERRA_TIMEOUT_MS 999
 #define HASHFAST_TIMEOUT_MS 999
@@ -86,6 +87,7 @@ static cgtimer_t usb11_cgt;
 #define MODMINER_TIMEOUT_MS 100
 #define AVALON_TIMEOUT_MS 200
 #define AVALON4_TIMEOUT_MS 200
+#define AVALONM_TIMEOUT_MS 300
 #define KLONDIKE_TIMEOUT_MS 200
 #define COINTERRA_TIMEOUT_MS 200
 #define HASHFAST_TIMEOUT_MS 500
@@ -694,7 +696,7 @@ static struct usb_find_devices find_dev[] = {
 		.iManufacturer = "CANAAN",
 		.iProduct = "Avalon4 mini",
 		.config = 1,
-		.timeout = AVALON4_TIMEOUT_MS,
+		.timeout = AVALONM_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
 		INTINFO(avam_ints) },
 #endif
