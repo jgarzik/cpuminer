@@ -2146,6 +2146,7 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 {
 	char *sockaddr_url, *stratum_port, *tmp;
 	char *url, *port, address[256];
+	int port_no;
 
 	memset(address, 0, 255);
 	url = (char *)json_string_value(json_array_get(val, 0));
@@ -2172,9 +2173,15 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 		}
 	}
 
-	port = (char *)json_string_value(json_array_get(val, 1));
-	if (!port)
-		port = pool->stratum_port;
+	port_no = json_integer_value(json_array_get(val, 1));
+	if (port_no) {
+		port = alloca(256);
+		sprintf(port, "%d", port_no);
+	} else {
+		port = (char *)json_string_value(json_array_get(val, 1));
+		if (!port)
+			port = pool->stratum_port;
+	}
 
 	snprintf(address, 254, "%s:%s", url, port);
 

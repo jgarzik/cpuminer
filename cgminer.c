@@ -6594,7 +6594,7 @@ static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 		       pool->rpc_url);
 		goto out;
 	}
-	snprintf(s, 256, "{\"method\": \"validateaddress\", \"params\": [\"%s\"]}\n", opt_btc_address);
+	snprintf(s, 256, "{\"id\": 1, \"method\": \"validateaddress\", \"params\": [\"%s\"]}\n", opt_btc_address);
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, true,
 			    false, &rolltime, pool, false);
 	if (!val)
@@ -9621,6 +9621,13 @@ int main(int argc, char *argv[])
 
 	if (want_per_device_stats)
 		opt_log_output = true;
+
+#ifdef HAVE_SYSLOG_H
+	if (opt_log_output)
+		setlogmask(LOG_UPTO(LOG_DEBUG));
+	else
+		setlogmask(LOG_UPTO(LOG_NOTICE));
+#endif
 
 	if (opt_scantime < 0)
 		opt_scantime = 60;
