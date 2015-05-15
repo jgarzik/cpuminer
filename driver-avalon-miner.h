@@ -7,12 +7,12 @@
  * any later version.  See COPYING for more details.
  */
 
-#ifndef _AVALON4_MINI_H_
-#define _AVALON4_MINI_H_
+#ifndef _AVALON_MINER_H_
+#define _AVALON_MINER_H_
 
 #include "util.h"
 
-#ifdef USE_AVALON4_MINI
+#ifdef USE_AVALON_MINER
 
 #define AVAM_DEFAULT_ASIC_COUNT		5
 #define AVAM_DEFAULT_ARRAY_SIZE		(3 + 2) /* This is from the A3222 datasheet. 3 quequed work + 1 new work + 1 auxiliary, because the device may buffer more work */
@@ -117,5 +117,5 @@ struct avalonm_info {
 extern char *set_avalonm_freq(char *arg);
 extern uint16_t opt_avalonm_ntime_offset;
 extern char *set_avalonm_voltage(char *arg);
-#endif /* USE_AVALON4_MINI */
-#endif	/* _AVALON4_MINI_H_ */
+#endif /* USE_AVALON_MINER */
+#endif	/* _AVALON_MINER_H_ */

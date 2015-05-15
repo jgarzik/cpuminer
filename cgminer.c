@@ -76,8 +76,8 @@ char *curly = ":D";
 #include "driver-avalon4.h"
 #endif
 
-#ifdef USE_AVALON4_MINI
-#include "driver-avalon4-mini.h"
+#ifdef USE_AVALON_MINER
+#include "driver-avalon-miner.h"
 #endif
 
 #ifdef USE_BFLSC
@@ -244,7 +244,7 @@ static char *opt_set_avalon4_fan;
 static char *opt_set_avalon4_voltage;
 static char *opt_set_avalon4_freq;
 #endif
-#ifdef USE_AVALON4_MINI
+#ifdef USE_AVALON_MINER
 static char *opt_set_avalonm_voltage;
 static char *opt_set_avalonm_freq;
 #endif
@@ -1251,16 +1251,16 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_avalon4_freezesafe,
 			"Make Avalon4 running as a radiator when stratum server failed"),
 #endif
-#ifdef USE_AVALON4_MINI
+#ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",
 		     set_avalonm_voltage, NULL, &opt_set_avalonm_voltage,
-		     "Set Avalon4 Mini core voltage, in millivolts, step: 125"),
+		     "Set Avalon miner core voltage, in millivolts, step: 125"),
 	OPT_WITH_CBARG("--avalonm-freq",
 		     set_avalonm_freq, NULL, &opt_set_avalonm_freq,
-		     "Set frequency for Avalon4 Mini, 1 to 3 values, example: 445:385:370"),
+		     "Set frequency for Avalon miner, 1 to 3 values, example: 445:385:370"),
 	OPT_WITH_ARG("--avalonm-ntime-offset",
 		     set_int_0_to_9999, opt_show_intval, &opt_avalonm_ntime_offset,
-		     "Set Avalon4 Mini ntime rolling max offset"),
+		     "Set Avalon miner ntime rolling max offset"),
 #endif
 #ifdef USE_BAB
 	OPT_WITH_ARG("--bab-options",
@@ -1857,8 +1857,8 @@ static char *opt_verusage_and_exit(const char *extra)
 #ifdef USE_AVALON4
 		"avalon4 "
 #endif
-#ifdef USE_AVALON4_MINI
-		"avalon4 mini"
+#ifdef USE_AVALON_MINER
+		"avalon miner"
 #endif
 #ifdef USE_BFLSC
 		"bflsc "
@@ -6978,7 +6978,7 @@ void set_target(unsigned char *dest_target, double diff)
 	cg_memcpy(dest_target, target, 32);
 }
 
-#if defined (USE_AVALON2) || defined (USE_AVALON4) || defined (USE_AVALON4_MINI) || defined (USE_HASHRATIO)
+#if defined (USE_AVALON2) || defined (USE_AVALON4) || defined (USE_AVALON_MINER) || defined (USE_HASHRATIO)
 bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool,
 			 uint32_t nonce2, uint32_t nonce,  uint32_t ntime)
 {

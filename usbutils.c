@@ -289,7 +289,7 @@ static struct usb_intinfo ava4_ints[] = {
 	USB_EPS(1, ava4_epinfos)
 };
 #endif
-#ifdef USE_AVALON4_MINI
+#ifdef USE_AVALON_MINER
 static struct usb_epinfo avam_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	40,	EPI(1), 0, 0 },
 	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	40,	EPO(1), 0, 0 }
@@ -686,10 +686,10 @@ static struct usb_find_devices find_dev[] = {
 		.latency = LATENCY_UNUSED,
 		INTINFO(ava4_ints) },
 #endif
-#ifdef USE_AVALON4_MINI
+#ifdef USE_AVALON_MINER
 	{
 		.drv = DRIVER_avalonm,
-		.name = "AVM",
+		.name = "AV4M",
 		.ident = IDENT_AVM,
 		.idVendor = 0x29f1,
 		.idProduct = 0x40f1,

@@ -10,7 +10,7 @@
  */
 #include "config.h"
 #include "miner.h"
-#include "driver-avalon4-mini.h"
+#include "driver-avalon-miner.h"
 #include "crc.h"
 #include "sha2.h"
 #include "hexdump.c"
@@ -381,7 +381,7 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 	avalonm_init_pkg(&send_pkg, AVAM_P_DETECT, 1, 1);
 	ret = avalonm_xfer_pkg(avalonm, &send_pkg, &ar);
 	if ((ret != AVAM_SEND_OK) || (ar.type != AVAM_P_ACKDETECT)) {
-		applog(LOG_DEBUG, "%s-%d: Failed to detect Avalon4 mini!", avalonm->drv->name, avalonm->device_id);
+		applog(LOG_DEBUG, "%s-%d: Failed to detect Avalon miner", avalonm->drv->name, avalonm->device_id);
 		return NULL;
 	}
 
@@ -730,7 +730,7 @@ static bool avalonm_prepare(struct thr_info *thr)
 	avalonm->works = calloc(AVAM_DEFAULT_ASIC_COUNT * sizeof(struct work *),
 			       AVAM_DEFAULT_ARRAY_SIZE);
 	if (!avalonm->works)
-		quit(1, "Failed to calloc avalon4 mini works in avalonm_prepare");
+		quit(1, "Failed to calloc avalon miner works in avalonm_prepare");
 
 	info->thr = thr;
 	info->delay_ms = CAL_DELAY(AVAM_DEFAULT_FREQUENCY);
