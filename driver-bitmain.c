@@ -28,7 +28,12 @@ static void ants2_detect(__maybe_unused bool hotplug)
 #else // LINUX
 
 #include "elist.h"
+#ifdef USE_ANT_S1
 #include "usbutils.h"
+#else
+#define C_BITMAIN_READ 0
+#define C_BITMAIN_DATA_RXSTATUS 0
+#endif
 #include "driver-bitmain.h"
 #include "hexdump.c"
 #include "util.h"
@@ -58,8 +63,6 @@ int opt_bitmain_fan_max = BITMAIN_DEFAULT_FAN_MAX_PWM;
 int opt_bitmain_freq_min = BITMAIN_MIN_FREQUENCY;
 int opt_bitmain_freq_max = BITMAIN_MAX_FREQUENCY;
 bool opt_bitmain_auto;
-
-static bool is_usb;
 
 static int option_offset = -1;
 
@@ -918,10 +921,11 @@ static int bitmain_parse_rxnonce(const uint8_t * data, int datalen, struct bitma
 }
 
 static int bitmain_read(struct cgpu_info *bitmain, unsigned char *buf,
-		       size_t bufsize, int timeout, int ep)
+			size_t bufsize, __maybe_unused int timeout,
+			__maybe_unused int ep)
 {
 	__maybe_unused struct bitmain_info *info = bitmain->device_data;
-	int readlen = 0, err = 0;
+	int readlen = 0;
 
 	if (bitmain == NULL || buf == NULL || bufsize <= 0) {
 		applog(LOG_WARNING, "%s%d: %s() parameter error bufsize(%d)",
@@ -930,55 +934,52 @@ static int bitmain_read(struct cgpu_info *bitmain, unsigned char *buf,
 		return -1;
 	}
 
-	if (is_usb) {
-		err = usb_read_once_timeout(bitmain, (char *)buf, bufsize, &readlen, timeout, ep);
-		applog(LOG_DEBUG, "%s%i: Get %s() got readlen %d err %d",
-				  bitmain->drv->name, bitmain->device_id,
-				  __func__, readlen, err);
-	}
-#ifdef USE_ANT_S2
-	else
-		readlen = read(info->device_fd, buf, bufsize);
+#ifdef USE_ANT_S1
+	int err = usb_read_once_timeout(bitmain, (char *)buf, bufsize, &readlen,
+					timeout, ep);
+	applog(LOG_DEBUG, "%s%i: Get %s() got readlen %d err %d",
+			  bitmain->drv->name, bitmain->device_id,
+			  __func__, readlen, err);
+#else
+	readlen = read(info->device_fd, buf, bufsize);
 #endif
 	return readlen;
 }
 
-static int bitmain_write(struct cgpu_info *bitmain, char *buf, ssize_t len, int ep)
+static int bitmain_write(struct cgpu_info *bitmain, char *buf, ssize_t len,
+			 __maybe_unused int ep)
 {
 	__maybe_unused struct bitmain_info *info = bitmain->device_data;
-	int err, amount, __maybe_unused sent;
+	int amount, __maybe_unused sent;
 
-	if (is_usb) {
-		err = usb_write(bitmain, buf, len, &amount, ep);
-		applog(LOG_DEBUG, "%s%d: usb_write got err %d",
-				  bitmain->drv->name, bitmain->device_id, err);
+#ifdef USE_ANT_S1
+	int err = usb_write(bitmain, buf, len, &amount, ep);
+	applog(LOG_DEBUG, "%s%d: usb_write got err %d",
+			  bitmain->drv->name, bitmain->device_id, err);
 
-		if (unlikely(err != 0)) {
-			applog(LOG_ERR, "%s%d: usb_write error on %s() err=%d",
-					bitmain->drv->name, bitmain->device_id, __func__, err);
-			return BTM_SEND_ERROR;
-		}
-		if (amount != len) {
-			applog(LOG_ERR, "%s%d: usb_write length mismatch on %s() "
-					"amount=%d len=%d",
-					bitmain->drv->name, bitmain->device_id, __func__,
-					amount, (int)len);
-			return BTM_SEND_ERROR;
-		}
+	if (unlikely(err != 0)) {
+		applog(LOG_ERR, "%s%d: usb_write error on %s() err=%d",
+				bitmain->drv->name, bitmain->device_id, __func__, err);
+		return BTM_SEND_ERROR;
 	}
-#ifdef USE_ANT_S2
-	else {
-		sent = 0;
+	if (amount != len) {
+		applog(LOG_ERR, "%s%d: usb_write length mismatch on %s() "
+				"amount=%d len=%d",
+				bitmain->drv->name, bitmain->device_id, __func__,
+				amount, (int)len);
+		return BTM_SEND_ERROR;
+	}
+#else
+	sent = 0;
 
-		while (sent < len) {
-			amount = write(info->device_fd, buf+sent, len-sent);
-			if (amount < 0) {
-				applog(LOG_WARNING, "%s%d: ser_write got err %d",
-						    bitmain->drv->name, bitmain->device_id, amount);
-				return BTM_SEND_ERROR;
-			}
-			sent += amount;
+	while (sent < len) {
+		amount = write(info->device_fd, buf+sent, len-sent);
+		if (amount < 0) {
+			applog(LOG_WARNING, "%s%d: ser_write got err %d",
+					    bitmain->drv->name, bitmain->device_id, amount);
+			return BTM_SEND_ERROR;
 		}
+		sent += amount;
 	}
 #endif
 	return BTM_SEND_OK;
@@ -986,7 +987,7 @@ static int bitmain_write(struct cgpu_info *bitmain, char *buf, ssize_t len, int 
 
 static int bitmain_send_data(const uint8_t *data, int datalen, __maybe_unused struct cgpu_info *bitmain)
 {
-	int ret, ep = C_BITMAIN_SEND;
+	int ret, ep = 0;
 	//int delay;
 	//struct bitmain_info *info = NULL;
 	//cgtimer_t ts_start;
@@ -995,6 +996,8 @@ static int bitmain_send_data(const uint8_t *data, int datalen, __maybe_unused st
 		return 0;
 	}
 
+#ifdef USE_ANT_S1
+	ep = C_BITMAIN_SEND;
 	if (data[0] == BITMAIN_TOKEN_TYPE_TXCONFIG) {
 		ep = C_BITMAIN_TOKEN_TXCONFIG;
 	} else if (data[0] == BITMAIN_TOKEN_TYPE_TXTASK) {
@@ -1002,6 +1005,7 @@ static int bitmain_send_data(const uint8_t *data, int datalen, __maybe_unused st
 	} else if (data[0] == BITMAIN_TOKEN_TYPE_RXSTATUS) {
 		ep = C_BITMAIN_TOKEN_RXSTATUS;
 	}
+#endif
 
 	//info = bitmain->device_data;
 	//delay = datalen * 10 * 1000000;
@@ -2100,6 +2104,7 @@ static void ant_info(struct bitmain_info *info, int baud, int chain_num, int asi
 	info->temp_sum = 0;
 }
 
+#ifdef USE_ANT_S1
 static struct cgpu_info *bitmain_detect_one(libusb_device *dev, struct usb_find_devices *found)
 {
 	int baud, chain_num, asic_num, timeout, frequency = 0;
@@ -2157,9 +2162,6 @@ static struct cgpu_info *bitmain_detect_one(libusb_device *dev, struct usb_find_
 
 	info->work_list = k_new_list("Work", sizeof(WITEM), ALLOC_WITEMS, LIMIT_WITEMS, true);
 	info->work_ready = k_new_store(info->work_list);
-#ifdef USE_ANT_S2
-	info->wbuild = k_new_store(info->work_list);
-#endif
 
 	applog(LOG_DEBUG, "%s%d: detected %s "
 			  "chain_num=%d asic_num=%d timeout=%d frequency=%d",
@@ -2182,11 +2184,12 @@ shin:
 
 	return NULL;
 }
+#endif
 
 #ifdef USE_ANT_S2
 static void ser_detect()
 {
-	int baud, chain_num, asic_num, timeout, frequency = 0;
+	int baud, chain_num = 0, asic_num = 0, timeout = 0, frequency = 0;
 	uint8_t reg_data[4] = {0};
 	struct cgpu_info *bitmain;
 	struct bitmain_info *info;
@@ -2207,7 +2210,6 @@ static void ser_detect()
 	bitmain->drv = &ANTDRV;
 	bitmain->deven = DEV_ENABLED;
 	bitmain->threads = 1;
-	bitmain->usbinfo.nodev = true;
 
 	configured = get_options(++option_offset, &baud, &chain_num,
 				  &asic_num, &timeout, &frequency, reg_data);
@@ -2225,7 +2227,6 @@ static void ser_detect()
 	}
 
 	bitmain->device_path = strdup(opt_bitmain_dev);
-	bitmain->usbinfo.nodev = false;
 
 	if (configured)
 		ant_info(info, baud, chain_num, asic_num, timeout, frequency, reg_data);
@@ -2271,7 +2272,6 @@ giveup:
 #ifdef USE_ANT_S1
 static void ants1_detect(bool __maybe_unused hotplug)
 {
-	is_usb = true;
 	usb_detect(&ANTDRV, bitmain_detect_one);
 }
 #endif
@@ -2288,15 +2288,7 @@ static void ants2_detect(bool __maybe_unused hotplug)
 
 	first_ant = false;
 
-	if (opt_bitmain_dev && *opt_bitmain_dev)
-		is_usb = false;
-	else
-		is_usb = true;
-
-	if (is_usb)
-		usb_detect(&ANTDRV, bitmain_detect_one);
-	else
-		ser_detect();
+	ser_detect();
 }
 #endif
 
@@ -2589,11 +2581,13 @@ static int64_t bitmain_scanhash(struct thr_info *thr)
 	//	info->reset = true;
 	//}
 
+#ifdef USE_ANT_S1
 	if (unlikely(bitmain->usbinfo.nodev)) {
 		applog(LOG_ERR, "%s%d: Device disappeared, shutting down thread",
 				bitmain->drv->name, bitmain->device_id);
 		bitmain->shutdown = true;
 	}
+#endif
 
 	/* This hashmeter is just a utility counter based on returned shares */
 	return hash_count;
