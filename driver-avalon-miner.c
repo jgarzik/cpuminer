@@ -167,7 +167,7 @@ static void process_nonce(struct cgpu_info *avalonm, uint8_t *report)
 	PACK32(report, &id);
 	chip_id = report[6];
 	if (chip_id >= info->asic_cnts) {
-		applog(LOG_ERR, "%s-%d: chip_id >= info->asic_cnts(%d > %d)",
+		applog(LOG_DEBUG, "%s-%d: chip_id >= info->asic_cnts(%d > %d)",
 				avalonm->drv->name, avalonm->device_id,
 				chip_id, info->asic_cnts);
 		return;
@@ -248,10 +248,10 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 
 		/* power off notice */
 		if (!info->get_voltage) {
-			applog(LOG_ERR, "%s-%d: AVAM_P_STATUS_M Power off notice", avalonm->drv->name, avalonm->device_id);
+			applog(LOG_NOTICE, "%s-%d: AVAM_P_STATUS_M Power off notice", avalonm->drv->name, avalonm->device_id);
 			info->power_on = 1;
-			memset(info->set_frequency, 0, sizeof(uint32_t) * AVAM_DEFAULT_ASIC_COUNT * 3);
-			for (i = 1; i <= AVAM_DEFAULT_ASIC_COUNT; i++)
+			memset(info->set_frequency, 0, sizeof(uint32_t) * info->asic_cnts * 3);
+			for (i = 1; i <= info->asic_cnts; i++)
 				FLAG_SET(info->freq_set, i);
 		}
 		break;
@@ -268,7 +268,7 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 		freq[2] = decode_cpm(tmp);
 
 		if (!ar->opt) {
-			for (i = 0; i < AVAM_DEFAULT_ASIC_COUNT; i++) {
+			for (i = 0; i < info->asic_cnts; i++) {
 				info->get_frequency[i][0] = freq[0];
 				info->get_frequency[i][1] = freq[1];
 				info->get_frequency[i][2] = freq[2];
@@ -387,15 +387,19 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 
 	add_cgpu(avalonm);
 
-	applog(LOG_ERR, "%s-%d: Found at %s", avalonm->drv->name, avalonm->device_id,
+	applog(LOG_DEBUG, "%s-%d: Found at %s", avalonm->drv->name, avalonm->device_id,
 	       avalonm->device_path);
 
 	avalonm->device_data = cgcalloc(sizeof(struct avalonm_info), 1);
 	info = avalonm->device_data;
 	info->thr = NULL;
-	memset(info->set_frequency, 0, sizeof(uint32_t) * AVAM_DEFAULT_ASIC_COUNT * 3);
-	memset(info->get_frequency, 0, sizeof(uint32_t) * AVAM_DEFAULT_ASIC_COUNT * 3);
-	for (i = 0; i < AVAM_DEFAULT_ASIC_COUNT; i++) {
+	memcpy(info->dna, ar.data, AVAM_MM_DNA_LEN);
+	memcpy(info->ver, ar.data + AVAM_MM_DNA_LEN, AVAM_MM_VER_LEN);
+	memcpy(&info->asic_cnts, ar.data + AVAM_MM_DNA_LEN + AVAM_MM_VER_LEN, 4);
+	info->asic_cnts = be32toh(info->asic_cnts);
+	memset(info->set_frequency, 0, sizeof(uint32_t) * info->asic_cnts * 3);
+	memset(info->get_frequency, 0, sizeof(uint32_t) * info->asic_cnts * 3);
+	for (i = 0; i < info->asic_cnts; i++) {
 		info->opt_freq[i][0] = opt_avalonm_freq[0];
 		info->opt_freq[i][1] = opt_avalonm_freq[1];
 		info->opt_freq[i][2] = opt_avalonm_freq[2];
@@ -403,10 +407,6 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 	info->set_voltage = 0;
 	info->opt_voltage = opt_avalonm_voltage;
 	info->nonce_cnts = 0;
-	memcpy(info->dna, ar.data, AVAM_MM_DNA_LEN);
-	memcpy(info->ver, ar.data + AVAM_MM_DNA_LEN, AVAM_MM_VER_LEN);
-	memcpy(&info->asic_cnts, ar.data + AVAM_MM_DNA_LEN + AVAM_MM_VER_LEN, 4);
-	info->asic_cnts = be32toh(info->asic_cnts);
 	info->usbfifo_cnt = 0;
 	info->workfifo_cnt = 0;
 	info->noncefifo_cnt = 0;
@@ -419,7 +419,7 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 	info->freq_update = 0;
 	info->freq_set = 0;
 	FLAG_SET(info->freq_set, AVAM_ASIC_ALL);
-	memset(info->hw_work, 0, sizeof(int) * AVAM_DEFAULT_ASIC_COUNT);
+	memset(info->hw_work, 0, sizeof(int) * info->asic_cnts);
 
 	return avalonm;
 }
@@ -446,7 +446,7 @@ static void avalonm_set_freq(struct cgpu_info *avalonm, uint8_t asic_index, uint
 
 	if (asic_index == AVAM_ASIC_ALL) {
 		index = 0;
-		for (i = 0; i < AVAM_DEFAULT_ASIC_COUNT; i++) {
+		for (i = 0; i < info->asic_cnts; i++) {
 			if ((info->set_frequency[i][0] == freq[0]) &&
 				(info->set_frequency[i][1] == freq[1]) &&
 				(info->set_frequency[i][2] == freq[2]))
@@ -476,7 +476,7 @@ static void avalonm_set_freq(struct cgpu_info *avalonm, uint8_t asic_index, uint
 	if (!change)
 		return;
 
-	for (i = 0; i < AVAM_DEFAULT_ASIC_COUNT; i++) {
+	for (i = 0; i < info->asic_cnts; i++) {
 		if (max_freq < info->set_frequency[i][0])
 			max_freq = info->set_frequency[i][0];
 
@@ -503,7 +503,7 @@ static void avalonm_set_freq(struct cgpu_info *avalonm, uint8_t asic_index, uint
 	avalonm_init_pkg(&send_pkg, AVAM_P_SET_FREQ, 1, 1);
 	send_pkg.opt = asic_index;
 	avalonm_send_pkg(avalonm, &send_pkg);
-	applog(LOG_ERR, "%s-%d: Avalonm set asic_index %d freq %d,%d,%d",
+	applog(LOG_NOTICE, "%s-%d: Avalonm set asic_index %d freq %d,%d,%d",
 			avalonm->drv->name, avalonm->device_id,
 			asic_index,
 			freq[0],
@@ -531,7 +531,7 @@ static void avalonm_set_voltage(struct cgpu_info *avalonm)
 	/* Package the data */
 	avalonm_init_pkg(&send_pkg, AVAM_P_SET_VOLT, 1, 1);
 	avalonm_send_pkg(avalonm, &send_pkg);
-	applog(LOG_ERR, "%s-%d: Avalonm set volt %d",
+	applog(LOG_NOTICE, "%s-%d: Avalonm set volt %d",
 	       avalonm->drv->name, avalonm->device_id,
 	       info->set_voltage);
 
@@ -617,7 +617,7 @@ static void *avalonm_process_tasks(void *userdata)
 	struct avalonm_pkg send_pkg;
 
 	int start_count, end_count, i, j, k, ret;
-	int avalon_get_work_count = AVAM_DEFAULT_ASIC_COUNT;
+	int avalon_get_work_count = info->asic_cnts;
 
 	snprintf(threadname, sizeof(threadname), "%d/AvmProc", avalonm->device_id);
 	RenameThread(threadname);
@@ -650,7 +650,7 @@ static void *avalonm_process_tasks(void *userdata)
 					FLAG_CLEAR(info->freq_set, 0);
 				}
 
-				for (k = 1; k <= AVAM_DEFAULT_ASIC_COUNT; k++) {
+				for (k = 1; k <= info->asic_cnts; k++) {
 					if (FLAG_GET(info->freq_set, k)) {
 						avalonm_set_freq(avalonm, k, info->opt_freq[k - 1]);
 						FLAG_CLEAR(info->freq_set, k);
@@ -690,7 +690,10 @@ static void *avalonm_process_tasks(void *userdata)
 		cgsem_post(&info->qsem);
 
 		/* little delay, let asics process more job */
-		cgsleep_ms(1);
+		if (!strncmp(info->ver, "3U", 2))
+			cgsleep_ms(400);
+		else
+			cgsleep_ms(1);
 
 		/* Get result */
 		do {
@@ -698,7 +701,7 @@ static void *avalonm_process_tasks(void *userdata)
 		} while (ret != AVAM_P_STATUS_M);
 
 		if (info->freq_update) {
-			applog(LOG_ERR, "%s-%d: avalonm_process_tasks freq change flag %02x",
+			applog(LOG_NOTICE, "%s-%d: avalonm_process_tasks freq change flag %02x",
 					avalonm->drv->name, avalonm->device_id,
 					info->freq_update);
 			if (FLAG_GET(info->freq_update, 0)) {
@@ -706,7 +709,7 @@ static void *avalonm_process_tasks(void *userdata)
 				FLAG_CLEAR(info->freq_update, 0);
 			}
 
-			for (i = 1; i <= AVAM_DEFAULT_ASIC_COUNT; i++) {
+			for (i = 1; i <= info->asic_cnts; i++) {
 				if (FLAG_GET(info->freq_update, i)) {
 					avalonm_get_frequency(avalonm, i);
 					FLAG_CLEAR(info->freq_update, i);
@@ -727,7 +730,7 @@ static bool avalonm_prepare(struct thr_info *thr)
 	struct avalonm_info *info = avalonm->device_data;
 
 	free(avalonm->works);
-	avalonm->works = calloc(AVAM_DEFAULT_ASIC_COUNT * sizeof(struct work *),
+	avalonm->works = calloc(info->asic_cnts * sizeof(struct work *),
 			       AVAM_DEFAULT_ARRAY_SIZE);
 	if (!avalonm->works)
 		quit(1, "Failed to calloc avalon miner works in avalonm_prepare");
@@ -829,8 +832,8 @@ char *set_avalonm_device_freq(struct cgpu_info *avalonm, char *arg)
 	if (colon1) {
 		sscanf(arg, "%d-", &asic_index);
 		arg = colon1 + 1;
-		if (asic_index < 0 || asic_index > AVAM_DEFAULT_ASIC_COUNT) {
-			applog(LOG_ERR, "invalid asic index: %d, valid range 0-%d", asic_index, AVAM_DEFAULT_ASIC_COUNT);
+		if (asic_index < 0 || asic_index > info->asic_cnts) {
+			applog(LOG_ERR, "invalid asic index: %d, valid range 0-%d", asic_index, info->asic_cnts);
 			return "Invalid asic index to set_avalonm_freq";
 		}
 	}
@@ -873,7 +876,7 @@ char *set_avalonm_device_freq(struct cgpu_info *avalonm, char *arg)
 		val3 = val2;
 
 	if (!asic_index) {
-		for (i = 0; i < AVAM_DEFAULT_ASIC_COUNT; i++) {
+		for (i = 0; i < info->asic_cnts; i++) {
 			info->opt_freq[i][0] = val1;
 			info->opt_freq[i][1] = val2;
 			info->opt_freq[i][2] = val3;
@@ -1011,7 +1014,7 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 	strcat(statbuf, buf);
 
 	strcat(statbuf, " Freq[");
-	for (i = 0; i < AVAM_DEFAULT_ASIC_COUNT; i++) {
+	for (i = 0; i < info->asic_cnts; i++) {
 		sprintf(buf, "%d %d %d ",
 				info->get_frequency[i][0],
 				info->get_frequency[i][1],
@@ -1021,7 +1024,7 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 	statbuf[strlen(statbuf) - 1] = ']';
 
 	strcat(statbuf, " HW[");
-	for (i = 0; i < AVAM_DEFAULT_ASIC_COUNT; i++) {
+	for (i = 0; i < info->asic_cnts; i++) {
 		sprintf(buf, "%d ", info->hw_work[i]);
 		strcat(statbuf, buf);
 	}
@@ -1062,7 +1065,7 @@ static bool avalonm_fill(struct cgpu_info *avalonm)
 	struct work *work;
 	bool ret = true;
 
-	ac = AVAM_DEFAULT_ASIC_COUNT;
+	ac = info->asic_cnts;
 	mutex_lock(&info->qlock);
 	if (avalonm->queued >= ac)
 		goto out_unlock;

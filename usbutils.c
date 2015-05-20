@@ -298,6 +298,14 @@ static struct usb_epinfo avam_epinfos[] = {
 static struct usb_intinfo avam_ints[] = {
 	USB_EPS(1, avam_epinfos)
 };
+static struct usb_epinfo av3u_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	40,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	40,	EPO(1), 0, 0 }
+};
+
+static struct usb_intinfo av3u_ints[] = {
+	USB_EPS(0, av3u_epinfos)
+};
 #endif
 #ifdef USE_KLONDIKE
 static struct usb_epinfo kln_epinfos[] = {
@@ -699,6 +707,19 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = AVALONM_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
 		INTINFO(avam_ints) },
+	{
+		.drv = DRIVER_avalonm,
+		.name = "AV3U",
+		.ident = IDENT_AVM,
+		.idVendor = 0x29f1,
+		.idProduct = 0x33f3,
+		.iManufacturer = "CANAAN",
+		.iProduct = "Avalon nano",
+		.config = 1,
+		.timeout = AVALONM_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		INTINFO(av3u_ints) },
+
 #endif
 #ifdef USE_HASHFAST
 	{
