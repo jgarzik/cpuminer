@@ -1034,6 +1034,7 @@ extern bool opt_bitmain_checkall;
 extern bool opt_bitmain_checkn2diff;
 extern bool opt_bitmain_beeper;
 extern bool opt_bitmain_tempoverctrl;
+extern char *opt_bitmain_voltage = BITMAIN_VOLTAGE_DEF;
 #endif
 #ifdef USE_MINION
 extern int opt_minion_chipreport;

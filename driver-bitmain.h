@@ -47,7 +47,6 @@
 #define BITMAIN_MAX_FREQUENCY 1000000
 #define BITMAIN_TIMEOUT_FACTOR 12690
 #define BITMAIN_DEFAULT_FREQUENCY 282
-#define BITMAIN_DEFAULT_VOLTAGE 5
 #define BITMAIN_DEFAULT_CHAIN_NUM 8
 #define BITMAIN_DEFAULT_ASIC_NUM 32
 #define BITMAIN_DEFAULT_REG_DATA 0
@@ -56,8 +55,12 @@
 
 #ifdef USE_ANT_S1
 #define BITMAIN_FTDI_READSIZE 510
+#define BITMAIN_DEFAULT_VOLTAGE 5
 #else // S2
 #define BITMAIN_FTDI_READSIZE 2048
+#define BITMAIN_VOLTAGE_DEF "0725"
+#define BITMAIN_VOLTAGE0_DEF 0x07
+#define BITMAIN_VOLTAGE1_DEF 0x25
 #endif
 #define BITMAIN_USB_PACKETSIZE 512
 #define BITMAIN_SENDBUF_SIZE 8192
@@ -126,7 +129,8 @@ struct bitmain_txconfig_token {
 	uint8_t beeper_ctrl          :1;
 	uint8_t temp_over_ctrl       :1;
 	uint8_t reserved1            :6;
-	uint8_t reserved[2];
+	uint8_t chain_check_time;
+	uint8_t reserved2;
 #endif
 
 	uint8_t chain_num;
@@ -135,8 +139,12 @@ struct bitmain_txconfig_token {
 	uint8_t timeout_data;
 
 	uint16_t frequency;
+#ifdef USE_ANT_S1
 	uint8_t voltage;
 	uint8_t chain_check_time;
+#else
+	uint8_t voltage[2];
+#endif
 
 	uint8_t reg_data[4];
 	uint8_t chip_address;

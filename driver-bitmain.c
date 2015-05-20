@@ -336,7 +336,7 @@ static int bitmain_set_txconfig(struct bitmain_txconfig_token *bm,
 				uint8_t hw_error_eft, uint8_t beeper_ctrl, uint8_t temp_over_ctrl,
 				uint8_t chain_num, uint8_t asic_num,
 				uint8_t fan_pwm_data, uint8_t timeout_data,
-				uint16_t frequency, uint8_t voltage, uint8_t chain_check_time,
+				uint16_t frequency, uint8_t voltage[2], uint8_t chain_check_time,
 				uint8_t chip_address, uint8_t reg_address, uint8_t * reg_data)
 #endif
 {
@@ -395,7 +395,12 @@ static int bitmain_set_txconfig(struct bitmain_txconfig_token *bm,
 	bm->timeout_data = timeout_data;
 
 	bm->frequency = htole16(frequency);
+#ifdef USE_ANT_S1
 	bm->voltage = voltage;
+#else
+	bm->voltage[0] = voltage[0];
+	bm->voltage[1] = voltage[1];
+#endif
 	bm->chain_check_time = chain_check_time;
 
 	memcpy(bm->reg_data, reg_data, 4);
@@ -422,7 +427,7 @@ static int bitmain_set_txconfig(struct bitmain_txconfig_token *bm,
 	applogsiz(LOG_DEBUG, 512, "%s: %s() v(%d) reset(%d) faneft(%d) touteft(%d) freqeft(%d)"
 			" volteft(%d) chainceft(%d) chipceft(%d) hweft(%d)"
 			" beepctrl(%d) toverctl(%d) mnum(%d)"
-			" anum(%d) fanpwmdata(%d) toutdata(%d) freq(%d) volt(%d)"
+			" anum(%d) fanpwmdata(%d) toutdata(%d) freq(%d) volt(%02x%02x)"
 			" chainctime(%d) regdata(%02x%02x%02x%02x) chipaddr(%02x)"
 			" regaddr(%02x) crc(%04x)",
 			ANTDRV.dname, __func__,
@@ -430,9 +435,10 @@ static int bitmain_set_txconfig(struct bitmain_txconfig_token *bm,
 			(int)frequency_eft, (int)voltage_eft, (int)chain_check_time_eft,
 			(int)chip_config_eft, (int)hw_error_eft, (int)beeper_ctrl,
 			(int)temp_over_ctrl, (int)chain_num, (int)asic_num, (int)fan_pwm_data,
-			(int)timeout_data, (int)frequency, (int)voltage, (int)chain_check_time,
-			(int)reg_data[0], (int)reg_data[1], (int)reg_data[2], (int)reg_data[3],
-			(int)chip_address, (int)reg_address, (int)crc);
+			(int)timeout_data, (int)frequency, (int)voltage[0], (int)voltage[1],
+			(int)chain_check_time, (int)reg_data[0], (int)reg_data[1],
+			(int)reg_data[2], (int)reg_data[3], (int)chip_address,
+			(int)reg_address, (int)crc);
 #endif
 
 	return datalen;
@@ -2091,7 +2097,19 @@ static void ant_info(struct bitmain_info *info, int baud, int chain_num, int asi
 	info->frequency = frequency;
 	memcpy(info->reg_data, reg_data, 4);
 
+#ifdef USE_ANT_S1
 	info->voltage = BITMAIN_DEFAULT_VOLTAGE;
+#else
+	info->voltage[0] = BITMAIN_VOLTAGE0_DEF;
+	info->voltage[1] = BITMAIN_VOLTAGE1_DEF;
+	if (opt_bitmain_voltage) {
+		unsigned char v[2];
+		if (hex2bin(v, opt_bitmain_voltage, 2))
+			info->voltage[0] = (uint8_t)(v[0]);
+			info->voltage[1] = (uint8_t)(v[1]);
+		}
+	}
+#endif
 
 	info->fan_pwm = BITMAIN_DEFAULT_FAN_MIN_PWM;
 	info->temp_max = 0;
@@ -2622,7 +2640,14 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "asic_count", &(info->asic_num), false);
 	root = api_add_int(root, "timeout", &(info->timeout), false);
 	root = api_add_int(root, "frequency", &(info->frequency), false);
+#ifdef USE_ANT_S1
 	root = api_add_int(root, "voltage", &(info->voltage), false);
+#else
+	char vbuf[5];
+	snprintf(vbuf, sizeof(vbuf), "%02x%02x",
+		 (int)(info->voltage[0]), (int)(info->voltage[1]));
+	root = api_add_string(root, "voltage", vbuf, false);
+#endif
 #ifdef USE_ANT_S2
 	root = api_add_int(root, "hwv1", &(info->hw_version[0]), false);
 	root = api_add_int(root, "hwv2", &(info->hw_version[1]), false);
