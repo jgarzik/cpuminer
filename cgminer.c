@@ -264,7 +264,7 @@ static char *opt_set_bitmain_freq;
 #endif
 #ifdef USE_ANT_S2
 char *opt_bitmain_dev;
-char *opt_bitmain_voltage;
+char *opt_bitmain_voltage = BITMAIN_VOLTAGE_DEF;
 #endif
 #ifdef USE_HASHFAST
 static char *opt_set_hfa_fan;
@@ -1300,7 +1300,7 @@ static struct opt_table opt_config_table[] = {
 		     "Set bitmain target temperature"),
 	OPT_WITH_ARG("--bitmain-voltage",
 		     opt_set_charp, NULL, &opt_bitmain_voltage,
-		     "Set bitmain voltage (default: %s)", BITMAIN_VOLTAGE_DEF),
+		     "Set bitmain voltage (default: "BITMAIN_VOLTAGE_DEF")"),
 #endif
 #ifdef USE_ANT_S2
 	OPT_WITH_ARG("--bitmain-dev",

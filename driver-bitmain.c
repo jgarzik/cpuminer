@@ -336,7 +336,7 @@ static int bitmain_set_txconfig(struct bitmain_txconfig_token *bm,
 				uint8_t hw_error_eft, uint8_t beeper_ctrl, uint8_t temp_over_ctrl,
 				uint8_t chain_num, uint8_t asic_num,
 				uint8_t fan_pwm_data, uint8_t timeout_data,
-				uint16_t frequency, uint8_t voltage[2], uint8_t chain_check_time,
+				uint16_t frequency, uint8_t *voltage, uint8_t chain_check_time,
 				uint8_t chip_address, uint8_t reg_address, uint8_t * reg_data)
 #endif
 {
@@ -2063,7 +2063,7 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 						beeper_ctrl, tempover_ctrl,
 						info->chain_num, info->asic_num,
 						BITMAIN_DEFAULT_FAN_MAX_PWM, info->timeout,
-						info->frequency, BITMAIN_DEFAULT_VOLTAGE,
+						info->frequency, info->voltage,
 						0, 0, 0x04, info->reg_data);
 #endif
 		if (sendlen <= 0) {
@@ -2104,7 +2104,7 @@ static void ant_info(struct bitmain_info *info, int baud, int chain_num, int asi
 	info->voltage[1] = BITMAIN_VOLTAGE1_DEF;
 	if (opt_bitmain_voltage) {
 		unsigned char v[2];
-		if (hex2bin(v, opt_bitmain_voltage, 2))
+		if (hex2bin(v, opt_bitmain_voltage, 2)) {
 			info->voltage[0] = (uint8_t)(v[0]);
 			info->voltage[1] = (uint8_t)(v[1]);
 		}

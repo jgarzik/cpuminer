@@ -315,9 +315,11 @@ struct bitmain_info {
 	int fan_pwm;
 
 	int frequency;
-	int voltage;
 	int temp_hi;
-#ifdef USE_ANT_S2
+#ifdef USE_ANT_S1
+	int voltage;
+#else
+	uint8_t voltage[2];
 	uint64_t total_nonce_num;
 	int diff;
 #endif
