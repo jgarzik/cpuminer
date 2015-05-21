@@ -460,7 +460,7 @@ fi
 
 
 #Add a new device to this list if it needs libusb, along with a no on the end.
-if test x$avalon$avalon2$avalon4$bitforce$bitfury$blockerupter$modminer$bflsc$icarus$hashfast$hashratio$klondike$drillbit$cointerra$ants1$ants2 != xnononononononononononononononono; then
+if test x$avalon$avalon2$avalon4$bitforce$bitfury$blockerupter$modminer$bflsc$icarus$hashfast$hashratio$klondike$drillbit$cointerra$ants1 != xnonononononononononononononono; then
 	want_usbutils=true
 else
 	want_usbutils=false

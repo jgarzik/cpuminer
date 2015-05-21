@@ -260,10 +260,11 @@ char *opt_bitmine_a1_options = NULL;
 #if defined(USE_ANT_S1) || defined(USE_ANT_S2)
 char *opt_bitmain_options;
 static char *opt_set_bitmain_fan;
-static char *opt_set_bitmain_freq;
+char *opt_bitmain_freq;
 #endif
 #ifdef USE_ANT_S2
 char *opt_bitmain_dev;
+char *opt_bitmain_voltage = BITMAIN_VOLTAGE_DEF;
 #endif
 #ifdef USE_HASHFAST
 static char *opt_set_hfa_fan;
@@ -1286,17 +1287,25 @@ static struct opt_table opt_config_table[] = {
 		     set_bitmain_fan, NULL, &opt_set_bitmain_fan,
 		     "Set fanspeed percentage for bitmain, single value or range (default: 20-100)"),
 	OPT_WITH_CBARG("--bitmain-freq",
-		     set_bitmain_freq, NULL, &opt_set_bitmain_freq,
-		     "Set frequency range for bitmain-auto, single value or range"),
+		     opt_set_charp, NULL, &opt_bitmain_freq,
+		     "Set bitmain freq options timeout:freq:regdata"),
 	OPT_WITHOUT_ARG("--bitmain-hwerror",
 			opt_set_bool, &opt_bitmain_hwerror,
 			"Set bitmain device detect hardware error"),
 	OPT_WITH_ARG("--bitmain-options",
 		     opt_set_charp, NULL, &opt_bitmain_options,
-		     "Set bitmain options baud:miners:asic:timeout:freq"),
+#ifdef USE_ANT_S1
+		     "Set bitmain options baud:miners:asic:timeout:freq"
+#else
+		     "Set bitmain options baud:miners:asic:ignored..."
+#endif
+			),
 	OPT_WITH_ARG("--bitmain-temp",
 		     set_int_0_to_100, opt_show_intval, &opt_bitmain_temp,
 		     "Set bitmain target temperature"),
+	OPT_WITH_ARG("--bitmain-voltage",
+		     opt_set_charp, NULL, &opt_bitmain_voltage,
+		     "Set bitmain voltage (default: "BITMAIN_VOLTAGE_DEF")"),
 #endif
 #ifdef USE_ANT_S2
 	OPT_WITH_ARG("--bitmain-dev",
