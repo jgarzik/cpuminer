@@ -425,7 +425,6 @@ extern int opt_bitmain_freq_min;
 extern int opt_bitmain_freq_max;
 extern bool opt_bitmain_auto;
 extern char *set_bitmain_fan(char *arg);
-extern char *set_bitmain_freq(char *arg);
 
 #endif /* USE_ANT_S1 || USE_ANT_S2 */
 #endif	/* BITMAIN_H */

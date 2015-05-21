@@ -60,8 +60,6 @@ int opt_bitmain_temp = BITMAIN_TEMP_TARGET;
 int opt_bitmain_overheat = BITMAIN_TEMP_OVERHEAT;
 int opt_bitmain_fan_min = BITMAIN_DEFAULT_FAN_MIN_PWM;
 int opt_bitmain_fan_max = BITMAIN_DEFAULT_FAN_MAX_PWM;
-int opt_bitmain_freq_min = BITMAIN_MIN_FREQUENCY;
-int opt_bitmain_freq_max = BITMAIN_MAX_FREQUENCY;
 bool opt_bitmain_auto;
 
 static int option_offset = -1;
@@ -184,8 +182,10 @@ static uint32_t num2bit(int num)
 		return (((uint32_t)1) << (31 - num));
 }
 
+#ifdef USE_ANT_S1
 static bool get_options(int this_option_offset, int *baud, int *chain_num,
-			int *asic_num, int *timeout, int *frequency, uint8_t * reg_data)
+			int *asic_num, int *timeout, int *frequency,
+			uint8_t *reg_data)
 {
 	char buf[BUFSIZ+1];
 	char *ptr, *comma, *colon, *colon2, *colon3, *colon4, *colon5;
@@ -320,6 +320,97 @@ static bool get_options(int this_option_offset, int *baud, int *chain_num,
 	}
 	return true;
 }
+#else
+static bool get_options(int this_option_offset, int *baud, int *chain_num, int *asic_num)
+{
+	char buf[BUFSIZ+1];
+	char *ptr, *comma, *colon, *colon2, *colon3;
+	size_t max;
+	int i, tmp;
+
+	if (opt_bitmain_options == NULL)
+		buf[0] = '\0';
+	else {
+		ptr = opt_bitmain_options;
+		for (i = 0; i < this_option_offset; i++) {
+			comma = strchr(ptr, ',');
+			if (comma == NULL)
+				break;
+			ptr = comma + 1;
+		}
+
+		comma = strchr(ptr, ',');
+		if (comma == NULL)
+			max = strlen(ptr);
+		else
+			max = comma - ptr;
+
+		if (max > BUFSIZ)
+			max = BUFSIZ;
+		strncpy(buf, ptr, max);
+		buf[max] = '\0';
+	}
+
+	if (!(*buf))
+		return false;
+
+	colon = strchr(buf, ':');
+	if (colon)
+		*(colon++) = '\0';
+
+	tmp = atoi(buf);
+	switch (tmp) {
+		case 115200:
+			*baud = 115200;
+			break;
+		case 57600:
+			*baud = 57600;
+			break;
+		case 38400:
+			*baud = 38400;
+			break;
+		case 19200:
+			*baud = 19200;
+				break;
+		default:
+			quit(1, "Invalid bitmain-options for baud (%s) "
+				"must be 115200, 57600, 38400 or 19200", buf);
+	}
+
+	if (colon && *colon) {
+		colon2 = strchr(colon, ':');
+		if (colon2)
+			*(colon2++) = '\0';
+
+		if (*colon) {
+			tmp = atoi(colon);
+			if (tmp > 0)
+				*chain_num = tmp;
+			else {
+				quit(1, "Invalid bitmain-options for "
+					"chain_num (%s) must be 1 ~ %d",
+					colon, BITMAIN_DEFAULT_CHAIN_NUM);
+			}
+		}
+
+		if (colon2 && *colon2) {
+			colon3 = strchr(colon2, ':');
+			if (colon3)
+				*(colon3++) = '\0';
+
+			tmp = atoi(colon2);
+			if (tmp > 0 && tmp <= BITMAIN_DEFAULT_ASIC_NUM)
+				*asic_num = tmp;
+			else {
+				quit(1, "Invalid bitmain-options for "
+					"asic_num (%s) must be 1 ~ %d",
+					colon2, BITMAIN_DEFAULT_ASIC_NUM);
+			}
+		}
+	}
+	return true;
+}
+#endif
 
 #ifdef USE_ANT_S1
 static int bitmain_set_txconfig(struct bitmain_txconfig_token *bm,
@@ -2088,20 +2179,63 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 	return 0;
 }
 
+#ifdef USE_ANT_S1
 static void ant_info(struct bitmain_info *info, int baud, int chain_num, int asic_num, int timeout, int frequency, uint8_t *reg_data)
+#else
+static void ant_info(struct bitmain_info *info, int baud, int chain_num, int asic_num)
+#endif
 {
 	info->baud = baud;
 	info->chain_num = chain_num;
 	info->asic_num = asic_num;
+
+#ifdef USE_ANT_S1
 	info->timeout = timeout;
 	info->frequency = frequency;
 	memcpy(info->reg_data, reg_data, 4);
-
-#ifdef USE_ANT_S1
 	info->voltage = BITMAIN_DEFAULT_VOLTAGE;
 #else
+	info->timeout = BITMAIN_DEFAULT_TIMEOUT;
+	info->frequency = BITMAIN_DEFAULT_FREQUENCY;
+	memset(info->reg_data, BITMAIN_DEFAULT_REG_DATA, 4);
 	info->voltage[0] = BITMAIN_VOLTAGE0_DEF;
 	info->voltage[1] = BITMAIN_VOLTAGE1_DEF;
+
+	if (opt_bitmain_freq) {
+		char buf[BUFSIZ+1];
+		char *colon, *colon2;
+		uint8_t reg_data[4];
+		int timeout, freq;
+		size_t len;
+
+		strncpy(buf, opt_bitmain_freq, sizeof(buf));
+		buf[sizeof(buf)-1] = '\0';
+		colon = strchr(buf, ':');
+		if (colon)
+			*(colon++) = '\0';
+		timeout = atoi(buf);
+		if (timeout > 0 && timeout <= 0xff)
+			info->timeout = timeout;
+		if (colon && *colon) {
+			colon2 = strchr(colon, ':');
+			if (colon2)
+				*(colon2++) = '\0';
+			freq = atoi(colon);
+			if (freq >= BITMAIN_MIN_FREQUENCY &&
+			    freq <= BITMAIN_MAX_FREQUENCY) {
+				info->frequency = freq;
+			}
+			if (colon2 && *colon2) {
+				len = strlen(colon2);
+				if (len > 1 && len <= 8 && (len & 1) == 0) {
+					memset(reg_data, BITMAIN_DEFAULT_REG_DATA, 4);
+					if (hex2bin(reg_data, colon2, len/2))
+						memcpy(info->reg_data, reg_data, len/2);
+				}
+			}
+		}
+	}
+
 	if (opt_bitmain_voltage) {
 		unsigned char v[2];
 		if (hex2bin(v, opt_bitmain_voltage, 2)) {
@@ -2207,8 +2341,7 @@ shin:
 #ifdef USE_ANT_S2
 static void ser_detect()
 {
-	int baud, chain_num = 0, asic_num = 0, timeout = 0, frequency = 0;
-	uint8_t reg_data[4] = {0};
+	int baud, chain_num = 0, asic_num = 0;
 	struct cgpu_info *bitmain;
 	struct bitmain_info *info;
 	bool configured;
@@ -2229,8 +2362,7 @@ static void ser_detect()
 	bitmain->deven = DEV_ENABLED;
 	bitmain->threads = 1;
 
-	configured = get_options(++option_offset, &baud, &chain_num,
-				  &asic_num, &timeout, &frequency, reg_data);
+	configured = get_options(++option_offset, &baud, &chain_num, &asic_num);
 
 	info = calloc(1, sizeof(*info));
 	if (unlikely(!info))
@@ -2247,11 +2379,9 @@ static void ser_detect()
 	bitmain->device_path = strdup(opt_bitmain_dev);
 
 	if (configured)
-		ant_info(info, baud, chain_num, asic_num, timeout, frequency, reg_data);
+		ant_info(info, baud, chain_num, asic_num);
 	else
-		ant_info(info, BITMAIN_IO_SPEED, BITMAIN_DEFAULT_CHAIN_NUM,
-			  BITMAIN_DEFAULT_ASIC_NUM, BITMAIN_DEFAULT_TIMEOUT,
-			  BITMAIN_DEFAULT_FREQUENCY, reg_data);
+		ant_info(info, BITMAIN_IO_SPEED, BITMAIN_DEFAULT_CHAIN_NUM, BITMAIN_DEFAULT_ASIC_NUM);
 
 	if (!add_cgpu(bitmain))
 		goto cleen;
@@ -2631,6 +2761,7 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct bitmain_info *info = cgpu->device_data;
+	char regbuf[9];
 	//int i = 0;
 	double hwp = (cgpu->hw_errors + cgpu->diff1) ?
 			(double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
@@ -2640,13 +2771,17 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "asic_count", &(info->asic_num), false);
 	root = api_add_int(root, "timeout", &(info->timeout), false);
 	root = api_add_int(root, "frequency", &(info->frequency), false);
+	snprintf(regbuf, sizeof(regbuf), "%02x%02x%02x%02x",
+		 (int)(info->reg_data[0]), (int)(info->reg_data[1]),
+		 (int)(info->reg_data[2]), (int)(info->reg_data[3]));
+	root = api_add_string(root, "regdata", regbuf, true);
 #ifdef USE_ANT_S1
 	root = api_add_int(root, "voltage", &(info->voltage), false);
 #else
 	char vbuf[5];
 	snprintf(vbuf, sizeof(vbuf), "%02x%02x",
 		 (int)(info->voltage[0]), (int)(info->voltage[1]));
-	root = api_add_string(root, "voltage", vbuf, false);
+	root = api_add_string(root, "voltage", vbuf, true);
 #endif
 #ifdef USE_ANT_S2
 	root = api_add_int(root, "hwv1", &(info->hw_version[0]), false);
@@ -2780,8 +2915,6 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "opt_bitmain_overheat", &opt_bitmain_overheat, false);
 	root = api_add_int(root, "opt_bitmain_fan_min", &opt_bitmain_fan_min, false);
 	root = api_add_int(root, "opt_bitmain_fan_max", &opt_bitmain_fan_max, false);
-	root = api_add_int(root, "opt_bitmain_freq_min", &opt_bitmain_freq_min, false);
-	root = api_add_int(root, "opt_bitmain_freq_max", &opt_bitmain_freq_max, false);
 	root = api_add_bool(root, "opt_bitmain_auto", &opt_bitmain_auto, false);
 
 	return root;
@@ -2807,27 +2940,6 @@ char *set_bitmain_fan(char *arg)
 
 	opt_bitmain_fan_min = val1 * BITMAIN_PWM_MAX / 100;
 	opt_bitmain_fan_max = val2 * BITMAIN_PWM_MAX / 100;
-
-	return NULL;
-}
-
-char *set_bitmain_freq(char *arg)
-{
-	int val1, val2, ret;
-
-	ret = sscanf(arg, "%d-%d", &val1, &val2);
-	if (ret < 1)
-		return "No values passed to bitmain-freq";
-	if (ret == 1)
-		val2 = val1;
-
-	if (val1 < BITMAIN_MIN_FREQUENCY || val1 > BITMAIN_MAX_FREQUENCY ||
-	    val2 < BITMAIN_MIN_FREQUENCY || val2 > BITMAIN_MAX_FREQUENCY ||
-	    val2 < val1)
-		return "Invalid value passed to bitmain-freq";
-
-	opt_bitmain_freq_min = val1;
-	opt_bitmain_freq_max = val2;
 
 	return NULL;
 }

@@ -1024,11 +1024,13 @@ extern char *opt_bitmine_a1_options;
 #endif
 #ifdef USE_ANT_S1
 extern char *opt_bitmain_options;
+extern char *opt_bitmain_freq;
 extern bool opt_bitmain_hwerror;
 #endif
 #ifdef USE_ANT_S2
 extern char *opt_bitmain_dev;
 extern char *opt_bitmain_options;
+extern char *opt_bitmain_freq;
 extern bool opt_bitmain_hwerror;
 extern bool opt_bitmain_checkall;
 extern bool opt_bitmain_checkn2diff;
