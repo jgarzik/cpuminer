@@ -1,6 +1,6 @@
 /*
  * Copyright 2012-2013 Lingchao Xu <lingchao.xu@bitmaintech.com>
- * Copyright 2014 Andrew Smith
+ * Copyright 2014-2015 Andrew Smith
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
