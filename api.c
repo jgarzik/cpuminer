@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2014 Andrew Smith
+ * Copyright 2011-2015 Andrew Smith
  * Copyright 2011-2014 Con Kolivas
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -4414,11 +4414,11 @@ static void setup_groups()
  */
 static void setup_ipaccess()
 {
-	char *buf, *ptr, *comma, *slash, *end;
+	char *buf, *ptr, *comma, *slash, *end, *dot;
 	int ipcount, mask, i, shift;
+	char tmp[64], original[64];
 	bool ipv6 = false;
 	char group;
-	char tmp[30];
 
 	buf = cgmalloc(strlen(opt_api_allow) + 1);
 
@@ -4448,6 +4448,8 @@ static void setup_ipaccess()
 		if (comma)
 			*(comma++) = '\0';
 
+		strncpy(original, ptr, sizeof(original));
+		original[sizeof(original)-1] = '\0';
 		group = NOPRIVGROUP;
 
 		if (isalpha(*ptr) && *(ptr+1) == ':') {
@@ -4483,8 +4485,12 @@ static void setup_ipaccess()
 			if (*slash) {
 				*(slash++) = '\0';
 				mask = atoi(slash);
-				if (mask < 1 || (mask += ipv6 ? 0 : 96) > 128 )
+				if (mask < 1 || (mask += ipv6 ? 0 : 96) > 128) {
+					applog(LOG_ERR, "API: ignored address with "
+							"invalid mask (%d) '%s'",
+							mask, original); 
 					goto popipo; // skip invalid/zero
+				}
 
 				for (i = 0; i < 16; i++)
 					ipaccess[ips].mask.s6_addr[i] = 0;
@@ -4503,14 +4509,47 @@ static void setup_ipaccess()
 			for (i = 0; i < 16; i++)
 				ipaccess[ips].ip.s6_addr[i] = 0; // missing default to '[::]'
 			if (ipv6) {
-				if (INET_PTON(AF_INET6, ptr, &(ipaccess[ips].ip)) != 1)
+				if (INET_PTON(AF_INET6, ptr, &(ipaccess[ips].ip)) != 1) {
+					applog(LOG_ERR, "API: ignored invalid "
+							"IPv6 address '%s'",
+							original); 
 					goto popipo;
+				}
 			}
 			else {
-				// v4 mapped v6 address, such as "::ffff:255.255.255.255"
-				sprintf(tmp, "::ffff:%s", ptr);
-				if (INET_PTON(AF_INET6, tmp, &(ipaccess[ips].ip)) != 1)
+				/* v4 mapped v6 address,
+				 * such as "::ffff:255.255.255.255"
+				 * but pad on extra missing .0 as needed */
+				dot = strchr(ptr, '.');
+				if (!dot) {
+					snprintf(tmp, sizeof(tmp),
+						 "::ffff:%s.0.0.0",
+						 ptr);
+				} else {
+					dot = strchr(dot+1, '.');
+					if (!dot) {
+						snprintf(tmp, sizeof(tmp),
+							 "::ffff:%s.0.0",
+							 ptr);
+					} else {
+						dot = strchr(dot+1, '.');
+						if (!dot) {
+							snprintf(tmp, sizeof(tmp),
+								 "::ffff:%s.0",
+								 ptr);
+						} else {
+							snprintf(tmp, sizeof(tmp),
+								 "::ffff:%s",
+								 ptr);
+						}
+					}
+				}
+				if (INET_PTON(AF_INET6, tmp, &(ipaccess[ips].ip)) != 1) {
+					applog(LOG_ERR, "API: ignored invalid "
+							"IPv4 address '%s' (as %s)",
+							original, tmp); 
 					goto popipo;
+				}
 			}
 			for (i = 0; i < 16; i++)
 				ipaccess[ips].ip.s6_addr[i] &= ipaccess[ips].mask.s6_addr[i];
@@ -4576,12 +4615,13 @@ static bool check_connect(struct sockaddr_storage *cli, char **connectaddr, char
 	if (opt_api_allow) {
 		for (i = 0; i < ips; i++) {
 			match = true;
-			for (j = 0; j < 16; j++)
+			for (j = 0; j < 16; j++) {
 				if ((client_ip.s6_addr[j] & ipaccess[i].mask.s6_addr[j])
 						!= ipaccess[i].ip.s6_addr[j]) {
 					match = false;
 					break;
 				}
+			}
 			if (match) {
 				addrok = true;
 				*group = ipaccess[i].group;

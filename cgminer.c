@@ -1,5 +1,6 @@
 /*
  * Copyright 2011-2015 Con Kolivas
+ * Copyright 2011-2015 Andrew Smith
  * Copyright 2011-2012 Luke Dashjr
  * Copyright 2010 Jeff Garzik
  *
