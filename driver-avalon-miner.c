@@ -248,6 +248,7 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 
 		/* power off notice */
 		if (!info->get_voltage) {
+			usb_buffer_clear(avalonm);
 			applog(LOG_NOTICE, "%s-%d: AVAM_P_STATUS_M Power off notice", avalonm->drv->name, avalonm->device_id);
 			info->power_on = 1;
 			memset(info->set_frequency, 0, sizeof(uint32_t) * info->asic_cnts * 3);
@@ -536,7 +537,7 @@ static void avalonm_set_voltage(struct cgpu_info *avalonm)
 	       info->set_voltage);
 
 	if (info->power_on)
-		cgsleep_ms(500);
+		cgsleep_ms(1000);
 
 	info->power_on = 0;
 }
@@ -644,19 +645,21 @@ static void *avalonm_process_tasks(void *userdata)
 			work = avalonm->works[i];
 			if (likely(j < avalonm->queued && avalonm->works[i])) {
 				/* Configuration */
-				/* FIXME: change voltage before frequency will cause the chip works at the default frequency (100Mhz) */
+				avalonm_set_voltage(avalonm);
+
 				if (FLAG_GET(info->freq_set, 0)) {
 					avalonm_set_freq(avalonm, AVAM_ASIC_ALL, info->opt_freq[0]);
 					FLAG_CLEAR(info->freq_set, 0);
+					cgsleep_ms(200);
 				}
 
 				for (k = 1; k <= info->asic_cnts; k++) {
 					if (FLAG_GET(info->freq_set, k)) {
 						avalonm_set_freq(avalonm, k, info->opt_freq[k - 1]);
 						FLAG_CLEAR(info->freq_set, k);
+						cgsleep_ms(1000);
 					}
 				}
-				avalonm_set_voltage(avalonm);
 
 				/* P_WORK part 1: midstate */
 				memcpy(send_pkg.data, work->midstate, AVAM_P_DATA_LEN);
@@ -664,6 +667,8 @@ static void *avalonm_process_tasks(void *userdata)
 				avalonm_init_pkg(&send_pkg, AVAM_P_WORK, 1, 2);
 				hexdump(send_pkg.data, 32);
 				avalonm_send_pkg(avalonm, &send_pkg);
+				if (info->freq_update)
+					cgsleep_ms(300);
 
 				/* P_WORK part 2:
 				 * id(6)+reserved(2)+ntime(1)+fan(3)+led(4)+reserved(4)+data(12) */
@@ -681,6 +686,8 @@ static void *avalonm_process_tasks(void *userdata)
 				avalonm_init_pkg(&send_pkg, AVAM_P_WORK, 2, 2);
 				hexdump(send_pkg.data, 32);
 				avalonm_send_pkg(avalonm, &send_pkg);
+				if (info->freq_update)
+					cgsleep_ms(300);
 			}
 		}
 
@@ -692,12 +699,11 @@ static void *avalonm_process_tasks(void *userdata)
 		/* little delay, let asics process more job */
 		if (!strncmp(info->ver, "3U", 2))
 			cgsleep_ms(400);
-		else
-			cgsleep_ms(1);
 
 		/* Get result */
 		do {
 			ret = avalonm_get_reports(avalonm);
+			cgsleep_ms(5);
 		} while (ret != AVAM_P_STATUS_M);
 
 		if (info->freq_update) {
