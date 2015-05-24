@@ -1304,11 +1304,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bitmain-temp",
 		     set_int_0_to_100, opt_show_intval, &opt_bitmain_temp,
 		     "Set bitmain target temperature"),
+#endif
+#ifdef USE_ANT_S2
 	OPT_WITH_ARG("--bitmain-voltage",
 		     opt_set_charp, NULL, &opt_bitmain_voltage,
 		     "Set bitmain voltage (default: "BITMAIN_VOLTAGE_DEF")"),
-#endif
-#ifdef USE_ANT_S2
 	OPT_WITH_ARG("--bitmain-dev",
 		     opt_set_charp, NULL, &opt_bitmain_dev,
 		     "Set bitmain device"),
