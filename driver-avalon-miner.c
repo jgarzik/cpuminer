@@ -188,9 +188,8 @@ static void process_nonce(struct cgpu_info *avalonm, uint8_t *report)
 	if (!work)
 		return;
 
-	if(!submit_noffset_nonce(info->thr, work, nonce, ntime)) {
+	if(!submit_noffset_nonce(info->thr, work, nonce, ntime))
 		info->hw_work[chip_id]++;
-	}
 
 	info->matching_work[chip_id]++;
 	free_work(work);
