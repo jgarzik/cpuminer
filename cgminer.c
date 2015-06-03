@@ -105,7 +105,7 @@ char *curly = ":D";
 #include "driver-hashfast.h"
 #endif
 
-#if defined(USE_ANT_S1) || defined(USE_ANT_S2)
+#if defined(USE_ANT_S1) || defined(USE_ANT_S2) || defined(USE_ANT_S3)
 #include "driver-bitmain.h"
 #endif
 
@@ -264,7 +264,9 @@ static char *opt_set_bitmain_fan;
 char *opt_bitmain_freq;
 #endif
 #ifdef USE_ANT_S2
+#ifndef USE_ANT_S3
 char *opt_bitmain_dev;
+#endif
 char *opt_bitmain_voltage = BITMAIN_VOLTAGE_DEF;
 #endif
 #ifdef USE_HASHFAST
@@ -1296,7 +1298,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bitmain-options",
 		     opt_set_charp, NULL, &opt_bitmain_options,
 #ifdef USE_ANT_S1
-		     "Set bitmain options baud:miners:asic:timeout:freq"
+		     "Set bitmain options baud:miners:asic:timeout:freq:regdata"
 #else
 		     "Set bitmain options baud:miners:asic:ignored..."
 #endif
@@ -1309,9 +1311,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bitmain-voltage",
 		     opt_set_charp, NULL, &opt_bitmain_voltage,
 		     "Set bitmain voltage (default: "BITMAIN_VOLTAGE_DEF")"),
+#ifndef USE_ANT_S3
 	OPT_WITH_ARG("--bitmain-dev",
 		     opt_set_charp, NULL, &opt_bitmain_dev,
 		     "Set bitmain device"),
+#endif
 	OPT_WITHOUT_ARG("--bitmainbeeper",
 			opt_set_bool, &opt_bitmain_beeper,
 			"Set bitmain beeper ringing"),
@@ -1831,7 +1835,11 @@ static char *opt_verusage_and_exit(const char *extra)
 		"ant.S1 "
 #endif
 #ifdef USE_ANT_S2
+#ifdef USE_ANT_S3
+		"ant.S3 "
+#else
 		"ant.S2 "
+#endif
 #endif
 #ifdef USE_AVALON
 		"avalon "

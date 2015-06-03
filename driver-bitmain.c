@@ -20,15 +20,21 @@ static void ants1_detect(__maybe_unused bool hotplug)
 }
 #endif
 #ifdef USE_ANT_S2
+#ifdef USE_ANT_S3
+static void ants3_detect(__maybe_unused bool hotplug)
+{
+}
+#else
 static void ants2_detect(__maybe_unused bool hotplug)
 {
 }
+#endif
 #endif
 
 #else // LINUX
 
 #include "elist.h"
-#ifdef USE_ANT_S1
+#if (defined(USE_ANT_S1) || defined(USE_ANT_S3))
 #include "usbutils.h"
 #else
 #define C_BITMAIN_READ 0
@@ -44,7 +50,11 @@ static void ants2_detect(__maybe_unused bool hotplug)
 #ifdef USE_ANT_S1
 #define ANTDRV ants1_drv
 #else
+#ifdef USE_ANT_S3
+#define ANTDRV ants3_drv
+#else
 #define ANTDRV ants2_drv
+#endif
 #endif
 
 #define BITMAIN_CALC_DIFF1	1
@@ -64,7 +74,7 @@ bool opt_bitmain_auto;
 
 static int option_offset = -1;
 
-#ifdef USE_ANT_S1
+#if (defined(USE_ANT_S1) || defined(USE_ANT_S3))
 static unsigned char bit_swap_table[256] =
 {
   0x00, 0x80, 0x40, 0xc0, 0x20, 0xa0, 0x60, 0xe0,
@@ -190,25 +200,17 @@ static bool get_options(int this_option_offset, int *baud, int *chain_num,
 	char buf[BUFSIZ+1];
 	char *ptr, *comma, *colon, *colon2, *colon3, *colon4, *colon5;
 	size_t max;
-	int i, tmp;
+	int tmp;
 
 	if (opt_bitmain_options == NULL)
 		buf[0] = '\0';
 	else {
+		// Always use the first set if more than one
 		ptr = opt_bitmain_options;
-		for (i = 0; i < this_option_offset; i++) {
-			comma = strchr(ptr, ',');
-			if (comma == NULL)
-				break;
-			ptr = comma + 1;
-		}
-
 		comma = strchr(ptr, ',');
-		if (comma == NULL)
-			max = strlen(ptr);
-		else
-			max = comma - ptr;
-
+		if (comma)
+			*comma = '\0';
+		max = strlen(ptr);
 		if (max > BUFSIZ)
 			max = BUFSIZ;
 		strncpy(buf, ptr, max);
@@ -321,30 +323,23 @@ static bool get_options(int this_option_offset, int *baud, int *chain_num,
 	return true;
 }
 #else
-static bool get_options(int this_option_offset, int *baud, int *chain_num, int *asic_num)
+static bool get_options(__maybe_unused int this_option_offset, int *baud,
+			int *chain_num, int *asic_num)
 {
 	char buf[BUFSIZ+1];
 	char *ptr, *comma, *colon, *colon2, *colon3;
 	size_t max;
-	int i, tmp;
+	int tmp;
 
 	if (opt_bitmain_options == NULL)
 		buf[0] = '\0';
 	else {
+		// Always use the first set if more than one
 		ptr = opt_bitmain_options;
-		for (i = 0; i < this_option_offset; i++) {
-			comma = strchr(ptr, ',');
-			if (comma == NULL)
-				break;
-			ptr = comma + 1;
-		}
-
 		comma = strchr(ptr, ',');
-		if (comma == NULL)
-			max = strlen(ptr);
-		else
-			max = comma - ptr;
-
+		if (comma)
+			*comma = '\0';
+		max = strlen(ptr);
 		if (max > BUFSIZ)
 			max = BUFSIZ;
 		strncpy(buf, ptr, max);
@@ -859,7 +854,7 @@ static int bitmain_parse_rxstatus(const uint8_t * data, int datalen, struct bitm
 	for (i = 0; i < bm->chain_num; i++) {
 		asic_num = bm->chain_asic_num[i];
 		if (asic_num < 0)
-			asic_num = 0;
+			asic_num = 1;
 		else {
 			if (asic_num % 32 == 0)
 				asic_num = asic_num / 32;
@@ -872,7 +867,7 @@ static int bitmain_parse_rxstatus(const uint8_t * data, int datalen, struct bitm
 	for(i = 0; i < bm->chain_num; i++) {
 		asic_num = bm->chain_asic_num[i];
 		if (asic_num < 0)
-			asic_num = 0;
+			asic_num = 1;
 		else {
 			if (asic_num % 32 == 0)
 				asic_num = asic_num / 32;
@@ -1031,7 +1026,7 @@ static int bitmain_read(struct cgpu_info *bitmain, unsigned char *buf,
 		return -1;
 	}
 
-#ifdef USE_ANT_S1
+#if (defined(USE_ANT_S1) || defined(USE_ANT_S3))
 	int err = usb_read_once_timeout(bitmain, (char *)buf, bufsize, &readlen,
 					timeout, ep);
 	applog(LOG_DEBUG, "%s%i: Get %s() got readlen %d err %d",
@@ -1049,7 +1044,7 @@ static int bitmain_write(struct cgpu_info *bitmain, char *buf, ssize_t len,
 	__maybe_unused struct bitmain_info *info = bitmain->device_data;
 	int amount, __maybe_unused sent;
 
-#ifdef USE_ANT_S1
+#if (defined(USE_ANT_S1) || defined(USE_ANT_S3))
 	int err = usb_write(bitmain, buf, len, &amount, ep);
 	applog(LOG_DEBUG, "%s%d: usb_write got err %d",
 			  bitmain->drv->name, bitmain->device_id, err);
@@ -1093,7 +1088,7 @@ static int bitmain_send_data(const uint8_t *data, int datalen, __maybe_unused st
 		return 0;
 	}
 
-#ifdef USE_ANT_S1
+#if (defined(USE_ANT_S1) || defined(USE_ANT_S3))
 	ep = C_BITMAIN_SEND;
 	if (data[0] == BITMAIN_TOKEN_TYPE_TXCONFIG) {
 		ep = C_BITMAIN_TOKEN_TXCONFIG;
@@ -1467,7 +1462,7 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 	bool found = false;
 	struct work *work = NULL;
 	struct bitmain_packet_head packethead;
-	int asicnum = 0;
+	int asicnum = 0, mod = 0, tmp = 0;
 	uint64_t searches;
 	K_ITEM *witem;
 
@@ -1520,18 +1515,21 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 					info->chain_asic_num[n] = rxstatusdata.chain_asic_num[n];
 					memset(info->chain_asic_status_t[n], 0, 320);
 					j = 0;
+					mod = 0;
 					if (info->chain_asic_num[n] <= 0)
 						asicnum = 0;
 					else {
-						if (info->chain_asic_num[n] % 32 == 0)
+						mod = info->chain_asic_num[n] % 32;
+						if (mod == 0)
 							asicnum = info->chain_asic_num[n] / 32;
 						else
 							asicnum = info->chain_asic_num[n] / 32 + 1;
 					}
 					if (asicnum > 0) {
 						for (m = asicnum-1; m >= 0; m--) {
-							for (r = 0; r < 32; r++) {
-								if ((r % 8) == 0 && r != 0) {
+							tmp = (mod ? (32 - mod) : 0);
+							for (r = tmp; r < 32; r++) {
+								if (((r-tmp) % 8) == 0 && (r-tmp) != 0) {
 									info->chain_asic_status_t[n][j] = ' ';
 									j++;
 								}
@@ -1547,6 +1545,7 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 							}
 							info->chain_asic_status_t[n][j] = ' ';
 							j++;
+							mod = 0;
 						}
 					}
 					applog(LOG_DEBUG, "%s%d: %s() RxStatis Data chain(%d) asic_num=%d "
@@ -1794,7 +1793,11 @@ static void *bitmain_get_results(void *userdata)
 		applog(LOG_DEBUG, "%s%d: %s() read=%d",
 				  bitmain->drv->name, bitmain->device_id, __func__, ret);
 
+#ifdef USE_ANT_S1
 		if (ret < 1) {
+#else
+		if (ret < 1 || ret == 18) {
+#endif
 			errorcount++;
 #ifdef USE_ANT_S1
 			if (errorcount > 100) {
@@ -1806,7 +1809,13 @@ static void *bitmain_get_results(void *userdata)
 				cgsleep_ms(20);
 				errorcount = 0;
 			}
-			continue;
+			if (ret < 1) {
+#ifndef USE_ANT_S1
+				if (errorcount > 0)
+					cgsleep_ms(1);
+#endif
+				continue;
+			}
 		}
 
 		if (opt_debug) {
@@ -2256,32 +2265,43 @@ static void ant_info(struct bitmain_info *info, int baud, int chain_num, int asi
 	info->temp_sum = 0;
 }
 
-#ifdef USE_ANT_S1
+#if (defined(USE_ANT_S1) || defined(USE_ANT_S3))
 static struct cgpu_info *bitmain_detect_one(libusb_device *dev, struct usb_find_devices *found)
 {
-	int baud, chain_num, asic_num, timeout, frequency = 0;
+	int baud, chain_num, asic_num = 0;
+#ifdef USE_ANT_S1
+	int timeout, frequency = 0;
 	uint8_t reg_data[4] = {0};
+#endif
 	struct bitmain_info *info;
 	struct cgpu_info *bitmain;
 	bool configured;
 	int ret;
 
-	if (opt_bitmain_options == NULL)
+	if (!opt_bitmain_options || !(*opt_bitmain_options)) {
+		applog(LOG_ERR, "%s: no bitmain-options specified", ANTDRV.dname);
 		return NULL;
+	}
 
 	bitmain = usb_alloc_cgpu(&ANTDRV, BITMAIN_MINER_THREADS);
 
 	baud = BITMAIN_IO_SPEED;
 	chain_num = BITMAIN_DEFAULT_CHAIN_NUM;
 	asic_num = BITMAIN_DEFAULT_ASIC_NUM;
+#ifdef USE_ANT_S1
 	timeout = BITMAIN_DEFAULT_TIMEOUT;
 	frequency = BITMAIN_DEFAULT_FREQUENCY;
+#endif
 
 	if (!usb_init(bitmain, dev, found))
 		goto shin;
 
+#ifdef USE_ANT_S1
 	configured = get_options(++option_offset, &baud, &chain_num,
 				 &asic_num, &timeout, &frequency, reg_data);
+#else
+	configured = get_options(++option_offset, &baud, &chain_num, &asic_num);
+#endif
 
 	/* Even though this is an FTDI type chip, we want to do the parsing
 	 * all ourselves so set it to std usb type */
@@ -2292,12 +2312,20 @@ static struct cgpu_info *bitmain_detect_one(libusb_device *dev, struct usb_find_
 		quit(1, "Failed to calloc bitmain_info data");
 	info = bitmain->device_data;
 
+#ifdef USE_ANT_S1
 	if (configured)
 		ant_info(info, baud, chain_num, asic_num, timeout, frequency, reg_data);
 	else
 		ant_info(info, BITMAIN_IO_SPEED, BITMAIN_DEFAULT_CHAIN_NUM,
 			  BITMAIN_DEFAULT_ASIC_NUM, BITMAIN_DEFAULT_TIMEOUT,
 			  BITMAIN_DEFAULT_FREQUENCY, reg_data);
+#else
+	if (configured)
+		ant_info(info, baud, chain_num, asic_num);
+	else
+		ant_info(info, BITMAIN_IO_SPEED, BITMAIN_DEFAULT_CHAIN_NUM, BITMAIN_DEFAULT_ASIC_NUM);
+
+#endif
 
 	if (!add_cgpu(bitmain))
 		goto unshin;
@@ -2314,6 +2342,10 @@ static struct cgpu_info *bitmain_detect_one(libusb_device *dev, struct usb_find_
 
 	info->work_list = k_new_list("Work", sizeof(WITEM), ALLOC_WITEMS, LIMIT_WITEMS, true);
 	info->work_ready = k_new_store(info->work_list);
+#ifdef USE_ANT_S3
+	info->wbuild = k_new_store(info->work_list);
+	dupalloc(bitmain, 10);
+#endif
 
 	applog(LOG_DEBUG, "%s%d: detected %s "
 			  "chain_num=%d asic_num=%d timeout=%d frequency=%d",
@@ -2336,9 +2368,7 @@ shin:
 
 	return NULL;
 }
-#endif
-
-#ifdef USE_ANT_S2
+#else // S2 (and only S2)
 static void ser_detect()
 {
 	int baud, chain_num = 0, asic_num = 0;
@@ -2424,7 +2454,12 @@ static void ants1_detect(bool __maybe_unused hotplug)
 }
 #endif
 
-
+#ifdef USE_ANT_S3
+static void ants3_detect(bool __maybe_unused hotplug)
+{
+	usb_detect(&ANTDRV, bitmain_detect_one);
+}
+#else
 #ifdef USE_ANT_S2
 static bool first_ant = true;
 
@@ -2438,6 +2473,7 @@ static void ants2_detect(bool __maybe_unused hotplug)
 
 	ser_detect();
 }
+#endif
 #endif
 
 static void do_bitmain_close(struct thr_info *thr)
@@ -2729,7 +2765,7 @@ static int64_t bitmain_scanhash(struct thr_info *thr)
 	//	info->reset = true;
 	//}
 
-#ifdef USE_ANT_S1
+#if (defined(USE_ANT_S1) || defined(USE_ANT_S3))
 	if (unlikely(bitmain->usbinfo.nodev)) {
 		applog(LOG_ERR, "%s%d: Device disappeared, shutting down thread",
 				bitmain->drv->name, bitmain->device_id);
@@ -2966,11 +3002,19 @@ struct device_drv ants1_drv = {
 #endif
 
 #ifdef USE_ANT_S2
+#ifdef USE_ANT_S3
+struct device_drv ants3_drv = {
+	.drv_id = DRIVER_ants3,
+	.dname = "BitmainAntS3",
+	.name = "AS3",
+	.drv_detect = ants3_detect,
+#else
 struct device_drv ants2_drv = {
 	.drv_id = DRIVER_ants2,
 	.dname = "BitmainAntS2",
 	.name = "AS2",
 	.drv_detect = ants2_detect,
+#endif
 #ifdef LINUX
 	.thread_prepare = bitmain_prepare,
 	.hash_work = hash_queued_work,
