@@ -1261,6 +1261,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalonm-ntime-offset",
 		     set_int_0_to_9999, opt_show_intval, &opt_avalonm_ntime_offset,
 		     "Set Avalon miner ntime rolling max offset"),
+	OPT_WITH_ARG("--avalonm-spispeed",
+		     opt_set_intval, opt_show_intval, &opt_avalonm_spispeed,
+		     "Set spi speed for Avalon miner"),
 #endif
 #ifdef USE_BAB
 	OPT_WITH_ARG("--bab-options",

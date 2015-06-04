@@ -25,6 +25,8 @@
 #define AVAM_DEFAULT_VOLTAGE_MAX	9000
 #define AVAM_DEFAULT_VOLTAGE		6500
 
+#define AVAM_DEFAULT_SPISPEED		1000000
+
 #define AVAM_ASIC_ALL	0
 
 #define CAL_DELAY(freq)	(100 * AVAM_ASIC_TIMEOUT_100M / (freq) / 4)
@@ -47,6 +49,7 @@
 #define AVAM_P_SET_VOLT 0x22
 #define AVAM_P_SET_FREQ 0x23
 #define AVAM_P_WORK     0x24
+#define AVAM_P_SETM     0x25
 
 #define AVAM_P_POLLING	0x30
 #define AVAM_P_REQUIRE	0x31
@@ -118,5 +121,6 @@ struct avalonm_info {
 extern char *set_avalonm_freq(char *arg);
 extern uint16_t opt_avalonm_ntime_offset;
 extern char *set_avalonm_voltage(char *arg);
+extern uint32_t opt_avalonm_spispeed;
 #endif /* USE_AVALON_MINER */
 #endif	/* _AVALON_MINER_H_ */

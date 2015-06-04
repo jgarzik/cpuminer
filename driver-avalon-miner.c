@@ -34,6 +34,7 @@
 static uint32_t opt_avalonm_freq[3] = {AVAM_DEFAULT_FREQUENCY, AVAM_DEFAULT_FREQUENCY, AVAM_DEFAULT_FREQUENCY};
 uint16_t opt_avalonm_ntime_offset = 0;
 int opt_avalonm_voltage = AVAM_DEFAULT_VOLTAGE;
+uint32_t opt_avalonm_spispeed = AVAM_DEFAULT_SPISPEED;
 static uint32_t g_freq_array[][2] = {
 	{100, 0x1e678447},
 	{113, 0x22688447},
@@ -356,6 +357,19 @@ static int avalonm_get_frequency(struct cgpu_info *avalonm, uint8_t asic_index)
 	return ret;
 }
 
+static void avalonm_set_spispeed(struct cgpu_info *avalonm, uint32_t speed)
+{
+	struct avalonm_pkg send_pkg;
+	int tmp;
+
+	memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
+	tmp = speed;
+	tmp = be32toh(tmp);
+	memcpy(send_pkg.data, &tmp, 4);
+	avalonm_init_pkg(&send_pkg, AVAM_P_SETM, 1, 1);
+	avalonm_send_pkg(avalonm, &send_pkg);
+}
+
 static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *avalonm = usb_alloc_cgpu(&avalonm_drv, 1);
@@ -423,6 +437,7 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 	memset(info->hw_work, 0, sizeof(int) * info->asic_cnts);
 	memset(info->matching_work, 0, sizeof(uint64_t) * info->asic_cnts);
 
+	avalonm_set_spispeed(avalonm, opt_avalonm_spispeed);
 	return avalonm;
 }
 
