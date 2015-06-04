@@ -262,6 +262,10 @@ char *opt_bitmine_a1_options = NULL;
 char *opt_bitmain_options;
 static char *opt_set_bitmain_fan;
 char *opt_bitmain_freq;
+// Ignored
+static bool opt_bitmain_nobeeper;
+static bool opt_bitmain_notempoverctrl;
+static bool opt_bitmain_homemode;
 #endif
 #ifdef USE_ANT_S2
 #ifndef USE_ANT_S3
@@ -1328,6 +1332,16 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--bitmaintempoverctrl",
 			opt_set_bool, &opt_bitmain_tempoverctrl,
 			"Set bitmain stop runing when temprerature is over 80 degree Celsius"),
+	// Ignored
+	OPT_WITHOUT_ARG("--bitmain-nobeeper",
+			opt_set_bool, &opt_bitmain_nobeeper,
+			opt_hidden),
+	OPT_WITHOUT_ARG("--bitmain-notempoverctrl",
+			opt_set_bool, &opt_bitmain_notempoverctrl,
+			opt_hidden),
+	OPT_WITHOUT_ARG("--bitmain-homemode",
+			opt_set_bool, &opt_bitmain_homemode,
+			opt_hidden),
 #endif
 #ifdef USE_BITMINE_A1
 	OPT_WITH_ARG("--bitmine-a1-options",
