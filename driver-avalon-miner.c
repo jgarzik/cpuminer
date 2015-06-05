@@ -8,6 +8,7 @@
  * Software Foundation; either version 3 of the License, or (at your option)
  * any later version.  See COPYING for more details.
  */
+#include <math.h>
 #include "config.h"
 #include "miner.h"
 #include "driver-avalon-miner.h"
@@ -30,6 +31,12 @@
            | ((uint32_t) *((str) + 1) << 16)    \
            | ((uint32_t) *((str) + 0) << 24);   \
 }
+
+#define V_REF	3.3
+#define R_REF	10000
+#define R0	10000
+#define BCOEFFICIENT	3450
+#define T0	25
 
 static uint32_t opt_avalonm_freq[3] = {AVAM_DEFAULT_FREQUENCY, AVAM_DEFAULT_FREQUENCY, AVAM_DEFAULT_FREQUENCY};
 uint16_t opt_avalonm_ntime_offset = 0;
@@ -158,6 +165,30 @@ static int avalonm_init_pkg(struct avalonm_pkg *pkg, uint8_t type, uint8_t idx, 
 	return 0;
 }
 
+static float convert_temp(uint32_t adc)
+{
+	float ret, resistance;
+
+	resistance = (1023.0 / adc) - 1;
+	resistance = R_REF / resistance;
+	ret = resistance / R0;
+	ret = log(ret);
+	ret /= BCOEFFICIENT;
+	ret += 1.0 / (T0 + 273.15);
+	ret = 1.0 / ret;
+	ret -= 273.15;
+
+	return ret;
+}
+
+static float convert_voltage(uint32_t adc)
+{
+	float voltage;
+
+	voltage = adc * V_REF / 1023 * 110 / 10;
+	return voltage;
+}
+
 static void process_nonce(struct cgpu_info *avalonm, uint8_t *report)
 {
 	struct avalonm_info *info = avalonm->device_data;
@@ -244,6 +275,12 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 		info->fan_pwm = be32toh(tmp);
 		memcpy(&tmp, ar->data + 12, 4);
 		info->get_voltage = decode_voltage((uint8_t)be32toh(tmp));
+		memcpy(&tmp, ar->data + 16, 4);
+		info->adc[0] = be32toh(tmp);
+		memcpy(&tmp, ar->data + 20, 4);
+		info->adc[1] = be32toh(tmp);
+		memcpy(&tmp, ar->data + 24, 4);
+		info->adc[2] = be32toh(tmp);
 		memcpy(&tmp, ar->data + 28 , 4);
 		info->power_good = be32toh(tmp);
 
@@ -436,6 +473,7 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 	FLAG_SET(info->freq_set, AVAM_ASIC_ALL);
 	memset(info->hw_work, 0, sizeof(int) * info->asic_cnts);
 	memset(info->matching_work, 0, sizeof(uint64_t) * info->asic_cnts);
+	info->adc[0] = info->adc[1] = info->adc[2] = 0;
 
 	avalonm_set_spispeed(avalonm, opt_avalonm_spispeed);
 	return avalonm;
@@ -1033,6 +1071,15 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 	strcat(statbuf, buf);
 
 	sprintf(buf, " Vol[%.4f]", (float)info->get_voltage / 10000);
+	strcat(statbuf, buf);
+
+	sprintf(buf, " V12[%.2f]", convert_voltage(info->adc[0]));
+	strcat(statbuf, buf);
+
+	sprintf(buf, " TC[%.2f]", convert_temp(info->adc[1]));
+	strcat(statbuf, buf);
+
+	sprintf(buf, " TF[%.2f]", convert_temp(info->adc[2]));
 	strcat(statbuf, buf);
 
 	strcat(statbuf, " Freq[");

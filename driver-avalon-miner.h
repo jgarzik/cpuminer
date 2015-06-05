@@ -106,6 +106,7 @@ struct avalonm_info {
 	uint8_t freq_set;
 	int hw_work[AVAM_DEFAULT_ASIC_COUNT];
 	uint64_t matching_work[AVAM_DEFAULT_ASIC_COUNT];
+	uint32_t adc[3];
 };
 
 #define AVAM_WRITE_SIZE (sizeof(struct avalonm_pkg))
