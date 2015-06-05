@@ -120,7 +120,7 @@ struct avalonm_info {
 #define FLAG_GET(val, bit)	(((val) >> (bit)) & 1)
 
 extern char *set_avalonm_freq(char *arg);
-extern uint16_t opt_avalonm_ntime_offset;
+extern uint8_t opt_avalonm_ntime_offset;
 extern char *set_avalonm_voltage(char *arg);
 extern uint32_t opt_avalonm_spispeed;
 #endif /* USE_AVALON_MINER */

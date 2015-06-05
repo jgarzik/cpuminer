@@ -39,7 +39,7 @@
 #define T0	25
 
 static uint32_t opt_avalonm_freq[3] = {AVAM_DEFAULT_FREQUENCY, AVAM_DEFAULT_FREQUENCY, AVAM_DEFAULT_FREQUENCY};
-uint16_t opt_avalonm_ntime_offset = 0;
+uint8_t opt_avalonm_ntime_offset = 0;
 int opt_avalonm_voltage = AVAM_DEFAULT_VOLTAGE;
 uint32_t opt_avalonm_spispeed = AVAM_DEFAULT_SPISPEED;
 static uint32_t g_freq_array[][2] = {
@@ -449,6 +449,9 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 	memcpy(info->ver, ar.data + AVAM_MM_DNA_LEN, AVAM_MM_VER_LEN);
 	memcpy(&info->asic_cnts, ar.data + AVAM_MM_DNA_LEN + AVAM_MM_VER_LEN, 4);
 	info->asic_cnts = be32toh(info->asic_cnts);
+	if (opt_avalonm_ntime_offset >= info->asic_cnts)
+		quit(1, "%s-%d: invalid opt_avalonm_ntime_offset, should 0-%d", avalonm->drv->name, avalonm->device_id, info->asic_cnts - 1);
+
 	memset(info->set_frequency, 0, sizeof(uint32_t) * info->asic_cnts * 3);
 	memset(info->get_frequency, 0, sizeof(uint32_t) * info->asic_cnts * 3);
 	for (i = 0; i < info->asic_cnts; i++) {
@@ -697,7 +700,7 @@ static void *avalonm_process_tasks(void *userdata)
 
 		for (i = start_count, j = 0; i < end_count; i++, j++) {
 			work = avalonm->works[i];
-			if (likely(j < avalonm->queued && avalonm->works[i])) {
+			if (likely(j < avalonm->queued && avalonm->works[i] && j < (info->asic_cnts - opt_avalonm_ntime_offset))) {
 				/* Configuration */
 				avalonm_set_voltage(avalonm);
 
@@ -730,7 +733,11 @@ static void *avalonm_process_tasks(void *userdata)
 
 				UNPACK32(work->id, send_pkg.data);
 
-				send_pkg.data[9] = opt_avalonm_ntime_offset;
+				/* always roll work 0 */
+				if (j == 0)
+					send_pkg.data[9] = opt_avalonm_ntime_offset;
+				else
+					send_pkg.data[9] = 0;
 
 				/* TODO led */
 				UNPACK32(0, send_pkg.data + 12);
@@ -1120,6 +1127,7 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 			info->noncefifo_cnt);
 
 	root = api_add_string(root, "AVAM Fifo", buf, true);
+	root = api_add_uint8(root, "AVAM ntime", &opt_avalonm_ntime_offset, true);
 	return root;
 }
 
