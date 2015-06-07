@@ -105,7 +105,7 @@ char *curly = ":D";
 #include "driver-hashfast.h"
 #endif
 
-#if defined(USE_ANT_S1) || defined(USE_ANT_S2)
+#if defined(USE_ANT_S1) || defined(USE_ANT_S2) || defined(USE_ANT_S3)
 #include "driver-bitmain.h"
 #endif
 
@@ -262,9 +262,15 @@ char *opt_bitmine_a1_options = NULL;
 char *opt_bitmain_options;
 static char *opt_set_bitmain_fan;
 char *opt_bitmain_freq;
+// Ignored
+static bool opt_bitmain_nobeeper;
+static bool opt_bitmain_notempoverctrl;
+static bool opt_bitmain_homemode;
 #endif
 #ifdef USE_ANT_S2
+#ifndef USE_ANT_S3
 char *opt_bitmain_dev;
+#endif
 char *opt_bitmain_voltage = BITMAIN_VOLTAGE_DEF;
 #endif
 #ifdef USE_HASHFAST
@@ -1296,7 +1302,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bitmain-options",
 		     opt_set_charp, NULL, &opt_bitmain_options,
 #ifdef USE_ANT_S1
-		     "Set bitmain options baud:miners:asic:timeout:freq"
+		     "Set bitmain options baud:miners:asic:timeout:freq:regdata"
 #else
 		     "Set bitmain options baud:miners:asic:ignored..."
 #endif
@@ -1304,14 +1310,19 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bitmain-temp",
 		     set_int_0_to_100, opt_show_intval, &opt_bitmain_temp,
 		     "Set bitmain target temperature"),
+	OPT_WITH_ARG("--bitmain-workdelay",
+		     set_int_0_to_100, opt_show_intval, &opt_bitmain_workdelay,
+		     "Set bitmain work delay (ms) 0-100"),
 #endif
 #ifdef USE_ANT_S2
 	OPT_WITH_ARG("--bitmain-voltage",
 		     opt_set_charp, NULL, &opt_bitmain_voltage,
 		     "Set bitmain voltage (default: "BITMAIN_VOLTAGE_DEF")"),
+#ifndef USE_ANT_S3
 	OPT_WITH_ARG("--bitmain-dev",
 		     opt_set_charp, NULL, &opt_bitmain_dev,
 		     "Set bitmain device"),
+#endif
 	OPT_WITHOUT_ARG("--bitmainbeeper",
 			opt_set_bool, &opt_bitmain_beeper,
 			"Set bitmain beeper ringing"),
@@ -1324,6 +1335,16 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--bitmaintempoverctrl",
 			opt_set_bool, &opt_bitmain_tempoverctrl,
 			"Set bitmain stop runing when temprerature is over 80 degree Celsius"),
+	// Ignored
+	OPT_WITHOUT_ARG("--bitmain-nobeeper",
+			opt_set_bool, &opt_bitmain_nobeeper,
+			opt_hidden),
+	OPT_WITHOUT_ARG("--bitmain-notempoverctrl",
+			opt_set_bool, &opt_bitmain_notempoverctrl,
+			opt_hidden),
+	OPT_WITHOUT_ARG("--bitmain-homemode",
+			opt_set_bool, &opt_bitmain_homemode,
+			opt_hidden),
 #endif
 #ifdef USE_BITMINE_A1
 	OPT_WITH_ARG("--bitmine-a1-options",
@@ -1831,7 +1852,11 @@ static char *opt_verusage_and_exit(const char *extra)
 		"ant.S1 "
 #endif
 #ifdef USE_ANT_S2
+#ifdef USE_ANT_S3
+		"ant.S3 "
+#else
 		"ant.S2 "
+#endif
 #endif
 #ifdef USE_AVALON
 		"avalon "

@@ -130,8 +130,9 @@ fi
 # All drivers should prepend an x to the drivercount
 
 standalone="no"
-ants1="no"
 drivercount=""
+
+ants1="no"
 
 AC_ARG_ENABLE([ants1],
 	[AC_HELP_STRING([--enable-ants1],[Compile support for Antminer S1 Bitmain STANDALONE(default disabled)])],
@@ -143,7 +144,6 @@ if test "x$ants1" = xyes; then
 	standalone="yes"
 fi
 AM_CONDITIONAL([HAS_ANT_S1], [test x$ants1 = xyes])
-
 
 ants2="no"
 
@@ -157,6 +157,19 @@ if test "x$ants2" = xyes; then
 	standalone="yes"
 fi
 AM_CONDITIONAL([HAS_ANT_S2], [test x$ants2 = xyes])
+
+ants3="no"
+
+AC_ARG_ENABLE([ants3],
+	[AC_HELP_STRING([--enable-ants3],[Compile support for Antminer S3 Bitmain STANDALONE(default disabled)])],
+	[ants3=$enableval]
+	)
+if test "x$ants3" = xyes; then
+	AC_DEFINE([USE_ANT_S3], [1], [Defined to 1 if Antminer S3 Bitmain support is wanted])
+	drivercount=x$drivercount
+	standalone="yes"
+fi
+AM_CONDITIONAL([HAS_ANT_S3], [test x$ants3 = xyes])
 
 avalon="no"
 
@@ -460,7 +473,7 @@ fi
 
 
 #Add a new device to this list if it needs libusb, along with a no on the end.
-if test x$avalon$avalon2$avalon4$bitforce$bitfury$blockerupter$modminer$bflsc$icarus$hashfast$hashratio$klondike$drillbit$cointerra$ants1 != xnonononononononononononononono; then
+if test x$avalon$avalon2$avalon4$bitforce$bitfury$blockerupter$modminer$bflsc$icarus$hashfast$hashratio$klondike$drillbit$cointerra$ants1$ants3 != xnononononononononononononononono; then
 	want_usbutils=true
 else
 	want_usbutils=false
@@ -666,6 +679,12 @@ else
 	echo "  Antminer.S2.Bitmain..: Disabled"
 fi
 
+if test "x$ants3" = xyes; then
+	echo "  Antminer.S3.Bitmain..: Enabled"
+else
+	echo "  Antminer.S3.Bitmain..: Disabled"
+fi
+
 if test "x$avalon" = xyes; then
 	echo "  Avalon.ASICs.........: Enabled"
 else
@@ -789,7 +808,7 @@ else
 fi
 
 #Add any new device to this, along with a no on the end of the test
-if test "x$avalon$avalon2$avalon4$bab$bflsc$bitforce$bitfury$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$sp10$sp30" = xnononononononononononononononononononononono; then
+if test "x$avalon$avalon2$avalon4$bab$bflsc$bitforce$bitfury$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$ants3$sp10$sp30" = xnonononononononononononononononononononononono; then
 	echo
 	AC_MSG_ERROR([No mining devices configured in])
 	echo

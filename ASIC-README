@@ -271,12 +271,17 @@ ASIC SPECIFIC COMMANDS
 --bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
 --bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
 --bitmain-auto      Adjust bitmain overclock frequency dynamically for best hashrate
---bitmain-cutoff    Set bitmain overheat cut off temperature
---bitmain-fan       Set fanspeed percentage for bitmain, single value or range (default: 20-100)
---bitmain-freq      Set frequency range for bitmain-auto, single value or range
+--bitmain-cutoff <arg> Set bitmain overheat cut off temperature
+--bitmain-fan <arg> Set fanspeed percentage for bitmain, single value or range (default: 20-100)
+--bitmain-freq <arg> Set bitmain freq options timeout:freq:regdata
 --bitmain-hwerror   Set bitmain device detect hardware error
---bitmain-options   Set bitmain options baud:miners:asic:timeout:freq
---bitmain-temp      Set bitmain target temperature
+--bitmain-options <arg> Set bitmain options baud:miners:asic:timeout:freq:regdata
+--bitmain-temp <arg> Set bitmain target temperature
+--bitmain-workdelay <arg> Set bitmain work delay (ms) 0-100
+--bitmain-voltage <arg> Set bitmain voltage - S2/S3 only
+--bitmain-dev <arg> Set bitmain device - S2 only
+--bitmainbeeper     Set bitmain beeper ringing
+--bitmaintempoverctrl Set bitmain stop runing when temprerature is over 80 degree Celsius
 --bxf-bits <arg>    Set max BXF/HXF bits for overclocking (default: 54)
 --bxf-temp-target <arg> Set target temperature for BXF/HXF devices (default: 82)
 --bxm-bits <arg>    Set BXM bits for overclocking (default: 54)

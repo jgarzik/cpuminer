@@ -62,7 +62,7 @@ static cgtimer_t usb11_cgt;
 
 // There is no windows version
 #define ANT_S1_TIMEOUT_MS 200
-#define ANT_S2_TIMEOUT_MS 200
+#define ANT_S3_TIMEOUT_MS 200
 
 #ifdef WIN32
 #define BFLSC_TIMEOUT_MS 999
@@ -411,14 +411,14 @@ static struct usb_intinfo ants1_ints[] = {
 };
 #endif
 
-#ifdef USE_ANT_S2
-static struct usb_epinfo ants2_epinfos[] = {
+#ifdef USE_ANT_S3
+static struct usb_epinfo ants3_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0, 0 }
 };
 
-static struct usb_intinfo ants2_ints[] = {
-	USB_EPS(0, ants2_epinfos)
+static struct usb_intinfo ants3_ints[] = {
+	USB_EPS(0, ants3_epinfos)
 };
 #endif
 
@@ -843,17 +843,17 @@ static struct usb_find_devices find_dev[] = {
 		.latency = LATENCY_ANTS1,
 		INTINFO(ants1_ints) },
 #endif
-#ifdef USE_ANT_S2
+#ifdef USE_ANT_S3
 	{
-		.drv = DRIVER_ants1,
-		.name = "AS2",
-		.ident = IDENT_AS2,
+		.drv = DRIVER_ants3,
+		.name = "AS3",
+		.ident = IDENT_AS3,
 		.idVendor = 0x4254,
 		.idProduct = 0x4153,
 		.config = 1,
-		.timeout = ANT_S2_TIMEOUT_MS,
-		.latency = LATENCY_ANTS2,
-		INTINFO(ants2_ints) },
+		.timeout = ANT_S3_TIMEOUT_MS,
+		.latency = LATENCY_ANTS3,
+		INTINFO(ants3_ints) },
 #endif
 	{ DRIVER_MAX, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, NULL }
 };

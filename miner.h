@@ -222,6 +222,9 @@ static inline int fsync (int fd)
 #define MAX(x, y)	((x) > (y) ? (x) : (y))
 #endif
 
+#define MACSTR(_num) MACSTR2(_num)
+#define MACSTR2(__num) #__num
+
 /* Put avalon last to make it the last device it tries to detect to prevent it
  * trying to claim same chip but different devices. Adding a device here will
  * update all macros in the code that use the *_PARSE_COMMANDS macros for each
@@ -233,6 +236,7 @@ static inline int fsync (int fd)
 #define ASIC_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(ants1) \
 	DRIVER_ADD_COMMAND(ants2) \
+	DRIVER_ADD_COMMAND(ants3) \
 	DRIVER_ADD_COMMAND(avalon) \
 	DRIVER_ADD_COMMAND(avalon2) \
 	DRIVER_ADD_COMMAND(avalon4) \
@@ -1027,8 +1031,10 @@ extern char *opt_bitmain_options;
 extern char *opt_bitmain_freq;
 extern bool opt_bitmain_hwerror;
 #endif
-#ifdef USE_ANT_S2
+#if (defined(USE_ANT_S2) || defined(USE_ANT_S3))
+#ifndef USE_ANT_S3
 extern char *opt_bitmain_dev;
+#endif
 extern char *opt_bitmain_options;
 extern char *opt_bitmain_freq;
 extern bool opt_bitmain_hwerror;
