@@ -1310,6 +1310,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bitmain-temp",
 		     set_int_0_to_100, opt_show_intval, &opt_bitmain_temp,
 		     "Set bitmain target temperature"),
+	OPT_WITH_ARG("--bitmain-workdelay",
+		     set_int_0_to_100, opt_show_intval, &opt_bitmain_workdelay,
+		     "Set bitmain work delay (ms) 0-100"),
 #endif
 #ifdef USE_ANT_S2
 	OPT_WITH_ARG("--bitmain-voltage",

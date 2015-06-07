@@ -222,6 +222,9 @@ static inline int fsync (int fd)
 #define MAX(x, y)	((x) > (y) ? (x) : (y))
 #endif
 
+#define MACSTR(_num) MACSTR2(_num)
+#define MACSTR2(__num) #__num
+
 /* Put avalon last to make it the last device it tries to detect to prevent it
  * trying to claim same chip but different devices. Adding a device here will
  * update all macros in the code that use the *_PARSE_COMMANDS macros for each
