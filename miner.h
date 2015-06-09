@@ -1271,6 +1271,7 @@ struct pool {
 	time_t last_share_time;
 	double last_share_diff;
 	uint64_t best_diff;
+	uint64_t bad_work;
 
 	struct cgminer_stats cgminer_stats;
 	struct cgminer_pool_stats cgminer_pool_stats;

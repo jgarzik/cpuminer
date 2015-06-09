@@ -1,5 +1,6 @@
 /*
  * Copyright 2011-2015 Con Kolivas
+ * Copyright 2011-2015 Andrew Smith
  * Copyright 2010 Jeff Garzik
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -2030,6 +2031,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		}
 	}
 	pool->merkles = merkles;
+	if (pool->merkles < 2)
+		pool->bad_work++;
 	if (clean)
 		pool->nonce2 = 0;
 #if 0

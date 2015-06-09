@@ -2258,6 +2258,8 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	hex2bin((unsigned char *)&pool->gbt_bits, bits, 4);
 
 	__build_gbt_txns(pool, res_val);
+	if (pool->transactions < 3)
+		pool->bad_work++;
 	cg_wunlock(&pool->gbt_lock);
 
 	return true;
@@ -2445,6 +2447,8 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	pool->nValue = coinbasevalue;
 	hex2bin((unsigned char *)&pool->gbt_bits, bits, 4);
 	gbt_merkle_bins(pool, transaction_arr);
+	if (pool->transactions < 3)
+		pool->bad_work++;
 	pool->height = height;
 
 	memset(pool->scriptsig_base, 0, 42);

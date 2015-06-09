@@ -522,6 +522,12 @@ Feature Changelog for external applications using the API:
 
 ---------
 
+API V3.6 (cgminer v4.9.2)
+
+Modified API commands:
+ 'pools' - add 'Bad Work'
+
+---------
 API V3.5 (cgminer v4.7.0)
 
 - Made quit and restart return valid JSON as a STATUS mirroring the reqest.
