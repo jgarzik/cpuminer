@@ -735,9 +735,9 @@ static void *avalonm_process_tasks(void *userdata)
 
 				/* always roll work 0 */
 				if (j == 0)
-					send_pkg.data[9] = opt_avalonm_ntime_offset;
+					send_pkg.data[8] = opt_avalonm_ntime_offset;
 				else
-					send_pkg.data[9] = 0;
+					send_pkg.data[8] = 0;
 
 				/* TODO led */
 				UNPACK32(0, send_pkg.data + 12);
