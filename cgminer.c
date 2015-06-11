@@ -34,6 +34,10 @@
 #include <semaphore.h>
 #endif
 
+#ifdef USE_LIBSYSTEMD
+#include <systemd/sd-daemon.h>
+#endif
+
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -446,7 +450,7 @@ static int include_count;
 	static int forkpid;
 #endif // defined(unix)
 
-struct sigaction termhandler, inthandler;
+struct sigaction termhandler, inthandler, abrthandler;
 
 struct thread_q *getq;
 
@@ -4036,6 +4040,10 @@ static void clean_up(bool restarting);
 void app_restart(void)
 {
 	applog(LOG_WARNING, "Attempting to restart %s", packagename);
+#ifdef USE_LIBSYSTEMD
+	sd_notify(false, "RELOADING=1\n"
+		"STATUS=Restarting...");
+#endif
 
 	cg_completion_timeout(&__kill_work, NULL, 5000);
 	clean_up(true);
@@ -4056,6 +4064,7 @@ static void sighandler(int __maybe_unused sig)
 	/* Restore signal handlers so we can still quit if kill_work fails */
 	sigaction(SIGTERM, &termhandler, NULL);
 	sigaction(SIGINT, &inthandler, NULL);
+	sigaction(SIGABRT, &abrthandler, NULL);
 	kill_work();
 }
 
@@ -6068,6 +6077,10 @@ static void hashmeter(int thr_id, uint64_t hashes_done)
 			displayed_r15, displayed_hashes);
 	}
 	mutex_unlock(&hash_lock);
+
+#ifdef USE_LIBSYSTEMD
+	sd_notifyf(false, "STATUS=%s", statusline);
+#endif
 
 	if (showlog) {
 		if (!curses_active) {
@@ -8510,6 +8523,21 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 	const unsigned int interval = WATCHDOG_INTERVAL;
 	struct timeval zero_tv;
 
+#ifdef USE_LIBSYSTEMD
+	uint64_t notify_usec;
+	struct timeval notify_interval, notify_tv;
+
+	if (sd_watchdog_enabled(false, &notify_usec)) {
+		notify_usec = notify_usec / 2;
+		us_to_timeval(&notify_interval, notify_usec);
+		cgtime(&notify_tv);
+		addtime(&notify_interval, &notify_tv);
+
+		applog(LOG_DEBUG, "Watchdog notify interval: %.3gs",
+				notify_usec / 1000000.0);
+	}
+#endif
+
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	RenameThread("Watchdog");
@@ -8561,6 +8589,15 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 #endif
 
 		cgtime(&now);
+
+#if USE_LIBSYSTEMD
+		if (notify_usec && !time_more(&notify_tv, &now)) {
+			sd_notify(false, "WATCHDOG=1");
+			copy_time(&notify_tv, &now);
+			addtime(&notify_interval, &notify_tv);
+			applog(LOG_DEBUG, "Notified watchdog");
+		}
+#endif
 
 		if (!sched_paused && !should_run()) {
 			applog(LOG_WARNING, "Pausing execution as per stop time %02d:%02d scheduled",
@@ -8782,6 +8819,11 @@ static void *killall_thread(void __maybe_unused *arg)
 void __quit(int status, bool clean)
 {
 	pthread_t killall_t;
+
+#ifdef USE_LIBSYSTEMD
+	sd_notify(false, "STOPPING=1\n"
+		"STATUS=Shutting down...");
+#endif
 
 	if (unlikely(pthread_create(&killall_t, NULL, killall_thread, NULL)))
 		exit(1);
@@ -9465,6 +9507,10 @@ int main(int argc, char *argv[])
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
 		early_quit(1, "Failed to curl_global_init");
 
+#ifdef USE_LIBSYSTEMD
+	sd_notify(false, "STATUS=Starting up...");
+#endif
+
 # ifdef __linux
 	/* If we're on a small lowspec platform with only one CPU, we should
 	 * yield after dropping a lock to allow a thread waiting for it to be
@@ -9523,6 +9569,7 @@ int main(int argc, char *argv[])
 	sigemptyset(&handler.sa_mask);
 	sigaction(SIGTERM, &handler, &termhandler);
 	sigaction(SIGINT, &handler, &inthandler);
+	sigaction(SIGABRT, &handler, &abrthandler);
 #ifndef WIN32
 	signal(SIGPIPE, SIG_IGN);
 #else
@@ -9869,6 +9916,11 @@ begin_bench:
 		early_quit(1, "incorrect total_control_threads (%d) should be 8", total_control_threads);
 
 	set_highprio();
+
+#ifdef USE_LIBSYSTEMD
+	sd_notify(false, "READY=1\n"
+		"STATUS=Started");
+#endif
 
 	/* Once everything is set up, main() becomes the getwork scheduler */
 	while (42) {

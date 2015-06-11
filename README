@@ -146,6 +146,8 @@ CGMiner specific configuration options:
                           disabled)
   --disable-libcurl       Disable building with libcurl for getwork and GBT
                           support
+  --enable-libsystemd     Compile support for system watchdog and status
+                          notifications (default disabled)
   --without-curses        Compile support for curses TUI (default enabled)
   --with-system-libusb    Compile against dynamic system libusb (default use
                           included static libusb)
