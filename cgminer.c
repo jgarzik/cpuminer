@@ -1257,7 +1257,7 @@ static struct opt_table opt_config_table[] = {
 		     "Set Avalon miner core voltage, in millivolts, step: 125"),
 	OPT_WITH_CBARG("--avalonm-freq",
 		     set_avalonm_freq, NULL, &opt_set_avalonm_freq,
-		     "Set frequency for Avalon miner, 1 to 3 values, example: 445:385:370"),
+		     "Set frequency for Avalon miner, 1 to 3 values, example: 275:250:200"),
 	OPT_WITH_ARG("--avalonm-ntime-offset",
 		     opt_set_intval, opt_show_intval, &opt_avalonm_ntime_offset,
 		     "Set Avalon miner ntime rolling max offset, range 0-4"),

@@ -18,7 +18,7 @@
 #define AVAM_DEFAULT_ARRAY_SIZE		(3 + 2) /* This is from the A3222 datasheet. 3 quequed work + 1 new work + 1 auxiliary, because the device may buffer more work */
 
 #define AVAM_DEFAULT_FREQUENCY_MIN	100
-#define AVAM_DEFAULT_FREQUENCY_MAX	1000
+#define AVAM_DEFAULT_FREQUENCY_MAX	400
 #define AVAM_DEFAULT_FREQUENCY		200
 
 #define AVAM_DEFAULT_VOLTAGE_MIN	4000
