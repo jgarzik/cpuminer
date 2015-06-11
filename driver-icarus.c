@@ -1227,8 +1227,10 @@ static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb
 			info->timeout = ICARUS_WAIT_TIMEOUT;
 			break;
 		case IDENT_ANU:
-		case IDENT_AU3:
 			info->timeout = ANT_WAIT_TIMEOUT;
+			break;
+		case IDENT_AU3:
+			info->timeout = AU3_WAIT_TIMEOUT;
 			break;
 		case IDENT_CMR2:
 			if (found->intinfo_count != CAIRNSMORE2_INTS) {
