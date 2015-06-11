@@ -352,7 +352,7 @@ static void avalonm_set_spispeed(struct cgpu_info *avalonm, uint32_t speed)
 	int tmp;
 
 	memset(send_pkg.data, 0, AVAM_P_DATA_LEN);
-	tmp = speed;
+	tmp = speed | 0x80000000;
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data, &tmp, 4);
 	avalonm_init_pkg(&send_pkg, AVAM_P_SETM, 1, 1);
