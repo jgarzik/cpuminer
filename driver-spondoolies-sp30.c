@@ -98,11 +98,9 @@ static int init_socket(void)
 	int socket_fd;
 	struct sockaddr_un address;
 
-	printf("Init\n");
 	socket_fd = socket(PF_UNIX, SOCK_STREAM, 0);
 	if (socket_fd < 0) {
-		printf("socket() failed\n");
-		perror("Err:");
+		applog(LOG_ERR, "SP30: socket error: %s", strerror(errno));
 		return 0;
 	}
 
@@ -113,8 +111,7 @@ static int init_socket(void)
 	sprintf(address.sun_path, MINERGATE_SOCKET_FILE_SP30);
 
 	if (connect(socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un))) {
-		printf("connect() failed\n");
-		perror("Err:");
+		applog(LOG_ERR, "SP30: socket connect error: %s", strerror(errno));
 		return 0;
 	}
 
@@ -127,11 +124,11 @@ static bool spondoolies_flush_queue(struct spond_adapter* a, bool flush_queue)
 		static int i = 0;
 
 		if (i++ % 10 == 0 && a->works_in_minergate_and_pending_tx + a->works_pending_tx != a->works_in_driver)
-			printf("%d + %d != %d\n", a->works_in_minergate_and_pending_tx, a->works_pending_tx,a->works_in_driver);
+			applog(LOG_DEBUG, "SP30: %d + %d != %d", a->works_in_minergate_and_pending_tx, a->works_pending_tx,a->works_in_driver);
 		assert(a->works_in_minergate_and_pending_tx + a->works_pending_tx == a->works_in_driver);
 		send_minergate_pkt(a->mp_next_req,  a->mp_last_rsp, a->socket_fd);
 		if (flush_queue) {
-			printf("FLUSH!\n");
+			applog(LOG_DEBUG, "SP30: FLUSH!");
 			a->mp_next_req->mask |= 0x02;
 		} else {
 			a->mp_next_req->mask &= ~0x02;
@@ -171,7 +168,7 @@ static void spondoolies_detect_sp30(__maybe_unused bool hotplug)
 	pthread_mutex_init(&a->lock, NULL);
 	a->socket_fd = init_socket();
 	if (a->socket_fd < 1) {
-		printf("Error connecting to minergate server!");
+		applog(LOG_ERR, "SP30: Failed to connect to minergate server");
 		_quit(-1);
 	}
 
@@ -180,7 +177,7 @@ static void spondoolies_detect_sp30(__maybe_unused bool hotplug)
 	spondoolies_flush_queue(a, true);
 	spondoolies_flush_queue(a, true);
 	spondoolies_flush_queue(a, true);
-	applog(LOG_DEBUG, "SPOND spondoolies_detect_sp30 done");
+	applog(LOG_DEBUG, "SP30: SPOND spondoolies_detect_sp30 done");
 }
 
 static struct api_data *spondoolies_api_stats_sp30(struct cgpu_info *cgpu)
@@ -368,7 +365,7 @@ static void spond_poll_stats(struct cgpu_info *spond, struct spond_adapter *a)
 	FILE *fp = fopen("/var/run/mg_rate_temp", "r");
 
 	if (!fp) {
-		applog(LOG_DEBUG, "SPOND unable to open mg_rate_temp");
+		applog(LOG_DEBUG, "SP30: SPOND unable to open mg_rate_temp");
 		a->temp_rate = a->front_temp = a->rear_temp_top = a->rear_temp_bot = 0;
 	} else {
   	int ret = fscanf(fp, "%d %d %d %d", &a->temp_rate,  &a->front_temp , &a->rear_temp_top , &a->rear_temp_bot);
@@ -378,7 +375,7 @@ static void spond_poll_stats(struct cgpu_info *spond, struct spond_adapter *a)
 		a->temp_rate = a->front_temp = a->rear_temp_top = a->rear_temp_bot = 0;
 		fclose(fp);
 	}
-	applog(LOG_DEBUG, "SPOND poll_stats rate: %d front: %d rear(T/B): %d/%d",
+	applog(LOG_DEBUG, "SP30: SPOND poll_stats rate: %d front: %d rear(T/B): %d/%d",
 	a->temp_rate, a->front_temp , a->rear_temp_top, a->rear_temp_bot);
 	/* Use the rear temperature as the dev temperature for now */
 	spond->temp = (a->rear_temp_top + a->rear_temp_bot)/2;
@@ -444,12 +441,12 @@ static int64_t spond_scanhash_sp30(struct thr_info *thr)
 					}
 				} else {
 					a->bad++;
-					printf("Dropping minergate old job id=%d mrkl=%x my-mrkl=%x\n",
+					applog(LOG_DEBUG, "SP30: Dropping minergate old job id=%d mrkl=%x my-mrkl=%x",
 					job_id, a->my_jobs[job_id].merkle_root, work->mrkle_root);
 				}
 			} else {
 				a->empty++;
-				printf("No cgminer job (id:%d res:%d)!\n",job_id, work->res);
+				applog(LOG_DEBUG, "SP30: No cgminer job (id:%d res:%d)!",job_id, work->res);
 			}
 		}
 		mutex_unlock(&a->lock);
