@@ -1589,6 +1589,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 				info->rmdev.def_frq = 330;
 				info->rmdev.max_frq = 400;
 				break;
+#if 0
 			case RM_PRODUCT_T2: // what's this?
 				newname = "LIX";
 				info->rmdev.product_id = ROCKMINER_T2;
@@ -1597,6 +1598,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 				info->rmdev.def_frq = 300;
 				info->rmdev.max_frq = 400;
 				break;
+#endif
 			case RM_PRODUCT_RBOX:
 				newname = "LIN"; // R-Box
 				info->rmdev.product_id = ROCKMINER_RBOX;
