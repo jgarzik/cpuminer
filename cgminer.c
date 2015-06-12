@@ -225,7 +225,7 @@ char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 float opt_anu_freq = 250;
 float opt_au3_freq = 225;
-int opt_au3_volt = 750;
+int opt_au3_volt = 775;
 float opt_rock_freq = 270;
 #endif
 bool opt_worktime;

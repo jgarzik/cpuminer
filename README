@@ -197,7 +197,7 @@ Options for both config file and command line:
 --api-network       Allow API (if enabled) to listen on/for any address, default: only 127.0.0.1
 --api-port <arg>    Port number of miner API (default: 4028)
 --au3-freq <arg>    Set AntminerU3 frequency in MHz, range 100-250 (default: 225.0)
---au3-volt <arg>    Set AntminerU3 voltage in mv, range 725-850, 0 to not set (default: 750)
+--au3-volt <arg>    Set AntminerU3 voltage in mv, range 725-850, 0 to not set (default: 775)
 --avalon-auto       Adjust avalon overclock frequency dynamically for best hashrate
 --avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
 --avalon-fan <arg>  Set fanspeed percentage for avalon, single value or range (default: 20-100)
