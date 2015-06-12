@@ -169,7 +169,7 @@ const int opt_cutofftemp = 95;
 int opt_log_interval = 5;
 static const int max_queue = 1;
 const int max_scantime = 60;
-int opt_expiry = 120;
+const int max_expiry = 600;
 unsigned long long global_hashrate;
 unsigned long global_quota_gcd = 1;
 time_t last_getwork;
@@ -1409,8 +1409,8 @@ static struct opt_table opt_config_table[] = {
 		     "Enable drillbit automatic tuning <every>:[<gooderr>:<baderr>:<maxerr>]"),
 #endif
 	OPT_WITH_ARG("--expiry|-E",
-		     set_int_0_to_9999, opt_show_intval, &opt_expiry,
-		     "Upper bound on how many seconds after getting work we consider a share from it stale"),
+		     set_null, NULL, &opt_set_null,
+		     opt_hidden),
 	OPT_WITHOUT_ARG("--failover-only",
 			opt_set_bool, &opt_fail_only,
 			"Don't leak work to backup pools when primary pool is lagging"),
@@ -4438,7 +4438,7 @@ static bool stale_work(struct work *work, bool share)
 	if (work->rolltime > max_scantime)
 		work_expiry = work->rolltime;
 	else
-		work_expiry = opt_expiry;
+		work_expiry = max_expiry;
 
 	pool = work->pool;
 
@@ -5618,22 +5618,12 @@ static void set_options(void)
 	immedok(logwin, true);
 	clear_logwin();
 retry:
-	wlogprint("\n[E]xpiry: %d\n"
-		  "[W]rite config file\n[C]gminer restart\n",
-		  opt_expiry);
+	wlogprint("[W]rite config file\n[C]gminer restart\n");
 	wlogprint("Select an option or any other key to return\n");
 	logwin_update();
 	input = getch();
 
-	if  (!strncasecmp(&input, "e", 1)) {
-		selected = curses_int("Set expiry time in seconds");
-		if (selected < 0 || selected > 9999) {
-			wlogprint("Invalid selection\n");
-			goto retry;
-		}
-		opt_expiry = selected;
-		goto retry;
-	} else if  (!strncasecmp(&input, "w", 1)) {
+	if  (!strncasecmp(&input, "w", 1)) {
 		FILE *fcfg;
 		char *str, filename[PATH_MAX], prompt[PATH_MAX + 50];
 

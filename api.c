@@ -443,6 +443,8 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_LOCKDIS 124
 #define MSG_LCD 125
 
+#define MSG_DEPRECATED 126
+
 enum code_severity {
 	SEVERITY_ERR,
 	SEVERITY_WARN,
@@ -563,6 +565,7 @@ struct CODES {
 #endif
  { SEVERITY_SUCC,  MSG_SETCONFIG,PARAM_SET,	"Set config '%s' to %d" },
  { SEVERITY_ERR,   MSG_UNKCON,	PARAM_STR,	"Unknown config '%s'" },
+ { SEVERITY_ERR,   MSG_DEPRECATED, PARAM_STR,	"Deprecated config option '%s'" },
  { SEVERITY_ERR,   MSG_INVNUM,	PARAM_BOTH,	"Invalid number (%d) for '%s' range is 0-9999" },
  { SEVERITY_ERR,   MSG_INVNEG,	PARAM_BOTH,	"Invalid negative number (%d) for '%s'" },
  { SEVERITY_SUCC,  MSG_SETQUOTA,PARAM_SET,	"Set pool '%s' to quota %d'" },
@@ -1957,7 +1960,6 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	root = api_add_const(root, "Device Code", DEVICECODE, false);
 	root = api_add_const(root, "OS", OSINFO, false);
 	root = api_add_bool(root, "Failover-Only", &opt_fail_only, false);
-	root = api_add_int(root, "Expiry", &opt_expiry, false);
 #ifdef USE_USBUTILS
 	if (hotplug_time == 0)
 		root = api_add_const(root, "Hotplug", DISABLED, false);
@@ -3499,35 +3501,10 @@ static void debugstate(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 
 static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
-	char *comma;
-	int value;
+	if (!strcasecmp(param, "queue") || ! strcasecmp(param, "scantime") || !strcasecmp(param, "expiry"))
+		message(io_data, MSG_DEPRECATED, 0, param, isjson);
 
-	if (param == NULL || *param == '\0') {
-		message(io_data, MSG_CONPAR, 0, NULL, isjson);
-		return;
-	}
-
-	comma = strchr(param, ',');
-	if (!comma) {
-		message(io_data, MSG_CONVAL, 0, param, isjson);
-		return;
-	}
-
-	*(comma++) = '\0';
-	value = atoi(comma);
-	if (value < 0 || value > 9999) {
-		message(io_data, MSG_INVNUM, value, param, isjson);
-		return;
-	}
-
-	if (strcasecmp(param, "expiry") == 0)
-		opt_expiry = value;
-	else {
-		message(io_data, MSG_UNKCON, 0, param, isjson);
-		return;
-	}
-
-	message(io_data, MSG_SETCONFIG, value, param, isjson);
+	message(io_data, MSG_UNKCON, 0, param, isjson);
 }
 
 static void usbstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
