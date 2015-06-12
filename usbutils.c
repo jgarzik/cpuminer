@@ -2168,6 +2168,10 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 
 			if (!iManufacturer)
 				continue;
+			/* If the alternative driver also has an iProduct, only
+			 * use that for comparison. */
+			if (find_dev[i].iProduct)
+				continue;
 			if (!strcmp((char *)man, iManufacturer)) {
 				applog(LOG_DEBUG, "USB init, alternative iManufacturer match %s",
 				       devstr);
