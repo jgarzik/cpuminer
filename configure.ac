@@ -2,7 +2,7 @@
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [4])
 m4_define([v_min], [9])
-m4_define([v_mic], [1])
+m4_define([v_mic], [2])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
 m4_define([lt_rev], m4_eval(v_maj + v_min))
@@ -279,7 +279,7 @@ AM_CONDITIONAL([HAS_BITMINE_A1], [test x$bitmine_A1 = xyes])
 blockerupter="no"
 
 AC_ARG_ENABLE([blockerupter],
-	[AC_HELP_STRING([--enable-blockerupter],[Compile support for BlockErupter (default disabled)])],
+	[AC_HELP_STRING([--enable-blockerupter],[Compile support for BlockErupter BROKEN DRIVER (default disabled)])],
 	[blockerupter=$enableval]
 	)
 if test "x$blockerupter" = xyes; then
