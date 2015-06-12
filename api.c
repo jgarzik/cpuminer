@@ -1,6 +1,6 @@
 /*
  * Copyright 2011-2015 Andrew Smith
- * Copyright 2011-2014 Con Kolivas
+ * Copyright 2011-2015 Con Kolivas
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -1959,7 +1959,6 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	root = api_add_int(root, "Log Interval", &opt_log_interval, false);
 	root = api_add_const(root, "Device Code", DEVICECODE, false);
 	root = api_add_const(root, "OS", OSINFO, false);
-	root = api_add_bool(root, "Failover-Only", &opt_fail_only, false);
 #ifdef USE_USBUTILS
 	if (hotplug_time == 0)
 		root = api_add_const(root, "Hotplug", DISABLED, false);
@@ -3380,23 +3379,7 @@ static void minerestats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 
 static void failoveronly(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
-	if (param == NULL || *param == '\0') {
-		message(io_data, MSG_MISBOOL, 0, NULL, isjson);
-		return;
-	}
-
-	*param = tolower(*param);
-
-	if (*param != 't' && *param != 'f') {
-		message(io_data, MSG_INVBOOL, 0, NULL, isjson);
-		return;
-	}
-
-	bool tf = (*param == 't');
-
-	opt_fail_only = tf;
-
-	message(io_data, MSG_FOO, tf, NULL, isjson);
+	message(io_data, MSG_DEPRECATED, 0, param, isjson);
 }
 
 static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)

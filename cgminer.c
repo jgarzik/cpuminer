@@ -198,7 +198,6 @@ static bool alt_status;
 static bool switch_status;
 static bool opt_submit_stale = true;
 static int opt_shares;
-bool opt_fail_only;
 static bool opt_fix_protocol;
 bool opt_lowmem;
 bool opt_autofan;
@@ -1412,8 +1411,8 @@ static struct opt_table opt_config_table[] = {
 		     set_null, NULL, &opt_set_null,
 		     opt_hidden),
 	OPT_WITHOUT_ARG("--failover-only",
-			opt_set_bool, &opt_fail_only,
-			"Don't leak work to backup pools when primary pool is lagging"),
+			set_null, &opt_set_null,
+			opt_hidden),
 	OPT_WITHOUT_ARG("--fix-protocol",
 			opt_set_bool, &opt_fix_protocol,
 			"Do not redirect to a different getwork protocol (eg. stratum)"),
@@ -3575,7 +3574,7 @@ static inline struct pool *select_pool(bool lagging)
 		goto out;
 	}
 
-	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only)) {
+	if (pool_strategy != POOL_LOADBALANCE && !lagging) {
 		pool = cp;
 		goto out;
 	} else
@@ -3605,10 +3604,6 @@ static inline struct pool *select_pool(bool lagging)
 		if (pool->quota_used++ < pool->quota_gcd) {
 			if (!pool_unworkable(pool))
 				break;
-			/* Failover-only flag for load-balance means distribute
-			 * unused quota to priority pool 0. */
-			if (opt_fail_only)
-				priority_pool(0)->quota_used--;
 		}
 		pool = NULL;
 		if (++rotating_pool >= total_pools)
@@ -4476,12 +4471,6 @@ static bool stale_work(struct work *work, bool share)
 		return true;
 	}
 
-	if (opt_fail_only && !share && pool != current_pool() && !work->mandatory &&
-	    pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
-		applog(LOG_DEBUG, "Work stale due to fail only pool mismatch");
-		return true;
-	}
-
 	return false;
 }
 
@@ -4622,15 +4611,9 @@ void switch_pools(struct pool *selected)
 	pool = currentpool;
 	cg_wunlock(&control_lock);
 
-	/* Set the lagging flag to avoid pool not providing work fast enough
-	 * messages in failover only mode since  we have to get all fresh work
-	 * as in restart_threads */
-	if (opt_fail_only)
-		pool_tset(pool, &pool->lagging);
-
 	if (pool != last_pool && pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
 		applog(LOG_WARNING, "Switching to pool %d %s", pool->pool_no, pool->rpc_url);
-		if (pool_localgen(pool) || opt_fail_only)
+		if (pool_localgen(pool))
 			clear_pool_work(last_pool);
 	}
 
@@ -5360,7 +5343,6 @@ retry:
 		strategies[pool_strategy].s);
 	if (pool_strategy == POOL_ROTATE)
 		wlogprint("Set to rotate every %d minutes\n", opt_rotate_period);
-	wlogprint("[F]ailover only %s\n", opt_fail_only ? "enabled" : "disabled");
 	wlogprint("Pool [A]dd [R]emove [D]isable [E]nable [Q]uota change\n");
 	wlogprint("[C]hange management strategy [S]witch pool [I]nformation\n");
 	wlogprint("Or press any other key to continue\n");
@@ -5469,9 +5451,6 @@ retry:
 		}
 		pool->quota = selected;
 		adjust_quota_gcd();
-		goto updated;
-	} else if (!strncasecmp(&input, "f", 1)) {
-		opt_fail_only ^= true;
 		goto updated;
 	} else
 		clear_logwin();
@@ -5611,7 +5590,6 @@ void default_save_file(char *filename)
 #ifdef HAVE_CURSES
 static void set_options(void)
 {
-	int selected;
 	char input;
 
 	opt_loginput = true;
@@ -6247,12 +6225,12 @@ static bool cnx_needed(struct pool *pool)
 	if (pool->has_stratum && pool->idle)
 		return true;
 
-	/* Getwork pools without opt_fail_only need backup pools up to be able
+	/* Getwork pools need backup pools up to be able
 	 * to leak shares */
 	cp = current_pool();
 	if (cp == pool)
 		return true;
-	if (!pool_localgen(cp) && (!opt_fail_only || !cp->hdr_path))
+	if (!pool_localgen(cp) && !cp->hdr_path)
 		return true;
 	/* If we're waiting for a response from shares submitted, keep the
 	 * connection open. */
@@ -8075,15 +8053,6 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct
 	 * allows testwork to know whether LP discovered the block or not. */
 	test_work_current(work);
 
-	/* Don't use backup LPs as work if we have failover-only enabled. Use
-	 * the longpoll work from a pool that has been rejecting shares as a
-	 * way to detect when the pool has recovered.
-	 */
-	if (pool != current_pool() && opt_fail_only && pool->enabled != POOL_REJECTING) {
-		free_work(work);
-		return;
-	}
-
 	work = clone_work(work);
 
 	applog(LOG_DEBUG, "Pushing converted work to stage thread");
@@ -9903,7 +9872,7 @@ begin_bench:
 		mutex_lock(stgd_lock);
 		ts = __total_staged();
 
-		if (!pool_localgen(cp) && !ts && !opt_fail_only)
+		if (!pool_localgen(cp) && !ts)
 			lagging = true;
 
 		/* Wait until hash_pop tells us we need to create more work */
@@ -10016,7 +9985,7 @@ retry:
 				pool_died(pool);
 			cgsleep_ms(5000);
 			push_curl_entry(ce, pool);
-			pool = select_pool(!opt_fail_only);
+			pool = select_pool(true);
 			free_work(work);
 			goto retry;
 		}

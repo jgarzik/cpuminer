@@ -980,7 +980,6 @@ extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
 extern int opt_suggest_diff;
 extern char *cgminer_path;
-extern bool opt_fail_only;
 extern bool opt_lowmem;
 extern bool opt_autofan;
 extern bool opt_autoengine;
