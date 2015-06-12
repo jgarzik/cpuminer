@@ -1,5 +1,6 @@
 Version 4.9.2 - 12th June 2015
 
+- Only blacklist devices on iManufacturer if they don't have an iProduct
 - Simplify the pool work choice switching now that only local work generation is
 supported
 - Check for absense of stratum notify on stratum pools to see if they're usable
