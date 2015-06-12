@@ -1102,7 +1102,6 @@ typedef bool (*sha256_func)(struct thr_info*, const unsigned char *pmidstate,
 
 extern bool fulltest(const unsigned char *hash, const unsigned char *target);
 
-extern int opt_queue;
 extern int opt_scantime;
 extern int opt_expiry;
 

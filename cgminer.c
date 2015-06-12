@@ -167,8 +167,7 @@ bool opt_loginput;
 bool opt_compact;
 const int opt_cutofftemp = 95;
 int opt_log_interval = 5;
-int opt_queue = 1;
-static int max_queue = 1;
+static const int max_queue = 1;
 int opt_scantime = -1;
 int opt_expiry = 120;
 unsigned long long global_hashrate;
@@ -1579,8 +1578,8 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_protocol,
 			"Verbose dump of protocol-level activities"),
 	OPT_WITH_ARG("--queue|-Q",
-		     set_int_0_to_9999, opt_show_intval, &opt_queue,
-		     "Maximum number of work items to have queued"),
+		     set_null, NULL, &opt_set_null,
+		     opt_hidden),
 	OPT_WITHOUT_ARG("--quiet|-q",
 			opt_set_bool, &opt_quiet,
 			"Disable logging output, display status and errors"),
@@ -4146,7 +4145,7 @@ static void recruit_curl(struct pool *pool)
  * network delays/outages. */
 static struct curl_ent *pop_curl_entry(struct pool *pool)
 {
-	int curl_limit = opt_delaynet ? 5 : (mining_threads + opt_queue) * 2;
+	int curl_limit = opt_delaynet ? 5 : (mining_threads + max_queue) * 2;
 	bool recruited = false;
 	struct curl_ent *ce;
 
@@ -4292,7 +4291,7 @@ out_unlock:
  * the future */
 static struct work *clone_work(struct work *work)
 {
-	int mrs = mining_threads + opt_queue - total_staged();
+	int mrs = mining_threads + max_queue - total_staged();
 	struct work *work_clone;
 	bool cloned;
 
@@ -5619,24 +5618,14 @@ static void set_options(void)
 	immedok(logwin, true);
 	clear_logwin();
 retry:
-	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n"
+	wlogprint("[S]cantime: %d\n[E]xpiry: %d\n"
 		  "[W]rite config file\n[C]gminer restart\n",
-		opt_queue, opt_scantime, opt_expiry);
+		opt_scantime, opt_expiry);
 	wlogprint("Select an option or any other key to return\n");
 	logwin_update();
 	input = getch();
 
-	if (!strncasecmp(&input, "q", 1)) {
-		selected = curses_int("Extra work items to queue");
-		if (selected < 0 || selected > 9999) {
-			wlogprint("Invalid selection\n");
-			goto retry;
-		}
-		opt_queue = selected;
-		if (opt_queue < max_queue)
-			max_queue = opt_queue;
-		goto retry;
-	} else if  (!strncasecmp(&input, "s", 1)) {
+	if  (!strncasecmp(&input, "s", 1)) {
 		selected = curses_int("Set scantime in seconds");
 		if (selected < 0 || selected > 9999) {
 			wlogprint("Invalid selection\n");
@@ -6881,12 +6870,6 @@ static struct work *hash_pop(bool blocking)
 
 	mutex_lock(stgd_lock);
 	if (!HASH_COUNT(staged_work)) {
-		/* Increase the queue if we reach zero and we know we can reach
-		 * the maximum we're asking for. */
-		if (work_filled && max_queue < opt_queue) {
-			max_queue++;
-			work_filled = false;
-		}
 		work_emptied = true;
 		if (!blocking)
 			goto out_unlock;
@@ -9946,10 +9929,6 @@ begin_bench:
 
 		/* Wait until hash_pop tells us we need to create more work */
 		if (ts > max_staged) {
-			if (work_emptied && max_queue < opt_queue) {
-				max_queue++;
-				work_emptied = false;
-			}
 			work_filled = true;
 			pthread_cond_wait(&gws_cond, stgd_lock);
 			ts = __total_staged();
@@ -9960,10 +9939,6 @@ begin_bench:
 			/* Keeps slowly generating work even if it's not being
 			 * used to keep last_getwork incrementing and to see
 			 * if pools are still alive. */
-			if (work_emptied && max_queue < opt_queue) {
-				max_queue++;
-				work_emptied = false;
-			}
 			work_filled = true;
 			work = hash_pop(false);
 			if (work)
@@ -9979,8 +9954,6 @@ begin_bench:
 			applog(LOG_WARNING, "Pool %d not providing work fast enough", cp->pool_no);
 			cp->getfail_occasions++;
 			total_go++;
-			if (!pool_localgen(cp) && max_queue < opt_queue)
-				applog(LOG_INFO, "Increasing queue to %d", ++max_queue);
 		}
 		pool = select_pool(lagging);
 retry:
@@ -10060,7 +10033,7 @@ retry:
 			applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, retrying in 5s", pool->pool_no);
 			/* Make sure the pool just hasn't stopped serving
 			 * requests but is up as we'll keep hammering it */
-			if (++pool->seq_getfails > mining_threads + opt_queue)
+			if (++pool->seq_getfails > mining_threads + max_queue)
 				pool_died(pool);
 			cgsleep_ms(5000);
 			push_curl_entry(ce, pool);
