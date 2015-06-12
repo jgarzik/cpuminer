@@ -312,6 +312,10 @@ The list of requests - a (*) means it requires privileged access - and replies:
  check|cmd     CHECK          Exists=Y/N, <- 'cmd' exists in this version
                               Access=Y/N| <- you have access to use 'cmd'
 
+ failover-only|true/false (*)
+               none           This command has been deprecated, only returning a
+                              deprecated message.
+
  coin          COIN           Coin mining information:
                               Hash Method=sha256/scrypt,
                               Current Block Time=N.N, <- 0 means none
