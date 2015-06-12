@@ -421,7 +421,7 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 				sscanf(val + 7, "%d", &hi->rolltime);
 				hi->hadexpire = true;
 			} else
-				hi->rolltime = opt_scantime;
+				hi->rolltime = max_scantime;
 			applog(LOG_DEBUG, "X-Roll-Ntime expiry set to %d", hi->rolltime);
 		}
 	}

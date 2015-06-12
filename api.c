@@ -1957,7 +1957,6 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	root = api_add_const(root, "Device Code", DEVICECODE, false);
 	root = api_add_const(root, "OS", OSINFO, false);
 	root = api_add_bool(root, "Failover-Only", &opt_fail_only, false);
-	root = api_add_int(root, "ScanTime", &opt_scantime, false);
 	root = api_add_int(root, "Expiry", &opt_expiry, false);
 #ifdef USE_USBUTILS
 	if (hotplug_time == 0)
@@ -3521,9 +3520,7 @@ static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 		return;
 	}
 
-	if (strcasecmp(param, "scantime") == 0)
-		opt_scantime = value;
-	else if (strcasecmp(param, "expiry") == 0)
+	if (strcasecmp(param, "expiry") == 0)
 		opt_expiry = value;
 	else {
 		message(io_data, MSG_UNKCON, 0, param, isjson);

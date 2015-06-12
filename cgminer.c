@@ -168,7 +168,7 @@ bool opt_compact;
 const int opt_cutofftemp = 95;
 int opt_log_interval = 5;
 static const int max_queue = 1;
-int opt_scantime = -1;
+const int max_scantime = 60;
 int opt_expiry = 120;
 unsigned long long global_hashrate;
 unsigned long global_quota_gcd = 1;
@@ -1612,8 +1612,8 @@ static struct opt_table opt_config_table[] = {
 		     "Serial port to probe for Serial FPGA Mining device"),
 #endif
 	OPT_WITH_ARG("--scan-time|-s",
-		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
-		     "Upper bound on time spent scanning current work, in seconds"),
+		     set_null, NULL, &opt_set_null,
+		     opt_hidden),
 	OPT_WITH_CBARG("--sched-start",
 		     set_sched_start, NULL, &opt_set_sched_start,
 		     "Set a time of day in HH:MM to start mining (a once off without a stop time)"),
@@ -4191,10 +4191,10 @@ static inline bool should_roll(struct work *work)
 	if (work->pool != current_pool() && pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE)
 		return false;
 
-	if (work->rolltime > opt_scantime)
+	if (work->rolltime > max_scantime)
 		expiry = work->rolltime;
 	else
-		expiry = opt_scantime;
+		expiry = max_scantime;
 	expiry = expiry * 2 / 3;
 
 	/* We shouldn't roll if we're unlikely to get one shares' duration
@@ -4435,7 +4435,7 @@ static bool stale_work(struct work *work, bool share)
 	/* Technically the rolltime should be correct but some pools
 	 * advertise a broken expire= that is lower than a meaningful
 	 * scantime */
-	if (work->rolltime > opt_scantime)
+	if (work->rolltime > max_scantime)
 		work_expiry = work->rolltime;
 	else
 		work_expiry = opt_expiry;
@@ -5618,22 +5618,14 @@ static void set_options(void)
 	immedok(logwin, true);
 	clear_logwin();
 retry:
-	wlogprint("[S]cantime: %d\n[E]xpiry: %d\n"
+	wlogprint("\n[E]xpiry: %d\n"
 		  "[W]rite config file\n[C]gminer restart\n",
-		opt_scantime, opt_expiry);
+		  opt_expiry);
 	wlogprint("Select an option or any other key to return\n");
 	logwin_update();
 	input = getch();
 
-	if  (!strncasecmp(&input, "s", 1)) {
-		selected = curses_int("Set scantime in seconds");
-		if (selected < 0 || selected > 9999) {
-			wlogprint("Invalid selection\n");
-			goto retry;
-		}
-		opt_scantime = selected;
-		goto retry;
-	} else if  (!strncasecmp(&input, "e", 1)) {
+	if  (!strncasecmp(&input, "e", 1)) {
 		selected = curses_int("Set expiry time in seconds");
 		if (selected < 0 || selected > 9999) {
 			wlogprint("Invalid selection\n");
@@ -7508,7 +7500,7 @@ out:
 
 static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
 {
-	if (wdiff->tv_sec > opt_scantime || hashes >= 0xfffffffe ||
+	if (wdiff->tv_sec > max_scantime || hashes >= 0xfffffffe ||
 	    stale_work(work, false))
 		return true;
 	return false;
@@ -9656,9 +9648,6 @@ int main(int argc, char *argv[])
 	else
 		setlogmask(LOG_UPTO(LOG_NOTICE));
 #endif
-
-	if (opt_scantime < 0)
-		opt_scantime = 60;
 
 	total_control_threads = 8;
 	control_thr = cgcalloc(total_control_threads, sizeof(*thr));
