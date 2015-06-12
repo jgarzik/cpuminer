@@ -3391,7 +3391,7 @@ out:
 #endif /* HAVE_LIBCURL */
 
 /* Specifies whether we can use this pool for work or not. */
-static bool pool_unworkable(struct pool *pool)
+static bool pool_unusable(struct pool *pool)
 {
 	if (pool->idle)
 		return true;
@@ -3415,7 +3415,7 @@ static struct pool *select_balanced(struct pool *cp)
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
 
-		if (pool_unworkable(pool))
+		if (pool_unusable(pool))
 			continue;
 		if (pool->shares < lowest) {
 			lowest = pool->shares;
@@ -3428,11 +3428,10 @@ static struct pool *select_balanced(struct pool *cp)
 }
 
 static struct pool *priority_pool(int choice);
-static bool pool_unusable(struct pool *pool);
 
 /* Select any active pool in a rotating fashion when loadbalance is chosen if
  * it has any quota left. */
-static inline struct pool *select_pool(bool lagging)
+static inline struct pool *select_pool(void)
 {
 	static int rotating_pool = 0;
 	struct pool *pool, *cp;
@@ -3446,7 +3445,7 @@ static inline struct pool *select_pool(bool lagging)
 		goto out;
 	}
 
-	if (pool_strategy != POOL_LOADBALANCE && !lagging) {
+	if (pool_strategy != POOL_LOADBALANCE) {
 		pool = cp;
 		goto out;
 	} else
@@ -3474,7 +3473,7 @@ static inline struct pool *select_pool(bool lagging)
 	while (!pool && tested++ < total_pools) {
 		pool = pools[rotating_pool];
 		if (pool->quota_used++ < pool->quota_gcd) {
-			if (!pool_unworkable(pool))
+			if (!pool_unusable(pool))
 				break;
 		}
 		pool = NULL;
@@ -4377,16 +4376,6 @@ static struct pool *priority_pool(int choice)
 	return ret;
 }
 
-/* Specifies whether we can switch to this pool or not. */
-static bool pool_unusable(struct pool *pool)
-{
-	if (pool->idle)
-		return true;
-	if (pool->enabled != POOL_ENABLED)
-		return true;
-	return false;
-}
-
 void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
@@ -4457,7 +4446,6 @@ void switch_pools(struct pool *selected)
 	mutex_lock(&lp_lock);
 	pthread_cond_broadcast(&lp_cond);
 	mutex_unlock(&lp_lock);
-
 }
 
 void _discard_work(struct work **workptr, const char *file, const char *func, const int line)
@@ -9697,18 +9685,16 @@ begin_bench:
 			discard_work(work);
 		work = make_work();
 
-		pool = select_pool(false);
-retry:
+		while (42) {
+			pool = select_pool();
+			if (!pool_unusable(pool))
+				break;
+			switch_pools(NULL);
+			pool = select_pool();
+			if (pool_unusable(pool))
+				cgsleep_ms(5);
+		};
 		if (pool->has_stratum) {
-			while (!pool->stratum_active || !pool->stratum_notify) {
-				struct pool *altpool = select_pool(true);
-
-				if (altpool != pool) {
-					pool = altpool;
-					goto retry;
-				}
-				cgsleep_ms(5000);
-			}
 			gen_stratum_work(pool, work);
 			applog(LOG_DEBUG, "Generated stratum work");
 			stage_work(work);
@@ -9717,15 +9703,6 @@ retry:
 
 #ifdef HAVE_LIBCURL
 		if (pool->gbt_solo) {
-			while (pool->idle) {
-				struct pool *altpool = select_pool(true);
-
-				cgsleep_ms(5000);
-				if (altpool != pool) {
-					pool = altpool;
-					goto retry;
-				}
-			}
 			gen_solo_work(pool, work);
 			applog(LOG_DEBUG, "Generated GBT SOLO work");
 			stage_work(work);
@@ -9733,15 +9710,6 @@ retry:
 		}
 
 		if (pool->has_gbt) {
-			while (pool->idle) {
-				struct pool *altpool = select_pool(true);
-
-				cgsleep_ms(5000);
-				if (altpool != pool) {
-					pool = altpool;
-					goto retry;
-				}
-			}
 			gen_gbt_work(pool, work);
 			applog(LOG_DEBUG, "Generated GBT work");
 			stage_work(work);
