@@ -573,19 +573,6 @@ static struct usb_find_devices find_dev[] = {
 		INTINFO(bxm_ints)
 	},
 #endif
-#ifdef USE_BLOCKERUPTER
-	{
-		.drv = DRIVER_blockerupter,
-		.name = "BET",
-		.ident = IDENT_BET,
-		.idVendor = 0x10c4,
-		.idProduct = 0xea60,
-		.config = 1,
-		.timeout = BLOCKERUPTER_TIMEOUT_MS,
-		.latency = LATENCY_UNUSED,
-		INTINFO(bet_ints) },
-
-#endif
 #ifdef USE_DRILLBIT
 	{
 		.drv = DRIVER_drillbit,
@@ -854,6 +841,19 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = ANT_S3_TIMEOUT_MS,
 		.latency = LATENCY_ANTS3,
 		INTINFO(ants3_ints) },
+#endif
+#ifdef USE_BLOCKERUPTER
+	{
+		.drv = DRIVER_blockerupter,
+		.name = "BET",
+		.ident = IDENT_BET,
+		.idVendor = 0x10c4,
+		.idProduct = 0xea60,
+		.config = 1,
+		.timeout = BLOCKERUPTER_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		INTINFO(bet_ints) },
+
 #endif
 	{ DRIVER_MAX, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, NULL }
 };
