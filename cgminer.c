@@ -2287,12 +2287,6 @@ static bool getwork_decode(json_t *res_val, struct work *work)
 	return true;
 }
 
-/* Returns whether the pool supports local work generation or not. */
-static bool pool_localgen(struct pool *pool)
-{
-	return (pool->has_stratum || pool->has_gbt || pool->gbt_solo);
-}
-
 static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 {
 	unsigned char *hashbin;
@@ -2565,8 +2559,6 @@ out:
 	return ret;
 }
 #else /* HAVE_LIBCURL */
-/* Always true with stratum */
-#define pool_localgen(pool) (true)
 #define json_rpc_call(curl, url, userpass, rpc_req, probe, longpoll, rolltime, pool, share) (NULL)
 #define work_decode(pool, work, val) (false)
 #define gen_gbt_work(pool, work) {}
@@ -4613,8 +4605,7 @@ void switch_pools(struct pool *selected)
 
 	if (pool != last_pool && pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
 		applog(LOG_WARNING, "Switching to pool %d %s", pool->pool_no, pool->rpc_url);
-		if (pool_localgen(pool))
-			clear_pool_work(last_pool);
+		clear_pool_work(last_pool);
 	}
 
 	mutex_lock(&lp_lock);
@@ -4991,8 +4982,6 @@ static bool input_pool(bool live);
 #ifdef HAVE_CURSES
 static void display_pool_summary(struct pool *pool)
 {
-	double efficiency = 0.0;
-
 	if (curses_active_locked()) {
 		wlog("Pool: %s\n", pool->rpc_url);
 		if (pool->solved)
@@ -5007,9 +4996,6 @@ static void display_pool_summary(struct pool *pool)
 		wlog(" Rejected difficulty shares: %1.f\n", pool->diff_rejected);
 		if (pool->accepted || pool->rejected)
 			wlog(" Reject ratio: %.1f%%\n", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
-		efficiency = pool->getwork_requested ? pool->accepted * 100.0 / pool->getwork_requested : 0.0;
-		if (!pool_localgen(pool))
-			wlog(" Efficiency (accepted / queued): %.0f%%\n", efficiency);
 
 		wlog(" Items worked on: %d\n", pool->works);
 		wlog(" Discarded work due to new blocks: %d\n", pool->discarded_work);
@@ -6229,8 +6215,6 @@ static bool cnx_needed(struct pool *pool)
 	 * to leak shares */
 	cp = current_pool();
 	if (cp == pool)
-		return true;
-	if (!pool_localgen(cp) && !cp->hdr_path)
 		return true;
 	/* If we're waiting for a response from shares submitted, keep the
 	 * connection open. */
@@ -9864,16 +9848,8 @@ begin_bench:
 		opt_work_update = false;
 		cp = current_pool();
 
-		/* If the primary pool is a getwork pool and cannot roll work,
-		 * try to stage one extra work per mining thread */
-		if (!pool_localgen(cp) && !staged_rollable)
-			max_staged += mining_threads;
-
 		mutex_lock(stgd_lock);
 		ts = __total_staged();
-
-		if (!pool_localgen(cp) && !ts)
-			lagging = true;
 
 		/* Wait until hash_pop tells us we need to create more work */
 		if (ts > max_staged) {
