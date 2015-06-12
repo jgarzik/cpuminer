@@ -1223,7 +1223,6 @@ struct pool {
 
 	bool submit_fail;
 	bool idle;
-	bool lagging;
 	bool probed;
 	enum pool_enable enabled;
 	bool submit_old;

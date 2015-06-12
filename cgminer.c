@@ -630,8 +630,6 @@ static void sharelog(const char*disposition, const struct work*work)
 		applog(LOG_ERR, "sharelog fwrite error");
 }
 
-static char *getwork_req = "{\"method\": \"getwork\", \"params\": [], \"id\":0}\n";
-
 static char *gbt_req = "{\"id\": 0, \"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": [\"coinbasetxn\", \"workid\", \"coinbase/append\"]}]}\n";
 
 static char *gbt_solo_req = "{\"id\": 0, \"method\": \"getblocktemplate\"}\n";
@@ -697,7 +695,7 @@ struct pool *add_pool(void)
 	/* Make sure the pool doesn't think we've been idle since time 0 */
 	pool->tv_idle.tv_sec = ~0UL;
 
-	pool->rpc_req = getwork_req;
+	pool->rpc_req = gbt_req;
 	pool->rpc_proxy = NULL;
 	pool->quota = 1;
 	adjust_quota_gcd();
@@ -1415,7 +1413,7 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden),
 	OPT_WITHOUT_ARG("--fix-protocol",
 			opt_set_bool, &opt_fix_protocol,
-			"Do not redirect to a different getwork protocol (eg. stratum)"),
+			"Do not redirect to stratum protocol from GBT"),
 #ifdef USE_HASHFAST
 	OPT_WITHOUT_ARG("--hfa-dfu-boot",
 			opt_set_bool, &opt_hfa_dfu_boot,
@@ -1955,31 +1953,6 @@ static struct opt_table opt_cmdline_table[] = {
 	OPT_ENDTABLE
 };
 
-#ifdef HAVE_LIBCURL
-static bool jobj_binary(const json_t *obj, const char *key,
-			void *buf, size_t buflen, bool required)
-{
-	const char *hexstr;
-	json_t *tmp;
-
-	tmp = json_object_get(obj, key);
-	if (unlikely(!tmp)) {
-		if (unlikely(required))
-			applog(LOG_ERR, "JSON key '%s' not found", key);
-		return false;
-	}
-	hexstr = json_string_value(tmp);
-	if (unlikely(!hexstr)) {
-		applog(LOG_ERR, "JSON key '%s' is not a string", key);
-		return false;
-	}
-	if (!hex2bin(buf, hexstr, buflen))
-		return false;
-
-	return true;
-}
-#endif
-
 static void calc_midstate(struct work *work)
 {
 	unsigned char data[64];
@@ -2267,26 +2240,6 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	return true;
 }
 
-static bool getwork_decode(json_t *res_val, struct work *work)
-{
-	if (unlikely(!jobj_binary(res_val, "data", work->data, sizeof(work->data), true))) {
-		applog(LOG_ERR, "JSON inval data");
-		return false;
-	}
-
-	if (!jobj_binary(res_val, "midstate", work->midstate, sizeof(work->midstate), false)) {
-		// Calculate it ourselves
-		applog(LOG_DEBUG, "Calculating midstate locally");
-		calc_midstate(work);
-	}
-
-	if (unlikely(!jobj_binary(res_val, "target", work->target, sizeof(work->target), true))) {
-		applog(LOG_ERR, "JSON inval target");
-		return false;
-	}
-	return true;
-}
-
 static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 {
 	unsigned char *hashbin;
@@ -2540,14 +2493,12 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			goto out;
 		ret = true;
 		goto out;
-	} else if (pool->has_gbt) {
-		if (unlikely(!gbt_decode(pool, res_val)))
+	}
+	if (unlikely(!gbt_decode(pool, res_val))) {
 			goto out;
 		work->gbt = true;
 		ret = true;
-		goto out;
-	} else if (unlikely(!getwork_decode(res_val, work)))
-		goto out;
+	}
 
 	memset(work->hash, 0, sizeof(work->hash));
 
@@ -3284,7 +3235,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	char *s;
 	bool rc = false;
 	int thr_id = work->thr_id;
-	struct cgpu_info *cgpu;
+	struct cgpu_info *cgpu = get_thr_cgpu(thr_id);
 	struct pool *pool = work->pool;
 	int rolltime;
 	struct timeval tv_submit, tv_submit_reply;
@@ -3292,62 +3243,46 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	char worktime[200] = "";
 	struct timeval now;
 	double dev_runtime;
-
-	cgpu = get_thr_cgpu(thr_id);
+	char gbt_block[1024], varint[12];
+	unsigned char data[80];
 
 	/* build JSON-RPC request */
-	if (work->gbt) {
-		char gbt_block[1024], varint[12];
-		unsigned char data[80];
+	flip80(data, work->data);
+	__bin2hex(gbt_block, data, 80); // 160 length
 
-		flip80(data, work->data);
-		__bin2hex(gbt_block, data, 80); // 160 length
+	if (work->gbt_txns < 0xfd) {
+		uint8_t val8 = work->gbt_txns;
 
-		if (work->gbt_txns < 0xfd) {
-			uint8_t val8 = work->gbt_txns;
+		__bin2hex(varint, (const unsigned char *)&val8, 1);
+	} else if (work->gbt_txns <= 0xffff) {
+		uint16_t val16 = htole16(work->gbt_txns);
 
-			__bin2hex(varint, (const unsigned char *)&val8, 1);
-		} else if (work->gbt_txns <= 0xffff) {
-			uint16_t val16 = htole16(work->gbt_txns);
-
-			strcat(gbt_block, "fd"); // +2
-			__bin2hex(varint, (const unsigned char *)&val16, 2);
-		} else {
-			uint32_t val32 = htole32(work->gbt_txns);
-
-			strcat(gbt_block, "fe"); // +2
-			__bin2hex(varint, (const unsigned char *)&val32, 4);
-		}
-		strcat(gbt_block, varint); // +8 max
-		strcat(gbt_block, work->coinbase);
-
-		s = cgmalloc(1024);
-		sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s", gbt_block);
-		/* Has submit/coinbase support */
-		if (!pool->has_gbt) {
-			cg_rlock(&pool->gbt_lock);
-			if (pool->txn_data)
-				s = realloc_strcat(s, pool->txn_data);
-			cg_runlock(&pool->gbt_lock);
-		}
-		if (work->job_id) {
-			s = realloc_strcat(s, "\", {\"workid\": \"");
-			s = realloc_strcat(s, work->job_id);
-			s = realloc_strcat(s, "\"}]}");
-		} else
-			s = realloc_strcat(s, "\"]}");
+		strcat(gbt_block, "fd"); // +2
+		__bin2hex(varint, (const unsigned char *)&val16, 2);
 	} else {
-		char *hexstr;
+		uint32_t val32 = htole32(work->gbt_txns);
 
-		endian_flip128(work->data, work->data);
-
-		/* build hex string */
-		hexstr = bin2hex(work->data, 118);
-		s = strdup("{\"method\": \"getwork\", \"params\": [ \"");
-		s = realloc_strcat(s, hexstr);
-		s = realloc_strcat(s, "\" ], \"id\":1}");
-		free(hexstr);
+		strcat(gbt_block, "fe"); // +2
+		__bin2hex(varint, (const unsigned char *)&val32, 4);
 	}
+	strcat(gbt_block, varint); // +8 max
+	strcat(gbt_block, work->coinbase);
+
+	s = cgmalloc(1024);
+	sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s", gbt_block);
+	/* Has submit/coinbase support */
+	if (!pool->has_gbt) {
+		cg_rlock(&pool->gbt_lock);
+		if (pool->txn_data)
+			s = realloc_strcat(s, pool->txn_data);
+		cg_runlock(&pool->gbt_lock);
+	}
+	if (work->job_id) {
+		s = realloc_strcat(s, "\", {\"workid\": \"");
+		s = realloc_strcat(s, work->job_id);
+		s = realloc_strcat(s, "\"}]}");
+	} else
+		s = realloc_strcat(s, "\"]}");
 	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, s);
 	s = realloc_strcat(s, "\n");
 
@@ -3451,61 +3386,6 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 	rc = true;
 out:
-	return rc;
-}
-
-static bool get_upstream_work(struct work *work, CURL *curl)
-{
-	struct pool *pool = work->pool;
-	struct cgminer_pool_stats *pool_stats = &(pool->cgminer_pool_stats);
-	struct timeval tv_elapsed;
-	json_t *val = NULL;
-	bool rc = false;
-	char *url;
-
-	url = pool->rpc_url;
-
-	applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", url, pool->rpc_req);
-
-	cgtime(&work->tv_getwork);
-
-	val = json_rpc_call(curl, url, pool->rpc_userpass, pool->rpc_req, false,
-			    false, &work->rolltime, pool, false);
-	pool_stats->getwork_attempts++;
-
-	if (likely(val)) {
-		rc = work_decode(pool, work, val);
-		if (unlikely(!rc))
-			applog(LOG_DEBUG, "Failed to decode work in get_upstream_work");
-	} else
-		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
-
-	cgtime(&work->tv_getwork_reply);
-	timersub(&(work->tv_getwork_reply), &(work->tv_getwork), &tv_elapsed);
-	pool_stats->getwork_wait_rolling += ((double)tv_elapsed.tv_sec + ((double)tv_elapsed.tv_usec / 1000000)) * 0.63;
-	pool_stats->getwork_wait_rolling /= 1.63;
-
-	timeradd(&tv_elapsed, &(pool_stats->getwork_wait), &(pool_stats->getwork_wait));
-	if (timercmp(&tv_elapsed, &(pool_stats->getwork_wait_max), >)) {
-		pool_stats->getwork_wait_max.tv_sec = tv_elapsed.tv_sec;
-		pool_stats->getwork_wait_max.tv_usec = tv_elapsed.tv_usec;
-	}
-	if (timercmp(&tv_elapsed, &(pool_stats->getwork_wait_min), <)) {
-		pool_stats->getwork_wait_min.tv_sec = tv_elapsed.tv_sec;
-		pool_stats->getwork_wait_min.tv_usec = tv_elapsed.tv_usec;
-	}
-	pool_stats->getwork_calls++;
-
-	work->pool = pool;
-	work->longpoll = false;
-	work->getwork_mode = GETWORK_MODE_POOL;
-	calc_diff(work, 0);
-	total_getworks++;
-	pool->getwork_requested++;
-
-	if (likely(val))
-		json_decref(val);
-
 	return rc;
 }
 #endif /* HAVE_LIBCURL */
@@ -4244,35 +4124,6 @@ static void *submit_work_thread(void *userdata)
 	return NULL;
 }
 
-static bool clone_available(void)
-{
-	struct work *work_clone = NULL, *work, *tmp;
-	bool cloned = false;
-
-	mutex_lock(stgd_lock);
-	if (!staged_rollable)
-		goto out_unlock;
-
-	HASH_ITER(hh, staged_work, work, tmp) {
-		if (can_roll(work) && should_roll(work)) {
-			roll_work(work);
-			work_clone = make_clone(work);
-			roll_work(work);
-			cloned = true;
-			break;
-		}
-	}
-
-out_unlock:
-	mutex_unlock(stgd_lock);
-
-	if (cloned) {
-		applog(LOG_DEBUG, "Pushing cloned available work to stage thread");
-		stage_work(work_clone);
-	}
-	return cloned;
-}
-
 /* Clones work by rolling it if possible, and returning a clone instead of the
  * original work item which gets staged again to possibly be rolled again in
  * the future */
@@ -4409,7 +4260,6 @@ static bool stale_work(struct work *work, bool share)
 	struct timeval now;
 	time_t work_expiry;
 	struct pool *pool;
-	int getwork_delay;
 
 	if (opt_benchmark || opt_benchfile)
 		return false;
@@ -4450,10 +4300,6 @@ static bool stale_work(struct work *work, bool share)
 		}
 	}
 
-	/* Factor in the average getwork delay of this pool, rounding it up to
-	 * the nearest second */
-	getwork_delay = pool->cgminer_pool_stats.getwork_wait_rolling * 5 + 1;
-	work_expiry -= getwork_delay;
 	if (unlikely(work_expiry < 5))
 		work_expiry = 5;
 
@@ -4693,15 +4539,10 @@ int restart_wait(struct thr_info *thr, unsigned int mstime)
 
 static void *restart_thread(void __maybe_unused *arg)
 {
-	struct pool *cp = current_pool();
 	struct cgpu_info *cgpu;
 	int i, mt;
 
 	pthread_detach(pthread_self());
-
-	/* Artificially set the lagging flag to avoid pool not providing work
-	 * fast enough  messages after every long poll */
-	pool_tset(cp, &cp->lagging);
 
 	/* Discard staged work that is now stale */
 	discard_stale();
@@ -4988,7 +4829,7 @@ static void display_pool_summary(struct pool *pool)
 			wlog("SOLVED %d BLOCK%s!\n", pool->solved, pool->solved > 1 ? "S" : "");
 		if (!pool->has_stratum)
 			wlog("%s own long-poll support\n", pool->hdr_path ? "Has" : "Does not have");
-		wlog(" Queued work requests: %d\n", pool->getwork_requested);
+		wlog(" Work templates received: %d\n", pool->getwork_requested);
 		wlog(" Share submissions: %"PRId64"\n", pool->accepted + pool->rejected);
 		wlog(" Accepted shares: %"PRId64"\n", pool->accepted);
 		wlog(" Rejected shares: %"PRId64"\n", pool->rejected);
@@ -6211,8 +6052,6 @@ static bool cnx_needed(struct pool *pool)
 	if (pool->has_stratum && pool->idle)
 		return true;
 
-	/* Getwork pools need backup pools up to be able
-	 * to leak shares */
 	cp = current_pool();
 	if (cp == pool)
 		return true;
@@ -6694,7 +6533,7 @@ retry_stratum:
 		else if (pool->gbt_solo)
 			applog(LOG_DEBUG, "GBT coinbase without append found, switching to GBT solo protocol");
 		else
-			applog(LOG_DEBUG, "No GBT coinbase + append support found, using getwork protocol");
+			applog(LOG_DEBUG, "No GBT coinbase + append support found, pool unusable if it has no stratum");
 	}
 
 	cgtime(&tv_getwork);
@@ -6702,8 +6541,8 @@ retry_stratum:
 			    pool->rpc_req, true, false, &rolltime, pool, false);
 	cgtime(&tv_getwork_reply);
 
-	/* Detect if a http getwork pool has an X-Stratum header at startup,
-	 * and if so, switch to that in preference to getwork if it works */
+	/* Detect if a http pool has an X-Stratum header at startup,
+	 * and if so, switch to that in preference to gbt if it works */
 	if (pool->stratum_url && !opt_fix_protocol && stratum_works(pool)) {
 		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
 		if (!pool->rpc_url)
@@ -6714,12 +6553,18 @@ retry_stratum:
 		goto retry_stratum;
 	}
 
+	if (!pool->has_stratum && !pool->gbt_solo && !pool->has_gbt) {
+		applog(LOG_WARNING, "No Stratum, GBT or Solo support in pool %d %s unable to use", pool->pool_no, pool->rpc_url);
+		return false;
+	}
 	if (val) {
 		struct work *work = make_work();
 		bool rc;
 
 		rc = work_decode(pool, work, val);
 		if (rc) {
+			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
+			       pool->pool_no, pool->rpc_url);
 			if (pool->gbt_solo) {
 				ret = setup_gbt_solo(curl, pool);
 				if (ret)
@@ -6727,8 +6572,6 @@ retry_stratum:
 				free_work(work);
 				goto out;
 			}
-			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
-			       pool->pool_no, pool->rpc_url);
 			work->pool = pool;
 			work->rolltime = rolltime;
 			copy_time(&work->tv_getwork, &tv_getwork);
@@ -6775,12 +6618,6 @@ retry_stratum:
 
 		pool_start_lp(pool);
 	} else {
-		/* If we failed to parse a getwork, this could be a stratum
-		 * url without the prefix stratum+tcp:// so let's check it */
-		if (initiate_stratum(pool)) {
-			pool->has_stratum = true;
-			goto retry_stratum;
-		}
 		applog(LOG_DEBUG, "FAILED to retrieve work from pool %u %s",
 		       pool->pool_no, pool->rpc_url);
 		if (!pinging && !pool->idle)
@@ -8190,18 +8027,8 @@ retry_pool:
 
 	wait_lpcurrent(cp);
 
-	if (pool->has_gbt) {
-		lp_url = pool->rpc_url;
-		applog(LOG_WARNING, "GBT longpoll ID activated for %s", lp_url);
-	} else {
-		strcpy(lpreq, getwork_req);
-
-		lp_url = pool->lp_url;
-		if (cp == pool)
-			applog(LOG_WARNING, "Long-polling activated for %s", lp_url);
-		else
-			applog(LOG_WARNING, "Long-polling activated for %s via %s", cp->rpc_url, lp_url);
-	}
+	lp_url = pool->rpc_url;
+	applog(LOG_WARNING, "GBT longpoll ID activated for %s", lp_url);
 
 	while (42) {
 		json_t *val, *soval;
@@ -8799,7 +8626,6 @@ retry:
 	if (pool->removed)
 		goto out;
 	if (pool_active(pool, false)) {
-		pool_tset(pool, &pool->lagging);
 		pool_tclear(pool, &pool->idle);
 		bool first_pool = false;
 
@@ -9840,17 +9666,14 @@ begin_bench:
 	/* Once everything is set up, main() becomes the getwork scheduler */
 	while (42) {
 		int ts, max_staged = max_queue;
-		struct pool *pool, *cp;
-		bool lagging = false;
+		struct pool *pool;
 
 		if (opt_work_update)
 			signal_work_update();
 		opt_work_update = false;
-		cp = current_pool();
 
 		mutex_lock(stgd_lock);
 		ts = __total_staged();
-
 		/* Wait until hash_pop tells us we need to create more work */
 		if (ts > max_staged) {
 			work_filled = true;
@@ -9874,22 +9697,17 @@ begin_bench:
 			discard_work(work);
 		work = make_work();
 
-		if (lagging && !pool_tset(cp, &cp->lagging)) {
-			applog(LOG_WARNING, "Pool %d not providing work fast enough", cp->pool_no);
-			cp->getfail_occasions++;
-			total_go++;
-		}
-		pool = select_pool(lagging);
+		pool = select_pool(false);
 retry:
 		if (pool->has_stratum) {
 			while (!pool->stratum_active || !pool->stratum_notify) {
 				struct pool *altpool = select_pool(true);
 
-				cgsleep_ms(5000);
 				if (altpool != pool) {
 					pool = altpool;
 					goto retry;
 				}
+				cgsleep_ms(5000);
 			}
 			gen_stratum_work(pool, work);
 			applog(LOG_DEBUG, "Generated stratum work");
@@ -9897,21 +9715,7 @@ retry:
 			continue;
 		}
 
-		if (opt_benchfile) {
-			get_benchfile_work(work);
-			applog(LOG_DEBUG, "Generated benchfile work");
-			stage_work(work);
-			continue;
-		} else if (opt_benchmark) {
-			get_benchmark_work(work);
-			applog(LOG_DEBUG, "Generated benchmark work");
-			stage_work(work);
-			continue;
-		}
-
 #ifdef HAVE_LIBCURL
-		struct curl_ent *ce;
-
 		if (pool->gbt_solo) {
 			while (pool->idle) {
 				struct pool *altpool = select_pool(true);
@@ -9943,37 +9747,18 @@ retry:
 			stage_work(work);
 			continue;
 		}
-
-		if (clone_available()) {
-			applog(LOG_DEBUG, "Cloned getwork work");
-			free_work(work);
+#endif
+		if (opt_benchfile) {
+			get_benchfile_work(work);
+			applog(LOG_DEBUG, "Generated benchfile work");
+			stage_work(work);
+			continue;
+		} else if (opt_benchmark) {
+			get_benchmark_work(work);
+			applog(LOG_DEBUG, "Generated benchmark work");
+			stage_work(work);
 			continue;
 		}
-
-		work->pool = pool;
-		ce = pop_curl_entry(pool);
-		/* obtain new work from bitcoin via JSON-RPC */
-		if (!get_upstream_work(work, ce->curl)) {
-			applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, retrying in 5s", pool->pool_no);
-			/* Make sure the pool just hasn't stopped serving
-			 * requests but is up as we'll keep hammering it */
-			if (++pool->seq_getfails > mining_threads + max_queue)
-				pool_died(pool);
-			cgsleep_ms(5000);
-			push_curl_entry(ce, pool);
-			pool = select_pool(true);
-			free_work(work);
-			goto retry;
-		}
-		if (ts >= max_staged)
-			pool_tclear(pool, &pool->lagging);
-		if (pool_tclear(pool, &pool->idle))
-			pool_resus(pool);
-
-		applog(LOG_DEBUG, "Generated getwork work");
-		stage_work(work);
-		push_curl_entry(ce, pool);
-#endif
 	}
 
 	return 0;
