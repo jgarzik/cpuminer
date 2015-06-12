@@ -1051,7 +1051,6 @@ USB on any hardware are the following:
 --enable-avalon4
 --enable-bflsc
 --enable-bitfury
---enable-blockerupter
 --enable-cointerra
 --enable-drillbit
 --enable-hashfast
