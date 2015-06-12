@@ -3397,7 +3397,7 @@ static bool pool_unworkable(struct pool *pool)
 		return true;
 	if (pool->enabled != POOL_ENABLED)
 		return true;
-	if (pool->has_stratum && !pool->stratum_active)
+	if (pool->has_stratum && (!pool->stratum_active || !pool->stratum_notify))
 		return true;
 	return false;
 }
