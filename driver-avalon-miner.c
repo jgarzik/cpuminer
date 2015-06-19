@@ -431,6 +431,7 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 	info->adc[0] = info->adc[1] = info->adc[2] = 0;
 
 	avalonm_set_spispeed(avalonm, opt_avalonm_spispeed);
+	cgtime(&info->elapsed);
 	return avalonm;
 }
 
@@ -1003,6 +1004,7 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 	char buf[256];
 	char statbuf[STATBUFLEN];
 	uint32_t i;
+	struct timeval now;
 
 	memset(statbuf, 0, STATBUFLEN);
 
@@ -1018,6 +1020,10 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 				info->dna[5],
 				info->dna[6],
 				info->dna[7]);
+	strcat(statbuf, buf);
+
+	cgtime(&now);
+	sprintf(buf, " Elapsed[%.0f]", tdiff(&now, &(info->elapsed)));
 	strcat(statbuf, buf);
 
 	sprintf(buf, " Chips[%d]", info->asic_cnts);
