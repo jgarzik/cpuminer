@@ -35,6 +35,10 @@
 #define AVAM_ASIC_TIMEOUT_100M	703
 
 #define AVAM_DEFAULT_MOV_TIMES	6
+#define AVAM_DEFAULT_ADJ_INTERVAL	30
+
+#define AVAM_HW_HIGH	20
+#define AVAM_HW_LOW	6
 
 /* Avalon4 protocol package type from MM protocol.h
  * https://github.com/Canaan-Creative/MM/blob/avalon4/firmware/protocol.h */
@@ -112,6 +116,7 @@ struct avalonm_info {
 	uint32_t adc[3];
 	struct timeval elapsed;
 	struct timeval lasttime;
+	struct timeval lastadj;
 	uint8_t time_i;
 	int hw_work_i[AVAM_DEFAULT_ASIC_COUNT][AVAM_DEFAULT_MOV_TIMES];
 };
@@ -130,5 +135,6 @@ extern char *set_avalonm_freq(char *arg);
 extern uint8_t opt_avalonm_ntime_offset;
 extern char *set_avalonm_voltage(char *arg);
 extern uint32_t opt_avalonm_spispeed;
+extern bool opt_avalonm_autof;
 #endif /* USE_AVALON_MINER */
 #endif	/* _AVALON_MINER_H_ */

@@ -42,6 +42,7 @@ static uint32_t opt_avalonm_freq[3] = {AVAM_DEFAULT_FREQUENCY, AVAM_DEFAULT_FREQ
 uint8_t opt_avalonm_ntime_offset = 0;
 int opt_avalonm_voltage = AVAM_DEFAULT_VOLTAGE;
 uint32_t opt_avalonm_spispeed = AVAM_DEFAULT_SPISPEED;
+bool opt_avalonm_autof;
 static uint32_t g_freq_array[][2] = {
 	{100, 0x1e678447},
 	{113, 0x22688447},
@@ -434,7 +435,7 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 
 	avalonm_set_spispeed(avalonm, opt_avalonm_spispeed);
 	cgtime(&info->elapsed);
-	info->lasttime = info->elapsed;
+	info->lastadj = info->lasttime = info->elapsed;
 	info->time_i = 0;
 	memset(info->hw_work_i, 0, sizeof(int) * info->asic_cnts * AVAM_DEFAULT_MOV_TIMES);
 	return avalonm;
@@ -597,8 +598,10 @@ static int64_t avalonm_scanhash(struct thr_info *thr)
 {
 	struct cgpu_info *avalonm = thr->cgpu;
 	struct avalonm_info *info = avalonm->device_data;
-
 	int64_t hash_count, ms_timeout;
+	struct timeval current;
+	double device_tdiff;
+	uint32_t i, j, tmp;
 
 	/* Half nonce range */
 	ms_timeout = 0x80000000ll / 1000;
@@ -610,6 +613,84 @@ static int64_t avalonm_scanhash(struct thr_info *thr)
 
 	hash_count = info->nonce_cnts++;
 	info->nonce_cnts = 0;
+
+	cgtime(&current);
+	device_tdiff = tdiff(&current, &(info->lastadj));
+	if (opt_avalonm_autof && (device_tdiff > AVAM_DEFAULT_ADJ_INTERVAL || device_tdiff < 0)) {
+		copy_time(&info->lastadj, &current);
+
+		for (i = 0; i < AVAM_DEFAULT_ASIC_COUNT; i++) {
+			tmp = 0;
+			for (j = 0; j < AVAM_DEFAULT_MOV_TIMES; j++)
+				tmp += info->hw_work_i[i][j];
+
+			if (tmp > AVAM_HW_HIGH && (info->opt_freq[i][0] > opt_avalonm_freq[0] - (uint32_t)(12 * 12.5))) {
+				if (info->opt_freq[i][0] * 10 % 125)
+					info->opt_freq[i][0] -= 13;
+				else
+					info->opt_freq[i][0] -= 12;
+
+				if (info->opt_freq[i][1] * 10 % 125)
+					info->opt_freq[i][1] -= 13;
+				else
+					info->opt_freq[i][1] -= 12;
+
+				if (info->opt_freq[i][2] * 10 % 125)
+					info->opt_freq[i][2] -= 13;
+				else
+					info->opt_freq[i][2] -= 12;
+
+				if (info->opt_freq[i][0] < AVAM_DEFAULT_FREQUENCY_MIN)
+					info->opt_freq[i][0] = AVAM_DEFAULT_FREQUENCY_MIN;
+
+				if (info->opt_freq[i][1] < AVAM_DEFAULT_FREQUENCY_MIN)
+					info->opt_freq[i][1] = AVAM_DEFAULT_FREQUENCY_MIN;
+
+				if (info->opt_freq[i][2] < AVAM_DEFAULT_FREQUENCY_MIN)
+					info->opt_freq[i][2] = AVAM_DEFAULT_FREQUENCY_MIN;
+
+				FLAG_SET(info->freq_set, i + 1);
+				applog(LOG_NOTICE, "%s-%d: Automatic decrease [%d] freq to %d,%d,%d",
+						avalonm->drv->name, avalonm->device_id, i,
+						info->opt_freq[i][0],
+						info->opt_freq[i][1],
+						info->opt_freq[i][2]);
+			}
+
+			if (tmp < AVAM_HW_LOW && (info->opt_freq[i][0] < opt_avalonm_freq[0] + (uint32_t)(8 * 12.5))) {
+				if (info->opt_freq[i][0] * 10 % 125)
+					info->opt_freq[i][0] += 12;
+				else
+					info->opt_freq[i][0] += 13;
+
+				if (info->opt_freq[i][1] * 10 % 125)
+					info->opt_freq[i][1] += 12;
+				else
+					info->opt_freq[i][1] += 13;
+
+				if (info->opt_freq[i][2] * 10 % 125)
+					info->opt_freq[i][2] += 12;
+				else
+					info->opt_freq[i][2] += 13;
+
+				if (info->opt_freq[i][0] > AVAM_DEFAULT_FREQUENCY_MAX)
+					info->opt_freq[i][0] = AVAM_DEFAULT_FREQUENCY_MAX;
+
+				if (info->opt_freq[i][1] > AVAM_DEFAULT_FREQUENCY_MAX)
+					info->opt_freq[i][1] = AVAM_DEFAULT_FREQUENCY_MAX;
+
+				if (info->opt_freq[i][2] > AVAM_DEFAULT_FREQUENCY_MAX)
+					info->opt_freq[i][2] = AVAM_DEFAULT_FREQUENCY_MAX;
+
+				FLAG_SET(info->freq_set, i + 1);
+				applog(LOG_NOTICE, "%s-%d: Automatic increase [%d] freq to %d,%d,%d",
+						avalonm->drv->name, avalonm->device_id, i,
+						info->opt_freq[i][0],
+						info->opt_freq[i][1],
+						info->opt_freq[i][2]);
+			}
+		}
+	}
 
 	return hash_count * 0xffffffffull;
 }
@@ -678,14 +759,14 @@ static void *avalonm_process_tasks(void *userdata)
 				if (FLAG_GET(info->freq_set, 0)) {
 					avalonm_set_freq(avalonm, AVAM_ASIC_ALL, info->opt_freq[0]);
 					FLAG_CLEAR(info->freq_set, 0);
-					cgsleep_ms(200);
+					cgsleep_ms(20);
 				}
 
 				for (k = 1; k <= info->asic_cnts; k++) {
 					if (FLAG_GET(info->freq_set, k)) {
 						avalonm_set_freq(avalonm, k, info->opt_freq[k - 1]);
 						FLAG_CLEAR(info->freq_set, k);
-						cgsleep_ms(1000);
+						cgsleep_ms(20);
 					}
 				}
 
@@ -1116,6 +1197,7 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 
 	root = api_add_string(root, "AVAM Fifo", buf, true);
 	root = api_add_uint8(root, "AVAM ntime", &opt_avalonm_ntime_offset, true);
+	root = api_add_bool(root, "Automatic Frequency", &opt_avalonm_autof, true);
 	return root;
 }
 

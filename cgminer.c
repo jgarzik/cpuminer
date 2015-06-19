@@ -1264,6 +1264,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalonm-spispeed",
 		     opt_set_intval, opt_show_intval, &opt_avalonm_spispeed,
 		     "Set spi speed for Avalon miner"),
+	OPT_WITHOUT_ARG("--avalonm-automatic-freq",
+			opt_set_bool, &opt_avalonm_autof,
+			"Automatic adjust frequency base on chip HW"),
 #endif
 #ifdef USE_BAB
 	OPT_WITH_ARG("--bab-options",
