@@ -33,6 +33,9 @@
 
 /* 2 ^ 32 * 1000 / (10 ^ 8 * 3968 / 65.0) ~= 703 ms */
 #define AVAM_ASIC_TIMEOUT_100M	703
+
+#define AVAM_DEFAULT_MOV_TIMES	6
+
 /* Avalon4 protocol package type from MM protocol.h
  * https://github.com/Canaan-Creative/MM/blob/avalon4/firmware/protocol.h */
 #define AVAM_MM_VER_LEN	15
@@ -108,6 +111,9 @@ struct avalonm_info {
 	uint64_t matching_work[AVAM_DEFAULT_ASIC_COUNT];
 	uint32_t adc[3];
 	struct timeval elapsed;
+	struct timeval lasttime;
+	uint8_t time_i;
+	int hw_work_i[AVAM_DEFAULT_ASIC_COUNT][AVAM_DEFAULT_MOV_TIMES];
 };
 
 #define AVAM_WRITE_SIZE (sizeof(struct avalonm_pkg))

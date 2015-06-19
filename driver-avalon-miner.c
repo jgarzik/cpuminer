@@ -172,8 +172,10 @@ static void process_nonce(struct cgpu_info *avalonm, uint8_t *report)
 	if (!work)
 		return;
 
-	if(!submit_noffset_nonce(info->thr, work, nonce, ntime))
+	if(!submit_noffset_nonce(info->thr, work, nonce, ntime)) {
 		info->hw_work[chip_id]++;
+		info->hw_work_i[chip_id][info->time_i]++;
+	}
 
 	info->matching_work[chip_id]++;
 	free_work(work);
@@ -432,6 +434,9 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 
 	avalonm_set_spispeed(avalonm, opt_avalonm_spispeed);
 	cgtime(&info->elapsed);
+	info->lasttime = info->elapsed;
+	info->time_i = 0;
+	memset(info->hw_work_i, 0, sizeof(int) * info->asic_cnts * AVAM_DEFAULT_MOV_TIMES);
 	return avalonm;
 }
 
@@ -629,6 +634,8 @@ static void *avalonm_process_tasks(void *userdata)
 
 	int start_count, end_count, i, j, k, ret;
 	int avalon_get_work_count = info->asic_cnts;
+	struct timeval current;
+	double device_tdiff;
 
 	snprintf(threadname, sizeof(threadname), "%d/AvmProc", avalonm->device_id);
 	RenameThread(threadname);
@@ -638,6 +645,17 @@ static void *avalonm_process_tasks(void *userdata)
 			applog(LOG_ERR, "%s-%d: Device disappeared, shutting down thread",
 			       avalonm->drv->name, avalonm->device_id);
 			goto out;
+		}
+
+		cgtime(&current);
+		device_tdiff = tdiff(&current, &(info->lasttime));
+		if (device_tdiff >= AVAM_DEFAULT_MOV_TIMES || device_tdiff < 0) {
+			copy_time(&info->lasttime, &current);
+			if (info->time_i++ >= AVAM_DEFAULT_MOV_TIMES)
+				info->time_i = 0;
+
+			for(i = 0; i < AVAM_DEFAULT_ASIC_COUNT; i++)
+				info->hw_work_i[i][info->time_i] = 0;
 		}
 
 		/* Give other threads a chance to acquire qlock. */
@@ -1003,7 +1021,7 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 	struct avalonm_info *info = cgpu->device_data;
 	char buf[256];
 	char statbuf[STATBUFLEN];
-	uint32_t i;
+	uint32_t i, j, tmp;
 	struct timeval now;
 
 	memset(statbuf, 0, STATBUFLEN);
@@ -1060,6 +1078,18 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 	strcat(statbuf, " HW[");
 	for (i = 0; i < info->asic_cnts; i++) {
 		sprintf(buf, "%d ", info->hw_work[i]);
+		strcat(statbuf, buf);
+	}
+	statbuf[strlen(statbuf) - 1] = ']';
+
+	/* simple moving the sum of hardware error */
+	strcat(statbuf, " SHW[");
+	for (i = 0; i < info->asic_cnts; i++) {
+		tmp = 0;
+		for (j = 0; j < AVAM_DEFAULT_MOV_TIMES; j++)
+			tmp += info->hw_work_i[i][j];
+
+		sprintf(buf, "%d ", tmp);
 		strcat(statbuf, buf);
 	}
 	statbuf[strlen(statbuf) - 1] = ']';
