@@ -445,9 +445,14 @@ static uint32_t avalonm_get_cpm(uint32_t freq)
 {
 	int i;
 
-	for (i = 0; i < sizeof(g_freq_array) / sizeof(g_freq_array[0]); i++)
+	for (i = 0; i < (sizeof(g_freq_array) / sizeof(g_freq_array[0]) - 1); i++) {
 		if (freq >= g_freq_array[i][0] && freq < g_freq_array[i+1][0])
 			return g_freq_array[i][1];
+	}
+
+	/* check if the final freq match */
+	if (freq == g_freq_array[i][0])
+		return g_freq_array[i][1];
 
 	/* return the lowest freq if not found */
 	return g_freq_array[0][1];
