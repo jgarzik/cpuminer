@@ -630,6 +630,11 @@ static int64_t avalonm_scanhash(struct thr_info *thr)
 				tmp += info->hw_work_i[i][j];
 
 			if (tmp > AVAM_HW_HIGH && (info->opt_freq[i][0] > opt_avalonm_freq[0] - (uint32_t)(12 * 12.5))) {
+				if ((info->opt_freq[i][0] == AVAM_DEFAULT_FREQUENCY_MIN) &&
+						(info->opt_freq[i][1] == AVAM_DEFAULT_FREQUENCY_MIN) &&
+						(info->opt_freq[i][2] == AVAM_DEFAULT_FREQUENCY_MIN))
+					continue;
+
 				if (info->opt_freq[i][0] * 10 % 125)
 					info->opt_freq[i][0] -= 13;
 				else
@@ -663,6 +668,11 @@ static int64_t avalonm_scanhash(struct thr_info *thr)
 			}
 
 			if (tmp < AVAM_HW_LOW && (info->opt_freq[i][0] < opt_avalonm_freq[0] + (uint32_t)(8 * 12.5))) {
+				if ((info->opt_freq[i][0] == AVAM_DEFAULT_FREQUENCY_MAX) &&
+						(info->opt_freq[i][1] == AVAM_DEFAULT_FREQUENCY_MAX) &&
+						(info->opt_freq[i][2] == AVAM_DEFAULT_FREQUENCY_MAX))
+					continue;
+
 				if (info->opt_freq[i][0] * 10 % 125)
 					info->opt_freq[i][0] += 12;
 				else
