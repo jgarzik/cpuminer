@@ -127,8 +127,8 @@ struct avalonm_info {
 #define AVAM_SEND_OK 0
 #define AVAM_SEND_ERROR -1
 
-#define FLAG_SET(val, bit)	((val) |= (1 << bit))
-#define FLAG_CLEAR(val, bit)	((val) &= ~(1 << bit))
+#define FLAG_SET(val, bit)	((val) |= (1 << (bit)))
+#define FLAG_CLEAR(val, bit)	((val) &= ~(1 << (bit)))
 #define FLAG_GET(val, bit)	(((val) >> (bit)) & 1)
 
 extern char *set_avalonm_freq(char *arg);
