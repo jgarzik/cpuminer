@@ -204,6 +204,7 @@ struct avalon4_info {
 	uint8_t miner_count[AVA4_DEFAULT_MODULARS];
 	uint8_t asic_count[AVA4_DEFAULT_MODULARS];
 	int ntime_offset[AVA4_DEFAULT_MODULARS];
+	bool autov[AVA4_DEFAULT_MODULARS];
 };
 
 struct avalon4_iic_info {

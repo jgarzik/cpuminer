@@ -1073,6 +1073,7 @@ static void detect_modules(struct cgpu_info *avalon4)
 		info->mm_version[i][AVA4_MM_VER_LEN] = '\0';
 		info->miner_count[i] = AVA4_DEFAULT_MINER_CNT;
 		info->asic_count[i] = AVA4_DEFAULT_ASIC_CNT;
+		info->autov[i] = opt_avalon4_autov;
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM40_PREFIXSTR, 2))
 			info->mod_type[i] = AVA4_TYPE_MM40;
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM41_PREFIXSTR, 2))
@@ -1080,6 +1081,10 @@ static void detect_modules(struct cgpu_info *avalon4)
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM50_PREFIXSTR, 2)) {
 			info->miner_count[i] = AVA4_MM50_MINER_CNT;
 			info->asic_count[i] = AVA4_MM50_ASIC_CNT;
+			if (opt_avalon4_autov)
+				applog(LOG_NOTICE, "%s-%d-%d: Module cann't support autov",
+				       avalon4->drv->name, avalon4->device_id, i);
+			info->autov[i] = false;
 			info->mod_type[i] = AVA4_TYPE_MM50;
 		}
 
@@ -1619,6 +1624,9 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 			uint8_t individual = 0;
 
 			if (!info->enable[i])
+				continue;
+
+			if (!info->autov[i])
 				continue;
 
 			if (info->mod_type[i] == AVA4_TYPE_MM50)
