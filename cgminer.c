@@ -516,14 +516,15 @@ void get_datestamp(char *f, size_t fsiz, struct timeval *tv)
 	struct tm *tm;
 
 	const time_t tmp_time = tv->tv_sec;
+	int ms = (int)(tv->tv_usec / 1000);
 	tm = localtime(&tmp_time);
-	snprintf(f, fsiz, "[%d-%02d-%02d %02d:%02d:%02d]",
+	snprintf(f, fsiz, "[%d-%02d-%02d %02d:%02d:%02d.%03d]",
 		tm->tm_year + 1900,
 		tm->tm_mon + 1,
 		tm->tm_mday,
 		tm->tm_hour,
 		tm->tm_min,
-		tm->tm_sec);
+		tm->tm_sec, ms);
 }
 
 static void get_timestamp(char *f, size_t fsiz, struct timeval *tv)
@@ -531,11 +532,12 @@ static void get_timestamp(char *f, size_t fsiz, struct timeval *tv)
 	struct tm *tm;
 
 	const time_t tmp_time = tv->tv_sec;
+	int ms = (int)(tv->tv_usec / 1000);
 	tm = localtime(&tmp_time);
-	snprintf(f, fsiz, "[%02d:%02d:%02d]",
+	snprintf(f, fsiz, "[%02d:%02d:%02d.%03d]",
 		tm->tm_hour,
 		tm->tm_min,
-		tm->tm_sec);
+		tm->tm_sec, ms);
 }
 
 static char exit_buf[512];
