@@ -122,6 +122,9 @@ static float convert_temp(uint32_t adc)
 {
 	float ret, resistance;
 
+	if (adc >= 1023)
+		return -273.15;
+
 	resistance = (1023.0 / adc) - 1;
 	resistance = R_REF / resistance;
 	ret = resistance / R0;
@@ -402,6 +405,7 @@ static struct cgpu_info *avalonm_detect_one(struct libusb_device *dev, struct us
 	info->thr = NULL;
 	memcpy(info->dna, ar.data, AVAM_MM_DNA_LEN);
 	memcpy(info->ver, ar.data + AVAM_MM_DNA_LEN, AVAM_MM_VER_LEN);
+	info->ver[AVAM_MM_VER_LEN] = '\0';
 	memcpy(&info->asic_cnts, ar.data + AVAM_MM_DNA_LEN + AVAM_MM_VER_LEN, 4);
 	info->asic_cnts = be32toh(info->asic_cnts);
 	if (opt_avalonm_ntime_offset >= info->asic_cnts)

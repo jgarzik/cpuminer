@@ -91,8 +91,8 @@ struct avalonm_info {
 	uint32_t delay_ms;
 	int power_on;
 
-	char dna[AVAM_MM_DNA_LEN];
-	char ver[AVAM_MM_VER_LEN];
+	unsigned char dna[AVAM_MM_DNA_LEN];
+	unsigned char ver[AVAM_MM_VER_LEN + 1];
 	uint32_t asic_cnts;
 	uint32_t set_frequency[AVAM_DEFAULT_ASIC_COUNT][3];
 	uint32_t opt_freq[AVAM_DEFAULT_ASIC_COUNT][3];
