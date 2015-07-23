@@ -550,6 +550,11 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 			}
 		}
 		break;
+	case AVA4_P_STATUS_MA:
+		applog(LOG_DEBUG, "%s-%d-%d: AVA4_P_STATUS_MA", avalon4->drv->name, avalon4->device_id, modular_id);
+		for (i = 0; i < info->asic_count[modular_id]; i++)
+			info->ma_sum[modular_id][ar->opt][i] = ar->data[i];
+		break;
 	default:
 		applog(LOG_DEBUG, "%s-%d-%d: Unknown response", avalon4->drv->name, avalon4->device_id, modular_id);
 		break;
@@ -1095,6 +1100,7 @@ static void detect_modules(struct cgpu_info *avalon4)
 			info->set_voltage_i[i][j] = opt_avalon4_voltage_min;
 			info->set_voltage_offset[i][j] = 0;
 			info->adjflag[i][j] = 0;
+			memset(info->ma_sum[i][j], 0, sizeof(uint8_t) * info->asic_count[i]);
 		}
 		info->led_red[i] = 0;
 		info->saved[i] = 0;
@@ -1206,12 +1212,12 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 
 				for (j = 0; j < info->miner_count[i]; j++) {
 					info->matching_work[i][j] = 0;
-					for (k = 0; k < info->asic_count[i]; k++)
-						info->chipmatching_work[i][j][k] = 0;
+					memset(info->chipmatching_work[i][j], 0, sizeof(int) * info->asic_count[i]);
 					info->local_works_i[i][j] = 0;
 					info->hw_works_i[i][j] = 0;
 					memset(info->lw5_i[i][j], 0, AVA4_DEFAULT_ADJ_TIMES * sizeof(uint32_t));
 					memset(info->hw5_i[i][j], 0, AVA4_DEFAULT_ADJ_TIMES * sizeof(uint32_t));
+					memset(info->ma_sum[i][j], 0, sizeof(uint8_t) * info->asic_count[i]);
 				}
 				applog(LOG_NOTICE, "%s-%d: Module detached! ID[%d]",
 				       avalon4->drv->name, avalon4->device_id, i);
@@ -1982,6 +1988,23 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 		sprintf(buf, " Led[%d]", info->led_red[i]);
 		strcat(statbuf[i], buf);
+	}
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+		if (info->mod_type[i] == AVA4_TYPE_NULL)
+			continue;
+
+		if (info->mod_type[i] == AVA4_TYPE_MM50) {
+			for (j = 0; j < info->miner_count[i]; j++) {
+				sprintf(buf, " MA%d[", j);
+				strcat(statbuf[i], buf);
+				for (k = 0; k < 16; k++) {
+					sprintf(buf, "%d ", info->ma_sum[i][j][k]);
+					strcat(statbuf[i], buf);
+				}
+
+				statbuf[i][strlen(statbuf[i]) - 1] = ']';
+			}
+		}
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (info->mod_type[i] == AVA4_TYPE_NULL)

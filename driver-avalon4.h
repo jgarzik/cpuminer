@@ -107,6 +107,7 @@
 #define AVA4_P_STATUS_LW        0x44
 #define AVA4_P_STATUS_HW        0x45
 #define AVA4_P_STATUS_VOLT	0x46
+#define AVA4_P_STATUS_MA	0x47
 
 #define AVA4_MODULE_BROADCAST	0
 /* Endof Avalon4 protocol package type */
@@ -205,6 +206,7 @@ struct avalon4_info {
 	uint8_t asic_count[AVA4_DEFAULT_MODULARS];
 	int ntime_offset[AVA4_DEFAULT_MODULARS];
 	bool autov[AVA4_DEFAULT_MODULARS];
+	uint8_t ma_sum[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINER_MAX][AVA4_DEFAULT_ASIC_MAX];
 };
 
 struct avalon4_iic_info {
