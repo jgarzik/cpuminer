@@ -162,6 +162,7 @@ struct avalon4_info {
 	int mm_count;
 
 	int set_frequency[3];
+	int set_frequency_i[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINER_MAX][AVA4_DEFAULT_ASIC_MAX][3];
 	int set_voltage[AVA4_DEFAULT_MODULARS];
 	uint16_t set_voltage_i[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINER_MAX];
 	int8_t set_voltage_offset[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINER_MAX];
