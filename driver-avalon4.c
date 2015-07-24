@@ -2042,6 +2042,23 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 		if (info->mod_type[i] == AVA4_TYPE_MM50) {
 			for (j = 0; j < info->miner_count[i]; j++) {
+				sprintf(buf, " MW%d[", j);
+				strcat(statbuf[i], buf);
+				for (k = 0; k < 16; k++) {
+					sprintf(buf, "%d ", info->chipmatching_work[i][j][k]);
+					strcat(statbuf[i], buf);
+				}
+
+				statbuf[i][strlen(statbuf[i]) - 1] = ']';
+			}
+		}
+	}
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+		if (info->mod_type[i] == AVA4_TYPE_NULL)
+			continue;
+
+		if (info->mod_type[i] == AVA4_TYPE_MM50) {
+			for (j = 0; j < info->miner_count[i]; j++) {
 				sprintf(buf, " MA%d[", j);
 				strcat(statbuf[i], buf);
 				for (k = 0; k < 16; k++) {
