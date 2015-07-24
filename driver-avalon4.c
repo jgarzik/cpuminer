@@ -1355,7 +1355,8 @@ static void avalon4_set_freq(struct cgpu_info *avalon4, int addr, uint8_t miner_
 	uint8_t set = 0;
 	int i, j;
 
-	if (!miner_id) {
+	/* Note: 0 (miner_id and chip_id) is reserved for all devices */
+	if (!miner_id || !chip_id) {
 		if (memcmp(freq, info->set_frequency, sizeof(int) * 3)) {
 			memcpy(info->set_frequency, freq, sizeof(int) * 3);
 			for (i = 0; i < info->miner_count[addr]; i++) {
@@ -1365,8 +1366,8 @@ static void avalon4_set_freq(struct cgpu_info *avalon4, int addr, uint8_t miner_
 			set = 1;
 		}
 	} else {
-		if (memcmp(freq, info->set_frequency_i[addr][miner_id][chip_id], sizeof(int) * 3)) {
-			memcpy(info->set_frequency_i[addr][miner_id][chip_id], freq, sizeof(int) * 3);
+		if (memcmp(freq, info->set_frequency_i[addr][miner_id - 1][chip_id - 1], sizeof(int) * 3)) {
+			memcpy(info->set_frequency_i[addr][miner_id - 1][chip_id - 1], freq, sizeof(int) * 3);
 			set = 1;
 		}
 	}
@@ -1407,6 +1408,7 @@ static void avalon4_set_freq(struct cgpu_info *avalon4, int addr, uint8_t miner_
 	/* Package the data */
 	avalon4_init_pkg(&send_pkg, AVA4_P_SET_FREQ, 1, 1);
 	send_pkg.opt = chip_id;
+
 	if (addr == AVA4_MODULE_BROADCAST)
 		avalon4_send_bc_pkgs(avalon4, &send_pkg);
 	else
@@ -2069,6 +2071,87 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
+char *set_avalon4_device_freq(struct cgpu_info *avalon4, char *arg)
+{
+	struct avalon4_info *info = avalon4->device_data;
+	char *colon1, *colon2, *param = arg;
+	int val[3], addr;
+	uint32_t miner_id, chip_id;
+
+	if (!(*arg))
+		return NULL;
+
+	colon1 = strchr(arg, ':');
+	if (colon1) {
+		*(colon1++) = '\0';
+		param = colon1;
+	}
+
+	if (*arg) {
+		val[0] = atoi(arg);
+		if (val[0] < AVA4_DEFAULT_FREQUENCY_MIN || val[0] > AVA4_DEFAULT_FREQUENCY_MAX)
+			return "Invalid value1 passed to set_avalon4_device_freq";
+	}
+
+	if (colon1 && *colon1) {
+		colon2 = strchr(colon1, ':');
+		if (colon2) {
+			*(colon2++) = '\0';
+			param = colon2;
+		}
+
+		if (*colon1) {
+			val[1] = atoi(colon1);
+			if (val[1] < AVA4_DEFAULT_FREQUENCY_MIN || val[1] > AVA4_DEFAULT_FREQUENCY_MAX)
+				return "Invalid value2 passed to set_avalon4_device_freq";
+		}
+
+		if (colon2 && *colon2) {
+			val[2] = atoi(colon2);
+			if (val[2] < AVA4_DEFAULT_FREQUENCY_MIN || val[2] > AVA4_DEFAULT_FREQUENCY_MAX)
+				return "Invalid value3 passed to set_avalon4_device_freq";
+		}
+	}
+
+	if (!val[0])
+		val[2] = val[1] = val[0] = AVA4_DEFAULT_FREQUENCY;
+
+	if (!val[1])
+		val[2] = val[1] = val[0];
+
+	if (!val[2])
+		val[2] = val[1];
+
+	colon1 = strchr(param, '-');
+	if (colon1) {
+		sscanf(colon1, "-%d-%d-%d", &addr, &miner_id, &chip_id);
+		if (addr < 0 || miner_id >= AVA4_DEFAULT_MODULARS) {
+			applog(LOG_ERR, "invalid dev index: %d, valid range 0-%d", addr, (AVA4_DEFAULT_MODULARS - 1));
+			return "Invalid dev index to set_avalon4_device_freq";
+		}
+		if (!info->enable[addr]) {
+			applog(LOG_ERR, "Disabled dev:%d", addr);
+			return "Disabled dev to set_avalon4_device_freq";
+		}
+		if (miner_id < 0 || miner_id > info->miner_count[addr]) {
+			applog(LOG_ERR, "invalid miner index: %d, valid range 0-%d", chip_id, info->miner_count[addr]);
+			return "Invalid miner index to set_avalon4_device_freq";
+		}
+		if (chip_id < 0 || chip_id > info->asic_count[addr]) {
+			applog(LOG_ERR, "invalid asic index: %d, valid range 0-%d", chip_id, info->asic_count[addr]);
+			return "Invalid asic index to set_avalon4_device_freq";
+		}
+	}
+
+	if (!miner_id || !chip_id) {
+		memcpy(opt_avalon4_freq, val, sizeof(int) * 3);
+		avalon4_set_freq(avalon4, addr, 0, 0, val);
+	} else
+		avalon4_set_freq(avalon4, addr, miner_id, chip_id, val);
+
+	return NULL;
+}
+
 static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *setting, char *replybuf)
 {
 	int val, i, j;
@@ -2139,7 +2222,7 @@ static char *avalon4_set_device(struct cgpu_info *avalon4, char *option, char *s
 			return replybuf;
 		}
 
-		if (set_avalon4_freq(setting)) {
+		if (set_avalon4_device_freq(avalon4, setting)) {
 			sprintf(replybuf, "invalid frequency value, valid range %d-%d",
 				AVA4_DEFAULT_FREQUENCY_MIN, AVA4_DEFAULT_FREQUENCY_MAX);
 			return replybuf;
