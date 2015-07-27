@@ -1159,7 +1159,10 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 	sprintf(buf, " V12[%.2f]", convert_voltage(info->adc[0]));
 	strcat(statbuf, buf);
 
-	sprintf(buf, " TC[%.2f]", convert_temp(info->adc[1]));
+	if (!strncmp(info->ver, "3U", 2))
+		sprintf(buf, " T[%d]", info->adc[1]);
+	else
+		sprintf(buf, " TC[%.2f]", convert_temp(info->adc[1]));
 	strcat(statbuf, buf);
 
 	sprintf(buf, " TF[%.2f]", convert_temp(info->adc[2]));
