@@ -226,7 +226,10 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 		applog(LOG_DEBUG, "%s-%d: AVAM_P_STATUS_M", avalonm->drv->name, avalonm->device_id);
 		hexdump(ar->data, 32);
 		memcpy(&tmp, ar->data, 4);
-		info->spi_speed = be32toh(tmp);
+		if (!strncmp(info->ver, "3U", 2))
+			info->get_frequency[0][0] = be32toh(tmp);
+		else
+			info->spi_speed = be32toh(tmp);
 		memcpy(&tmp, ar->data + 4, 4);
 		info->led_status = be32toh(tmp);
 		memcpy(&tmp, ar->data + 8, 4);
@@ -1182,15 +1185,20 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 		sprintf(buf, " TF[%.2f]", convert_temp(info->adc[2]));
 	strcat(statbuf, buf);
 
-	strcat(statbuf, " Freq[");
-	for (i = 0; i < info->asic_cnts; i++) {
-		sprintf(buf, "%d %d %d ",
-				info->get_frequency[i][0],
-				info->get_frequency[i][1],
-				info->get_frequency[i][2]);
+	if (!strncmp(info->ver, "3U", 2)) {
+		sprintf(buf, " Freq[%d]", info->get_frequency[0][0]);
 		strcat(statbuf, buf);
+	} else {
+		strcat(statbuf, " Freq[");
+		for (i = 0; i < info->asic_cnts; i++) {
+			sprintf(buf, "%d %d %d ",
+					info->get_frequency[i][0],
+					info->get_frequency[i][1],
+					info->get_frequency[i][2]);
+			strcat(statbuf, buf);
+		}
+		statbuf[strlen(statbuf) - 1] = ']';
 	}
-	statbuf[strlen(statbuf) - 1] = ']';
 
 	strcat(statbuf, " HW[");
 	for (i = 0; i < info->asic_cnts; i++) {
@@ -1242,10 +1250,9 @@ static void avalonm_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	struct avalonm_info *info = avalonm->device_data;
 	int frequency;
 
-	if (!strncmp(info->ver, "3U", 2)) {
-		frequency = 100;
-		tailsprintf(buf, bufsiz, "%4dMhz %.2fV", frequency, (float)info->get_voltage);
-	} else {
+	if (!strncmp(info->ver, "3U", 2))
+		tailsprintf(buf, bufsiz, "%4dMhz %.2fV", info->get_frequency[0][0], (float)info->get_voltage);
+	else {
 		frequency = (info->set_frequency[0][0] * 4 + info->set_frequency[0][1] * 4 + info->set_frequency[0][2]) / 9;
 		tailsprintf(buf, bufsiz, "%4dMhz %.4fV", frequency, (float)info->get_voltage / 10000);
 	}
