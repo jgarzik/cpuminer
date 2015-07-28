@@ -137,11 +137,11 @@ static float convert_temp(uint32_t adc)
 	return ret;
 }
 
-static float convert_voltage(uint32_t adc)
+static float convert_voltage(uint32_t adc, float percent)
 {
 	float voltage;
 
-	voltage = adc * V_REF / 1023 * 110 / 10;
+	voltage = adc * V_REF / 1023 / percent;
 	return voltage;
 }
 
@@ -232,7 +232,10 @@ static int decode_pkg(struct thr_info *thr, struct avalonm_ret *ar)
 		memcpy(&tmp, ar->data + 8, 4);
 		info->fan_pwm = be32toh(tmp);
 		memcpy(&tmp, ar->data + 12, 4);
-		info->get_voltage = decode_voltage((uint8_t)be32toh(tmp));
+		if (!strncmp(info->ver, "3U", 2))
+			info->get_voltage = convert_voltage(be32toh(tmp), 0.5);
+		else
+			info->get_voltage = decode_voltage((uint8_t)be32toh(tmp));
 		memcpy(&tmp, ar->data + 16, 4);
 		info->adc[0] = be32toh(tmp);
 		memcpy(&tmp, ar->data + 20, 4);
@@ -1153,10 +1156,16 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 	sprintf(buf, " Speed[%d]", info->spi_speed);
 	strcat(statbuf, buf);
 
-	sprintf(buf, " Vol[%.4f]", (float)info->get_voltage / 10000);
+	if (!strncmp(info->ver, "3U", 2))
+		sprintf(buf, " Vol[%.2f]", (float)info->get_voltage);
+	else
+		sprintf(buf, " Vol[%.4f]", (float)info->get_voltage / 10000);
 	strcat(statbuf, buf);
 
-	sprintf(buf, " V12[%.2f]", convert_voltage(info->adc[0]));
+	if (!strncmp(info->ver, "3U", 2))
+		sprintf(buf, " V_CORE[%.2f]", convert_voltage(info->adc[0], 1));
+	else
+		sprintf(buf, " V12[%.2f]", convert_voltage(info->adc[0], (10 / 110)));
 	strcat(statbuf, buf);
 
 	if (!strncmp(info->ver, "3U", 2))
@@ -1165,7 +1174,12 @@ static struct api_data *avalonm_api_stats(struct cgpu_info *cgpu)
 		sprintf(buf, " TC[%.2f]", convert_temp(info->adc[1]));
 	strcat(statbuf, buf);
 
-	sprintf(buf, " TF[%.2f]", convert_temp(info->adc[2]));
+	if (!strncmp(info->ver, "3U", 2)) {
+		sprintf(buf, " V0_9[%.2f]", convert_voltage(info->adc[2] & 0xffff, 1));
+		strcat(statbuf, buf);
+		sprintf(buf, " V1_8[%.2f]", convert_voltage((info->adc[2] >> 16) & 0xffff, 1));
+	} else
+		sprintf(buf, " TF[%.2f]", convert_temp(info->adc[2]));
 	strcat(statbuf, buf);
 
 	strcat(statbuf, " Freq[");
@@ -1228,8 +1242,13 @@ static void avalonm_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	struct avalonm_info *info = avalonm->device_data;
 	int frequency;
 
-	frequency = (info->set_frequency[0][0] * 4 + info->set_frequency[0][1] * 4 + info->set_frequency[0][2]) / 9;
-	tailsprintf(buf, bufsiz, "%4dMhz %.4fV", frequency, (float)info->get_voltage / 10000);
+	if (!strncmp(info->ver, "3U", 2)) {
+		frequency = 100;
+		tailsprintf(buf, bufsiz, "%4dMhz %.2fV", frequency, (float)info->get_voltage);
+	} else {
+		frequency = (info->set_frequency[0][0] * 4 + info->set_frequency[0][1] * 4 + info->set_frequency[0][2]) / 9;
+		tailsprintf(buf, bufsiz, "%4dMhz %.4fV", frequency, (float)info->get_voltage / 10000);
+	}
 }
 
 /* We use a replacement algorithm to only remove references to work done from
