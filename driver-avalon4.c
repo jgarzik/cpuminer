@@ -2088,12 +2088,13 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
+/* format: freq[-addr[-miner[-chip]]] add4[0, 63], miner[1, 10], chip[1, 16] */
 char *set_avalon4_device_freq(struct cgpu_info *avalon4, char *arg)
 {
 	struct avalon4_info *info = avalon4->device_data;
 	char *colon1, *colon2, *param = arg;
-	int val[3], addr;
-	uint32_t miner_id, chip_id;
+	int val[3], addr = 0, i;
+	uint32_t miner_id = 0, chip_id = 0;
 
 	if (!(*arg))
 		return NULL;
@@ -2162,7 +2163,15 @@ char *set_avalon4_device_freq(struct cgpu_info *avalon4, char *arg)
 
 	if (!miner_id || !chip_id) {
 		memcpy(opt_avalon4_freq, val, sizeof(int) * 3);
-		avalon4_set_freq(avalon4, addr, 0, 0, val);
+		if (!addr) {
+			for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+				if (!info->enable[i])
+					continue;
+
+				avalon4_set_freq(avalon4, i, 0, 0, val);
+			}
+		} else
+			avalon4_set_freq(avalon4, addr, 0, 0, val);
 	} else
 		avalon4_set_freq(avalon4, addr, miner_id, chip_id, val);
 
