@@ -144,8 +144,7 @@ CGMiner specific configuration options:
                           disabled)
   --enable-sp30           Compile support for Spondoolies SP30 (default
                           disabled)
-  --disable-libcurl       Disable building with libcurl for getwork and GBT
-                          support
+  --disable-libcurl       Disable building with libcurl for GBT support
   --enable-libsystemd     Compile support for system watchdog and status
                           notifications (default disabled)
   --without-curses        Compile support for curses TUI (default enabled)
@@ -253,7 +252,7 @@ Options for both config file and command line:
 --drillbit-options <arg> Set drillbit options <int|ext>:clock[:clock_divider][:voltage]
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
---fix-protocol      Do not redirect to a different getwork protocol (eg. stratum)
+--fix-protocol      Do not redirect to stratum protocol from GBT
 --hfa-hash-clock <arg> Set hashfast clock speed (default: 550)
 --hfa-fail-drop <arg> Set how many MHz to drop clockspeed each failure on an overlocked hashfast device (default: 10)
 --hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)
@@ -980,8 +979,8 @@ linux is the primary development platform and is virtually guaranteed to be
 more stable.
 
 Q: My network gets slower and slower and then dies for a minute?
-A; Try the --net-delay option if you are on a getwork or GBT server. This does
-nothing with stratum mining.
+A; Try the --net-delay option if you are on a GBT server. This does nothing
+with stratum mining.
 
 Q: How do I tune for p2pool?
 A: It is also recommended to use --failover-only since the work is effectively

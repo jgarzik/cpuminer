@@ -582,7 +582,7 @@ AC_SUBST(LIBUSB_LIBS)
 AC_SUBST(LIBUSB_CFLAGS)
 
 AC_ARG_ENABLE([libcurl],
-	[AC_HELP_STRING([--disable-libcurl],[Disable building with libcurl for getwork and GBT support])],
+	[AC_HELP_STRING([--disable-libcurl],[Disable building with libcurl for GBT support])],
 	[libcurl=$enableval]
 	)
 
@@ -696,9 +696,9 @@ echo "Configuration Options Summary:"
 echo
 
 if test "x$libcurl" != xno; then
-	echo "  libcurl(GBT+getwork).: Enabled: $LIBCURL_LIBS"
+	echo "  libcurl(GBT).: Enabled: $LIBCURL_LIBS"
 else
-	echo "  libcurl(GBT+getwork).: Disabled"
+	echo "  libcurl(GBT).: Disabled"
 fi
 
 if test "x$libsystemd" != xno; then
