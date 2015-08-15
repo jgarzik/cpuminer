@@ -138,7 +138,7 @@ static const char SEPARATOR = '|';
 #define JOIN_CMD "CMD="
 #define BETWEEN_JOIN SEPSTR
 
-static const char *APIVERSION = "3.6";
+static const char *APIVERSION = "3.7";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -2554,6 +2554,7 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		root = api_add_diff(root, "Difficulty Rejected", &(pool->diff_rejected), false);
 		root = api_add_diff(root, "Difficulty Stale", &(pool->diff_stale), false);
 		root = api_add_diff(root, "Last Share Difficulty", &(pool->last_share_diff), false);
+		root = api_add_diff(root, "Work Difficulty", &(pool->cgminer_pool_stats.last_diff), false);
 		root = api_add_bool(root, "Has Stratum", &(pool->has_stratum), false);
 		root = api_add_bool(root, "Stratum Active", &(pool->stratum_active), false);
 		if (pool->stratum_active)

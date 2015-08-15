@@ -517,6 +517,13 @@ Feature Changelog for external applications using the API:
 
 ---------
 
+API V3.7 (cgminer v4.9.3?)
+
+Modified API commands:
+ 'pools' - add 'Work Difficulty'
+
+---------
+
 API V3.6 (cgminer v4.9.2)
 
 Modified API commands:
@@ -526,9 +533,10 @@ Modified API commands:
  'failover-only' - deprecated, a deprecated message will be returned.
 
 ---------
+
 API V3.5 (cgminer v4.7.0)
 
-- Made quit and restart return valid JSON as a STATUS mirroring the reqest.
+- Made quit and restart return valid JSON as a STATUS mirroring the request.
 - Made addpool return what pool number the added pool is.
 
 ---------

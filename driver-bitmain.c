@@ -64,7 +64,7 @@ bool opt_bitmain_hwerror = false;
 bool opt_bitmain_checkall = false;
 bool opt_bitmain_checkn2diff = false;
 bool opt_bitmain_beeper = false;
-bool opt_bitmain_tempoverctrl = true;
+bool opt_bitmain_tempoverctrl = false;
 #endif
 int opt_bitmain_temp = BITMAIN_TEMP_TARGET;
 int opt_bitmain_workdelay = BITMAIN_WORK_DELAY;
