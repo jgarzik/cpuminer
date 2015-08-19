@@ -2074,7 +2074,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	free(pool->coinbase);
 	pool->coinbase = cgcalloc(alloc_len, 1);
 	cg_memcpy(pool->coinbase, cb1, cb1_len);
-	cg_memcpy(pool->coinbase + cb1_len, pool->nonce1bin, pool->n1_len);
+	if (pool->n1_len)
+		cg_memcpy(pool->coinbase + cb1_len, pool->nonce1bin, pool->n1_len);
 	cg_memcpy(pool->coinbase + cb1_len + pool->n1_len + pool->n2size, cb2, cb2_len);
 	if (opt_debug) {
 		char *cb = bin2hex(pool->coinbase, pool->coinbase_len);
