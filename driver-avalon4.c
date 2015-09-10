@@ -416,7 +416,11 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		}
 		nonce2 = be32toh(nonce2);
 		nonce = be32toh(nonce);
-		nonce -= 0x4000;
+
+		if ((info->mod_type[modular_id] == AVA4_TYPE_MM40) ||
+			(info->mod_type[modular_id] == AVA4_TYPE_MM41) ||
+			(info->mod_type[modular_id] == AVA4_TYPE_MM50))
+			nonce -= 0x4000;
 
 		applog(LOG_DEBUG, "%s-%d-%d: Found! P:%d - N2:%08x N:%08x NR:%d [M:%d - MW: %d(%d,%d,%d,%d)]",
 		       avalon4->drv->name, avalon4->device_id, modular_id,
@@ -488,6 +492,9 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 			tmp = decode_voltage_ncp5392p(volt);
 		if (info->mod_type[modular_id] == AVA4_TYPE_MM50)
 			tmp = decode_voltage_ncp5392p(volt);
+		/* TODO: fix it with the actual board */
+		if (info->mod_type[modular_id] == AVA4_TYPE_MM60)
+			tmp = decode_voltage_ncp5392p(volt);
 
 		info->get_voltage[modular_id] = tmp;
 
@@ -535,6 +542,9 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 			if (info->mod_type[modular_id] == AVA4_TYPE_MM41)
 				tmp = decode_voltage_ncp5392p(tmp);
 			if (info->mod_type[modular_id] == AVA4_TYPE_MM50)
+				tmp = decode_voltage_ncp5392p(tmp);
+			/* TODO: fix it with the actual board */
+			if (info->mod_type[modular_id] == AVA4_TYPE_MM60)
 				tmp = decode_voltage_ncp5392p(tmp);
 
 			if (tmp < AVA4_DEFAULT_VOLTAGE_MIN || tmp > AVA4_DEFAULT_VOLTAGE_MAX) {
@@ -1086,7 +1096,15 @@ static void detect_modules(struct cgpu_info *avalon4)
 			info->autov[i] = false;
 			info->mod_type[i] = AVA4_TYPE_MM50;
 		}
-
+		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM60_PREFIXSTR, 2)) {
+			info->miner_count[i] = AVA4_MM60_MINER_CNT;
+			info->asic_count[i] = AVA4_MM60_ASIC_CNT;
+			if (opt_avalon4_autov)
+				applog(LOG_NOTICE, "%s-%d-%d: Module cann't support autov",
+				       avalon4->drv->name, avalon4->device_id, i);
+			info->autov[i] = false;
+			info->mod_type[i] = AVA4_TYPE_MM60;
+		}
 		info->ntime_offset[i] = (opt_avalon4_ntime_offset > info->asic_count[i]) ? info->asic_count[i] : opt_avalon4_ntime_offset;
 		info->fan_pct[i] = AVA4_DEFAULT_FAN_START;
 		info->set_voltage[i] = opt_avalon4_voltage_min;
@@ -1321,6 +1339,9 @@ static void avalon4_set_voltage(struct cgpu_info *avalon4, int addr, int opt)
 			tmp = encode_voltage_ncp5392p(tmp);
 		if (info->mod_type[addr] == AVA4_TYPE_MM50)
 			tmp = encode_voltage_ncp5392p(tmp);
+		/* TODO: fix it with the actual board */
+		if (info->mod_type[addr] == AVA4_TYPE_MM60)
+			tmp = encode_voltage_ncp5392p(tmp);
 
 		tmp = htobe16(tmp);
 		memcpy(send_pkg.data + 2 * ((4 + i / 5 * 5) - i + (i / 5 * 5)), &tmp, 2);
@@ -1443,6 +1464,9 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 		tmp = encode_voltage_ncp5392p(volt);
 	if (info->mod_type[addr] == AVA4_TYPE_MM50)
 		tmp = encode_voltage_ncp5392p(volt);
+	/* TODO: fix it with the actual board */
+	if (info->mod_type[addr] == AVA4_TYPE_MM60)
+		tmp = encode_voltage_ncp5392p(volt);
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + 4, &tmp, 4);
 
@@ -1490,6 +1514,11 @@ static void avalon4_adjust_vf(struct cgpu_info *avalon4, int addr, uint8_t save)
 {
 	struct avalon4_info *info = avalon4->device_data;
 
+	/* TODO: fix it with the actual board */
+	if (info->mod_type[addr] == AVA4_TYPE_MM60) {
+		avalon4_set_voltage(avalon4, addr, ((save << 4) | opt_avalon4_miningmode));
+		avalon4_set_freq(avalon4, addr, 0, 0, opt_avalon4_freq);
+	}
 	if (info->mod_type[addr] == AVA4_TYPE_MM50) {
 		avalon4_set_voltage(avalon4, addr, ((save << 4) | opt_avalon4_miningmode));
 		avalon4_set_freq(avalon4, addr, 0, 0, opt_avalon4_freq);
@@ -1661,6 +1690,9 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 			if (!info->autov[i])
 				continue;
 
+			if (info->mod_type[i] == AVA4_TYPE_MM60)
+				individual = 1;
+
 			if (info->mod_type[i] == AVA4_TYPE_MM50)
 				individual = 1;
 
@@ -1817,6 +1849,9 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 
+		if (info->mod_type[i] == AVA4_TYPE_MM60)
+			show = 1;
+
 		if (info->mod_type[i] == AVA4_TYPE_MM50)
 			show = 1;
 
@@ -1851,6 +1886,9 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
+
+		if (info->mod_type[i] == AVA4_TYPE_MM60)
+			show = 1;
 
 		if (info->mod_type[i] == AVA4_TYPE_MM50)
 			show = 1;
@@ -1916,6 +1954,9 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 		hwp = a ? (double)b / (double)a * 100 : 0;
 
+		if (info->mod_type[i] == AVA4_TYPE_MM60)
+			show = 1;
+
 		if (info->mod_type[i] == AVA4_TYPE_MM50)
 			show = 1;
 
@@ -1968,6 +2009,9 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 
+		if (info->mod_type[i] == AVA4_TYPE_MM60)
+			show = 1;
+
 		if (info->mod_type[i] == AVA4_TYPE_MM50)
 			show = 1;
 
@@ -2006,7 +2050,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 			if (info->mod_type[i] == AVA4_TYPE_NULL)
 				continue;
 
-			if (info->mod_type[i] == AVA4_TYPE_MM50) {
+			if ((info->mod_type[i] == AVA4_TYPE_MM50) || (info->mod_type[i] == AVA4_TYPE_MM60)) {
 				for (j = 0; j < info->miner_count[i]; j++) {
 					sprintf(buf, " MFreq%d[", j);
 					strcat(statbuf[i], buf);
@@ -2040,11 +2084,11 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 
-		if (info->mod_type[i] == AVA4_TYPE_MM50) {
+		if ((info->mod_type[i] == AVA4_TYPE_MM50) || (info->mod_type[i] == AVA4_TYPE_MM60)) {
 			for (j = 0; j < info->miner_count[i]; j++) {
 				sprintf(buf, " MW%d[", j);
 				strcat(statbuf[i], buf);
-				for (k = 0; k < 16; k++) {
+				for (k = 0; k < info->asic_count[i]; k++) {
 					sprintf(buf, "%d ", info->chipmatching_work[i][j][k]);
 					strcat(statbuf[i], buf);
 				}
@@ -2061,7 +2105,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 			for (j = 0; j < info->miner_count[i]; j++) {
 				sprintf(buf, " MA%d[", j);
 				strcat(statbuf[i], buf);
-				for (k = 0; k < 16; k++) {
+				for (k = 0; k < info->asic_count[i]; k++) {
 					sprintf(buf, "%d ", info->ma_sum[i][j][k]);
 					strcat(statbuf[i], buf);
 				}
@@ -2088,7 +2132,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
-/* format: freq[-addr[-miner[-chip]]] add4[0, 63], miner[1, 10], chip[1, 16] */
+/* format: freq[-addr[-miner[-chip]]] add4[0, 63], miner[1, miner_count], chip[1, asic_count] */
 char *set_avalon4_device_freq(struct cgpu_info *avalon4, char *arg)
 {
 	struct avalon4_info *info = avalon4->device_data;
