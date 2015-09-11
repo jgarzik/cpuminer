@@ -453,14 +453,23 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 						avalon4->drv->name, avalon4->device_id, modular_id,
 						pool->swork.job_id);
 				inc_hw_errors(thr);
+				if (info->mod_type[modular_id] == AVA4_TYPE_MM60) {
+					info->hw_works_i[modular_id][miner]++;
+					info->hw5_i[modular_id][miner][info->i_5s]++;
+				}
 				break;
+			}
+		}
+
+		if (!submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce, ntime)) {
+			if (info->mod_type[modular_id] == AVA4_TYPE_MM60) {
+				info->hw_works_i[modular_id][miner]++;
+				info->hw5_i[modular_id][miner][info->i_5s]++;
 			}
 		} else {
 			info->matching_work[modular_id][miner]++;
 			info->chipmatching_work[modular_id][miner][chip_id]++;
 		}
-
-		submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce, ntime);
 		break;
 	case AVA4_P_STATUS:
 		applog(LOG_DEBUG, "%s-%d-%d: AVA4_P_STATUS", avalon4->drv->name, avalon4->device_id, modular_id);
@@ -519,6 +528,11 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		break;
 	case AVA4_P_STATUS_HW:
 		applog(LOG_DEBUG, "%s-%d-%d: AVA4_P_STATUS_HW", avalon4->drv->name, avalon4->device_id, modular_id);
+		if (info->mod_type[modular_id] == AVA4_TYPE_MM60) {
+			applog(LOG_NOTICE, "%s-%d-%d: AVA4_P_STATUS_HW found on Avalon6!", avalon4->drv->name, avalon4->device_id, modular_id);
+			break;
+		}
+
 		for (i = 0; i < info->miner_count[modular_id]; i++) {
 			info->hw_works_i[modular_id][i] += ((ar->data[i * 3] << 16) |
 							    (ar->data[i * 3 + 1] << 8) |
