@@ -1805,7 +1805,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	return h * 0xffffffffull;
 }
 
-#define STATBUFLEN 512
+#define STATBUFLEN (6 * 1024)
 static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
