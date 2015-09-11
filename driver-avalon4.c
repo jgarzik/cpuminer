@@ -1255,14 +1255,21 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 static void copy_pool_stratum(struct pool *pool_stratum, struct pool *pool)
 {
 	int i;
-	int merkles = pool->merkles;
+	int merkles = pool->merkles, job_id_len;
 	size_t coinbase_len = pool->coinbase_len;
+	unsigned short crc;
 
 	if (!pool->swork.job_id)
 		return;
 
-	if (!job_idcmp((unsigned char *)pool->swork.job_id, pool_stratum->swork.job_id))
-		return;
+	if (pool_stratum->swork.job_id) {
+		job_id_len = strlen(pool->swork.job_id);
+		crc = crc16((unsigned char *)pool->swork.job_id, job_id_len);
+		job_id_len = strlen(pool_stratum->swork.job_id);
+
+		if (crc16((unsigned char *)pool_stratum->swork.job_id, job_id_len) == crc)
+			return;
+	}
 
 	cg_wlock(&pool_stratum->data_lock);
 	free(pool_stratum->swork.job_id);
