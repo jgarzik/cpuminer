@@ -469,6 +469,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		} else {
 			info->matching_work[modular_id][miner]++;
 			info->chipmatching_work[modular_id][miner][chip_id]++;
+			info->newnonce[modular_id]++;
 		}
 		break;
 	case AVA4_P_STATUS:
@@ -1134,6 +1135,7 @@ static void detect_modules(struct cgpu_info *avalon4)
 		info->led_red[i] = 0;
 		info->saved[i] = 0;
 		info->cutoff[i] = 0;
+		info->newnonce[i] = 0;
 		applog(LOG_NOTICE, "%s-%d: New module detect! ID[%d]",
 		       avalon4->drv->name, avalon4->device_id, i);
 
@@ -1251,6 +1253,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 					for (k = 0; k < info->asic_count[i]; k++)
 						memset(info->set_frequency_i[i][j][k], 0, sizeof(int) * 3);
 				}
+				info->newnonce[i] = 0;
 				applog(LOG_NOTICE, "%s-%d: Module detached! ID[%d]",
 				       avalon4->drv->name, avalon4->device_id, i);
 			}
@@ -1812,9 +1815,14 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	h = 0;
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (info->enable[i] && (info->local_work[i] > info->hw_work[i]))
-			h += (info->local_work[i] - info->hw_work[i]);
-		info->local_work[i] = 0;
-		info->hw_work[i] = 0;
+			if (info->mod_type[i] == AVA4_TYPE_MM60) {
+				h += info->newnonce[i];
+				info->newnonce[i] = 0;
+			} else {
+				h += (info->local_work[i] - info->hw_work[i]);
+				info->local_work[i] = 0;
+				info->hw_work[i] = 0;
+			}
 	}
 	return h * 0xffffffffull;
 }
