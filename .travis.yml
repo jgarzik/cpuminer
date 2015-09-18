@@ -7,7 +7,6 @@ compiler:
 
 os:
   - linux
-  - osx
 
 sudo: false
 
@@ -27,14 +26,6 @@ addons:
       - libcurl4-openssl-dev
       - libjansson-dev
       - pkg-config
-
-before_install:
-  - if [ "$TRAVIS_OS_NAME" = "osx" ]; then brew update; fi
-
-install:
-  - if [ "$TRAVIS_OS_NAME" = "osx" ]; then brew install curl; fi
-  - if [ "$TRAVIS_OS_NAME" = "osx" ]; then brew install jansson; fi
-  - if [ "$TRAVIS_OS_NAME" = "osx" ]; then brew install argp-standalone; fi
 
 before_script:
   - if [ -n "$USE_SHELL" ]; then export CONFIG_SHELL="$USE_SHELL"; fi
