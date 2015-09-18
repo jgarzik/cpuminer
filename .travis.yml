@@ -24,8 +24,8 @@ addons:
   apt:
     packages:
       - libssl-dev
-      - libjansson-dev
       - libcurl4-openssl-dev
+      - libjansson-dev
       - pkg-config
 
 before_install:
