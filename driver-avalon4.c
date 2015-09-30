@@ -1539,10 +1539,9 @@ static void avalon4_adjust_vf(struct cgpu_info *avalon4, int addr, uint8_t save)
 	struct avalon4_info *info = avalon4->device_data;
 
 	/* TODO: fix it with the actual board */
-	if (info->mod_type[addr] == AVA4_TYPE_MM60) {
-		avalon4_set_voltage(avalon4, addr, ((save << 4) | opt_avalon4_miningmode));
+	if (info->mod_type[addr] == AVA4_TYPE_MM60)
 		avalon4_set_freq(avalon4, addr, 0, 0, opt_avalon4_freq);
-	}
+
 	if (info->mod_type[addr] == AVA4_TYPE_MM50) {
 		avalon4_set_voltage(avalon4, addr, ((save << 4) | opt_avalon4_miningmode));
 		avalon4_set_freq(avalon4, addr, 0, 0, opt_avalon4_freq);
