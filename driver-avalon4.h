@@ -181,6 +181,7 @@ struct avalon4_info {
 	int get_voltage_i[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINER_MAX];
 	int get_frequency[AVA4_DEFAULT_MODULARS];
 	int power_good[AVA4_DEFAULT_MODULARS];
+	int error_code[AVA4_DEFAULT_MODULARS];
 	int fan_pct[AVA4_DEFAULT_MODULARS];
 	int fan[AVA4_DEFAULT_MODULARS];
 	int temp[AVA4_DEFAULT_MODULARS];

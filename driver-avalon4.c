@@ -488,12 +488,14 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		memcpy(&(info->local_work[modular_id]), ar->data + 16, 4);
 		memcpy(&(info->hw_work[modular_id]), ar->data + 20, 4);
 		memcpy(&(info->power_good[modular_id]), ar->data + 24, 4);
+		memcpy(&(info->error_code[modular_id]), ar->data + 28, 4);
 
 		info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]) * 3968 / 65;
 		info->get_voltage[modular_id] = be32toh(info->get_voltage[modular_id]);
 		info->local_work[modular_id] = be32toh(info->local_work[modular_id]);
 		info->hw_work[modular_id] = be32toh(info->hw_work[modular_id]);
 		info->power_good[modular_id] = be32toh(info->power_good[modular_id]);
+		info->error_code[modular_id] = be32toh(info->error_code[modular_id]);
 
 		volt = info->get_voltage[modular_id];
 		if (info->mod_type[modular_id] == AVA4_TYPE_MM40)
@@ -1232,6 +1234,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 				info->get_voltage[i] = 0;
 				info->get_frequency[i] = 0;
 				info->power_good[i] = 0;
+				info->error_code[i] = 0;
 				info->local_work[i] = 0;
 				info->local_works[i] = 0;
 				info->hw_work[i] = 0;
@@ -2140,6 +2143,15 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 				statbuf[i][strlen(statbuf[i]) - 1] = ']';
 			}
+		}
+	}
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+		if (info->mod_type[i] == AVA4_TYPE_NULL)
+			continue;
+
+		if (info->mod_type[i] == AVA4_TYPE_MM60) {
+			sprintf(buf, " EC[%d]", info->error_code[i]);
+			strcat(statbuf[i], buf);
 		}
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
