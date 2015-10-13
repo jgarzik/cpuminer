@@ -501,7 +501,6 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		} else {
 			info->matching_work[modular_id][miner]++;
 			info->chipmatching_work[modular_id][miner][chip_id]++;
-			info->newnonce[modular_id]++;
 		}
 		break;
 	case AVA4_P_STATUS:
@@ -1857,8 +1856,8 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (info->enable[i] && (info->local_work[i] > info->hw_work[i]))
 			if (info->mod_type[i] == AVA4_TYPE_MM60) {
-				h += info->newnonce[i];
-				info->newnonce[i] = 0;
+				h += avalon4->diff_accepted - info->newnonce[i];
+				info->newnonce[i] = avalon4->diff_accepted;
 			} else {
 				h += (info->local_work[i] - info->hw_work[i]);
 				info->local_work[i] = 0;
