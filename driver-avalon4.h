@@ -35,6 +35,7 @@
 #define AVA4_DEFAULT_MODULARS	64
 #define AVA4_DEFAULT_MINER_MAX	10
 #define AVA4_DEFAULT_ASIC_MAX	40
+#define AVA4_DEFAULT_ADC_MAX	6 /* RNTC1-4, VCC12, VCC3VC */
 
 #define AVA4_DEFAULT_MINER_CNT	10
 #define AVA4_DEFAULT_ASIC_CNT	4
@@ -52,7 +53,8 @@
 #define AVA4_DH_INC	0.03
 #define AVA4_DH_DEC	0.002
 
-#define AVA4_PWM_MAX		0x3FF
+#define AVA4_PWM_MAX	0x3FF
+#define AVA4_ADC_MAX	0x3FF
 
 #define AVA4_AUC_VER_LEN	12	/* Version length: 12 (AUC-YYYYMMDD) */
 #define AVA4_AUC_SPEED		400000
@@ -110,6 +112,7 @@
 #define AVA4_P_STATUS_HW        0x45
 #define AVA4_P_STATUS_VOLT	0x46
 #define AVA4_P_STATUS_MA	0x47
+#define AVA4_P_STATUS_M	0x48
 
 #define AVA4_MODULE_BROADCAST	0
 /* Endof Avalon4 protocol package type */
@@ -186,6 +189,7 @@ struct avalon4_info {
 	int fan[AVA4_DEFAULT_MODULARS];
 	int temp[AVA4_DEFAULT_MODULARS];
 	int led_red[AVA4_DEFAULT_MODULARS];
+	uint16_t adc[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_ADC_MAX];
 
 	uint64_t local_works[AVA4_DEFAULT_MODULARS];
 	uint64_t local_works_i[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINER_MAX];
