@@ -43,7 +43,14 @@ int opt_avalon4_aucxdelay = AVA4_AUC_XDELAY;
 int opt_avalon4_ntime_offset = AVA4_DEFAULT_ASIC_MAX;
 int opt_avalon4_miningmode = AVA4_MOD_CUSTOM;
 
+int opt_avalon4_ntcb = AVA4_DEFAULT_NTCB;
+int opt_avalon4_freq_min = AVA4_DEFAULT_FREQUENCY_MIN;
+int opt_avalon4_freq_max = AVA4_DEFAULT_FREQUENCY_MAX;
+bool opt_avalon4_noncecheck = AVA4_DEFAULT_NCHECK;
+bool opt_avalon4_autof = AVA4_DEFAULT_AUTOF;
+
 static uint8_t avalon4_freezsafemode = 0;
+/* Only for Avalon4 */
 static uint32_t g_freq_array[][2] = {
 	{100, 0x1e678447},
 	{113, 0x22688447},
@@ -155,7 +162,6 @@ static inline uint8_t rev8(uint8_t d)
 
 #define R_REF	10000
 #define R0	10000
-#define BCOEFFICIENT	3450
 #define T0	25
 static float convert_temp(uint16_t adc)
 {
@@ -168,7 +174,7 @@ static float convert_temp(uint16_t adc)
 	resistance = R_REF / resistance;
 	ret = resistance / R0;
 	ret = logf(ret);
-	ret /= BCOEFFICIENT;
+	ret /= opt_avalon4_ntcb;
 	ret += 1.0 / (T0 + 273.15);
 	ret = 1.0 / ret;
 	ret -= 273.15;
@@ -1104,6 +1110,12 @@ static void detect_modules(struct cgpu_info *avalon4)
 		applog(LOG_DEBUG, "%s-%d: AVA4_P_DETECT ID[%d]",
 		       avalon4->drv->name, avalon4->device_id, i);
 		memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
+		tmp = be32toh(opt_avalon4_freq_min);
+		memcpy(send_pkg.data, &tmp, 4);
+		tmp = be32toh(opt_avalon4_freq_max);
+		memcpy(send_pkg.data + 4, &tmp, 4);
+		send_pkg.data[8] = opt_avalon4_ntcb >> 8;
+		send_pkg.data[9] = opt_avalon4_ntcb & 0xff;
 		tmp = be32toh(i); /* ID */
 		memcpy(send_pkg.data + 28, &tmp, 4);
 		avalon4_init_pkg(&send_pkg, AVA4_P_DETECT, 1, 1);
@@ -1557,6 +1569,14 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 
 	tmp = be32toh(range);
 	memcpy(send_pkg.data + 16, &tmp, 4);
+
+	/* adjust flag [0-5]: reserved, 6: nonce check, 7: autof*/
+	tmp = 0;
+	if (opt_avalon4_autof)
+		tmp = 1;
+	if (opt_avalon4_noncecheck)
+		tmp |= 2;
+	send_pkg.data[20] = tmp & 0xff;
 
 	/* Package the data */
 	avalon4_init_pkg(&send_pkg, AVA4_P_SET, 1, 1);

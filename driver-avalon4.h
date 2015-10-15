@@ -49,6 +49,9 @@
 #define AVA4_DEFAULT_POLLING_DELAY	20 /* ms */
 
 #define AVA4_DEFAULT_ADJ_TIMES	6
+#define AVA4_DEFAULT_NTCB	3450
+#define AVA4_DEFAULT_NCHECK	true
+#define AVA4_DEFAULT_AUTOF	0
 
 #define AVA4_DH_INC	0.03
 #define AVA4_DH_DEC	0.002
@@ -247,5 +250,10 @@ extern int opt_avalon4_aucspeed;
 extern int opt_avalon4_aucxdelay;
 extern int opt_avalon4_ntime_offset;
 extern int opt_avalon4_miningmode;
+extern int opt_avalon4_ntcb;
+extern int opt_avalon4_freq_min;
+extern int opt_avalon4_freq_max;
+extern bool opt_avalon4_noncecheck;
+extern bool opt_avalon4_autof;
 #endif /* USE_AVALON4 */
 #endif	/* _AVALON4_H_ */
