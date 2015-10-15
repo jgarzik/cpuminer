@@ -2097,7 +2097,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 		if (info->mod_type[i] == AVA4_TYPE_MM60)
-			sprintf(buf, " Vol[%.4f]", convert_voltage(info->adc[i][4], 1 / 11.0));
+			sprintf(buf, " Vol[%.1f]", convert_voltage(info->adc[i][4], 1 / 11.0));
 		else
 			sprintf(buf, " Vol[%.4f]", (float)info->get_voltage[i] / 10000);
 		strcat(statbuf[i], buf);
@@ -2587,7 +2587,7 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 #endif
 	frequency = (info->set_frequency[0] * 4 + info->set_frequency[1] * 4 + info->set_frequency[2]) / 9;
 	if (has_a6)
-		tailsprintf(buf, bufsiz, "%4dMhz %2dC-%2dC %3d%% %.3fV", frequency,
+		tailsprintf(buf, bufsiz, "%4dMhz %2dC-%2dC %3d%% %.1fV", frequency,
 				temp, (int)convert_temp(tempadcmin), fanmin,
 				convert_voltage(vcc12adcmin, 1 / 11.0));
 	else
