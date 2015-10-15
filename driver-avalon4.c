@@ -188,7 +188,7 @@ static float convert_voltage(uint16_t adc, float percent)
 	float voltage;
 
 	voltage = adc * V_REF * 1.0 / AVA4_ADC_MAX / percent;
-	return voltage;
+	return voltage + 0.3;
 }
 
 char *set_avalon4_fan(char *arg)
