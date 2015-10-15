@@ -2247,6 +2247,8 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 	root = api_add_int(root, "MM Count", &(info->mm_count), true);
 	root = api_add_bool(root, "Automatic Voltage", &opt_avalon4_autov, true);
+	root = api_add_bool(root, "Automatic Frequency", &opt_avalon4_autof, true);
+	root = api_add_bool(root, "Nonce check", &opt_avalon4_noncecheck, true);
 	root = api_add_string(root, "AUC VER", info->auc_version, false);
 	root = api_add_int(root, "AUC I2C Speed", &(info->auc_speed), true);
 	root = api_add_int(root, "AUC I2C XDelay", &(info->auc_xdelay), true);
