@@ -626,6 +626,11 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		applog(LOG_DEBUG, "%s-%d-%d: AVA4_P_STATUS_M", avalon4->drv->name, avalon4->device_id, modular_id);
 		for (i = 0; i < AVA4_DEFAULT_ADC_MAX; i++)
 			info->adc[modular_id][i] = (ar->data[2 * i] << 8) | ar->data[(2 * i) + 1];
+
+		/* MCU LED status --> data[2 * AVA4_DEFAULT_ADC : 2 * AVA4_DEFAULT_ADC_MAX + 3] */
+		for (i = 0; i < AVA4_DEFAULT_PLL_MAX; i++)
+			info->pll_sel[modular_id][i] = (ar->data[2 * (AVA4_DEFAULT_ADC_MAX + 2 + i)] << 8) |
+				ar->data[(2 * (AVA4_DEFAULT_ADC_MAX + 2 + i)) + 1];
 		break;
 	default:
 		applog(LOG_DEBUG, "%s-%d-%d: Unknown response", avalon4->drv->name, avalon4->device_id, modular_id);
@@ -1188,6 +1193,7 @@ static void detect_modules(struct cgpu_info *avalon4)
 		info->led_red[i] = 0;
 		for (j = 0; j < AVA4_DEFAULT_ADC_MAX; j++)
 			info->adc[i][j] = AVA4_ADC_MAX;
+		memset(info->pll_sel, 0, sizeof(info->pll_sel));
 		info->saved[i] = 0;
 		info->cutoff[i] = 0;
 		info->newnonce[i] = 0;
@@ -2226,6 +2232,20 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 			strcat(statbuf[i], buf);
 			for (j = 0; j < AVA4_DEFAULT_ADC_MAX; j++) {
 				sprintf(buf, "%d ", info->adc[i][j]);
+				strcat(statbuf[i], buf);
+			}
+			statbuf[i][strlen(statbuf[i]) - 1] = ']';
+		}
+	}
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+		if (info->mod_type[i] == AVA4_TYPE_NULL)
+			continue;
+
+		if (info->mod_type[i] == AVA4_TYPE_MM60) {
+			sprintf(buf, " PLL[");
+			strcat(statbuf[i], buf);
+			for (j = 0; j < AVA4_DEFAULT_PLL_MAX; j++) {
+				sprintf(buf, "%d ", info->pll_sel[i][j]);
 				strcat(statbuf[i], buf);
 			}
 			statbuf[i][strlen(statbuf[i]) - 1] = ']';
