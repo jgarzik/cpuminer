@@ -50,7 +50,7 @@
 
 #define AVA4_DEFAULT_ADJ_TIMES	6
 #define AVA4_DEFAULT_NTCB	3450
-#define AVA4_DEFAULT_NCHECK	false
+#define AVA4_DEFAULT_NCHECK	true
 #define AVA4_DEFAULT_AUTOF	false
 
 #define AVA4_DH_INC	0.03
