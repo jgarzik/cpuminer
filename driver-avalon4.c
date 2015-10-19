@@ -527,7 +527,10 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		memcpy(&(info->power_good[modular_id]), ar->data + 24, 4);
 		memcpy(&(info->error_code[modular_id]), ar->data + 28, 4);
 
-		info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]) * 3968 / 65;
+		if (info->mod_type[modular_id] == AVA4_TYPE_MM60)
+			info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]) / (info->miner_count[modular_id] * info->asic_count[modular_id]);
+		else
+			info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]) * 3968 / 65;
 		info->get_voltage[modular_id] = be32toh(info->get_voltage[modular_id]);
 		info->local_work[modular_id] = be32toh(info->local_work[modular_id]);
 		info->hw_work[modular_id] = be32toh(info->hw_work[modular_id]);
