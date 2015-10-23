@@ -2144,7 +2144,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 			continue;
 
 		if (info->mod_type[i] == AVA4_TYPE_MM60)
-			sprintf(buf, " GHSmm[%.2f] Freq[%.2f]", (float)info->get_frequency[i] / 1000 * info->asic_count[i], (float)info->get_frequency[i] / 1000);
+			sprintf(buf, " GHSmm[%.2f] Freq[%.2f]", (float)info->get_frequency[i] / 1000 * info->miner_count[i] * info->asic_count[i], (float)info->get_frequency[i] / 1000);
 		else
 			sprintf(buf, " Freq[%.2f]", (float)info->get_frequency[i] / 1000);
 		strcat(statbuf[i], buf);
