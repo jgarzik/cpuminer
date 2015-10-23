@@ -2052,9 +2052,6 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 		hwp = a ? (double)b / (double)a * 100 : 0;
 
-		if (info->mod_type[i] == AVA4_TYPE_MM60)
-			show = 1;
-
 		if (info->mod_type[i] == AVA4_TYPE_MM50)
 			show = 1;
 
@@ -2084,15 +2081,13 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 			continue;
 
 		if (info->mod_type[i] == AVA4_TYPE_MM60) {
-			uint16_t tmp;
-			tmp = info->adc[i][0];
-			for (j = 1; j < AVA4_DEFAULT_ADC_MAX - 2; j++) {
-				if (info->adc[i][j] < tmp)
-					tmp = info->adc[i][j];
-			}
-			sprintf(buf, " Temp[%d] Temp1[%d]", info->temp[i], (int)convert_temp(tmp));
+			sprintf(buf, " Temp[%d] Temp0[%d] Temp1[%d]",
+					info->temp[i],
+					(int)convert_temp(info->adc[i][0]),
+					(int)convert_temp(info->adc[i][1]));
 		} else
 			sprintf(buf, " Temp[%d]", info->temp[i]);
+
 		strcat(statbuf[i], buf);
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
@@ -2106,7 +2101,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 		if (info->mod_type[i] == AVA4_TYPE_MM60)
-			sprintf(buf, " Vol[%.1f]", convert_voltage(info->adc[i][4], 1 / 11.0));
+			sprintf(buf, " Vol[%.1f]", convert_voltage(info->adc[i][4], 1 / 11.0) / 20.0);
 		else
 			sprintf(buf, " Vol[%.4f]", (float)info->get_voltage[i] / 10000);
 		strcat(statbuf[i], buf);
@@ -2117,9 +2112,6 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
-
-		if (info->mod_type[i] == AVA4_TYPE_MM60)
-			show = 1;
 
 		if (info->mod_type[i] == AVA4_TYPE_MM50)
 			show = 1;
@@ -2151,7 +2143,10 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 
-		sprintf(buf, " Freq[%.2f]", (float)info->get_frequency[i] / 1000);
+		if (info->mod_type[i] == AVA4_TYPE_MM60)
+			sprintf(buf, " GHSmm[%.2f] Freq[%.2f]", (float)info->get_frequency[i] / 1000 * info->asic_count[i], (float)info->get_frequency[i] / 1000);
+		else
+			sprintf(buf, " Freq[%.2f]", (float)info->get_frequency[i] / 1000);
 		strcat(statbuf[i], buf);
 	}
 	if (opt_debug) {
@@ -2159,7 +2154,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 			if (info->mod_type[i] == AVA4_TYPE_NULL)
 				continue;
 
-			if ((info->mod_type[i] == AVA4_TYPE_MM50) || (info->mod_type[i] == AVA4_TYPE_MM60)) {
+			if (info->mod_type[i] == AVA4_TYPE_MM50) {
 				for (j = 0; j < info->miner_count[i]; j++) {
 					sprintf(buf, " MFreq%d[", j);
 					strcat(statbuf[i], buf);
@@ -2223,32 +2218,20 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 			}
 		}
 	}
-	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->mod_type[i] == AVA4_TYPE_NULL)
-			continue;
+	if (opt_debug) {
+		for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+			if (info->mod_type[i] == AVA4_TYPE_NULL)
+				continue;
 
-		if (info->mod_type[i] == AVA4_TYPE_MM60) {
-			sprintf(buf, " ADC[");
-			strcat(statbuf[i], buf);
-			for (j = 0; j < AVA4_DEFAULT_ADC_MAX; j++) {
-				sprintf(buf, "%d ", info->adc[i][j]);
+			if (info->mod_type[i] == AVA4_TYPE_MM60) {
+				sprintf(buf, " PLL[");
 				strcat(statbuf[i], buf);
+				for (j = 0; j < AVA4_DEFAULT_PLL_MAX; j++) {
+					sprintf(buf, "%d ", info->pll_sel[i][j]);
+					strcat(statbuf[i], buf);
+				}
+				statbuf[i][strlen(statbuf[i]) - 1] = ']';
 			}
-			statbuf[i][strlen(statbuf[i]) - 1] = ']';
-		}
-	}
-	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->mod_type[i] == AVA4_TYPE_NULL)
-			continue;
-
-		if (info->mod_type[i] == AVA4_TYPE_MM60) {
-			sprintf(buf, " PLL[");
-			strcat(statbuf[i], buf);
-			for (j = 0; j < AVA4_DEFAULT_PLL_MAX; j++) {
-				sprintf(buf, "%d ", info->pll_sel[i][j]);
-				strcat(statbuf[i], buf);
-			}
-			statbuf[i][strlen(statbuf[i]) - 1] = ']';
 		}
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
@@ -2575,7 +2558,7 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	int temp = get_current_temp_max(info);
 	int voltsmin = AVA4_DEFAULT_VOLTAGE_MAX, voltsmax = AVA4_DEFAULT_VOLTAGE_MIN;
 	int fanmin = AVA4_DEFAULT_FAN_MAX, fanmax = AVA4_DEFAULT_FAN_MIN;
-	int i, j, frequency, tempadcmin = AVA4_ADC_MAX, vcc12adcmin = AVA4_ADC_MAX;
+	int i, j, frequency = AVA4_DEFAULT_FREQUENCY_MIN, tempadcmin = AVA4_ADC_MAX, vcc12adcmin = AVA4_ADC_MAX;
 	int has_a6 = 0;
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
@@ -2601,6 +2584,8 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 		}
 		if (info->adc[i][4] < vcc12adcmin)
 			vcc12adcmin = info->adc[i][4];
+		if (frequency < info->get_frequency[i])
+			frequency = info->get_frequency[i];
 	}
 #if 0
 	tailsprintf(buf, bufsiz, "%2dMMs %.4fV-%.4fV %4dMhz %2dC %3d%%-%3d%%",
@@ -2608,14 +2593,16 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 		    (info->set_frequency[0] * 4 + info->set_frequency[1] * 4 + info->set_frequency[2]) / 9,
 		    temp, fanmin, fanmax);
 #endif
-	frequency = (info->set_frequency[0] * 4 + info->set_frequency[1] * 4 + info->set_frequency[2]) / 9;
-	if (has_a6)
+	if (has_a6) {
+		frequency = frequency / 1000 * AVA4_MM60_ASIC_CNT;
 		tailsprintf(buf, bufsiz, "%4dMhz %2dC-%2dC %3d%% %.1fV", frequency,
 				temp, (int)convert_temp(tempadcmin), fanmin,
 				convert_voltage(vcc12adcmin, 1 / 11.0));
-	else
+	} else {
+		frequency = (info->set_frequency[0] * 4 + info->set_frequency[1] * 4 + info->set_frequency[2]) / 9;
 		tailsprintf(buf, bufsiz, "%4dMhz %2dC %3d%% %.3fV", frequency,
 				temp, fanmin, (float)voltsmax / 10000);
+	}
 }
 
 struct device_drv avalon4_drv = {
