@@ -1907,12 +1907,16 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	char buf[256];
 	char statbuf[AVA4_DEFAULT_MODULARS][STATBUFLEN];
 	struct timeval current;
+	bool has_a6 = false;
 
 	memset(statbuf, 0, AVA4_DEFAULT_MODULARS * STATBUFLEN);
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
+
+		if (info->mod_type[i] == AVA4_TYPE_MM60)
+			has_a6 = true;
 
 		sprintf(buf, "Ver[%s]", info->mm_version[i]);
 		strcat(statbuf[i], buf);
@@ -2252,7 +2256,8 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	}
 
 	root = api_add_int(root, "MM Count", &(info->mm_count), true);
-	root = api_add_bool(root, "Automatic Voltage", &opt_avalon4_autov, true);
+	if (!has_a6)
+		root = api_add_bool(root, "Automatic Voltage", &opt_avalon4_autov, true);
 	root = api_add_bool(root, "Automatic Frequency", &opt_avalon4_autof, true);
 	root = api_add_bool(root, "Nonce check", &opt_avalon4_noncecheck, true);
 	root = api_add_string(root, "AUC VER", info->auc_version, false);
