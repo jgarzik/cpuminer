@@ -52,7 +52,7 @@
 #define AVA4_DEFAULT_ADJ_TIMES	6
 #define AVA4_DEFAULT_NTCB	3450
 #define AVA4_DEFAULT_NCHECK	true
-#define AVA4_DEFAULT_AUTOF	false
+#define AVA4_DEFAULT_FREQUENCY_FIXED	false
 
 #define AVA4_DH_INC	0.03
 #define AVA4_DH_DEC	0.002
@@ -256,6 +256,6 @@ extern int opt_avalon4_ntcb;
 extern int opt_avalon4_freq_min;
 extern int opt_avalon4_freq_max;
 extern bool opt_avalon4_noncecheck;
-extern bool opt_avalon4_autof;
+extern bool opt_avalon4_freq_fixed;
 #endif /* USE_AVALON4 */
 #endif	/* _AVALON4_H_ */

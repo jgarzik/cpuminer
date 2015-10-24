@@ -1257,9 +1257,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--avalon4-noncecheck-off",
 			opt_set_invbool, &opt_avalon4_noncecheck,
 			"Disable MM noncheck"),
-	OPT_WITHOUT_ARG("--avalon4-freq-auto",
-			opt_set_bool, &opt_avalon4_autof,
-			"Enable adjust frequency automatically"),
+	OPT_WITHOUT_ARG("--avalon4-freq-fixed",
+			opt_set_bool, &opt_avalon4_freq_fixed,
+			"Enable fixed frequency"),
 #endif
 #ifdef USE_BAB
 	OPT_WITH_ARG("--bab-options",
