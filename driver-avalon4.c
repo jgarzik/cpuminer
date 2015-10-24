@@ -2563,7 +2563,7 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	int temp = get_current_temp_max(info);
 	int voltsmin = AVA4_DEFAULT_VOLTAGE_MAX, voltsmax = AVA4_DEFAULT_VOLTAGE_MIN;
 	int fanmin = AVA4_DEFAULT_FAN_MAX, fanmax = AVA4_DEFAULT_FAN_MIN;
-	int i, j, frequency = AVA4_DEFAULT_FREQUENCY_MIN, tempadcmin = AVA4_ADC_MAX, vcc12adcmin = AVA4_ADC_MAX;
+	int i, j, frequency = 0, tempadcmin = AVA4_ADC_MAX, vcc12adcmin = AVA4_ADC_MAX;
 	int has_a6 = 0;
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
@@ -2599,10 +2599,10 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 		    temp, fanmin, fanmax);
 #endif
 	if (has_a6) {
-		frequency = frequency / 1000 * AVA4_MM60_ASIC_CNT;
-		tailsprintf(buf, bufsiz, "%4dMhz %2dC-%2dC %3d%% %.1fV", frequency,
+		tailsprintf(buf, bufsiz, "%4dMhz %4dGHS %2dC-%2dC %3d%% %.1fV", frequency / 96,
+				frequency / 1000 * AVA4_MM60_MINER_CNT * AVA4_MM60_ASIC_CNT,
 				temp, (int)convert_temp(tempadcmin), fanmin,
-				convert_voltage(vcc12adcmin, 1 / 11.0));
+				(vcc12adcmin == AVA4_ADC_MAX) ? 0 : convert_voltage(vcc12adcmin, 1 / 11.0));
 	} else {
 		frequency = (info->set_frequency[0] * 4 + info->set_frequency[1] * 4 + info->set_frequency[2]) / 9;
 		tailsprintf(buf, bufsiz, "%4dMhz %2dC %3d%% %.3fV", frequency,
