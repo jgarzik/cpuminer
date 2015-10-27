@@ -1,7 +1,7 @@
 /*
- * Copyright 2014 Mikeqin <Fengling.Qin@gmail.com>
+ * Copyright 2014-2015 Mikeqin <Fengling.Qin@gmail.com>
  * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
- * Copyright 2012-2014 Xiangfu <xiangfu@openmobilefree.com>
+ * Copyright 2012-2015 Xiangfu <xiangfu@openmobilefree.com>
  * Copyright 2012 Luke Dashjr
  * Copyright 2012 Andrew Smith
  *
@@ -47,7 +47,7 @@ int opt_avalon4_ntcb = AVA4_DEFAULT_NTCB;
 int opt_avalon4_freq_min = AVA4_DEFAULT_FREQUENCY_MIN;
 int opt_avalon4_freq_max = AVA4_DEFAULT_FREQUENCY_MAX;
 bool opt_avalon4_noncecheck = AVA4_DEFAULT_NCHECK;
-bool opt_avalon4_autof = AVA4_DEFAULT_AUTOF;
+bool opt_avalon4_freq_fixed = AVA4_DEFAULT_FREQUENCY_FIXED;
 
 static uint8_t avalon4_freezsafemode = 0;
 /* Only for Avalon4 */
@@ -368,6 +368,15 @@ static inline uint32_t adjust_fan(struct avalon4_info *info, int id)
 {
 	uint32_t pwm;
 	int t = info->temp[id];
+
+	if (info->mod_type[id] == AVA4_TYPE_MM60) {
+		int t1, t2;
+		t1 = (int)convert_temp(info->adc[id][0]),
+		t2 = (int)convert_temp(info->adc[id][1]),
+
+		t = t > t1 ? t : t1;
+		t = t > t2 ? t : t2;
+	}
 
 	if (avalon4_freezsafemode) {
 		pwm = get_fan_pwm(AVA4_FREEZESAFE_FAN);
@@ -923,7 +932,11 @@ static void avalon4_stratum_pkgs(struct cgpu_info *avalon4, struct pool *pool)
 	if (avalon4_send_bc_pkgs(avalon4, &pkg))
 		return;
 
-	set_target(target, pool->sdiff);
+	if (pool->sdiff <= AVA4_DRV_DIFFMAX)
+		set_target(target, pool->sdiff);
+	else
+		set_target(target, AVA4_DRV_DIFFMAX);
+
 	memcpy(pkg.data, target, 32);
 	if (opt_debug) {
 		char *target_str;
@@ -1167,7 +1180,7 @@ static void detect_modules(struct cgpu_info *avalon4)
 			info->miner_count[i] = AVA4_MM50_MINER_CNT;
 			info->asic_count[i] = AVA4_MM50_ASIC_CNT;
 			if (opt_avalon4_autov)
-				applog(LOG_NOTICE, "%s-%d-%d: Module cann't support autov",
+				applog(LOG_NOTICE, "%s-%d-%d: Module do not support autov",
 				       avalon4->drv->name, avalon4->device_id, i);
 			info->autov[i] = false;
 			info->mod_type[i] = AVA4_TYPE_MM50;
@@ -1176,7 +1189,7 @@ static void detect_modules(struct cgpu_info *avalon4)
 			info->miner_count[i] = AVA4_MM60_MINER_CNT;
 			info->asic_count[i] = AVA4_MM60_ASIC_CNT;
 			if (opt_avalon4_autov)
-				applog(LOG_NOTICE, "%s-%d-%d: Module cann't support autov",
+				applog(LOG_NOTICE, "%s-%d-%d: Module do not support autov",
 				       avalon4->drv->name, avalon4->device_id, i);
 			info->autov[i] = false;
 			info->mod_type[i] = AVA4_TYPE_MM60;
@@ -1584,9 +1597,9 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 	memcpy(send_pkg.data + 16, &tmp, 4);
 
 	/* adjust flag [0-5]: reserved, 6: nonce check, 7: autof*/
-	tmp = 0;
-	if (opt_avalon4_autof)
-		tmp = 1;
+	tmp = 1;
+	if (opt_avalon4_freq_fixed)
+		tmp = 0;
 	if (opt_avalon4_noncecheck)
 		tmp |= 2;
 	send_pkg.data[20] = tmp & 0xff;
@@ -1889,8 +1902,8 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (info->enable[i] && (info->local_work[i] > info->hw_work[i]))
 			if (info->mod_type[i] == AVA4_TYPE_MM60) {
-				h += avalon4->diff_accepted - info->newnonce[i];
-				info->newnonce[i] = avalon4->diff_accepted;
+				h += avalon4->diff1 - info->newnonce[i];
+				info->newnonce[i] = avalon4->diff1;
 			} else {
 				h += (info->local_work[i] - info->hw_work[i]);
 				info->local_work[i] = 0;
@@ -2271,7 +2284,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "MM Count", &(info->mm_count), true);
 	if (!has_a6)
 		root = api_add_bool(root, "Automatic Voltage", &opt_avalon4_autov, true);
-	root = api_add_bool(root, "Automatic Frequency", &opt_avalon4_autof, true);
+	root = api_add_bool(root, "Fixed Frequency", &opt_avalon4_freq_fixed, true);
 	root = api_add_bool(root, "Nonce check", &opt_avalon4_noncecheck, true);
 	root = api_add_string(root, "AUC VER", info->auc_version, false);
 	root = api_add_int(root, "AUC I2C Speed", &(info->auc_speed), true);
@@ -2576,7 +2589,7 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 	int temp = get_current_temp_max(info);
 	int voltsmin = AVA4_DEFAULT_VOLTAGE_MAX, voltsmax = AVA4_DEFAULT_VOLTAGE_MIN;
 	int fanmin = AVA4_DEFAULT_FAN_MAX, fanmax = AVA4_DEFAULT_FAN_MIN;
-	int i, j, frequency = AVA4_DEFAULT_FREQUENCY_MIN, tempadcmin = AVA4_ADC_MAX, vcc12adcmin = AVA4_ADC_MAX;
+	int i, j, frequency = 0, tempadcmin = AVA4_ADC_MAX, vcc12adcmin = AVA4_ADC_MAX;
 	int has_a6 = 0;
 
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
@@ -2612,10 +2625,10 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 		    temp, fanmin, fanmax);
 #endif
 	if (has_a6) {
-		frequency = frequency / 1000 * AVA4_MM60_ASIC_CNT;
-		tailsprintf(buf, bufsiz, "%4dMhz %2dC-%2dC %3d%% %.1fV", frequency,
+		tailsprintf(buf, bufsiz, "%4dMhz %4dGHS %2dC-%2dC %3d%% %.1fV", frequency / 96,
+				frequency / 1000 * AVA4_MM60_MINER_CNT * AVA4_MM60_ASIC_CNT,
 				temp, (int)convert_temp(tempadcmin), fanmin,
-				convert_voltage(vcc12adcmin, 1 / 11.0));
+				(vcc12adcmin == AVA4_ADC_MAX) ? 0 : convert_voltage(vcc12adcmin, 1 / 11.0));
 	} else {
 		frequency = (info->set_frequency[0] * 4 + info->set_frequency[1] * 4 + info->set_frequency[2]) / 9;
 		tailsprintf(buf, bufsiz, "%4dMhz %2dC %3d%% %.3fV", frequency,
@@ -2636,4 +2649,5 @@ struct device_drv avalon4_drv = {
 	.flush_work = avalon4_update,
 	.update_work = avalon4_update,
 	.scanwork = avalon4_scanhash,
+	.max_diff = AVA4_DRV_DIFFMAX,
 };
