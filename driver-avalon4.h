@@ -223,6 +223,7 @@ struct avalon4_info {
 	bool autov[AVA4_DEFAULT_MODULARS];
 	uint8_t ma_sum[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINER_MAX][AVA4_DEFAULT_ASIC_MAX];
 	uint32_t newnonce[AVA4_DEFAULT_MODULARS];
+	uint32_t total_asics[AVA4_DEFAULT_MODULARS];
 };
 
 struct avalon4_iic_info {

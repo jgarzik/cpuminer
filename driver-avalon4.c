@@ -1152,9 +1152,12 @@ static void detect_modules(struct cgpu_info *avalon4)
 		memcpy(info->mm_dna[i], ret_pkg.data, AVA4_MM_DNA_LEN);
 		info->mm_dna[i][AVA4_MM_DNA_LEN] = '\0';
 		memcpy(info->mm_version[i], ret_pkg.data + AVA4_MM_DNA_LEN, AVA4_MM_VER_LEN);
+		memcpy(&tmp, ret_pkg.data + AVA4_MM_DNA_LEN + AVA4_MM_VER_LEN, 4);
+		tmp = be32toh(tmp);
 		info->mm_version[i][AVA4_MM_VER_LEN] = '\0';
 		info->miner_count[i] = AVA4_DEFAULT_MINER_CNT;
 		info->asic_count[i] = AVA4_DEFAULT_ASIC_CNT;
+		info->total_asics[i] = tmp;
 		info->autov[i] = opt_avalon4_autov;
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM40_PREFIXSTR, 2))
 			info->mod_type[i] = AVA4_TYPE_MM40;
@@ -1298,6 +1301,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 				info->local_works[i] = 0;
 				info->hw_work[i] = 0;
 				info->hw_works[i] = 0;
+				info->total_asics[i] = 0;
 				memset(info->set_frequency, 0, sizeof(int) * 3);
 				for (j = 0; j < AVA4_DEFAULT_ADJ_TIMES; j++) {
 					info->lw5[i][j] = 0;
@@ -2236,6 +2240,15 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 				}
 				statbuf[i][strlen(statbuf[i]) - 1] = ']';
 			}
+		}
+	}
+	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
+		if (info->mod_type[i] == AVA4_TYPE_NULL)
+			continue;
+
+		if (info->mod_type[i] == AVA4_TYPE_MM60) {
+			sprintf(buf, " TA[%d]", info->total_asics[i]);
+			strcat(statbuf[i], buf);
 		}
 	}
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
