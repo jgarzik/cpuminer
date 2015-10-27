@@ -369,6 +369,15 @@ static inline uint32_t adjust_fan(struct avalon4_info *info, int id)
 	uint32_t pwm;
 	int t = info->temp[id];
 
+	if (info->mod_type[id] == AVA4_TYPE_MM60) {
+		int t1, t2;
+		t1 = (int)convert_temp(info->adc[id][0]),
+		t2 = (int)convert_temp(info->adc[id][1]),
+
+		t = t > t1 ? t : t1;
+		t = t > t2 ? t : t2;
+	}
+
 	if (avalon4_freezsafemode) {
 		pwm = get_fan_pwm(AVA4_FREEZESAFE_FAN);
 		return pwm;
