@@ -932,7 +932,11 @@ static void avalon4_stratum_pkgs(struct cgpu_info *avalon4, struct pool *pool)
 	if (avalon4_send_bc_pkgs(avalon4, &pkg))
 		return;
 
-	set_target(target, pool->sdiff);
+	if (pool->sdiff <= AVA4_DRV_DIFFMAX)
+		set_target(target, pool->sdiff);
+	else
+		set_target(target, AVA4_DRV_DIFFMAX);
+
 	memcpy(pkg.data, target, 32);
 	if (opt_debug) {
 		char *target_str;
@@ -1894,8 +1898,8 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (info->enable[i] && (info->local_work[i] > info->hw_work[i]))
 			if (info->mod_type[i] == AVA4_TYPE_MM60) {
-				h += avalon4->diff_accepted - info->newnonce[i];
-				info->newnonce[i] = avalon4->diff_accepted;
+				h += avalon4->diff1 - info->newnonce[i];
+				info->newnonce[i] = avalon4->diff1;
 			} else {
 				h += (info->local_work[i] - info->hw_work[i]);
 				info->local_work[i] = 0;
@@ -2632,4 +2636,5 @@ struct device_drv avalon4_drv = {
 	.flush_work = avalon4_update,
 	.update_work = avalon4_update,
 	.scanwork = avalon4_scanhash,
+	.max_diff = AVA4_DRV_DIFFMAX,
 };

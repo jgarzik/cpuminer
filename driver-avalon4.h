@@ -59,6 +59,7 @@
 
 #define AVA4_PWM_MAX	0x3FF
 #define AVA4_ADC_MAX	0x3FF
+#define AVA4_DRV_DIFFMAX	1024
 
 #define AVA4_AUC_VER_LEN	12	/* Version length: 12 (AUC-YYYYMMDD) */
 #define AVA4_AUC_SPEED		400000
