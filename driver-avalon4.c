@@ -167,7 +167,7 @@ static float convert_temp(uint16_t adc)
 {
 	float ret, resistance;
 
-	if (adc >= AVA4_ADC_MAX)
+	if (!adc || adc >= AVA4_ADC_MAX)
 		return -273.15;
 
 	resistance = (AVA4_ADC_MAX * 1.0 / adc) - 1;
@@ -536,9 +536,10 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
 		memcpy(&(info->power_good[modular_id]), ar->data + 24, 4);
 		memcpy(&(info->error_code[modular_id]), ar->data + 28, 4);
 
-		if (info->mod_type[modular_id] == AVA4_TYPE_MM60)
-			info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]) / info->total_asics[modular_id];
-		else
+		if (info->mod_type[modular_id] == AVA4_TYPE_MM60) {
+			if (info->total_asics[modular_id])
+				info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]) / info->total_asics[modular_id];
+		} else
 			info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]) * 3968 / 65;
 		info->get_voltage[modular_id] = be32toh(info->get_voltage[modular_id]);
 		info->local_work[modular_id] = be32toh(info->local_work[modular_id]);
@@ -2627,7 +2628,8 @@ static void avalon4_statline_before(char *buf, size_t bufsiz, struct cgpu_info *
 		    temp, fanmin, fanmax);
 #endif
 	if (has_a6) {
-		frequency /= info->mm_count;
+		if (info->mm_count)
+			frequency /= info->mm_count;
 		tailsprintf(buf, bufsiz, "%4dMhz %.2fGHS %2dC-%2dC %3d%% %.1fV", frequency / 96,
 				ghs_sum, temp, (int)convert_temp(tempadcmin), fanmin,
 				(vcc12adcmin == AVA4_ADC_MAX) ? 0 : convert_voltage(vcc12adcmin, 1 / 11.0));
