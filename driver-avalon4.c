@@ -2123,7 +2123,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		if (info->mod_type[i] == AVA4_TYPE_NULL)
 			continue;
 		if (info->mod_type[i] == AVA4_TYPE_MM60)
-			sprintf(buf, " Vol[%.1f]", convert_voltage(info->adc[i][4], 1 / 11.0) / 20.0);
+			sprintf(buf, " Vol[%.1f]", convert_voltage(info->adc[i][4], 1 / 11.0));
 		else
 			sprintf(buf, " Vol[%.4f]", (float)info->get_voltage[i] / 10000);
 		strcat(statbuf[i], buf);
