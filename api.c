@@ -2500,6 +2500,7 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 	bool io_open = false;
 	char *status, *lp;
 	int i;
+	double sdiff0 = 0.0;
 
 	if (total_pools == 0) {
 		message(io_data, MSG_NOPOOL, 0, NULL, isjson);
@@ -2570,10 +2571,13 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		root = api_add_diff(root, "Last Share Difficulty", &(pool->last_share_diff), false);
 		root = api_add_bool(root, "Has Stratum", &(pool->has_stratum), false);
 		root = api_add_bool(root, "Stratum Active", &(pool->stratum_active), false);
-		if (pool->stratum_active)
+		if (pool->stratum_active) {
 			root = api_add_escape(root, "Stratum URL", pool->stratum_url, false);
-		else
+			root = api_add_diff(root, "Stratum Difficulty", &(pool->sdiff), false);
+		} else {
 			root = api_add_const(root, "Stratum URL", BLANK, false);
+			root = api_add_diff(root, "Stratum Difficulty", &(sdiff0), false);
+		}
 		root = api_add_bool(root, "Has GBT", &(pool->has_gbt), false);
 		root = api_add_uint64(root, "Best Share", &(pool->best_diff), true);
 		double rejp = (pool->diff_accepted + pool->diff_rejected + pool->diff_stale) ?
