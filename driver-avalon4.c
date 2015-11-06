@@ -47,7 +47,7 @@ int opt_avalon4_ntcb = AVA4_DEFAULT_NTCB;
 int opt_avalon4_freq_min = AVA4_DEFAULT_FREQUENCY_MIN;
 int opt_avalon4_freq_max = AVA4_DEFAULT_FREQUENCY_MAX;
 bool opt_avalon4_noncecheck = AVA4_DEFAULT_NCHECK;
-bool opt_avalon4_freq_fixed = AVA4_DEFAULT_FREQUENCY_FIXED;
+bool opt_avalon4_smart_speed = AVA4_DEFAULT_SMART_SPEED;
 
 static uint8_t avalon4_freezsafemode = 0;
 /* Only for Avalon4 */
@@ -1598,7 +1598,7 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 
 	/* adjust flag [0-5]: reserved, 6: nonce check, 7: autof*/
 	tmp = 1;
-	if (opt_avalon4_freq_fixed)
+	if (!opt_avalon4_smart_speed)
 		tmp = 0;
 	if (opt_avalon4_noncecheck)
 		tmp |= 2;
@@ -2285,7 +2285,7 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "MM Count", &(info->mm_count), true);
 	if (!has_a6)
 		root = api_add_bool(root, "Automatic Voltage", &opt_avalon4_autov, true);
-	root = api_add_bool(root, "Fixed Frequency", &opt_avalon4_freq_fixed, true);
+	root = api_add_bool(root, "Smart Speed", &opt_avalon4_smart_speed, true);
 	root = api_add_bool(root, "Nonce check", &opt_avalon4_noncecheck, true);
 	root = api_add_string(root, "AUC VER", info->auc_version, false);
 	root = api_add_int(root, "AUC I2C Speed", &(info->auc_speed), true);
