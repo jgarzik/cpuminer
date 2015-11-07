@@ -37,5 +37,5 @@ script:
   - ./configure --cache-file=config.cache $CPUMINER_CONFIG_ALL $CPUMINER_CONFIG || ( cat config.log && false)
   - make -s $MAKEJOBS $GOAL || ( echo "Build failure. Verbose build follows." && make $GOAL ; false )
   - export LD_LIBRARY_PATH=$TRAVIS_BUILD_DIR/depends/$HOST/lib
-  - if [ "$RUN_TESTS" = "true" ]; then make distcheck; fi
+  - if [ "$RUN_TESTS" = "true" ]; then make $MAKEJOBS distcheck; fi
 
