@@ -782,14 +782,14 @@ static char *set_int_32_to_63(const char *arg, int *i)
 	return set_int_range(arg, i, 32, 63);
 }
 
-static char *set_int_22_to_55(const char *arg, int *i)
+static char *set_int_22_to_75(const char *arg, int *i)
 {
-	return set_int_range(arg, i, 22, 55);
+	return set_int_range(arg, i, 22, 75);
 }
 
-static char *set_int_42_to_65(const char *arg, int *i)
+static char *set_int_42_to_85(const char *arg, int *i)
 {
-	return set_int_range(arg, i, 42, 62);
+	return set_int_range(arg, i, 42, 85);
 }
 
 static char *set_int_1_to_10(const char *arg, int *i)
@@ -1222,10 +1222,10 @@ static struct opt_table opt_config_table[] = {
 		     set_avalon4_fan, NULL, &opt_set_avalon4_fan,
 		     "Set Avalon4 target fan speed range"),
 	OPT_WITH_ARG("--avalon4-temp",
-		     set_int_22_to_55, opt_show_intval, &opt_avalon4_temp_target,
+		     set_int_22_to_75, opt_show_intval, &opt_avalon4_temp_target,
 		     "Set Avalon4 target temperature"),
 	OPT_WITH_ARG("--avalon4-cutoff",
-		     set_int_42_to_65, opt_show_intval, &opt_avalon4_overheat,
+		     set_int_42_to_85, opt_show_intval, &opt_avalon4_overheat,
 		     "Set Avalon4 overheat cut off temperature"),
 	OPT_WITH_ARG("--avalon4-polling-delay",
 		     set_int_1_to_65535, opt_show_intval, &opt_avalon4_polling_delay,
@@ -5161,8 +5161,8 @@ void write_config(FILE *fcfg)
 			     (void *)opt->cb_arg == (void *)set_int_0_to_200 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_4 ||
 			     (void *)opt->cb_arg == (void *)set_int_32_to_63 ||
-			     (void *)opt->cb_arg == (void *)set_int_22_to_55 ||
-			     (void *)opt->cb_arg == (void *)set_int_42_to_65)) {
+			     (void *)opt->cb_arg == (void *)set_int_22_to_75 ||
+			     (void *)opt->cb_arg == (void *)set_int_42_to_85)) {
 				fprintf(fcfg, ",\n\"%s\" : \"%d\"", p+2, *(int *)opt->u.arg);
 				continue;
 			}

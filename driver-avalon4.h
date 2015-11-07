@@ -23,6 +23,7 @@
 
 #define AVA4_DEFAULT_TEMP_TARGET	42
 #define AVA4_DEFAULT_TEMP_OVERHEAT	65
+#define AVA4_MM60_TEMP_TARGET	75
 #define AVA4_MM60_TEMP_OVERHEAT	85
 
 #define AVA4_DEFAULT_VOLTAGE_MIN	4000
@@ -227,6 +228,7 @@ struct avalon4_info {
 	uint32_t newnonce;
 	uint32_t total_asics[AVA4_DEFAULT_MODULARS];
 	int toverheat[AVA4_DEFAULT_MODULARS];
+	int temp_target[AVA4_DEFAULT_MODULARS];
 };
 
 struct avalon4_iic_info {

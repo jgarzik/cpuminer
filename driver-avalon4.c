@@ -336,6 +336,23 @@ static inline int get_current_temp_max(struct avalon4_info *info)
 	return t;
 }
 
+static inline int get_temp_max(struct avalon4_info *info, int addr)
+{
+	int i;
+	int t = -273, t1 = -273;
+
+	if (info->enable[addr]) {
+		t = info->temp[addr];
+
+		for (i = 0; i < 1; i++) {
+			t1 = convert_temp(info->adc[addr][i]);
+			if (t1 > t)
+				t = t1;
+		}
+	}
+	return t;
+}
+
 /* http://www.onsemi.com/pub_link/Collateral/ADP3208D.PDF */
 static uint32_t encode_voltage_adp3208d(uint32_t v)
 {
@@ -383,15 +400,15 @@ static inline uint32_t adjust_fan(struct avalon4_info *info, int id)
 		return pwm;
 	}
 
-	if (t > opt_avalon4_temp_target + 4 || t > info->toverheat[id] - 3)
+	if (t > info->temp_target[id] + 4 || t > info->toverheat[id] - 3)
 		info->fan_pct[id] = opt_avalon4_fan_max;
-	else if (t > opt_avalon4_temp_target + 2)
+	else if (t > info->temp_target[id] + 2)
 		info->fan_pct[id] += 20;
-	else if (t > opt_avalon4_temp_target + 1)
+	else if (t > info->temp_target[id] + 1)
 		info->fan_pct[id] += 4;
-	else if (t < opt_avalon4_temp_target - 1)
+	else if (t < info->temp_target[id] - 1)
 		info->fan_pct[id] -= 4;
-	else if (t < opt_avalon4_temp_target - 10)
+	else if (t < info->temp_target[id] - 10)
 		info->fan_pct[id] = opt_avalon4_fan_min;
 
 	if (info->fan_pct[id] < opt_avalon4_fan_min)
@@ -1177,6 +1194,10 @@ static void detect_modules(struct cgpu_info *avalon4)
 		info->total_asics[i] = tmp;
 		info->autov[i] = opt_avalon4_autov;
 		info->toverheat[i] = opt_avalon4_overheat;
+		info->temp_target[i] = opt_avalon4_temp_target;
+		if (info->temp_target[i] > AVA4_DEFAULT_TEMP_TARGET)
+			info->temp_target[i] = AVA4_DEFAULT_TEMP_TARGET;
+
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM40_PREFIXSTR, 2))
 			info->mod_type[i] = AVA4_TYPE_MM40;
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM41_PREFIXSTR, 2))
@@ -1197,8 +1218,14 @@ static void detect_modules(struct cgpu_info *avalon4)
 				applog(LOG_NOTICE, "%s-%d-%d: Module do not support autov",
 				       avalon4->drv->name, avalon4->device_id, i);
 			info->autov[i] = false;
-			/* fix overheat value */
-			info->toverheat[i] = AVA4_MM60_TEMP_OVERHEAT;
+			info->toverheat[i] = opt_avalon4_overheat;
+			if (info->toverheat[i] > AVA4_MM60_TEMP_OVERHEAT)
+				info->toverheat[i] = AVA4_MM60_TEMP_OVERHEAT;
+
+			info->temp_target[i] = opt_avalon4_temp_target;
+			if (info->temp_target[i] > AVA4_MM60_TEMP_TARGET)
+				info->temp_target[i] = AVA4_MM60_TEMP_TARGET;
+
 			info->mod_type[i] = AVA4_TYPE_MM60;
 		}
 		info->ntime_offset[i] = (opt_avalon4_ntime_offset > info->asic_count[i]) ? info->asic_count[i] : opt_avalon4_ntime_offset;
@@ -1322,6 +1349,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 				info->hw_works[i] = 0;
 				info->total_asics[i] = 0;
 				info->toverheat[i] = opt_avalon4_overheat;
+				info->temp_target[i] = opt_avalon4_temp_target;
 				memset(info->set_frequency, 0, sizeof(int) * 3);
 				for (j = 0; j < AVA4_DEFAULT_ADJ_TIMES; j++) {
 					info->lw5[i][j] = 0;
@@ -1721,10 +1749,10 @@ static void avalon4_update(struct cgpu_info *avalon4)
 
 		count++;
 
-		if (info->temp[i] >= info->toverheat[i])
+		if (get_temp_max(info, i) >= info->toverheat[i])
 			info->cutoff[i] = 1;
 
-		if (info->cutoff[i] && (info->temp[i] <= (info->toverheat[i] - 10)))
+		if (info->cutoff[i] && (get_temp_max(info, i) <= (info->toverheat[i] - 10)))
 			info->cutoff[i] = 0;
 
 		if (info->cutoff[i])
