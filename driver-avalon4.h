@@ -15,14 +15,15 @@
 
 #ifdef USE_AVALON4
 
-#define AVA4_DEFAULT_FAN_MIN	5 /* % */
-#define AVA4_DEFAULT_FAN_MAX	85
+#define AVA4_DEFAULT_FAN_MIN	10 /* % */
+#define AVA4_DEFAULT_FAN_MAX	100
 /* Percentage required to make sure fan starts spinning, then we can go down */
 #define AVA4_DEFAULT_FAN_START	15
 #define AVA4_FREEZESAFE_FAN	10
 
 #define AVA4_DEFAULT_TEMP_TARGET	42
 #define AVA4_DEFAULT_TEMP_OVERHEAT	65
+#define AVA4_MM60_TEMP_OVERHEAT	85
 
 #define AVA4_DEFAULT_VOLTAGE_MIN	4000
 #define AVA4_DEFAULT_VOLTAGE_MAX	9000
@@ -225,6 +226,7 @@ struct avalon4_info {
 	uint8_t ma_sum[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINER_MAX][AVA4_DEFAULT_ASIC_MAX];
 	uint32_t newnonce;
 	uint32_t total_asics[AVA4_DEFAULT_MODULARS];
+	int toverheat[AVA4_DEFAULT_MODULARS];
 };
 
 struct avalon4_iic_info {

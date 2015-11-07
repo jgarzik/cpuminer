@@ -383,14 +383,16 @@ static inline uint32_t adjust_fan(struct avalon4_info *info, int id)
 		return pwm;
 	}
 
-	if (t < opt_avalon4_temp_target - 10)
-		info->fan_pct[id] = opt_avalon4_fan_min;
-	else if (t > opt_avalon4_temp_target + 10 || t > opt_avalon4_overheat - 3)
+	if (t > opt_avalon4_temp_target + 4 || t > info->toverheat[id] - 3)
 		info->fan_pct[id] = opt_avalon4_fan_max;
+	else if (t > opt_avalon4_temp_target + 2)
+		info->fan_pct[id] += 20;
 	else if (t > opt_avalon4_temp_target + 1)
-		info->fan_pct[id] += 2;
+		info->fan_pct[id] += 4;
 	else if (t < opt_avalon4_temp_target - 1)
-		info->fan_pct[id] -= 2;
+		info->fan_pct[id] -= 4;
+	else if (t < opt_avalon4_temp_target - 10)
+		info->fan_pct[id] = opt_avalon4_fan_min;
 
 	if (info->fan_pct[id] < opt_avalon4_fan_min)
 		info->fan_pct[id] = opt_avalon4_fan_min;
@@ -1174,6 +1176,7 @@ static void detect_modules(struct cgpu_info *avalon4)
 		info->asic_count[i] = AVA4_DEFAULT_ASIC_CNT;
 		info->total_asics[i] = tmp;
 		info->autov[i] = opt_avalon4_autov;
+		info->toverheat[i] = opt_avalon4_overheat;
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM40_PREFIXSTR, 2))
 			info->mod_type[i] = AVA4_TYPE_MM40;
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM41_PREFIXSTR, 2))
@@ -1194,6 +1197,8 @@ static void detect_modules(struct cgpu_info *avalon4)
 				applog(LOG_NOTICE, "%s-%d-%d: Module do not support autov",
 				       avalon4->drv->name, avalon4->device_id, i);
 			info->autov[i] = false;
+			/* fix overheat value */
+			info->toverheat[i] = AVA4_MM60_TEMP_OVERHEAT;
 			info->mod_type[i] = AVA4_TYPE_MM60;
 		}
 		info->ntime_offset[i] = (opt_avalon4_ntime_offset > info->asic_count[i]) ? info->asic_count[i] : opt_avalon4_ntime_offset;
@@ -1268,7 +1273,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 
 	cgtime(&current_fan);
 	device_tdiff = tdiff(&current_fan, &(info->last_fan));
-	if (device_tdiff > 5.0 || device_tdiff < 0) {
+	if (device_tdiff > 2.0 || device_tdiff < 0) {
 		cgtime(&info->last_fan);
 		do_adjust_fan = 1;
 	}
@@ -1316,6 +1321,7 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 				info->hw_work[i] = 0;
 				info->hw_works[i] = 0;
 				info->total_asics[i] = 0;
+				info->toverheat[i] = opt_avalon4_overheat;
 				memset(info->set_frequency, 0, sizeof(int) * 3);
 				for (j = 0; j < AVA4_DEFAULT_ADJ_TIMES; j++) {
 					info->lw5[i][j] = 0;
@@ -1715,10 +1721,10 @@ static void avalon4_update(struct cgpu_info *avalon4)
 
 		count++;
 
-		if (info->temp[i] >= opt_avalon4_overheat)
+		if (info->temp[i] >= info->toverheat[i])
 			info->cutoff[i] = 1;
 
-		if (info->cutoff[i] && (info->temp[i] <= (opt_avalon4_overheat - 10)))
+		if (info->cutoff[i] && (info->temp[i] <= (info->toverheat[i] - 10)))
 			info->cutoff[i] = 0;
 
 		if (info->cutoff[i])
