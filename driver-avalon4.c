@@ -1194,9 +1194,11 @@ static void detect_modules(struct cgpu_info *avalon4)
 		info->total_asics[i] = tmp;
 		info->autov[i] = opt_avalon4_autov;
 		info->toverheat[i] = opt_avalon4_overheat;
+		if (info->toverheat[i] > AVA4_MM40_TEMP_OVERHEAT)
+			info->toverheat[i] = AVA4_MM40_TEMP_OVERHEAT;
 		info->temp_target[i] = opt_avalon4_temp_target;
-		if (info->temp_target[i] > AVA4_DEFAULT_TEMP_TARGET)
-			info->temp_target[i] = AVA4_DEFAULT_TEMP_TARGET;
+		if (info->temp_target[i] > AVA4_MM40_TEMP_TARGET)
+			info->temp_target[i] = AVA4_MM40_TEMP_TARGET;
 
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM40_PREFIXSTR, 2))
 			info->mod_type[i] = AVA4_TYPE_MM40;
@@ -1219,13 +1221,12 @@ static void detect_modules(struct cgpu_info *avalon4)
 				       avalon4->drv->name, avalon4->device_id, i);
 			info->autov[i] = false;
 			info->toverheat[i] = opt_avalon4_overheat;
-			if (info->toverheat[i] > AVA4_MM60_TEMP_OVERHEAT)
-				info->toverheat[i] = AVA4_MM60_TEMP_OVERHEAT;
+			if (info->toverheat[i] > AVA4_DEFAULT_TEMP_OVERHEAT)
+				info->toverheat[i] = AVA4_DEFAULT_TEMP_OVERHEAT;
 
 			info->temp_target[i] = opt_avalon4_temp_target;
-			if (info->temp_target[i] > AVA4_MM60_TEMP_TARGET)
-				info->temp_target[i] = AVA4_MM60_TEMP_TARGET;
-
+			if (info->temp_target[i] > AVA4_DEFAULT_TEMP_TARGET)
+				info->temp_target[i] = AVA4_DEFAULT_TEMP_TARGET;
 			info->mod_type[i] = AVA4_TYPE_MM60;
 		}
 		info->ntime_offset[i] = (opt_avalon4_ntime_offset > info->asic_count[i]) ? info->asic_count[i] : opt_avalon4_ntime_offset;
