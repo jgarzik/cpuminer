@@ -157,10 +157,6 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               Device Code=ICA , <- spaced list of compiled
                                                        device drivers
                               OS=Linux/Apple/..., <- operating System
-                              Failover-Only=true/false, <- failover-only setting
-                              ScanTime=N, <- --scan-time setting
-                              Queue=N, <- --queue setting
-                              Expiry=N| <- --expiry setting
 
  summary       SUMMARY        The status summary of the miner
                               e.g. Elapsed=NNN,Found Blocks=N,Getworks=N,...|
@@ -317,8 +313,8 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               Access=Y/N| <- you have access to use 'cmd'
 
  failover-only|true/false (*)
-               none           There is no reply section just the STATUS section
-                              stating what failover-only was set to
+               none           This command has been deprecated, only returning a
+                              deprecated message.
 
  coin          COIN           Coin mining information:
                               Hash Method=sha256/scrypt,
@@ -348,9 +344,8 @@ The list of requests - a (*) means it requires privileged access - and replies:
  setconfig|name,N (*)
                none           There is no reply section just the STATUS section
                               stating the results of setting 'name' to N
-                              The valid values for name are currently:
-                              queue, scantime, expiry
-                              N is an integer in the range 0 to 9999
+                              No values are supported any more and only a
+                              deprecated message will be returned.
 
  usbstats      USBSTATS       Stats of all LIBUSB mining devices except ztex
                               e.g. Name=MMQ,ID=0,Stat=SendWork,Count=99,...|
@@ -522,9 +517,26 @@ Feature Changelog for external applications using the API:
 
 ---------
 
+API V3.7 (cgminer v4.9.3?)
+
+Modified API commands:
+ 'pools' - add 'Work Difficulty'
+
+---------
+
+API V3.6 (cgminer v4.9.2)
+
+Modified API commands:
+ 'pools' - add 'Bad Work'
+ 'setconfig' - expire, scantime and queue have all been deprecated and will
+ only return a deprecated message.
+ 'failover-only' - deprecated, a deprecated message will be returned.
+
+---------
+
 API V3.5 (cgminer v4.7.0)
 
-- Made quit and restart return valid JSON as a STATUS mirroring the reqest.
+- Made quit and restart return valid JSON as a STATUS mirroring the request.
 - Made addpool return what pool number the added pool is.
 
 ---------

@@ -144,11 +144,14 @@ CGMiner specific configuration options:
                           disabled)
   --enable-sp30           Compile support for Spondoolies SP30 (default
                           disabled)
-  --disable-libcurl       Disable building with libcurl for getwork and GBT
-                          support
+  --disable-libcurl       Disable building with libcurl for GBT support
+  --enable-libsystemd     Compile support for system watchdog and status
+                          notifications (default disabled)
   --without-curses        Compile support for curses TUI (default enabled)
   --with-system-libusb    Compile against dynamic system libusb (default use
                           included static libusb)
+  --with-system-jansson   Compile against dynamic system jansson (default use
+                          included static jansson)
 
 Basic *nix build instructions:
 	To actually build:
@@ -193,7 +196,7 @@ Options for both config file and command line:
 --api-network       Allow API (if enabled) to listen on/for any address, default: only 127.0.0.1
 --api-port <arg>    Port number of miner API (default: 4028)
 --au3-freq <arg>    Set AntminerU3 frequency in MHz, range 100-250 (default: 225.0)
---au3-volt <arg>    Set AntminerU3 voltage in mv, range 725-850, 0 to not set (default: 750)
+--au3-volt <arg>    Set AntminerU3 voltage in mv, range 725-850, 0 to not set (default: 775)
 --avalon-auto       Adjust avalon overclock frequency dynamically for best hashrate
 --avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
 --avalon-fan <arg>  Set fanspeed percentage for avalon, single value or range (default: 20-100)
@@ -227,12 +230,17 @@ Options for both config file and command line:
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
 --bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
 --bitmain-auto      Adjust bitmain overclock frequency dynamically for best hashrate
---bitmain-cutoff    Set bitmain overheat cut off temperature
---bitmain-fan       Set fanspeed percentage for bitmain, single value or range (default: 20-100)
---bitmain-freq      Set frequency range for bitmain-auto, single value or range
+--bitmain-cutoff <arg> Set bitmain overheat cut off temperature
+--bitmain-fan <arg> Set fanspeed percentage for bitmain, single value or range (default: 20-100)
+--bitmain-freq <arg> Set bitmain freq options timeout:freq:regdata
 --bitmain-hwerror   Set bitmain device detect hardware error
---bitmain-options   Set bitmain options baud:miners:asic:timeout:freq
---bitmain-temp      Set bitmain target temperature
+--bitmain-options <arg> Set bitmain options baud:miners:asic:timeout:freq:regdata
+--bitmain-temp <arg> Set bitmain target temperature
+--bitmain-workdelay <arg> Set bitmain work delay (ms) 0-100
+--bitmain-voltage <arg> Set bitmain voltage - S2/S3 only
+--bitmain-dev <arg> Set bitmain device - S2 only
+--bitmainbeeper     Set bitmain beeper ringing
+--bitmaintempoverctrl Set bitmain stop runing when temprerature is over 80 degree Celsius
 --bxf-bits <arg>    Set max BXF/HXF bits for overclocking (default: 54)
 --bxf-temp-target <arg> Set target temperature for BXF/HXF devices (default: 82)
 --bxm-bits <arg>    Set BXM bits for overclocking (default: 54)
@@ -244,7 +252,7 @@ Options for both config file and command line:
 --drillbit-options <arg> Set drillbit options <int|ext>:clock[:clock_divider][:voltage]
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
---fix-protocol      Do not redirect to a different getwork protocol (eg. stratum)
+--fix-protocol      Do not redirect to stratum protocol from GBT
 --hfa-hash-clock <arg> Set hashfast clock speed (default: 550)
 --hfa-fail-drop <arg> Set how many MHz to drop clockspeed each failure on an overlocked hashfast device (default: 10)
 --hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)
@@ -971,8 +979,8 @@ linux is the primary development platform and is virtually guaranteed to be
 more stable.
 
 Q: My network gets slower and slower and then dies for a minute?
-A; Try the --net-delay option if you are on a getwork or GBT server. This does
-nothing with stratum mining.
+A; Try the --net-delay option if you are on a GBT server. This does nothing
+with stratum mining.
 
 Q: How do I tune for p2pool?
 A: It is also recommended to use --failover-only since the work is effectively
@@ -1042,7 +1050,6 @@ USB on any hardware are the following:
 --enable-avalon4
 --enable-bflsc
 --enable-bitfury
---enable-blockerupter
 --enable-cointerra
 --enable-drillbit
 --enable-hashfast

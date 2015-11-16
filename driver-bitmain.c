@@ -1,6 +1,6 @@
 /*
  * Copyright 2012-2013 Lingchao Xu <lingchao.xu@bitmaintech.com>
- * Copyright 2014 Andrew Smith
+ * Copyright 2014-2015 Andrew Smith
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -20,15 +20,26 @@ static void ants1_detect(__maybe_unused bool hotplug)
 }
 #endif
 #ifdef USE_ANT_S2
+#ifdef USE_ANT_S3
+static void ants3_detect(__maybe_unused bool hotplug)
+{
+}
+#else
 static void ants2_detect(__maybe_unused bool hotplug)
 {
 }
+#endif
 #endif
 
 #else // LINUX
 
 #include "elist.h"
+#if (defined(USE_ANT_S1) || defined(USE_ANT_S3))
 #include "usbutils.h"
+#else
+#define C_BITMAIN_READ 0
+#define C_BITMAIN_DATA_RXSTATUS 0
+#endif
 #include "driver-bitmain.h"
 #include "hexdump.c"
 #include "util.h"
@@ -39,7 +50,11 @@ static void ants2_detect(__maybe_unused bool hotplug)
 #ifdef USE_ANT_S1
 #define ANTDRV ants1_drv
 #else
+#ifdef USE_ANT_S3
+#define ANTDRV ants3_drv
+#else
 #define ANTDRV ants2_drv
+#endif
 #endif
 
 #define BITMAIN_CALC_DIFF1	1
@@ -49,21 +64,18 @@ bool opt_bitmain_hwerror = false;
 bool opt_bitmain_checkall = false;
 bool opt_bitmain_checkn2diff = false;
 bool opt_bitmain_beeper = false;
-bool opt_bitmain_tempoverctrl = true;
+bool opt_bitmain_tempoverctrl = false;
 #endif
 int opt_bitmain_temp = BITMAIN_TEMP_TARGET;
+int opt_bitmain_workdelay = BITMAIN_WORK_DELAY;
 int opt_bitmain_overheat = BITMAIN_TEMP_OVERHEAT;
 int opt_bitmain_fan_min = BITMAIN_DEFAULT_FAN_MIN_PWM;
 int opt_bitmain_fan_max = BITMAIN_DEFAULT_FAN_MAX_PWM;
-int opt_bitmain_freq_min = BITMAIN_MIN_FREQUENCY;
-int opt_bitmain_freq_max = BITMAIN_MAX_FREQUENCY;
 bool opt_bitmain_auto;
-
-static bool is_usb;
 
 static int option_offset = -1;
 
-#ifdef USE_ANT_S1
+#if (defined(USE_ANT_S1) || defined(USE_ANT_S3))
 static unsigned char bit_swap_table[256] =
 {
   0x00, 0x80, 0x40, 0xc0, 0x20, 0xa0, 0x60, 0xe0,
@@ -181,31 +193,25 @@ static uint32_t num2bit(int num)
 		return (((uint32_t)1) << (31 - num));
 }
 
+#ifdef USE_ANT_S1
 static bool get_options(int this_option_offset, int *baud, int *chain_num,
-			int *asic_num, int *timeout, int *frequency, uint8_t * reg_data)
+			int *asic_num, int *timeout, int *frequency,
+			uint8_t *reg_data)
 {
 	char buf[BUFSIZ+1];
 	char *ptr, *comma, *colon, *colon2, *colon3, *colon4, *colon5;
 	size_t max;
-	int i, tmp;
+	int tmp;
 
 	if (opt_bitmain_options == NULL)
 		buf[0] = '\0';
 	else {
+		// Always use the first set if more than one
 		ptr = opt_bitmain_options;
-		for (i = 0; i < this_option_offset; i++) {
-			comma = strchr(ptr, ',');
-			if (comma == NULL)
-				break;
-			ptr = comma + 1;
-		}
-
 		comma = strchr(ptr, ',');
-		if (comma == NULL)
-			max = strlen(ptr);
-		else
-			max = comma - ptr;
-
+		if (comma)
+			*comma = '\0';
+		max = strlen(ptr);
 		if (max > BUFSIZ)
 			max = BUFSIZ;
 		strncpy(buf, ptr, max);
@@ -317,6 +323,90 @@ static bool get_options(int this_option_offset, int *baud, int *chain_num,
 	}
 	return true;
 }
+#else
+static bool get_options(__maybe_unused int this_option_offset, int *baud,
+			int *chain_num, int *asic_num)
+{
+	char buf[BUFSIZ+1];
+	char *ptr, *comma, *colon, *colon2, *colon3;
+	size_t max;
+	int tmp;
+
+	if (opt_bitmain_options == NULL)
+		buf[0] = '\0';
+	else {
+		// Always use the first set if more than one
+		ptr = opt_bitmain_options;
+		comma = strchr(ptr, ',');
+		if (comma)
+			*comma = '\0';
+		max = strlen(ptr);
+		if (max > BUFSIZ)
+			max = BUFSIZ;
+		strncpy(buf, ptr, max);
+		buf[max] = '\0';
+	}
+
+	if (!(*buf))
+		return false;
+
+	colon = strchr(buf, ':');
+	if (colon)
+		*(colon++) = '\0';
+
+	tmp = atoi(buf);
+	switch (tmp) {
+		case 115200:
+			*baud = 115200;
+			break;
+		case 57600:
+			*baud = 57600;
+			break;
+		case 38400:
+			*baud = 38400;
+			break;
+		case 19200:
+			*baud = 19200;
+				break;
+		default:
+			quit(1, "Invalid bitmain-options for baud (%s) "
+				"must be 115200, 57600, 38400 or 19200", buf);
+	}
+
+	if (colon && *colon) {
+		colon2 = strchr(colon, ':');
+		if (colon2)
+			*(colon2++) = '\0';
+
+		if (*colon) {
+			tmp = atoi(colon);
+			if (tmp > 0)
+				*chain_num = tmp;
+			else {
+				quit(1, "Invalid bitmain-options for "
+					"chain_num (%s) must be 1 ~ %d",
+					colon, BITMAIN_DEFAULT_CHAIN_NUM);
+			}
+		}
+
+		if (colon2 && *colon2) {
+			colon3 = strchr(colon2, ':');
+			if (colon3)
+				*(colon3++) = '\0';
+
+			tmp = atoi(colon2);
+			if (tmp > 0 && tmp <= BITMAIN_DEFAULT_ASIC_NUM)
+				*asic_num = tmp;
+			else {
+				quit(1, "Invalid bitmain-options for "
+					"asic_num (%s) must be 1 ~ %d",
+					colon2, BITMAIN_DEFAULT_ASIC_NUM);
+			}
+		}
+	}
+	return true;
+}
+#endif
 
 #ifdef USE_ANT_S1
 static int bitmain_set_txconfig(struct bitmain_txconfig_token *bm,
@@ -333,7 +423,7 @@ static int bitmain_set_txconfig(struct bitmain_txconfig_token *bm,
 				uint8_t hw_error_eft, uint8_t beeper_ctrl, uint8_t temp_over_ctrl,
 				uint8_t chain_num, uint8_t asic_num,
 				uint8_t fan_pwm_data, uint8_t timeout_data,
-				uint16_t frequency, uint8_t voltage, uint8_t chain_check_time,
+				uint16_t frequency, uint8_t *voltage, uint8_t chain_check_time,
 				uint8_t chip_address, uint8_t reg_address, uint8_t * reg_data)
 #endif
 {
@@ -392,7 +482,12 @@ static int bitmain_set_txconfig(struct bitmain_txconfig_token *bm,
 	bm->timeout_data = timeout_data;
 
 	bm->frequency = htole16(frequency);
+#ifdef USE_ANT_S1
 	bm->voltage = voltage;
+#else
+	bm->voltage[0] = voltage[0];
+	bm->voltage[1] = voltage[1];
+#endif
 	bm->chain_check_time = chain_check_time;
 
 	memcpy(bm->reg_data, reg_data, 4);
@@ -419,7 +514,7 @@ static int bitmain_set_txconfig(struct bitmain_txconfig_token *bm,
 	applogsiz(LOG_DEBUG, 512, "%s: %s() v(%d) reset(%d) faneft(%d) touteft(%d) freqeft(%d)"
 			" volteft(%d) chainceft(%d) chipceft(%d) hweft(%d)"
 			" beepctrl(%d) toverctl(%d) mnum(%d)"
-			" anum(%d) fanpwmdata(%d) toutdata(%d) freq(%d) volt(%d)"
+			" anum(%d) fanpwmdata(%d) toutdata(%d) freq(%d) volt(%02x%02x)"
 			" chainctime(%d) regdata(%02x%02x%02x%02x) chipaddr(%02x)"
 			" regaddr(%02x) crc(%04x)",
 			ANTDRV.dname, __func__,
@@ -427,9 +522,10 @@ static int bitmain_set_txconfig(struct bitmain_txconfig_token *bm,
 			(int)frequency_eft, (int)voltage_eft, (int)chain_check_time_eft,
 			(int)chip_config_eft, (int)hw_error_eft, (int)beeper_ctrl,
 			(int)temp_over_ctrl, (int)chain_num, (int)asic_num, (int)fan_pwm_data,
-			(int)timeout_data, (int)frequency, (int)voltage, (int)chain_check_time,
-			(int)reg_data[0], (int)reg_data[1], (int)reg_data[2], (int)reg_data[3],
-			(int)chip_address, (int)reg_address, (int)crc);
+			(int)timeout_data, (int)frequency, (int)voltage[0], (int)voltage[1],
+			(int)chain_check_time, (int)reg_data[0], (int)reg_data[1],
+			(int)reg_data[2], (int)reg_data[3], (int)chip_address,
+			(int)reg_address, (int)crc);
 #endif
 
 	return datalen;
@@ -759,7 +855,7 @@ static int bitmain_parse_rxstatus(const uint8_t * data, int datalen, struct bitm
 	for (i = 0; i < bm->chain_num; i++) {
 		asic_num = bm->chain_asic_num[i];
 		if (asic_num < 0)
-			asic_num = 0;
+			asic_num = 1;
 		else {
 			if (asic_num % 32 == 0)
 				asic_num = asic_num / 32;
@@ -772,7 +868,7 @@ static int bitmain_parse_rxstatus(const uint8_t * data, int datalen, struct bitm
 	for(i = 0; i < bm->chain_num; i++) {
 		asic_num = bm->chain_asic_num[i];
 		if (asic_num < 0)
-			asic_num = 0;
+			asic_num = 1;
 		else {
 			if (asic_num % 32 == 0)
 				asic_num = asic_num / 32;
@@ -918,10 +1014,11 @@ static int bitmain_parse_rxnonce(const uint8_t * data, int datalen, struct bitma
 }
 
 static int bitmain_read(struct cgpu_info *bitmain, unsigned char *buf,
-		       size_t bufsize, int timeout, int ep)
+			size_t bufsize, __maybe_unused int timeout,
+			__maybe_unused int ep)
 {
 	__maybe_unused struct bitmain_info *info = bitmain->device_data;
-	int readlen = 0, err = 0;
+	int readlen = 0;
 
 	if (bitmain == NULL || buf == NULL || bufsize <= 0) {
 		applog(LOG_WARNING, "%s%d: %s() parameter error bufsize(%d)",
@@ -930,55 +1027,52 @@ static int bitmain_read(struct cgpu_info *bitmain, unsigned char *buf,
 		return -1;
 	}
 
-	if (is_usb) {
-		err = usb_read_once_timeout(bitmain, (char *)buf, bufsize, &readlen, timeout, ep);
-		applog(LOG_DEBUG, "%s%i: Get %s() got readlen %d err %d",
-				  bitmain->drv->name, bitmain->device_id,
-				  __func__, readlen, err);
-	}
-#ifdef USE_ANT_S2
-	else
-		readlen = read(info->device_fd, buf, bufsize);
+#if (defined(USE_ANT_S1) || defined(USE_ANT_S3))
+	int err = usb_read_once_timeout(bitmain, (char *)buf, bufsize, &readlen,
+					timeout, ep);
+	applog(LOG_DEBUG, "%s%i: Get %s() got readlen %d err %d",
+			  bitmain->drv->name, bitmain->device_id,
+			  __func__, readlen, err);
+#else
+	readlen = read(info->device_fd, buf, bufsize);
 #endif
 	return readlen;
 }
 
-static int bitmain_write(struct cgpu_info *bitmain, char *buf, ssize_t len, int ep)
+static int bitmain_write(struct cgpu_info *bitmain, char *buf, ssize_t len,
+			 __maybe_unused int ep)
 {
 	__maybe_unused struct bitmain_info *info = bitmain->device_data;
-	int err, amount, __maybe_unused sent;
+	int amount, __maybe_unused sent;
 
-	if (is_usb) {
-		err = usb_write(bitmain, buf, len, &amount, ep);
-		applog(LOG_DEBUG, "%s%d: usb_write got err %d",
-				  bitmain->drv->name, bitmain->device_id, err);
+#if (defined(USE_ANT_S1) || defined(USE_ANT_S3))
+	int err = usb_write(bitmain, buf, len, &amount, ep);
+	applog(LOG_DEBUG, "%s%d: usb_write got err %d",
+			  bitmain->drv->name, bitmain->device_id, err);
 
-		if (unlikely(err != 0)) {
-			applog(LOG_ERR, "%s%d: usb_write error on %s() err=%d",
-					bitmain->drv->name, bitmain->device_id, __func__, err);
-			return BTM_SEND_ERROR;
-		}
-		if (amount != len) {
-			applog(LOG_ERR, "%s%d: usb_write length mismatch on %s() "
-					"amount=%d len=%d",
-					bitmain->drv->name, bitmain->device_id, __func__,
-					amount, (int)len);
-			return BTM_SEND_ERROR;
-		}
+	if (unlikely(err != 0)) {
+		applog(LOG_ERR, "%s%d: usb_write error on %s() err=%d",
+				bitmain->drv->name, bitmain->device_id, __func__, err);
+		return BTM_SEND_ERROR;
 	}
-#ifdef USE_ANT_S2
-	else {
-		sent = 0;
+	if (amount != len) {
+		applog(LOG_ERR, "%s%d: usb_write length mismatch on %s() "
+				"amount=%d len=%d",
+				bitmain->drv->name, bitmain->device_id, __func__,
+				amount, (int)len);
+		return BTM_SEND_ERROR;
+	}
+#else
+	sent = 0;
 
-		while (sent < len) {
-			amount = write(info->device_fd, buf+sent, len-sent);
-			if (amount < 0) {
-				applog(LOG_WARNING, "%s%d: ser_write got err %d",
-						    bitmain->drv->name, bitmain->device_id, amount);
-				return BTM_SEND_ERROR;
-			}
-			sent += amount;
+	while (sent < len) {
+		amount = write(info->device_fd, buf+sent, len-sent);
+		if (amount < 0) {
+			applog(LOG_WARNING, "%s%d: ser_write got err %d",
+					    bitmain->drv->name, bitmain->device_id, amount);
+			return BTM_SEND_ERROR;
 		}
+		sent += amount;
 	}
 #endif
 	return BTM_SEND_OK;
@@ -986,7 +1080,7 @@ static int bitmain_write(struct cgpu_info *bitmain, char *buf, ssize_t len, int 
 
 static int bitmain_send_data(const uint8_t *data, int datalen, __maybe_unused struct cgpu_info *bitmain)
 {
-	int ret, ep = C_BITMAIN_SEND;
+	int ret, ep = 0;
 	//int delay;
 	//struct bitmain_info *info = NULL;
 	//cgtimer_t ts_start;
@@ -995,6 +1089,8 @@ static int bitmain_send_data(const uint8_t *data, int datalen, __maybe_unused st
 		return 0;
 	}
 
+#if (defined(USE_ANT_S1) || defined(USE_ANT_S3))
+	ep = C_BITMAIN_SEND;
 	if (data[0] == BITMAIN_TOKEN_TYPE_TXCONFIG) {
 		ep = C_BITMAIN_TOKEN_TXCONFIG;
 	} else if (data[0] == BITMAIN_TOKEN_TYPE_TXTASK) {
@@ -1002,6 +1098,7 @@ static int bitmain_send_data(const uint8_t *data, int datalen, __maybe_unused st
 	} else if (data[0] == BITMAIN_TOKEN_TYPE_RXSTATUS) {
 		ep = C_BITMAIN_TOKEN_RXSTATUS;
 	}
+#endif
 
 	//info = bitmain->device_data;
 	//delay = datalen * 10 * 1000000;
@@ -1366,7 +1463,7 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 	bool found = false;
 	struct work *work = NULL;
 	struct bitmain_packet_head packethead;
-	int asicnum = 0;
+	int asicnum = 0, mod = 0, tmp = 0;
 	uint64_t searches;
 	K_ITEM *witem;
 
@@ -1419,18 +1516,21 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 					info->chain_asic_num[n] = rxstatusdata.chain_asic_num[n];
 					memset(info->chain_asic_status_t[n], 0, 320);
 					j = 0;
+					mod = 0;
 					if (info->chain_asic_num[n] <= 0)
 						asicnum = 0;
 					else {
-						if (info->chain_asic_num[n] % 32 == 0)
+						mod = info->chain_asic_num[n] % 32;
+						if (mod == 0)
 							asicnum = info->chain_asic_num[n] / 32;
 						else
 							asicnum = info->chain_asic_num[n] / 32 + 1;
 					}
 					if (asicnum > 0) {
 						for (m = asicnum-1; m >= 0; m--) {
-							for (r = 0; r < 32; r++) {
-								if ((r % 8) == 0 && r != 0) {
+							tmp = (mod ? (32 - mod) : 0);
+							for (r = tmp; r < 32; r++) {
+								if (((r-tmp) % 8) == 0 && (r-tmp) != 0) {
 									info->chain_asic_status_t[n][j] = ' ';
 									j++;
 								}
@@ -1446,6 +1546,7 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 							}
 							info->chain_asic_status_t[n][j] = ' ';
 							j++;
+							mod = 0;
 						}
 					}
 					applog(LOG_DEBUG, "%s%d: %s() RxStatis Data chain(%d) asic_num=%d "
@@ -1670,6 +1771,7 @@ static void *bitmain_get_results(void *userdata)
 		}
 
 		if (unlikely(offset + rsize >= BITMAIN_READBUF_SIZE)) {
+			info->readbuf_over++;
 			/* This should never happen */
 			applog(LOG_DEBUG, "%s%d: readbuf overflow, resetting buffer",
 					  bitmain->drv->name, bitmain->device_id);
@@ -1695,6 +1797,7 @@ static void *bitmain_get_results(void *userdata)
 
 		if (ret < 1) {
 			errorcount++;
+			info->read_bad++;
 #ifdef USE_ANT_S1
 			if (errorcount > 100) {
 #else
@@ -1705,6 +1808,10 @@ static void *bitmain_get_results(void *userdata)
 				cgsleep_ms(20);
 				errorcount = 0;
 			}
+#ifndef USE_ANT_S1
+			if (errorcount > 0)
+				cgsleep_ms(1);
+#endif
 			continue;
 		}
 
@@ -1714,6 +1821,18 @@ static void *bitmain_get_results(void *userdata)
 			hexdump((uint8_t *)buf, ret);
 		}
 
+		info->read_size += ret;
+		if (info->read_good == 0)
+			info->read_sizemin = info->read_sizemax = ret;
+		else {
+			if (info->read_sizemin > ret)
+				info->read_sizemin = ret;
+			if (info->read_sizemax < ret)
+				info->read_sizemax = ret;
+		}
+		info->read_good++;
+		if (ret == 18)
+			info->read_18s++;
 		memcpy(readbuf+offset, buf, ret);
 		offset += ret;
 	}
@@ -2053,7 +2172,7 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 						beeper_ctrl, tempover_ctrl,
 						info->chain_num, info->asic_num,
 						BITMAIN_DEFAULT_FAN_MAX_PWM, info->timeout,
-						info->frequency, BITMAIN_DEFAULT_VOLTAGE,
+						info->frequency, info->voltage,
 						0, 0, 0x04, info->reg_data);
 #endif
 		if (sendlen <= 0) {
@@ -2078,16 +2197,71 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 	return 0;
 }
 
+#ifdef USE_ANT_S1
 static void ant_info(struct bitmain_info *info, int baud, int chain_num, int asic_num, int timeout, int frequency, uint8_t *reg_data)
+#else
+static void ant_info(struct bitmain_info *info, int baud, int chain_num, int asic_num)
+#endif
 {
 	info->baud = baud;
 	info->chain_num = chain_num;
 	info->asic_num = asic_num;
+
+#ifdef USE_ANT_S1
 	info->timeout = timeout;
 	info->frequency = frequency;
 	memcpy(info->reg_data, reg_data, 4);
-
 	info->voltage = BITMAIN_DEFAULT_VOLTAGE;
+#else
+	info->timeout = BITMAIN_DEFAULT_TIMEOUT;
+	info->frequency = BITMAIN_DEFAULT_FREQUENCY;
+	memset(info->reg_data, BITMAIN_DEFAULT_REG_DATA, 4);
+	info->voltage[0] = BITMAIN_VOLTAGE0_DEF;
+	info->voltage[1] = BITMAIN_VOLTAGE1_DEF;
+
+	if (opt_bitmain_freq) {
+		char buf[BUFSIZ+1];
+		char *colon, *colon2;
+		uint8_t reg_data[4];
+		int timeout, freq;
+		size_t len;
+
+		strncpy(buf, opt_bitmain_freq, sizeof(buf));
+		buf[sizeof(buf)-1] = '\0';
+		colon = strchr(buf, ':');
+		if (colon)
+			*(colon++) = '\0';
+		timeout = atoi(buf);
+		if (timeout > 0 && timeout <= 0xff)
+			info->timeout = timeout;
+		if (colon && *colon) {
+			colon2 = strchr(colon, ':');
+			if (colon2)
+				*(colon2++) = '\0';
+			freq = atoi(colon);
+			if (freq >= BITMAIN_MIN_FREQUENCY &&
+			    freq <= BITMAIN_MAX_FREQUENCY) {
+				info->frequency = freq;
+			}
+			if (colon2 && *colon2) {
+				len = strlen(colon2);
+				if (len > 1 && len <= 8 && (len & 1) == 0) {
+					memset(reg_data, BITMAIN_DEFAULT_REG_DATA, 4);
+					if (hex2bin(reg_data, colon2, len/2))
+						memcpy(info->reg_data, reg_data, len/2);
+				}
+			}
+		}
+	}
+
+	if (opt_bitmain_voltage) {
+		unsigned char v[2];
+		if (hex2bin(v, opt_bitmain_voltage, 2)) {
+			info->voltage[0] = (uint8_t)(v[0]);
+			info->voltage[1] = (uint8_t)(v[1]);
+		}
+	}
+#endif
 
 	info->fan_pwm = BITMAIN_DEFAULT_FAN_MIN_PWM;
 	info->temp_max = 0;
@@ -2100,31 +2274,43 @@ static void ant_info(struct bitmain_info *info, int baud, int chain_num, int asi
 	info->temp_sum = 0;
 }
 
+#if (defined(USE_ANT_S1) || defined(USE_ANT_S3))
 static struct cgpu_info *bitmain_detect_one(libusb_device *dev, struct usb_find_devices *found)
 {
-	int baud, chain_num, asic_num, timeout, frequency = 0;
+	int baud, chain_num, asic_num = 0;
+#ifdef USE_ANT_S1
+	int timeout, frequency = 0;
 	uint8_t reg_data[4] = {0};
+#endif
 	struct bitmain_info *info;
 	struct cgpu_info *bitmain;
 	bool configured;
 	int ret;
 
-	if (opt_bitmain_options == NULL)
+	if (!opt_bitmain_options || !(*opt_bitmain_options)) {
+		applog(LOG_ERR, "%s: no bitmain-options specified", ANTDRV.dname);
 		return NULL;
+	}
 
 	bitmain = usb_alloc_cgpu(&ANTDRV, BITMAIN_MINER_THREADS);
 
 	baud = BITMAIN_IO_SPEED;
 	chain_num = BITMAIN_DEFAULT_CHAIN_NUM;
 	asic_num = BITMAIN_DEFAULT_ASIC_NUM;
+#ifdef USE_ANT_S1
 	timeout = BITMAIN_DEFAULT_TIMEOUT;
 	frequency = BITMAIN_DEFAULT_FREQUENCY;
+#endif
 
 	if (!usb_init(bitmain, dev, found))
 		goto shin;
 
+#ifdef USE_ANT_S1
 	configured = get_options(++option_offset, &baud, &chain_num,
 				 &asic_num, &timeout, &frequency, reg_data);
+#else
+	configured = get_options(++option_offset, &baud, &chain_num, &asic_num);
+#endif
 
 	/* Even though this is an FTDI type chip, we want to do the parsing
 	 * all ourselves so set it to std usb type */
@@ -2135,12 +2321,20 @@ static struct cgpu_info *bitmain_detect_one(libusb_device *dev, struct usb_find_
 		quit(1, "Failed to calloc bitmain_info data");
 	info = bitmain->device_data;
 
+#ifdef USE_ANT_S1
 	if (configured)
 		ant_info(info, baud, chain_num, asic_num, timeout, frequency, reg_data);
 	else
 		ant_info(info, BITMAIN_IO_SPEED, BITMAIN_DEFAULT_CHAIN_NUM,
 			  BITMAIN_DEFAULT_ASIC_NUM, BITMAIN_DEFAULT_TIMEOUT,
 			  BITMAIN_DEFAULT_FREQUENCY, reg_data);
+#else
+	if (configured)
+		ant_info(info, baud, chain_num, asic_num);
+	else
+		ant_info(info, BITMAIN_IO_SPEED, BITMAIN_DEFAULT_CHAIN_NUM, BITMAIN_DEFAULT_ASIC_NUM);
+
+#endif
 
 	if (!add_cgpu(bitmain))
 		goto unshin;
@@ -2157,8 +2351,9 @@ static struct cgpu_info *bitmain_detect_one(libusb_device *dev, struct usb_find_
 
 	info->work_list = k_new_list("Work", sizeof(WITEM), ALLOC_WITEMS, LIMIT_WITEMS, true);
 	info->work_ready = k_new_store(info->work_list);
-#ifdef USE_ANT_S2
+#ifdef USE_ANT_S3
 	info->wbuild = k_new_store(info->work_list);
+	dupalloc(bitmain, 10);
 #endif
 
 	applog(LOG_DEBUG, "%s%d: detected %s "
@@ -2182,12 +2377,10 @@ shin:
 
 	return NULL;
 }
-
-#ifdef USE_ANT_S2
+#else // S2 (and only S2)
 static void ser_detect()
 {
-	int baud, chain_num, asic_num, timeout, frequency = 0;
-	uint8_t reg_data[4] = {0};
+	int baud, chain_num = 0, asic_num = 0;
 	struct cgpu_info *bitmain;
 	struct bitmain_info *info;
 	bool configured;
@@ -2207,10 +2400,8 @@ static void ser_detect()
 	bitmain->drv = &ANTDRV;
 	bitmain->deven = DEV_ENABLED;
 	bitmain->threads = 1;
-	bitmain->usbinfo.nodev = true;
 
-	configured = get_options(++option_offset, &baud, &chain_num,
-				  &asic_num, &timeout, &frequency, reg_data);
+	configured = get_options(++option_offset, &baud, &chain_num, &asic_num);
 
 	info = calloc(1, sizeof(*info));
 	if (unlikely(!info))
@@ -2225,14 +2416,11 @@ static void ser_detect()
 	}
 
 	bitmain->device_path = strdup(opt_bitmain_dev);
-	bitmain->usbinfo.nodev = false;
 
 	if (configured)
-		ant_info(info, baud, chain_num, asic_num, timeout, frequency, reg_data);
+		ant_info(info, baud, chain_num, asic_num);
 	else
-		ant_info(info, BITMAIN_IO_SPEED, BITMAIN_DEFAULT_CHAIN_NUM,
-			  BITMAIN_DEFAULT_ASIC_NUM, BITMAIN_DEFAULT_TIMEOUT,
-			  BITMAIN_DEFAULT_FREQUENCY, reg_data);
+		ant_info(info, BITMAIN_IO_SPEED, BITMAIN_DEFAULT_CHAIN_NUM, BITMAIN_DEFAULT_ASIC_NUM);
 
 	if (!add_cgpu(bitmain))
 		goto cleen;
@@ -2271,12 +2459,16 @@ giveup:
 #ifdef USE_ANT_S1
 static void ants1_detect(bool __maybe_unused hotplug)
 {
-	is_usb = true;
 	usb_detect(&ANTDRV, bitmain_detect_one);
 }
 #endif
 
-
+#ifdef USE_ANT_S3
+static void ants3_detect(bool __maybe_unused hotplug)
+{
+	usb_detect(&ANTDRV, bitmain_detect_one);
+}
+#else
 #ifdef USE_ANT_S2
 static bool first_ant = true;
 
@@ -2288,16 +2480,9 @@ static void ants2_detect(bool __maybe_unused hotplug)
 
 	first_ant = false;
 
-	if (opt_bitmain_dev && *opt_bitmain_dev)
-		is_usb = false;
-	else
-		is_usb = true;
-
-	if (is_usb)
-		usb_detect(&ANTDRV, bitmain_detect_one);
-	else
-		ser_detect();
+	ser_detect();
 }
+#endif
 #endif
 
 static void do_bitmain_close(struct thr_info *thr)
@@ -2334,7 +2519,7 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 {
 	struct bitmain_info *info = bitmain->device_data;
 	struct work *work, *usework;
-	bool ret = true;
+	bool ret = true, dodelay = false;
 	int sendret = 0, sentcount = 0, neednum = 0, queuednum = 0, sendnum = 0, sendlen = 0;
 	int roll, roll_limit;
 	uint8_t sendbuf[BITMAIN_SENDBUF_SIZE];
@@ -2391,12 +2576,15 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 	applog(LOG_DEBUG, "%s%d: %s() start",
 			  bitmain->drv->name, bitmain->device_id,
 			  __func__);
+	info->fill_calls++;
 	mutex_lock(&info->qlock);
 	if (info->fifo_space <= 0) {
 		applog(LOG_DEBUG, "%s%d: %s() fifo space empty",
 				  bitmain->drv->name, bitmain->device_id,
 				  __func__);
 		ret = true;
+		info->fill_nospace++;
+		dodelay = true;
 		goto out_unlock;
 	}
 
@@ -2405,65 +2593,105 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 	else
 		ret = false;
 
-	while (info->fifo_space > 0) {
-#ifdef USE_ANT_S1
-		neednum = info->fifo_space<8?info->fifo_space:8;
-#else
-		neednum = info->fifo_space<BITMAIN_MAX_WORK_NUM?info->fifo_space:BITMAIN_MAX_WORK_NUM;
-#endif
+	if (info->fifo_space > 0) {
+		work = get_queued(bitmain);
+		if (!work) {
+			if (info->fifo_space < BITMAIN_MAX_WORK_NUM)
+				neednum = info->fifo_space;
+			else
+				neednum = BITMAIN_MAX_WORK_NUM;
+
+			queuednum = info->queued;
+
+			int need = neednum - queuednum;
+			if (need > BITMAIN_MAX_WORK_NUM) {
+				need = BITMAIN_MAX_WORK_NUM;
+				info->need_over++;
+			} else {
+				if (need < 0)
+					need = 0;
+			}
+			info->fill_nowork++;
+			info->need_nowork[need]++;
+			goto out_unlock;
+		}
+
+		roll_limit = work->drv_rolllimit;
+		info->fill_rolltot += roll_limit;
+		if (info->fill_roll == 0)
+			info->fill_rollmin = info->fill_rollmax = roll_limit;
+		else {
+			if (info->fill_rollmin > roll_limit)
+				info->fill_rollmin = roll_limit;
+			if (info->fill_rollmax < roll_limit)
+				info->fill_rollmax = roll_limit;
+		}
+		info->fill_roll++;
+		roll = 0;
+	}
+
+	while (info->fifo_space > 0 && roll <= roll_limit) {
+		info->fifo_checks++;
+		if (info->fifo_space < BITMAIN_MAX_WORK_NUM) {
+			neednum = info->fifo_space;
+			info->fill_neededless++;
+		} else
+			neednum = BITMAIN_MAX_WORK_NUM;
+
+		info->fill_totalneeded += neednum;
+		info->fill_need[neednum]++;
+
 		queuednum = info->queued;
 		applog(LOG_DEBUG, "%s%d: Work task queued(%d) fifo space(%d) needsend(%d)",
 				  bitmain->drv->name, bitmain->device_id,
 				  queuednum, info->fifo_space, neednum);
-		while (queuednum < neednum) {
-			work = get_queued(bitmain);
-			if (!work)
-				break;
-			else {
-				roll_limit = work->drv_rolllimit;
-				roll = 0;
-				while (queuednum < neednum && roll <= roll_limit) {
-					applog(LOG_DEBUG, "%s%d: get work queued number:%d"
-							  " neednum:%d",
-							  bitmain->drv->name,
-							  bitmain->device_id,
-							  queuednum, neednum);
+		info->fill_want += (neednum - queuednum);
+		while (queuednum < neednum && roll <= roll_limit) {
+			applog(LOG_DEBUG, "%s%d: get work queued number:%d"
+					  " neednum:%d",
+					  bitmain->drv->name,
+					  bitmain->device_id,
+					  queuednum, neednum);
 
-					// Using devflag to say if it was rolled
-					if (roll == 0) {
-						usework = work;
-						usework->devflag = false;
-					} else {
-						usework = copy_work_noffset(work, roll);
-						usework->devflag = true;
-					}
-
-					witem = k_unlink_tail(info->work_list);
-					if (DATAW(witem)->work) {
-						// Was it rolled?
-						if (DATAW(witem)->work->devflag)
-							free_work(DATAW(witem)->work);
-						else
-							work_completed(bitmain, DATAW(witem)->work);
-					}
-					DATAW(witem)->work = usework;
-					DATAW(witem)->wid = ++info->last_wid;
-					info->queued++;
-					k_add_head(info->work_ready, witem);
-					queuednum++;
-					roll++;
-				}
+			// Using devflag to say if it was rolled
+			if (roll == 0) {
+				usework = work;
+				usework->devflag = false;
+			} else {
+				usework = copy_work_noffset(work, roll);
+				usework->devflag = true;
 			}
+
+			witem = k_unlink_tail(info->work_list);
+			if (DATAW(witem)->work) {
+				// Was it rolled?
+				if (DATAW(witem)->work->devflag)
+					free_work(DATAW(witem)->work);
+				else
+					work_completed(bitmain, DATAW(witem)->work);
+			}
+			DATAW(witem)->work = usework;
+			DATAW(witem)->wid = ++info->last_wid;
+			info->queued++;
+			k_add_head(info->work_ready, witem);
+			queuednum++;
+			roll++;
 		}
 		if (queuednum < BITMAIN_MAX_DEAL_QUEUE_NUM) {
 			if (queuednum < neednum) {
+				info->fill_toosmall++;
+				info->fill_less += (neednum - queuednum);
 				applog(LOG_DEBUG, "%s%d: Not enough work to send, queue num=%d",
 						  bitmain->drv->name, bitmain->device_id,
 						  queuednum);
-				break;
+				goto out_unlock;
 			}
 		}
+		info->fill_sends++;
 		sendnum = queuednum < neednum ? queuednum : neednum;
+		info->fill_totalsend += sendnum;
+		info->fill_send[sendnum]++;
+		info->fill_sendless[neednum - sendnum]++;
 		sendlen = bitmain_set_txtask(info, sendbuf, &(info->last_work_block), &sentcount);
 		info->queued -= sendnum;
 		info->send_full_space += sendnum;
@@ -2479,6 +2707,7 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 				info->fifo_space = 0;
 			sendret = bitmain_send_data(sendbuf, sendlen, bitmain);
 			if (unlikely(sendret == BTM_SEND_ERROR)) {
+				info->fill_senderr++;
 				applog(LOG_ERR, "%s%d: send work comms error",
 						bitmain->drv->name, bitmain->device_id);
 				//dev_error(bitmain, REASON_DEV_COMMS_ERROR);
@@ -2492,7 +2721,7 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 							bitmain->drv->name, bitmain->device_id);
 					bitmain->shutdown = true;
 				}
-				break;
+				goto out_unlock;
 			} else {
 				applog(LOG_DEBUG, "%s%d: send_data ret=%d",
 						  bitmain->drv->name, bitmain->device_id,
@@ -2500,19 +2729,20 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 				info->errorcount = 0;
 			}
 		} else {
+			info->fill_seterr++;
 			applog(LOG_DEBUG, "%s%d: Send work set_txtask error: %d",
 					  bitmain->drv->name, bitmain->device_id,
 					  sendlen);
-			break;
 		}
 	}
 
 out_unlock:
 	cgtime(&now);
 	timediff = now.tv_sec - info->last_status_time.tv_sec;
-	if (timediff < 0) timediff = -timediff;
-
-	if (now.tv_sec - info->last_status_time.tv_sec > BITMAIN_SEND_STATUS_TIME) {
+	if (timediff < 0)
+		timediff = -timediff;
+	if (timediff > BITMAIN_SEND_STATUS_TIME) {
+		info->fill_sendstatus++;
 		applog(LOG_DEBUG, "%s%d: Send RX Status Token fifo_space(%d) timediff(%d)",
 				  bitmain->drv->name, bitmain->device_id,
 				  info->fifo_space, timediff);
@@ -2552,6 +2782,9 @@ out_unlock:
 		ret = true;
 		cgsleep_prepare_r(&ts_start);
 		cgsleep_ms_r(&ts_start, 50);
+	} else {
+		if (dodelay)
+			cgsleep_ms(opt_bitmain_workdelay);
 	}
 	return ret;
 }
@@ -2589,11 +2822,13 @@ static int64_t bitmain_scanhash(struct thr_info *thr)
 	//	info->reset = true;
 	//}
 
+#if (defined(USE_ANT_S1) || defined(USE_ANT_S3))
 	if (unlikely(bitmain->usbinfo.nodev)) {
 		applog(LOG_ERR, "%s%d: Device disappeared, shutting down thread",
 				bitmain->drv->name, bitmain->device_id);
 		bitmain->shutdown = true;
 	}
+#endif
 
 	/* This hashmeter is just a utility counter based on returned shares */
 	return hash_count;
@@ -2619,7 +2854,13 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct bitmain_info *info = cgpu->device_data;
-	//int i = 0;
+	char needbuf[16 * (BITMAIN_MAX_WORK_NUM + 1)], *needptr;
+	char fillbuf[64];
+	char rollbuf[64];
+	char regbuf[16];
+	float avg;
+	int i = 0;
+	size_t len;
 	double hwp = (cgpu->hw_errors + cgpu->diff1) ?
 			(double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
 
@@ -2628,7 +2869,18 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "asic_count", &(info->asic_num), false);
 	root = api_add_int(root, "timeout", &(info->timeout), false);
 	root = api_add_int(root, "frequency", &(info->frequency), false);
+	snprintf(regbuf, sizeof(regbuf), "0x%02x%02x%02x%02x",
+		 (int)(info->reg_data[0]), (int)(info->reg_data[1]),
+		 (int)(info->reg_data[2]), (int)(info->reg_data[3]));
+	root = api_add_string(root, "regdata", regbuf, true);
+#ifdef USE_ANT_S1
 	root = api_add_int(root, "voltage", &(info->voltage), false);
+#else
+	char vbuf[8];
+	snprintf(vbuf, sizeof(vbuf), "0x%02x%02x",
+		 (int)(info->voltage[0]), (int)(info->voltage[1]));
+	root = api_add_string(root, "voltage", vbuf, true);
+#endif
 #ifdef USE_ANT_S2
 	root = api_add_int(root, "hwv1", &(info->hw_version[0]), false);
 	root = api_add_int(root, "hwv2", &(info->hw_version[1]), false);
@@ -2675,10 +2927,10 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "temp15", &(info->temp[14]), false);
 	root = api_add_int(root, "temp16", &(info->temp[15]), false);
 #endif
-	root = api_add_int(root, "temp_avg", &(info->temp_avg), false);
-	root = api_add_int(root, "temp_max", &(info->temp_max), false);
+	root = api_add_int(root, "temp_avg", &(info->temp_avg), true);
+	root = api_add_int(root, "temp_max", &(info->temp_max), true);
 	root = api_add_percent(root, "Device Hardware%", &hwp, true);
-	root = api_add_int(root, "no_matching_work", &(info->no_matching_work), false);
+	root = api_add_int(root, "no_matching_work", &(info->no_matching_work), true);
 	/*
 	for (i = 0; i < info->chain_num; i++) {
 		char mcw[24];
@@ -2731,8 +2983,8 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 	root = api_add_uint64(root, "work_search", &(info->work_search), true);
 	root = api_add_uint64(root, "min_search", &(info->min_search), true);
 	root = api_add_uint64(root, "max_search", &(info->max_search), true);
-	float avg = info->work_search ? (float)(info->tot_search) /
-						(float)(info->work_search) : 0;
+	avg = info->work_search ? (float)(info->tot_search) /
+					(float)(info->work_search) : 0;
 	root = api_add_avg(root, "avg_search", &avg, true);
 	root = api_add_uint64(root, "failed_search", &(info->failed_search), true);
 	root = api_add_uint64(root, "min_failed", &(info->min_failed), true);
@@ -2752,17 +3004,101 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 	root = api_add_uint64(root, "overheat_total_sleep", &(info->overheat_total_sleep), true);
 	root = api_add_uint32(root, "overheat_recovers", &(info->overheat_recovers), true);
 #endif
+	root = api_add_uint64(root, "fill_calls", &(info->fill_calls), true);
+	root = api_add_uint64(root, "fill_nospace", &(info->fill_nospace), true);
+	root = api_add_uint64(root, "fifo_checks", &(info->fifo_checks), true);
+	root = api_add_uint64(root, "fill_neededless", &(info->fill_neededless), true);
+	avg = info->fifo_checks ? (float)(info->fill_totalneeded) /
+					(float)(info->fifo_checks) : 0;
+	snprintf(fillbuf, sizeof(fillbuf), "%"PRId64"/%.2fav", info->fill_totalneeded, avg);
+	root = api_add_string(root, "fill_needed", fillbuf, true);
+	needptr = needbuf;
+	for (i = 0; i <= BITMAIN_MAX_WORK_NUM; i++) {
+		len = sizeof(needbuf) - (needptr - needbuf);
+		if (len > 1) {
+			snprintf(needptr, len, "%s%"PRIu64,
+				 i ? "/" : "", info->fill_need[i]);
+			needptr += strlen(needptr);
+		}
+	}
+	root = api_add_string(root, "fill_need", needbuf, true);
+	avg = info->fifo_checks ? (float)(info->fill_want) /
+					(float)(info->fifo_checks) : 0;
+	snprintf(fillbuf, sizeof(fillbuf), "%"PRId64"/%.2fav", info->fill_want, avg);
+	root = api_add_string(root, "fill_want", fillbuf, true);
+	root = api_add_uint64(root, "fill_nowork", &(info->fill_nowork), true);
+	root = api_add_uint64(root, "fill_toosmall", &(info->fill_toosmall), true);
+	avg = info->fill_toosmall ? (float)(info->fill_less) /
+					(float)(info->fill_toosmall) : 0;
+	snprintf(fillbuf, sizeof(fillbuf), "%"PRId64" %.2fav", info->fill_less, avg);
+	root = api_add_string(root, "fill_less", fillbuf, true);
+	root = api_add_uint64(root, "fill_sends", &(info->fill_sends), true);
+	avg = info->fill_sends ? (float)(info->fill_totalsend) /
+					(float)(info->fill_sends) : 0;
+	snprintf(fillbuf, sizeof(fillbuf), "%"PRId64"/%.2fav", info->fill_totalsend, avg);
+	root = api_add_string(root, "fill_totalsend", fillbuf, true);
+	needptr = needbuf;
+	for (i = 0; i <= BITMAIN_MAX_WORK_NUM; i++) {
+		len = sizeof(needbuf) - (needptr - needbuf);
+		if (len > 1) {
+			snprintf(needptr, len, "%s%"PRIu64,
+				 i ? "/" : "", info->fill_send[i]);
+			needptr += strlen(needptr);
+		}
+	}
+	root = api_add_string(root, "fill_send", needbuf, true);
+	needptr = needbuf;
+	for (i = 0; i <= BITMAIN_MAX_WORK_NUM; i++) {
+		len = sizeof(needbuf) - (needptr - needbuf);
+		if (len > 1) {
+			snprintf(needptr, len, "%s%"PRIu64,
+				 i ? "/" : "", info->fill_sendless[i]);
+			needptr += strlen(needptr);
+		}
+	}
+	root = api_add_string(root, "fill_sendless", needbuf, true);
+	root = api_add_uint64(root, "fill_seterr", &(info->fill_seterr), true);
+	root = api_add_uint64(root, "fill_senderr", &(info->fill_senderr), true);
+
+	needptr = needbuf;
+	for (i = 0; i <= BITMAIN_MAX_WORK_NUM; i++) {
+		len = sizeof(needbuf) - (needptr - needbuf);
+		if (len > 1) {
+			snprintf(needptr, len, "%s%"PRIu64,
+				 i ? "/" : "", info->need_nowork[i]);
+			needptr += strlen(needptr);
+		}
+	}
+	len = sizeof(needbuf) - (needptr - needbuf);
+	if (len > 1)
+		snprintf(needptr, len, " %"PRIu64, info->need_over);
+	root = api_add_string(root, "need_nowork", needbuf, true);
+	avg = info->fill_roll ? (float)(info->fill_rolltot) / (float)(info->fill_roll) : 0;
+	snprintf(rollbuf, sizeof(rollbuf), "%"PRIu64"/%d/%d/%.2fav",
+		 info->fill_roll, info->fill_rollmin, info->fill_rollmax, avg);
+	root = api_add_string(root, "roll", rollbuf, true);
+	i = BITMAIN_SEND_STATUS_TIME;
+	root = api_add_int(root, "send_status_time", &i, true);
+	root = api_add_timeval(root, "last_status_time", &(info->last_status_time), true);
+	root = api_add_uint64(root, "fill_sendstatus", &(info->fill_sendstatus), true);
+	root = api_add_uint64(root, "read_good", &(info->read_good), true);
+	avg = info->read_good ? (float)(info->read_size) / (float)(info->read_good) : 0;
+	snprintf(fillbuf, sizeof(fillbuf), "%"PRIu64"/%d/%d/%.2fav",
+		 info->read_size, info->read_sizemin, info->read_sizemax, avg);
+	root = api_add_string(root, "read_size", fillbuf, true);
+	root = api_add_uint64(root, "read_18s", &(info->read_18s), true);
+	root = api_add_uint64(root, "read_bad", &(info->readbuf_over), true);
+	root = api_add_uint64(root, "readbuf_over", &(info->readbuf_over), true);
 
 #ifdef USE_ANT_S2
 	root = api_add_bool(root, "opt_bitmain_beeper", &opt_bitmain_beeper, false);
 	root = api_add_bool(root, "opt_bitmain_tempoverctrl", &opt_bitmain_tempoverctrl, false);
 #endif
 	root = api_add_int(root, "opt_bitmain_temp", &opt_bitmain_temp, false);
+	root = api_add_int(root, "opt_bitmain_workdelay", &opt_bitmain_workdelay, false);
 	root = api_add_int(root, "opt_bitmain_overheat", &opt_bitmain_overheat, false);
 	root = api_add_int(root, "opt_bitmain_fan_min", &opt_bitmain_fan_min, false);
 	root = api_add_int(root, "opt_bitmain_fan_max", &opt_bitmain_fan_max, false);
-	root = api_add_int(root, "opt_bitmain_freq_min", &opt_bitmain_freq_min, false);
-	root = api_add_int(root, "opt_bitmain_freq_max", &opt_bitmain_freq_max, false);
 	root = api_add_bool(root, "opt_bitmain_auto", &opt_bitmain_auto, false);
 
 	return root;
@@ -2791,27 +3127,6 @@ char *set_bitmain_fan(char *arg)
 
 	return NULL;
 }
-
-char *set_bitmain_freq(char *arg)
-{
-	int val1, val2, ret;
-
-	ret = sscanf(arg, "%d-%d", &val1, &val2);
-	if (ret < 1)
-		return "No values passed to bitmain-freq";
-	if (ret == 1)
-		val2 = val1;
-
-	if (val1 < BITMAIN_MIN_FREQUENCY || val1 > BITMAIN_MAX_FREQUENCY ||
-	    val2 < BITMAIN_MIN_FREQUENCY || val2 > BITMAIN_MAX_FREQUENCY ||
-	    val2 < val1)
-		return "Invalid value passed to bitmain-freq";
-
-	opt_bitmain_freq_min = val1;
-	opt_bitmain_freq_max = val2;
-
-	return NULL;
-}
 #endif // LINUX
 
 #ifdef USE_ANT_S1
@@ -2835,11 +3150,19 @@ struct device_drv ants1_drv = {
 #endif
 
 #ifdef USE_ANT_S2
+#ifdef USE_ANT_S3
+struct device_drv ants3_drv = {
+	.drv_id = DRIVER_ants3,
+	.dname = "BitmainAntS3",
+	.name = "AS3",
+	.drv_detect = ants3_detect,
+#else
 struct device_drv ants2_drv = {
 	.drv_id = DRIVER_ants2,
 	.dname = "BitmainAntS2",
 	.name = "AS2",
 	.drv_detect = ants2_detect,
+#endif
 #ifdef LINUX
 	.thread_prepare = bitmain_prepare,
 	.hash_work = hash_queued_work,

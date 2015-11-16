@@ -222,6 +222,9 @@ static inline int fsync (int fd)
 #define MAX(x, y)	((x) > (y) ? (x) : (y))
 #endif
 
+#define MACSTR(_num) MACSTR2(_num)
+#define MACSTR2(__num) #__num
+
 /* Put avalon last to make it the last device it tries to detect to prevent it
  * trying to claim same chip but different devices. Adding a device here will
  * update all macros in the code that use the *_PARSE_COMMANDS macros for each
@@ -233,6 +236,7 @@ static inline int fsync (int fd)
 #define ASIC_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(ants1) \
 	DRIVER_ADD_COMMAND(ants2) \
+	DRIVER_ADD_COMMAND(ants3) \
 	DRIVER_ADD_COMMAND(avalon) \
 	DRIVER_ADD_COMMAND(avalon2) \
 	DRIVER_ADD_COMMAND(avalon4) \
@@ -977,7 +981,6 @@ extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
 extern int opt_suggest_diff;
 extern char *cgminer_path;
-extern bool opt_fail_only;
 extern bool opt_lowmem;
 extern bool opt_autofan;
 extern bool opt_autoengine;
@@ -1025,16 +1028,21 @@ extern char *opt_bitmine_a1_options;
 #endif
 #ifdef USE_ANT_S1
 extern char *opt_bitmain_options;
+extern char *opt_bitmain_freq;
 extern bool opt_bitmain_hwerror;
 #endif
-#ifdef USE_ANT_S2
+#if (defined(USE_ANT_S2) || defined(USE_ANT_S3))
+#ifndef USE_ANT_S3
 extern char *opt_bitmain_dev;
+#endif
 extern char *opt_bitmain_options;
+extern char *opt_bitmain_freq;
 extern bool opt_bitmain_hwerror;
 extern bool opt_bitmain_checkall;
 extern bool opt_bitmain_checkn2diff;
 extern bool opt_bitmain_beeper;
 extern bool opt_bitmain_tempoverctrl;
+extern char *opt_bitmain_voltage;
 #endif
 #ifdef USE_MINION
 extern int opt_minion_chipreport;
@@ -1094,9 +1102,7 @@ typedef bool (*sha256_func)(struct thr_info*, const unsigned char *pmidstate,
 
 extern bool fulltest(const unsigned char *hash, const unsigned char *target);
 
-extern int opt_queue;
-extern int opt_scantime;
-extern int opt_expiry;
+extern const int max_scantime;
 
 extern cglock_t control_lock;
 extern pthread_mutex_t hash_lock;
@@ -1218,7 +1224,6 @@ struct pool {
 
 	bool submit_fail;
 	bool idle;
-	bool lagging;
 	bool probed;
 	enum pool_enable enabled;
 	bool submit_old;
@@ -1263,6 +1268,7 @@ struct pool {
 	time_t last_share_time;
 	double last_share_diff;
 	uint64_t best_diff;
+	uint64_t bad_work;
 
 	struct cgminer_stats cgminer_stats;
 	struct cgminer_pool_stats cgminer_pool_stats;
@@ -1333,6 +1339,7 @@ struct pool {
 	char bbversion[12];
 	char nbit[12];
 	char ntime[12];
+	double next_diff;
 	double sdiff;
 
 	struct timeval tv_lastwork;

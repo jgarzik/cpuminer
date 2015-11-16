@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 BitMain project
  * Copyright 2013 BitMain <xlc1985@126.com>
- * Copyright 2014 Andrew Smith
+ * Copyright 2014-2015 Andrew Smith
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -12,7 +12,12 @@
 #ifndef BITMAIN_H
 #define BITMAIN_H
 
-#if defined(USE_ANT_S1) || defined(USE_ANT_S2)
+// S3 is a USB S2 with other minor changes (search for USE_ANT_S3)
+#if defined(USE_ANT_S3)
+#define USE_ANT_S2 1
+#endif
+
+#if (defined(USE_ANT_S1) || defined(USE_ANT_S2))
 
 #include "util.h"
 #include "klist.h"
@@ -47,7 +52,6 @@
 #define BITMAIN_MAX_FREQUENCY 1000000
 #define BITMAIN_TIMEOUT_FACTOR 12690
 #define BITMAIN_DEFAULT_FREQUENCY 282
-#define BITMAIN_DEFAULT_VOLTAGE 5
 #define BITMAIN_DEFAULT_CHAIN_NUM 8
 #define BITMAIN_DEFAULT_ASIC_NUM 32
 #define BITMAIN_DEFAULT_REG_DATA 0
@@ -56,28 +60,52 @@
 
 #ifdef USE_ANT_S1
 #define BITMAIN_FTDI_READSIZE 510
+#define BITMAIN_DEFAULT_VOLTAGE 5
+#define BITMAIN_WORK_DELAY 1
+#else // S2 or S3
+#ifdef USE_ANT_S3 // S3
+#define BITMAIN_FTDI_READSIZE 510
+#define BITMAIN_VOLTAGE_DEF "0000"
+#define BITMAIN_VOLTAGE0_DEF 0x00
+#define BITMAIN_VOLTAGE1_DEF 0x00
+#define BITMAIN_WORK_DELAY 1
 #else // S2
 #define BITMAIN_FTDI_READSIZE 2048
+#define BITMAIN_VOLTAGE_DEF "0725"
+#define BITMAIN_VOLTAGE0_DEF 0x07
+#define BITMAIN_VOLTAGE1_DEF 0x25
+#define BITMAIN_WORK_DELAY 1
+#endif
 #endif
 #define BITMAIN_USB_PACKETSIZE 512
 #define BITMAIN_SENDBUF_SIZE 8192
 #define BITMAIN_READBUF_SIZE 8192
 #define BITMAIN_RESET_TIMEOUT 100
-#define BITMAIN_READ_TIMEOUT 18 /* Enough to only half fill the buffer */
 #define BITMAIN_LATENCY 1
 
 #ifdef USE_ANT_S1
+#define BITMAIN_READ_TIMEOUT 18 /* Enough to only half fill the buffer */
 #define BITMAIN_MAX_WORK_NUM       8
 #define BITMAIN_MAX_WORK_QUEUE_NUM 64
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 1
 #define BITMAIN_MAX_NONCE_NUM      8
 #define BITMAIN_MAX_CHAIN_NUM      8
+#else // S2 or S3
+#ifdef USE_ANT_S3
+#define BITMAIN_READ_TIMEOUT 100
+#define BITMAIN_MAX_WORK_NUM       8
+#define BITMAIN_MAX_WORK_QUEUE_NUM 1024
+#define BITMAIN_MAX_DEAL_QUEUE_NUM 2
+#define BITMAIN_MAX_NONCE_NUM      128
+#define BITMAIN_MAX_CHAIN_NUM      8
 #else // S2
+#define BITMAIN_READ_TIMEOUT 0 // Ignored
 #define BITMAIN_MAX_WORK_NUM       64
 #define BITMAIN_MAX_WORK_QUEUE_NUM 4096
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 32
 #define BITMAIN_MAX_NONCE_NUM      128
 #define BITMAIN_MAX_CHAIN_NUM      16
+#endif
 #endif
 
 #define BITMAIN_MAX_TEMP_NUM       32
@@ -86,9 +114,13 @@
 #ifdef USE_ANT_S1
 #define BITMAIN_SEND_STATUS_TIME   10 //s
 #define BITMAIN_SEND_FULL_SPACE    128
-#else // S2
+#else // S2 or S3
 #define BITMAIN_SEND_STATUS_TIME   15 //s
+#ifdef USE_ANT_S3
+#define BITMAIN_SEND_FULL_SPACE    256
+#else
 #define BITMAIN_SEND_FULL_SPACE    512
+#endif
 #endif
 
 #define BITMAIN_OVERHEAT_SLEEP_MS_MAX 10000
@@ -126,7 +158,8 @@ struct bitmain_txconfig_token {
 	uint8_t beeper_ctrl          :1;
 	uint8_t temp_over_ctrl       :1;
 	uint8_t reserved1            :6;
-	uint8_t reserved[2];
+	uint8_t chain_check_time;
+	uint8_t reserved2;
 #endif
 
 	uint8_t chain_num;
@@ -135,8 +168,12 @@ struct bitmain_txconfig_token {
 	uint8_t timeout_data;
 
 	uint16_t frequency;
+#ifdef USE_ANT_S1
 	uint8_t voltage;
 	uint8_t chain_check_time;
+#else
+	uint8_t voltage[2];
+#endif
 
 	uint8_t reg_data[4];
 	uint8_t chip_address;
@@ -278,8 +315,10 @@ struct bitmain_info {
 	int chain_asic_num[BITMAIN_MAX_CHAIN_NUM];
 	uint32_t chain_asic_status[BITMAIN_MAX_CHAIN_NUM];
 	char chain_asic_status_t[BITMAIN_MAX_CHAIN_NUM][40];
-#else // S2
+#else // S2 or S3
+#ifndef USE_ANT_S3
 	int device_fd;
+#endif
 	int baud;
 	int chain_num;
 	int asic_num;
@@ -307,9 +346,11 @@ struct bitmain_info {
 	int fan_pwm;
 
 	int frequency;
-	int voltage;
 	int temp_hi;
-#ifdef USE_ANT_S2
+#ifdef USE_ANT_S1
+	int voltage;
+#else
+	uint8_t voltage[2];
 	uint64_t total_nonce_num;
 	int diff;
 #endif
@@ -366,6 +407,37 @@ struct bitmain_info {
 	uint64_t tot_failed;
 	uint64_t min_failed;
 	uint64_t max_failed;
+
+	uint64_t fill_calls;
+	uint64_t fill_nospace;
+	uint64_t fifo_checks;
+	uint64_t fill_neededless;
+	uint64_t fill_totalneeded;
+	uint64_t fill_need[BITMAIN_MAX_WORK_NUM+1];
+	uint64_t fill_want;
+	uint64_t fill_nowork;
+	uint64_t fill_roll;
+	int fill_rollmin;
+	int fill_rollmax;
+	uint64_t fill_rolltot;
+	uint64_t fill_toosmall;
+	uint64_t fill_less;
+	uint64_t fill_sends;
+	uint64_t fill_totalsend;
+	uint64_t fill_send[BITMAIN_MAX_WORK_NUM+1];
+	uint64_t fill_sendless[BITMAIN_MAX_WORK_NUM+1];
+	uint64_t fill_seterr;
+	uint64_t fill_senderr;
+	uint64_t need_over;
+	uint64_t need_nowork[BITMAIN_MAX_WORK_NUM+1];
+	uint64_t fill_sendstatus;
+	uint64_t read_good;
+	uint64_t read_size;
+	uint64_t read_18s;
+	int read_sizemin;
+	int read_sizemax;
+	uint64_t read_bad;
+	uint64_t readbuf_over;
 };
 
 // Work
@@ -377,7 +449,11 @@ typedef struct witem {
 #ifdef USE_ANT_S1
 #define ALLOC_WITEMS 1024
 #else
+#ifdef USE_ANT_S3
+#define ALLOC_WITEMS 4096
+#else // S2
 #define ALLOC_WITEMS 32768
+#endif
 #endif
 /*
  * The limit doesn't matter since we simply take the tail item
@@ -386,7 +462,11 @@ typedef struct witem {
 #ifdef USE_ANT_S1
 #define LIMIT_WITEMS 1024
 #else
+#ifdef USE_ANT_S3
+#define LIMIT_WITEMS 4096
+#else // S2
 #define LIMIT_WITEMS 32768
+#endif
 #endif
 
 #define DATAW(_item) ((WITEM *)(_item->data))
@@ -408,6 +488,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 
 extern struct bitmain_info **bitmain_info;
 extern int opt_bitmain_temp;
+extern int opt_bitmain_workdelay;
 extern int opt_bitmain_overheat;
 extern int opt_bitmain_fan_min;
 extern int opt_bitmain_fan_max;
@@ -415,7 +496,6 @@ extern int opt_bitmain_freq_min;
 extern int opt_bitmain_freq_max;
 extern bool opt_bitmain_auto;
 extern char *set_bitmain_fan(char *arg);
-extern char *set_bitmain_freq(char *arg);
 
 #endif /* USE_ANT_S1 || USE_ANT_S2 */
 #endif	/* BITMAIN_H */

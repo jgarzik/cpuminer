@@ -1,5 +1,6 @@
 /*
  * Copyright 2011-2015 Con Kolivas
+ * Copyright 2011-2015 Andrew Smith
  * Copyright 2010 Jeff Garzik
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -420,7 +421,7 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 				sscanf(val + 7, "%d", &hi->rolltime);
 				hi->hadexpire = true;
 			} else
-				hi->rolltime = opt_scantime;
+				hi->rolltime = max_scantime;
 			applog(LOG_DEBUG, "X-Roll-Ntime expiry set to %d", hi->rolltime);
 		}
 	}
@@ -2007,6 +2008,9 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	snprintf(pool->nbit, 9, "%s", nbit);
 	snprintf(pool->ntime, 9, "%s", ntime);
 	pool->swork.clean = clean;
+	if (pool->next_diff > 0) {
+		pool->sdiff = pool->next_diff;
+	}
 	alloc_len = pool->coinbase_len = cb1_len + pool->n1_len + pool->n2size + cb2_len;
 	pool->nonce2_offset = cb1_len + pool->n1_len;
 
@@ -2030,6 +2034,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		}
 	}
 	pool->merkles = merkles;
+	if (pool->merkles < 2)
+		pool->bad_work++;
 	if (clean)
 		pool->nonce2 = 0;
 #if 0
@@ -2071,7 +2077,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	free(pool->coinbase);
 	pool->coinbase = cgcalloc(alloc_len, 1);
 	cg_memcpy(pool->coinbase, cb1, cb1_len);
-	cg_memcpy(pool->coinbase + cb1_len, pool->nonce1bin, pool->n1_len);
+	if (pool->n1_len)
+		cg_memcpy(pool->coinbase + cb1_len, pool->nonce1bin, pool->n1_len);
 	cg_memcpy(pool->coinbase + cb1_len + pool->n1_len + pool->n2size, cb2, cb2_len);
 	if (opt_debug) {
 		char *cb = bin2hex(pool->coinbase, pool->coinbase_len);
@@ -2113,8 +2120,13 @@ static bool parse_diff(struct pool *pool, json_t *val)
 		return false;
 
 	cg_wlock(&pool->data_lock);
-	old_diff = pool->sdiff;
-	pool->sdiff = diff;
+	if (pool->next_diff > 0) {
+		old_diff = pool->next_diff;
+		pool->next_diff = diff;
+	} else {
+		old_diff = pool->sdiff;
+		pool->next_diff = pool->sdiff = diff;
+	}
 	cg_wunlock(&pool->data_lock);
 
 	if (old_diff != diff) {
@@ -2912,6 +2924,7 @@ out:
 		if (!pool->stratum_url)
 			pool->stratum_url = pool->sockaddr_url;
 		pool->stratum_active = true;
+		pool->next_diff = 0;
 		pool->sdiff = 1;
 		if (opt_protocol) {
 			applog(LOG_DEBUG, "Pool %d confirmed mining.subscribe with extranonce1 %s extran2size %d",

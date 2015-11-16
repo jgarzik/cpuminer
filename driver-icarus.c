@@ -821,7 +821,7 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 	/* Set the time to detect a dead device to 30 full nonce ranges. */
 	fail_time = info->Hs * 0xffffffffull * 30.0;
 	/* Integer accuracy is definitely enough. */
-	info->fail_time = fail_time;
+	info->fail_time = fail_time + 1;
 }
 
 static uint32_t mask(int work_division)
@@ -1227,8 +1227,10 @@ static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb
 			info->timeout = ICARUS_WAIT_TIMEOUT;
 			break;
 		case IDENT_ANU:
-		case IDENT_AU3:
 			info->timeout = ANT_WAIT_TIMEOUT;
+			break;
+		case IDENT_AU3:
+			info->timeout = AU3_WAIT_TIMEOUT;
 			break;
 		case IDENT_CMR2:
 			if (found->intinfo_count != CAIRNSMORE2_INTS) {
@@ -1589,6 +1591,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 				info->rmdev.def_frq = 330;
 				info->rmdev.max_frq = 400;
 				break;
+#if 0
 			case RM_PRODUCT_T2: // what's this?
 				newname = "LIX";
 				info->rmdev.product_id = ROCKMINER_T2;
@@ -1597,6 +1600,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 				info->rmdev.def_frq = 300;
 				info->rmdev.max_frq = 400;
 				break;
+#endif
 			case RM_PRODUCT_RBOX:
 				newname = "LIN"; // R-Box
 				info->rmdev.product_id = ROCKMINER_RBOX;
