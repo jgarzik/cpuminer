@@ -244,13 +244,18 @@ static struct cgpu_info *blockerupter_detect_one(struct libusb_device *dev, stru
 		     info->boards[i] = 1;
 		     info->found++;
 		} else {
-		     applog(LOG_DEBUG, "BlockErupter missing board: %d, received %02x",
-			    i, answer);
+			if (!i) {
+				applog(LOG_DEBUG, "BlockErupter no boards found, likely not BET");
+				break;
+			}
+			applog(LOG_DEBUG, "BlockErupter missing board: %d, received %02x",
+			       i, answer);
 		}
 	}
 
 	if (!info->found) {
-		usb_free_cgpu(blockerupter);
+		usb_uninit(blockerupter);
+		blockerupter = usb_free_cgpu(blockerupter);
 		free(info);
 		return NULL;
 	} else {

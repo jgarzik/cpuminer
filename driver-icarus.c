@@ -1,7 +1,7 @@
 /*
  * Copyright 2012-2013 Andrew Smith
  * Copyright 2012 Xiangfu <xiangfu@openmobilefree.com>
- * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2015 Con Kolivas <kernel@kolivas.org>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -1213,9 +1213,7 @@ static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb
 
 	hex2bin((void *)(&workdata), golden_ob, sizeof(workdata));
 
-	info = (struct ICARUS_INFO *)calloc(1, sizeof(struct ICARUS_INFO));
-	if (unlikely(!info))
-		quit(1, "Failed to malloc ICARUS_INFO");
+	info = cgcalloc(1, sizeof(struct ICARUS_INFO));
 	icarus->device_data = (void *)info;
 
 	info->ident = usb_ident(icarus);
@@ -1428,9 +1426,7 @@ retry:
 
 			cgtmp->usbinfo.usbstat = USB_NOSTAT;
 
-			intmp = (struct ICARUS_INFO *)malloc(sizeof(struct ICARUS_INFO));
-			if (unlikely(!intmp))
-				quit(1, "Failed2 to malloc ICARUS_INFO");
+			intmp = cgmalloc(sizeof(struct ICARUS_INFO));
 
 			cgtmp->device_data = (void *)intmp;
 
@@ -1539,9 +1535,7 @@ static struct cgpu_info *rock_detect_one(struct libusb_device *dev, struct usb_f
 		free(ob_hex);
 	}
 
-	info = (struct ICARUS_INFO *)calloc(1, sizeof(struct ICARUS_INFO));
-	if (unlikely(!info))
-		quit(1, "Failed to malloc ICARUS_INFO");
+	info = cgcalloc(1, sizeof(struct ICARUS_INFO));
 	(void)memset(info, 0, sizeof(struct ICARUS_INFO));
 	icarus->device_data = (void *)info;
 	icarus->usbdev->ident = info->ident = IDENT_LIN;
@@ -1724,7 +1718,7 @@ static bool icarus_prepare(struct thr_info *thr)
 	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
 
 	if (info->ant)
-		info->antworks = calloc(sizeof(struct work *), ANT_QUEUE_NUM);
+		info->antworks = cgcalloc(sizeof(struct work *), ANT_QUEUE_NUM);
 	return true;
 }
 

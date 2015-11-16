@@ -102,8 +102,14 @@ typedef LARGE_INTEGER cgtimer_t;
 typedef struct timespec cgtimer_t;
 #endif
 
-int no_yield(void);
-int (*selective_yield)(void);
+extern int no_yield(void);
+extern int (*selective_yield)(void);
+void *_cgmalloc(size_t size, const char *file, const char *func, const int line);
+void *_cgcalloc(const size_t memb, size_t size, const char *file, const char *func, const int line);
+void *_cgrealloc(void *ptr, size_t size, const char *file, const char *func, const int line);
+#define cgmalloc(_size) _cgmalloc(_size, __FILE__, __func__, __LINE__)
+#define cgcalloc(_memb, _size) _cgcalloc(_memb, _size, __FILE__, __func__, __LINE__)
+#define cgrealloc(_ptr, _size) _cgrealloc(_ptr, _size, __FILE__, __func__, __LINE__)
 struct thr_info;
 struct pool;
 enum dev_reason;
@@ -168,12 +174,5 @@ void _cg_memcpy(void *dest, const void *src, unsigned int n, const char *file, c
 #define cgsem_wait(_sem) _cgsem_wait(_sem, __FILE__, __func__, __LINE__)
 #define cgsem_mswait(_sem, _timeout) _cgsem_mswait(_sem, _timeout, __FILE__, __func__, __LINE__)
 #define cg_memcpy(dest, src, n) _cg_memcpy(dest, src, n, __FILE__, __func__, __LINE__)
-
-/* Align a size_t to 4 byte boundaries for fussy arches */
-static inline void align_len(size_t *len)
-{
-	if (*len % 4)
-		*len += 4 - (*len % 4);
-}
 
 #endif /* __UTIL_H__ */

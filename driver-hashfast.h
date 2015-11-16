@@ -16,21 +16,21 @@
 #include "elist.h"
 #include "hf_protocol.h"
 
-int opt_hfa_ntime_roll;
-int opt_hfa_hash_clock;
-int opt_hfa_overheat;
-int opt_hfa_target;
-bool opt_hfa_pll_bypass;
-bool opt_hfa_dfu_boot;
-int opt_hfa_fan_default;
-int opt_hfa_fan_max;
-int opt_hfa_fan_min;
-int opt_hfa_fail_drop;
-bool opt_hfa_noshed;
+extern int opt_hfa_ntime_roll;
+extern int opt_hfa_hash_clock;
+extern int opt_hfa_overheat;
+extern int opt_hfa_target;
+extern bool opt_hfa_pll_bypass;
+extern bool opt_hfa_dfu_boot;
+extern int opt_hfa_fan_default;
+extern int opt_hfa_fan_max;
+extern int opt_hfa_fan_min;
+extern int opt_hfa_fail_drop;
+extern bool opt_hfa_noshed;
 
-char *set_hfa_fan(char *arg);
-char *opt_hfa_name;
-char *opt_hfa_options;
+extern char *set_hfa_fan(char *arg);
+extern char *opt_hfa_name;
+extern char *opt_hfa_options;
 
 #define HASHFAST_MINER_THREADS 1
 #define HFA_CLOCK_DEFAULT 550

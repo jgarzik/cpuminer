@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2014 Con Kolivas
+ * Copyright 2011-2015 Con Kolivas
  * Copyright 2010 Jeff Garzik
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -137,7 +137,7 @@ static int Inet_Pton4(const char *src, char *dst)
 	if (octets < 4)
 		return 0;
 
-	memcpy(dst, tmp, W32NS_INADDRSZ);
+	cg_memcpy(dst, tmp, W32NS_INADDRSZ);
 
 	return 1;
 }
@@ -234,7 +234,7 @@ static int Inet_Pton6(const char *src, char *dst)
 	if (tp != endp)
 		return 0;
 
-	memcpy(dst, tmp, W32NS_IN6ADDRSZ);
+	cg_memcpy(dst, tmp, W32NS_IN6ADDRSZ);
 
 	return 1;
 }
@@ -252,6 +252,46 @@ int Inet_Pton(int af, const char *src, void *dst)
 	}
 }
 #endif
+
+/* Align a size_t to 4 byte boundaries for fussy arches */
+static inline void align_len(size_t *len)
+{
+	if (*len % 4)
+		*len += 4 - (*len % 4);
+}
+
+void *_cgmalloc(size_t size, const char *file, const char *func, const int line)
+{
+	void *ret;
+
+	align_len(&size);
+	ret = malloc(size);
+	if (unlikely(!ret))
+		quit(1, "Failed to malloc size %d from %s %s:%d", (int)size, file, func, line);
+	return ret;
+}
+
+void *_cgcalloc(const size_t memb, size_t size, const char *file, const char *func, const int line)
+{
+	void *ret;
+
+	align_len(&size);
+	ret = calloc(memb, size);
+	if (unlikely(!ret))
+		quit(1, "Failed to calloc memb %d size %d from %s %s:%d", (int)memb, (int)size, file, func, line);
+	return ret;
+}
+
+void *_cgrealloc(void *ptr, size_t size, const char *file, const char *func, const int line)
+{
+	void *ret;
+
+	align_len(&size);
+	ret = realloc(ptr, size);
+	if (unlikely(!ret))
+		quit(1, "Failed to realloc size %d from %s %s:%d", (int)size, file, func, line);
+	return ret;
+}
 
 struct tq_ent {
 	void			*data;
@@ -303,14 +343,11 @@ static size_t all_data_cb(const void *ptr, size_t size, size_t nmemb,
 	oldlen = db->len;
 	newlen = oldlen + len;
 
-	newmem = realloc(db->buf, newlen + 1);
-	if (!newmem)
-		return 0;
-
+	newmem = cgrealloc(db->buf, newlen + 1);
 	db->buf = newmem;
 	db->len = newlen;
-	memcpy(db->buf + oldlen, ptr, len);
-	memcpy(db->buf + newlen, &zero, 1);	/* null terminate */
+	cg_memcpy(db->buf + oldlen, ptr, len);
+	cg_memcpy(db->buf + newlen, &zero, 1);	/* null terminate */
 
 	return len;
 }
@@ -325,7 +362,7 @@ static size_t upload_data_cb(void *ptr, size_t size, size_t nmemb,
 		len = ub->len;
 
 	if (len) {
-		memcpy(ptr, ub->buf, len);
+		cg_memcpy(ptr, ub->buf, len);
 		ub->buf += len;
 		ub->len -= len;
 	}
@@ -340,10 +377,8 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 	char *rem, *val = NULL, *key = NULL;
 	void *tmp;
 
-	val = calloc(1, ptrlen);
-	key = calloc(1, ptrlen);
-	if (!key || !val)
-		goto out;
+	val = cgcalloc(1, ptrlen);
+	key = cgcalloc(1, ptrlen);
 
 	tmp = memchr(ptr, ':', ptrlen);
 	if (!tmp || (tmp == ptr))	/* skip empty keys / blanks */
@@ -351,7 +386,7 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 	slen = tmp - ptr;
 	if ((slen + 1) == ptrlen)	/* skip key w/ no value */
 		goto out;
-	memcpy(key, ptr, slen);		/* store & nul term key */
+	cg_memcpy(key, ptr, slen);		/* store & nul term key */
 	key[slen] = 0;
 
 	rem = ptr + slen + 1;		/* trim value's leading whitespace */
@@ -361,7 +396,7 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 		rem++;
 	}
 
-	memcpy(val, rem, remlen);	/* store value, trim trailing ws */
+	cg_memcpy(val, rem, remlen);	/* store value, trim trailing ws */
 	val[remlen] = 0;
 	while ((*val) && (isspace(val[strlen(val) - 1])))
 		val[strlen(val) - 1] = 0;
@@ -797,10 +832,7 @@ char *get_proxy(char *url, struct pool *pool)
 
 			*split = '\0';
 			len = split - url;
-			pool->rpc_proxy = malloc(1 + len - plen);
-			if (!(pool->rpc_proxy))
-				quithere(1, "Failed to malloc rpc_proxy");
-
+			pool->rpc_proxy = cgmalloc(1 + len - plen);
 			strcpy(pool->rpc_proxy, url + plen);
 			extract_sockaddr(pool->rpc_proxy, &pool->sockaddr_proxy_url, &pool->sockaddr_proxy_port);
 			pool->rpc_proxytype = proxynames[i].proxytype;
@@ -835,10 +867,7 @@ char *bin2hex(const unsigned char *p, size_t len)
 	slen = len * 2 + 1;
 	if (slen % 4)
 		slen += 4 - (slen % 4);
-	s = calloc(slen, 1);
-	if (unlikely(!s))
-		quithere(1, "Failed to calloc");
-
+	s = cgcalloc(slen, 1);
 	__bin2hex(s, p, len);
 
 	return s;
@@ -993,7 +1022,7 @@ void address_to_pubkeyhash(unsigned char *pkh, const char *addr)
 	pkh[0] = 0x76;
 	pkh[1] = 0xa9;
 	pkh[2] = 0x14;
-	memcpy(&pkh[3], &b58bin[1], 20);
+	cg_memcpy(&pkh[3], &b58bin[1], 20);
 	pkh[23] = 0x88;
 	pkh[24] = 0xac;
 }
@@ -1023,19 +1052,17 @@ unsigned char *ser_string(char *s, int *slen)
 	size_t len = strlen(s);
 	unsigned char *ret;
 
-	ret = malloc(1 + len + 8); // Leave room for largest size
-	if (unlikely(!ret))
-		quit(1, "Failed to malloc ret in ser_string");
+	ret = cgmalloc(1 + len + 8); // Leave room for largest size
 	if (len < 253) {
 		ret[0] = len;
-		memcpy(ret + 1, s, len);
+		cg_memcpy(ret + 1, s, len);
 		*slen = len + 1;
 	} else if (len < 0x10000) {
 		uint16_t *u16 = (uint16_t *)&ret[1];
 
 		ret[0] = 253;
 		*u16 = htobe16(len);
-		memcpy(ret + 3, s, len);
+		cg_memcpy(ret + 3, s, len);
 		*slen = len + 3;
 	} else {
 		/* size_t is only 32 bit on many platforms anyway */
@@ -1043,7 +1070,7 @@ unsigned char *ser_string(char *s, int *slen)
 
 		ret[0] = 254;
 		*u32 = htobe32(len);
-		memcpy(ret + 5, s, len);
+		cg_memcpy(ret + 5, s, len);
 		*slen = len + 5;
 	}
 	return ret;
@@ -1096,10 +1123,7 @@ struct thread_q *tq_new(void)
 {
 	struct thread_q *tq;
 
-	tq = calloc(1, sizeof(*tq));
-	if (!tq)
-		return NULL;
-
+	tq = cgcalloc(1, sizeof(*tq));
 	INIT_LIST_HEAD(&tq->q);
 	pthread_mutex_init(&tq->mutex, NULL);
 	pthread_cond_init(&tq->cond, NULL);
@@ -1149,10 +1173,7 @@ bool tq_push(struct thread_q *tq, void *data)
 	struct tq_ent *ent;
 	bool rc = true;
 
-	ent = calloc(1, sizeof(*ent));
-	if (!ent)
-		return false;
-
+	ent = cgcalloc(1, sizeof(*ent));
 	ent->data = data;
 	INIT_LIST_HEAD(&ent->q_node);
 
@@ -1240,7 +1261,7 @@ bool time_less(struct timeval *a, struct timeval *b)
 
 void copy_time(struct timeval *dest, const struct timeval *src)
 {
-	memcpy(dest, src, sizeof(struct timeval));
+	cg_memcpy(dest, src, sizeof(struct timeval));
 }
 
 void timespec_to_val(struct timeval *val, const struct timespec *spec)
@@ -1419,7 +1440,8 @@ void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
 }
 #endif /* WIN32 */
 
-#ifdef CLOCK_MONOTONIC /* Essentially just linux */
+#if defined(CLOCK_MONOTONIC) && !defined(__FreeBSD__) /* Essentially just linux */
+//#ifdef CLOCK_MONOTONIC /* Essentially just linux */
 void cgtimer_time(cgtimer_t *ts_start)
 {
 	clock_gettime(CLOCK_MONOTONIC, ts_start);
@@ -1475,8 +1497,8 @@ void cgtimer_time(cgtimer_t *ts_start)
 	struct timeval tv;
 
 	cgtime(&tv);
-	ts_start->tv_sec = tv->tv_sec;
-	ts_start->tv_nsec = tv->tv_usec * 1000;
+	ts_start->tv_sec = tv.tv_sec;
+	ts_start->tv_nsec = tv.tv_usec * 1000;
 }
 #endif /* __MACH__ */
 
@@ -1812,9 +1834,7 @@ void _recalloc(void **ptr, size_t old, size_t new, const char *file, const char 
 {
 	if (new == old)
 		return;
-	*ptr = realloc(*ptr, new);
-	if (unlikely(!*ptr))
-		quitfrom(1, file, func, line, "Failed to realloc");
+	*ptr = _cgrealloc(*ptr, new, file, func, line);
 	if (new > old)
 		memset(*ptr + old, 0, new - old);
 }
@@ -1833,9 +1853,7 @@ static void recalloc_sock(struct pool *pool, size_t len)
 	new = new + (RBUFSIZE - (new % RBUFSIZE));
 	// Avoid potentially recursive locking
 	// applog(LOG_DEBUG, "Recallocing pool sockbuf to %d", new);
-	pool->sockbuf = realloc(pool->sockbuf, new);
-	if (!pool->sockbuf)
-		quithere(1, "Failed to realloc pool sockbuf");
+	pool->sockbuf = cgrealloc(pool->sockbuf, new);
 	memset(pool->sockbuf + old, 0, new - old);
 	pool->sockbuf_size = new;
 }
@@ -1995,14 +2013,12 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	for (i = 0; i < pool->merkles; i++)
 		free(pool->swork.merkle_bin[i]);
 	if (merkles) {
-		pool->swork.merkle_bin = realloc(pool->swork.merkle_bin,
-						 sizeof(char *) * merkles + 1);
+		pool->swork.merkle_bin = cgrealloc(pool->swork.merkle_bin,
+						   sizeof(char *) * merkles + 1);
 		for (i = 0; i < merkles; i++) {
 			char *merkle = json_array_string(arr, i);
 
-			pool->swork.merkle_bin[i] = malloc(32);
-			if (unlikely(!pool->swork.merkle_bin[i]))
-				quit(1, "Failed to malloc pool swork merkle_bin");
+			pool->swork.merkle_bin[i] = cgmalloc(32);
 			if (opt_protocol)
 				applog(LOG_DEBUG, "merkle %d: %s", i, merkle);
 			ret = hex2bin(pool->swork.merkle_bin[i], merkle, 32);
@@ -2053,13 +2069,10 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		goto out_unlock;
 	}
 	free(pool->coinbase);
-	align_len(&alloc_len);
-	pool->coinbase = calloc(alloc_len, 1);
-	if (unlikely(!pool->coinbase))
-		quit(1, "Failed to calloc pool coinbase in parse_notify");
-	memcpy(pool->coinbase, cb1, cb1_len);
-	memcpy(pool->coinbase + cb1_len, pool->nonce1bin, pool->n1_len);
-	memcpy(pool->coinbase + cb1_len + pool->n1_len + pool->n2size, cb2, cb2_len);
+	pool->coinbase = cgcalloc(alloc_len, 1);
+	cg_memcpy(pool->coinbase, cb1, cb1_len);
+	cg_memcpy(pool->coinbase + cb1_len, pool->nonce1bin, pool->n1_len);
+	cg_memcpy(pool->coinbase + cb1_len + pool->n1_len + pool->n2size, cb2, cb2_len);
 	if (opt_debug) {
 		char *cb = bin2hex(pool->coinbase, pool->coinbase_len);
 
@@ -2133,6 +2146,7 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 {
 	char *sockaddr_url, *stratum_port, *tmp;
 	char *url, *port, address[256];
+	int port_no;
 
 	memset(address, 0, 255);
 	url = (char *)json_string_value(json_array_get(val, 0));
@@ -2159,9 +2173,15 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 		}
 	}
 
-	port = (char *)json_string_value(json_array_get(val, 1));
-	if (!port)
-		port = pool->stratum_port;
+	port_no = json_integer_value(json_array_get(val, 1));
+	if (port_no) {
+		port = alloca(256);
+		sprintf(port, "%d", port_no);
+	} else {
+		port = (char *)json_string_value(json_array_get(val, 1));
+		if (!port)
+			port = pool->stratum_port;
+	}
 
 	snprintf(address, 254, "%s:%s", url, port);
 
@@ -2464,7 +2484,7 @@ static bool socks5_negotiate(struct pool *pool, int sockd)
 		len = 255;
 	uclen = len;
 	buf[4] = (uclen & 0xff);
-	memcpy(buf + 5, pool->sockaddr_url, len);
+	cg_memcpy(buf + 5, pool->sockaddr_url, len);
 	port = atoi(pool->stratum_port);
 	buf[5 + len] = (port >> 8);
 	buf[6 + len] = (port & 0xff);
@@ -2554,7 +2574,7 @@ static bool socks4_negotiate(struct pool *pool, int sockd, bool socks4a)
 		len = strlen(pool->sockaddr_url);
 		if (len > 255)
 			len = 255;
-		memcpy(&buf[16], pool->sockaddr_url, len);
+		cg_memcpy(&buf[16], pool->sockaddr_url, len);
 		len += 16;
 		buf[len++] = '\0';
 		send(sockd, buf, len, 0);
@@ -2736,9 +2756,7 @@ retry:
 	}
 
 	if (!pool->sockbuf) {
-		pool->sockbuf = calloc(RBUFSIZE, 1);
-		if (!pool->sockbuf)
-			quithere(1, "Failed to calloc pool sockbuf");
+		pool->sockbuf = cgcalloc(RBUFSIZE, 1);
 		pool->sockbuf_size = RBUFSIZE;
 	}
 
@@ -2870,14 +2888,17 @@ resend:
 		goto out;
 	}
 
+	if (sessionid && pool->sessionid && !strcmp(sessionid, pool->sessionid)) {
+		applog(LOG_NOTICE, "Pool %d successfully negotiated resume with the same session ID",
+		       pool->pool_no);
+	}
+
 	cg_wlock(&pool->data_lock);
 	pool->sessionid = sessionid;
 	pool->nonce1 = nonce1;
 	pool->n1_len = strlen(nonce1) / 2;
 	free(pool->nonce1bin);
-	pool->nonce1bin = calloc(pool->n1_len, 1);
-	if (unlikely(!pool->nonce1bin))
-		quithere(1, "Failed to calloc pool->nonce1bin");
+	pool->nonce1bin = cgcalloc(pool->n1_len, 1);
 	hex2bin(pool->nonce1bin, pool->nonce1, pool->n1_len);
 	pool->n2size = n2size;
 	cg_wunlock(&pool->data_lock);
@@ -2991,11 +3012,7 @@ void *realloc_strcat(char *ptr, char *s)
 		old = strlen(ptr);
 
 	len += old + 1;
-	align_len(&len);
-
-	ret = malloc(len);
-	if (unlikely(!ret))
-		quithere(1, "Failed to malloc");
+	ret = cgmalloc(len);
 
 	if (ptr) {
 		sprintf(ret, "%s%s", ptr, s);
@@ -3022,9 +3039,7 @@ void *str_text(char *ptr)
 
 	uptr = (unsigned char *)ptr;
 
-	ret = txt = malloc(strlen(ptr)*4+5); // Guaranteed >= needed
-	if (unlikely(!txt))
-		quithere(1, "Failed to malloc txt");
+	ret = txt = cgmalloc(strlen(ptr) * 4 + 5); // Guaranteed >= needed
 
 	do {
 		if (*uptr < ' ' || *uptr > '~') {
@@ -3248,9 +3263,7 @@ bool cg_completion_timeout(void *fn, void *fnarg, int timeout)
 	pthread_t pthread;
 	bool ret = false;
 
-	cgc = malloc(sizeof(struct cg_completion));
-	if (unlikely(!cgc))
-		return ret;
+	cgc = cgmalloc(sizeof(struct cg_completion));
 	cgsem_init(&cgc->cgsem);
 	cgc->fn = fn;
 	cgc->fnarg = fnarg;
@@ -3270,7 +3283,17 @@ void _cg_memcpy(void *dest, const void *src, unsigned int n, const char *file, c
 {
 	if (unlikely(n < 1 || n > (1ul << 31))) {
 		applog(LOG_ERR, "ERR: Asked to memcpy %u bytes from %s %s():%d",
-			      n, file, func, line);
+		       n, file, func, line);
+		return;
+	}
+	if (unlikely(!dest)) {
+		applog(LOG_ERR, "ERR: Asked to memcpy %u bytes to NULL from %s %s():%d",
+		       n, file, func, line);
+		return;
+	}
+	if (unlikely(!src)) {
+		applog(LOG_ERR, "ERR: Asked to memcpy %u bytes from NULL from %s %s():%d",
+		       n, file, func, line);
 		return;
 	}
 	memcpy(dest, src, n);

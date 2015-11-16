@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2014-2015 Con Kolivas <kernel@kolivas.org>
  * Copyright 2014 Zvi (Zvisha) Shteingart - Spondoolies-tech.com
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -13,6 +13,8 @@
 #ifndef ____MINERGATE_LIB_H___
 #define ____MINERGATE_LIB_H___
 
+#include "config.h"
+
 //#include "squid.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +26,9 @@
 #include <netinet/in.h>
 //#include "queue.h"
 //#include "spond_debug.h"
+
+#include "miner.h"
+#include "util.h"
 
 #ifndef passert
 #define passert assert

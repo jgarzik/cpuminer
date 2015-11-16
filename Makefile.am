@@ -142,6 +142,10 @@ if HAS_AVALON4
 cgminer_SOURCES += driver-avalon4.c driver-avalon4.h
 endif
 
+if HAS_AVALON_MINER
+cgminer_SOURCES += driver-avalon-miner.c driver-avalon-miner.h
+endif
+
 if HAS_MINION
 cgminer_SOURCES += driver-minion.c
 endif

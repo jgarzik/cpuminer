@@ -46,10 +46,12 @@ extern char *curly;
 #ifdef HAVE_ALLOCA_H
 # include <alloca.h>
 #elif defined __GNUC__
-# ifndef WIN32
-#  define alloca __builtin_alloca
-# else
-#  include <malloc.h>
+# ifndef __FreeBSD__ /* FreeBSD has below #define in stdlib.h */
+#  ifndef WIN32
+#   define alloca __builtin_alloca
+#  else
+#   include <malloc.h>
+#  endif
 # endif
 #elif defined _AIX
 # define alloca __alloca
@@ -234,6 +236,7 @@ static inline int fsync (int fd)
 	DRIVER_ADD_COMMAND(avalon) \
 	DRIVER_ADD_COMMAND(avalon2) \
 	DRIVER_ADD_COMMAND(avalon4) \
+	DRIVER_ADD_COMMAND(avalonm) \
 	DRIVER_ADD_COMMAND(bflsc) \
 	DRIVER_ADD_COMMAND(bitfury) \
 	DRIVER_ADD_COMMAND(blockerupter) \
@@ -438,7 +441,7 @@ struct cgpu_info {
 	bool blacklisted;
 	bool nozlp; // Device prefers no zero length packet
 #endif
-#if defined(USE_AVALON) || defined(USE_AVALON2)
+#if defined(USE_AVALON) || defined(USE_AVALON2) || defined (USE_AVALON_MINER)
 	struct work **works;
 	int work_array;
 	int queued;
@@ -571,7 +574,7 @@ static inline void string_elist_add(const char *s, struct list_head *head)
 {
 	struct string_elist *n;
 
-	n = calloc(1, sizeof(*n));
+	n = cgcalloc(1, sizeof(*n));
 	n->string = strdup(s);
 	n->free_me = true;
 	list_add_tail(&n->list, head);
@@ -1108,7 +1111,7 @@ extern pthread_cond_t restart_cond;
 extern void clear_stratum_shares(struct pool *pool);
 extern void clear_pool_work(struct pool *pool);
 extern void set_target(unsigned char *dest_target, double diff);
-#if defined (USE_AVALON2) || defined (USE_AVALON4) || defined (USE_HASHRATIO)
+#if defined (USE_AVALON2) || defined (USE_AVALON4) || defined (USE_AVALON_MINER) || defined (USE_HASHRATIO)
 bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool,
 			 uint32_t nonce2, uint32_t nonce, uint32_t ntime);
 #endif
@@ -1467,6 +1470,7 @@ extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *mi
 extern struct work *clone_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *__find_work_byid(struct work *que, uint32_t id);
 extern struct work *find_queued_work_byid(struct cgpu_info *cgpu, uint32_t id);
+extern struct work *clone_queued_work_byid(struct cgpu_info *cgpu, uint32_t id);
 extern void __work_completed(struct cgpu_info *cgpu, struct work *work);
 extern int age_queued_work(struct cgpu_info *cgpu, double secs);
 extern void work_completed(struct cgpu_info *cgpu, struct work *work);
@@ -1480,11 +1484,8 @@ extern int curses_int(const char *query);
 extern char *curses_input(const char *query);
 extern void kill_work(void);
 extern void switch_pools(struct pool *selected);
-extern void _discard_work(struct work *work);
-#define discard_work(WORK) do { \
-	_discard_work(WORK); \
-	WORK = NULL; \
-} while (0)
+extern void _discard_work(struct work **workptr, const char *file, const char *func, const int line);
+#define discard_work(WORK) _discard_work(&(WORK), __FILE__, __func__, __LINE__)
 extern void remove_pool(struct pool *pool);
 extern void write_config(FILE *fcfg);
 extern void zero_bestshare(void);
@@ -1508,11 +1509,8 @@ extern void app_restart(void);
 extern void roll_work(struct work *work);
 extern struct work *make_clone(struct work *work);
 extern void clean_work(struct work *work);
-extern void _free_work(struct work *work);
-#define free_work(WORK) do { \
-	_free_work(WORK); \
-	WORK = NULL; \
-} while (0)
+extern void _free_work(struct work **workptr, const char *file, const char *func, const int line);
+#define free_work(WORK) _free_work(&(WORK), __FILE__, __func__, __LINE__)
 extern void set_work_ntime(struct work *work, int ntime);
 extern struct work *copy_work_noffset(struct work *base_work, int noffset);
 #define copy_work(work_in) copy_work_noffset(work_in, 0)

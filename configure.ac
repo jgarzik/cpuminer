@@ -2,7 +2,7 @@
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [4])
 m4_define([v_min], [9])
-m4_define([v_mic], [0])
+m4_define([v_mic], [1])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
 m4_define([lt_rev], m4_eval(v_maj + v_min))
@@ -50,7 +50,9 @@ AC_PROG_CC
 gl_EARLY
 AC_PROG_GCC_TRADITIONAL
 AM_PROG_CC_C_O
-LT_INIT([disable-shared])
+
+# This breaks autoreconf so disable it
+# LT_INIT([disable-shared])
 
 gl_INIT
 
@@ -104,6 +106,11 @@ case $target in
     PTHREAD_FLAGS=""
     RT_LIBS=""
 	;;
+  *-*-freebsd*)
+    PTHREAD_FLAGS=""
+    DLOPEN_FLAGS=""
+    RT_LIBS=""
+    ;;
 esac
 
 has_winpthread=false
@@ -188,6 +195,16 @@ if test "x$avalon4" = xyes; then
 fi
 AM_CONDITIONAL([HAS_AVALON4], [test x$avalon4 = xyes])
 
+avalon_miner="no"
+
+AC_ARG_ENABLE([avalon_miner],
+	[AC_HELP_STRING([--enable-avalon-miner],[Compile support for Avalon miner(default disabled)])],
+	[avalon_miner=$enableval]
+	)
+if test "x$avalon_miner" = xyes; then
+	AC_DEFINE([USE_AVALON_MINER], [1], [Defined to 1 if Avalon miner support is wanted])
+fi
+AM_CONDITIONAL([HAS_AVALON_MINER], [test x$avalon_miner = xyes])
 
 bab="no"
 
@@ -453,7 +470,7 @@ fi
 
 
 #Add a new device to this list if it needs libusb, along with a no on the end.
-if test x$avalon$avalon2$avalon4$bitforce$bitfury$blockerupter$modminer$bflsc$icarus$hashfast$hashratio$klondike$drillbit$cointerra$ants1$ants2 != xnononononononononononononononono; then
+if test x$avalon$avalon2$avalon4$avalon_miner$bitforce$bitfury$blockerupter$modminer$bflsc$icarus$hashfast$hashratio$klondike$drillbit$cointerra$ants1$ants2 != xnonononononononononononononononono; then
 	want_usbutils=true
 else
 	want_usbutils=false
@@ -465,7 +482,7 @@ else
 	want_libbitfury=false
 fi
 
-if test x$avalon2$avalon4$hashratio != xnonono; then
+if test x$avalon2$avalon4$avalon_miner$hashratio != xnononono; then
 	want_crc16=true
 else
 	want_crc16=false
@@ -677,6 +694,12 @@ else
 	echo "  Avalon4.ASICs........: Disabled"
 fi
 
+if test "x$avalon_miner" = xyes; then
+	echo "  Avalon miner.ASICs...: Enabled"
+else
+	echo "  Avalon miner.ASICs...: Disabled"
+fi
+
 if test "x$minion" = xyes; then
 	echo "  BlackArrowMinion.ASIC: Enabled"
 else
@@ -782,7 +805,7 @@ else
 fi
 
 #Add any new device to this, along with a no on the end of the test
-if test "x$avalon$avalon2$bab$bflsc$bitforce$bitfury$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$sp10$sp30" = xnononononononononononononononononononononono; then
+if test "x$avalon$avalon2$avalon4$avalon_miner$bab$bflsc$bitforce$bitfury$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$sp10$sp30" = xnonononononononononononononononononononononono; then
 	echo
 	AC_MSG_ERROR([No mining devices configured in])
 	echo
