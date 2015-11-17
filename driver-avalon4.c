@@ -1080,7 +1080,9 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 	info->mod_type[0] = AVA4_TYPE_MM40;
 	info->temp[0] = -273;
 
-	memset(info->set_frequency, 0, sizeof(int) * 3);
+	info->set_frequency[0] = opt_avalon4_freq[0];
+	info->set_frequency[1] = opt_avalon4_freq[1];
+	info->set_frequency[2] = opt_avalon4_freq[2];
 
 	return avalon4;
 }
@@ -1244,6 +1246,7 @@ static void detect_modules(struct cgpu_info *avalon4)
 		memset(info->pll_sel, 0, sizeof(info->pll_sel));
 		info->saved[i] = 0;
 		info->cutoff[i] = 0;
+		info->get_frequency[i] = 0;
 		applog(LOG_NOTICE, "%s-%d: New module detect! ID[%d]",
 		       avalon4->drv->name, avalon4->device_id, i);
 
@@ -1507,7 +1510,7 @@ static void avalon4_set_freq(struct cgpu_info *avalon4, int addr, uint8_t miner_
 
 	/* Note: 0 (miner_id and chip_id) is reserved for all devices */
 	if (!miner_id || !chip_id) {
-		if (memcmp(freq, info->set_frequency, sizeof(int) * 3)) {
+		if (memcmp(freq, info->set_frequency, sizeof(int) * 3) || !info->get_frequency[addr]) {
 			memcpy(info->set_frequency, freq, sizeof(int) * 3);
 			for (i = 0; i < info->miner_count[addr]; i++) {
 				for (j = 0; j < info->asic_count[addr]; j++)
@@ -1544,13 +1547,13 @@ static void avalon4_set_freq(struct cgpu_info *avalon4, int addr, uint8_t miner_
 		return;
 
 	memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
-	tmp = avalon4_get_cpm(freq[0]);
+	tmp = avalon4_get_cpm(info->set_frequency[0]);
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data, &tmp, 4);
-	tmp = avalon4_get_cpm(freq[1]);
+	tmp = avalon4_get_cpm(info->set_frequency[1]);
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + 4, &tmp, 4);
-	tmp = avalon4_get_cpm(freq[2]);
+	tmp = avalon4_get_cpm(info->set_frequency[2]);
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + 8, &tmp, 4);
 	send_pkg.data[12] = miner_id;
@@ -1749,8 +1752,8 @@ static void avalon4_update(struct cgpu_info *avalon4)
 
 		if (info->cutoff[i])
 			info->polling_first = 1;
-		avalon4_adjust_vf(avalon4, i, 0);
 		avalon4_stratum_set(avalon4, pool, i);
+		avalon4_adjust_vf(avalon4, i, 0);
 	}
 	info->mm_count = count;
 
