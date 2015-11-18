@@ -48,6 +48,8 @@ int opt_avalon4_freq_min = AVA4_DEFAULT_FREQUENCY_MIN;
 int opt_avalon4_freq_max = AVA4_DEFAULT_FREQUENCY_MAX;
 bool opt_avalon4_noncecheck = AVA4_DEFAULT_NCHECK;
 bool opt_avalon4_smart_speed = AVA4_DEFAULT_SMART_SPEED;
+int opt_avalon4_speed_bingo = AVA4_DEFAULT_SPEED_BINGO;
+int opt_avalon4_speed_error = AVA4_DEFAULT_SPEED_ERROR;
 
 static uint8_t avalon4_freezsafemode = 0;
 /* Only for Avalon4 */
@@ -1084,6 +1086,8 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 	info->set_frequency[1] = opt_avalon4_freq[1];
 	info->set_frequency[2] = opt_avalon4_freq[2];
 
+	info->speed_bingo[0] = opt_avalon4_speed_bingo;
+	info->speed_error[0] = opt_avalon4_speed_error;
 	return avalon4;
 }
 
@@ -1247,6 +1251,8 @@ static void detect_modules(struct cgpu_info *avalon4)
 		info->saved[i] = 0;
 		info->cutoff[i] = 0;
 		info->get_frequency[i] = 0;
+		info->speed_bingo[i] = opt_avalon4_speed_bingo;
+		info->speed_error[i] = opt_avalon4_speed_error;
 		applog(LOG_NOTICE, "%s-%d: New module detect! ID[%d]",
 		       avalon4->drv->name, avalon4->device_id, i);
 
@@ -1351,6 +1357,8 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 				info->total_asics[i] = 0;
 				info->toverheat[i] = opt_avalon4_overheat;
 				info->temp_target[i] = opt_avalon4_temp_target;
+				info->speed_bingo[i] = opt_avalon4_speed_bingo;
+				info->speed_error[i] = opt_avalon4_speed_error;
 				memset(info->set_frequency, 0, sizeof(int) * 3);
 				for (j = 0; j < AVA4_DEFAULT_ADJ_TIMES; j++) {
 					info->lw5[i][j] = 0;
@@ -1632,6 +1640,8 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 	if (opt_avalon4_noncecheck)
 		tmp |= 2;
 	send_pkg.data[20] = tmp & 0xff;
+	send_pkg.data[21] = info->speed_bingo[addr];
+	send_pkg.data[22] = info->speed_error[addr];
 
 	/* Package the data */
 	avalon4_init_pkg(&send_pkg, AVA4_P_SET, 1, 1);

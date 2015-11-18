@@ -55,6 +55,8 @@
 #define AVA4_DEFAULT_NTCB	3450
 #define AVA4_DEFAULT_NCHECK	true
 #define AVA4_DEFAULT_SMART_SPEED	true
+#define AVA4_DEFAULT_SPEED_BINGO	255
+#define AVA4_DEFAULT_SPEED_ERROR	1
 
 #define AVA4_DH_INC	0.03
 #define AVA4_DH_DEC	0.002
@@ -229,6 +231,8 @@ struct avalon4_info {
 	uint32_t total_asics[AVA4_DEFAULT_MODULARS];
 	int toverheat[AVA4_DEFAULT_MODULARS];
 	int temp_target[AVA4_DEFAULT_MODULARS];
+	uint8_t speed_bingo[AVA4_DEFAULT_MODULARS];
+	uint8_t speed_error[AVA4_DEFAULT_MODULARS];
 };
 
 struct avalon4_iic_info {
@@ -263,5 +267,7 @@ extern int opt_avalon4_freq_min;
 extern int opt_avalon4_freq_max;
 extern bool opt_avalon4_noncecheck;
 extern bool opt_avalon4_smart_speed;
+extern int opt_avalon4_speed_bingo;
+extern int opt_avalon4_speed_error;
 #endif /* USE_AVALON4 */
 #endif	/* _AVALON4_H_ */
