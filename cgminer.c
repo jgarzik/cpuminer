@@ -4655,12 +4655,22 @@ static bool test_work_current(struct work *work)
 	unsigned char bedata[32];
 	char hexstr[68];
 	bool ret = true;
+	unsigned char *bin_height = &pool->coinbase[43];
+	uint8_t cb_height_sz = bin_height[-1];
+	uint32_t height = 0;
 
 	if (work->mandatory)
 		return ret;
 
 	swap256(bedata, work->data + 4);
 	__bin2hex(hexstr, bedata, 32);
+
+	/* Calculate block height */
+	if (cb_height_sz <= 4) {
+		memcpy(&height, bin_height, cb_height_sz);
+		height = le32toh(height);
+		height--;
+	}
 
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
@@ -4712,8 +4722,8 @@ static bool test_work_current(struct work *work)
 
 		if (work->longpoll) {
 			if (work->stratum) {
-				applog(LOG_NOTICE, "Stratum from pool %d detected new block",
-				       pool->pool_no);
+				applog(LOG_NOTICE, "Stratum from pool %d detected new block at height %d",
+				       pool->pool_no, height);
 			} else {
 				applog(LOG_NOTICE, "%sLONGPOLL from pool %d detected new block",
 				       work->gbt ? "GBT " : "", work->pool->pool_no);
@@ -4731,12 +4741,12 @@ static bool test_work_current(struct work *work)
 			 * block. */
 			if (memcmp(bedata, current_block, 32)) {
 				/* Doesn't match current block. It's stale */
-				applog(LOG_DEBUG, "Stale data from pool %d", pool->pool_no);
+				applog(LOG_DEBUG, "Stale data from pool %d at height %d", pool->pool_no, height);
 				ret = false;
 			} else {
 				/* Work is from new block and pool is up now
 				 * current. */
-				applog(LOG_INFO, "Pool %d now up to date", pool->pool_no);
+				applog(LOG_INFO, "Pool %d now up to date at height %d", pool->pool_no, height);
 				cg_memcpy(pool->prev_block, bedata, 32);
 			}
 		}
