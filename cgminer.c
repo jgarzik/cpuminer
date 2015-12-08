@@ -4703,6 +4703,13 @@ static bool test_work_current(struct work *work)
 
 		work->work_block = ++work_block;
 
+		cg_wlock(&pool->data_lock);
+		if (pool->swork.clean) {
+			pool->swork.clean = false;
+			work->longpoll = true;
+		}
+		cg_wunlock(&pool->data_lock);
+
 		if (work->longpoll) {
 			if (work->stratum) {
 				applog(LOG_NOTICE, "Stratum from pool %d detected new block",
@@ -6177,9 +6184,7 @@ static void *stratum_rthread(void *userdata)
 
 			/* Generate a single work item to update the current
 			 * block database */
-			pool->swork.clean = false;
 			gen_stratum_work(pool, work);
-			work->longpoll = true;
 			/* Return value doesn't matter. We're just informing
 			 * that we may need to restart. */
 			test_work_current(work);
