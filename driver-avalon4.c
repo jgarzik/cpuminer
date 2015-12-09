@@ -1231,6 +1231,7 @@ static void detect_modules(struct cgpu_info *avalon4)
 			if (info->temp_target[i] > AVA4_DEFAULT_TEMP_TARGET)
 				info->temp_target[i] = AVA4_DEFAULT_TEMP_TARGET;
 			info->mod_type[i] = AVA4_TYPE_MM60;
+			avalon4->drv->name = "AV6";
 		}
 		info->ntime_offset[i] = (opt_avalon4_ntime_offset > info->asic_count[i]) ? info->asic_count[i] : opt_avalon4_ntime_offset;
 		info->fan_pct[i] = AVA4_DEFAULT_FAN_START;
