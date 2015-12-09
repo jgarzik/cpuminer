@@ -1519,9 +1519,9 @@ static void avalon4_set_freq(struct cgpu_info *avalon4, int addr, uint8_t miner_
 	for (i = 0; i < 3; i++) {
 		if (!info->set_frequency[i]) {
 			if (info->mod_type[addr] == AVA4_TYPE_MM60)
-				info->set_frequency[i] = AVA6_DEFAULT_FREQUENCY;
+				freq[i] = info->set_frequency[i] = AVA6_DEFAULT_FREQUENCY;
 			else
-				info->set_frequency[i] = AVA4_DEFAULT_FREQUENCY;
+				freq[i] = info->set_frequency[i] = AVA4_DEFAULT_FREQUENCY;
 		}
 	}
 
