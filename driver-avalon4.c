@@ -31,9 +31,7 @@ bool opt_avalon4_autov;
 bool opt_avalon4_freezesafe;
 int opt_avalon4_voltage_min = AVA4_DEFAULT_VOLTAGE;
 int opt_avalon4_voltage_max = AVA4_DEFAULT_VOLTAGE;
-int opt_avalon4_freq[3] = {AVA4_DEFAULT_FREQUENCY,
-			   AVA4_DEFAULT_FREQUENCY,
-			   AVA4_DEFAULT_FREQUENCY};
+int opt_avalon4_freq[3];
 
 int opt_avalon4_polling_delay = AVA4_DEFAULT_POLLING_DELAY;
 
@@ -1516,6 +1514,16 @@ static void avalon4_set_freq(struct cgpu_info *avalon4, int addr, uint8_t miner_
 	uint32_t tmp;
 	uint8_t set = 0;
 	int i, j;
+
+	/* No optional frequencies were set, choose default frequencies */
+	for (i = 0; i < 3; i++) {
+		if (!info->set_frequency[i]) {
+			if (info->mod_type[addr] == AVA4_TYPE_MM60)
+				info->set_frequency[i] = AVA6_DEFAULT_FREQUENCY;
+			else
+				info->set_frequency[i] = AVA4_DEFAULT_FREQUENCY;
+		}
+	}
 
 	/* Note: 0 (miner_id and chip_id) is reserved for all devices */
 	if (!miner_id || !chip_id) {
