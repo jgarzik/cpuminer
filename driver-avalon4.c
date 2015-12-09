@@ -1,6 +1,6 @@
 /*
  * Copyright 2014-2015 Mikeqin <Fengling.Qin@gmail.com>
- * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2015 Con Kolivas <kernel@kolivas.org>
  * Copyright 2012-2015 Xiangfu <xiangfu@openmobilefree.com>
  * Copyright 2012 Luke Dashjr
  * Copyright 2012 Andrew Smith

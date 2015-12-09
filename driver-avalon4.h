@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2015 Con Kolivas <kernel@kolivas.org>
  * Copyright 2012-2014 Xiangfu <xiangfu@openmobilefree.com>
  *
  * This program is free software; you can redistribute it and/or modify it
