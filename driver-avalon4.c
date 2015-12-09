@@ -1496,9 +1496,9 @@ static void avalon4_set_voltage(struct cgpu_info *avalon4, int addr, int opt)
 		avalon4_iic_xfer_pkg(avalon4, addr, &send_pkg, NULL);
 }
 
-static uint32_t avalon4_get_cpm(int freq)
+static uint32_t avalon4_get_cpm(uint32_t freq)
 {
-	int i;
+	size_t i;
 
 	for (i = 0; i < sizeof(g_freq_array) / sizeof(g_freq_array[0]); i++)
 		if (freq >= g_freq_array[i][0] && freq < g_freq_array[i+1][0])
@@ -1695,7 +1695,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	struct work *work;
 	struct pool *pool;
 	int coinbase_len_posthash, coinbase_len_prehash;
-	int i, cutoff = 0, count = 0;
+	int i, count = 0;
 
 	applog(LOG_DEBUG, "%s-%d: New stratum: restart: %d, update: %d",
 	       avalon4->drv->name, avalon4->device_id,
@@ -2337,10 +2337,9 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 /* format: freq[-addr[-miner[-chip]]] add4[0, 63], miner[1, miner_count], chip[1, asic_count] */
 char *set_avalon4_device_freq(struct cgpu_info *avalon4, char *arg)
 {
+	int val[3], addr = 0, miner_id = 0, chip_id = 0, i;
 	struct avalon4_info *info = avalon4->device_data;
 	char *colon1, *colon2, *param = arg;
-	int val[3], addr = 0, i;
-	uint32_t miner_id = 0, chip_id = 0;
 
 	if (!(*arg))
 		return NULL;
