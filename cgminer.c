@@ -4593,7 +4593,7 @@ static void signal_work_update(void)
 	rd_unlock(&mining_thr_lock);
 }
 
-static void set_curblock(char *hexstr, unsigned char *bedata)
+static void set_curblock(const char *hexstr, const unsigned char *bedata)
 {
 	int ofs;
 
@@ -4612,20 +4612,6 @@ static void set_curblock(char *hexstr, unsigned char *bedata)
 	prev_block[8] = '\0';
 
 	applog(LOG_INFO, "New block: %s... diff %s", current_hash, block_diff);
-}
-
-/* Search to see if this string is from a block that has been seen before */
-static bool block_exists(char *hexstr)
-{
-	struct block *s;
-
-	rd_lock(&blk_lock);
-	HASH_FIND_STR(blocks, hexstr, s);
-	rd_unlock(&blk_lock);
-
-	if (s)
-		return true;
-	return false;
 }
 
 static int block_sort(struct block *blocka, struct block *blockb)
@@ -4647,6 +4633,50 @@ static void set_blockdiff(const struct work *work)
 		current_diff = ddiff;
 		applog(LOG_NOTICE, "Network diff set to %s", block_diff);
 	}
+}
+
+/* Search to see if this string is from a block that has been seen before */
+static bool block_exists(const char *hexstr, const unsigned char *bedata, const struct work *work)
+{
+	int deleted_block = 0;
+	struct block *s;
+	bool ret = true;
+
+	wr_lock(&blk_lock);
+	HASH_FIND_STR(blocks, hexstr, s);
+	if (!s) {
+		s = cgcalloc(sizeof(struct block), 1);
+		if (unlikely(!s))
+			quit (1, "block_exists OOM");
+		strcpy(s->hash, hexstr);
+		s->block_no = new_blocks++;
+
+		ret = false;
+		/* Only keep the last hour's worth of blocks in memory since
+		 * work from blocks before this is virtually impossible and we
+		 * want to prevent memory usage from continually rising */
+		if (HASH_COUNT(blocks) > 6) {
+			struct block *oldblock;
+
+			HASH_SORT(blocks, block_sort);
+			oldblock = blocks;
+			deleted_block = oldblock->block_no;
+			HASH_DEL(blocks, oldblock);
+			free(oldblock);
+		}
+		HASH_ADD_STR(blocks, hash, s);
+		set_blockdiff(work);
+		if (deleted_block)
+			applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
+	}
+	wr_unlock(&blk_lock);
+
+	if (!ret)
+		set_curblock(hexstr, bedata);
+	if (deleted_block)
+		applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
+
+	return ret;
 }
 
 static bool test_work_current(struct work *work)
@@ -4674,35 +4704,7 @@ static bool test_work_current(struct work *work)
 
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
-	if (!block_exists(hexstr)) {
-		struct block *s = cgcalloc(sizeof(struct block), 1);
-		int deleted_block = 0;
-
-		if (unlikely(!s))
-			quit (1, "test_work_current OOM");
-		strcpy(s->hash, hexstr);
-		s->block_no = new_blocks++;
-
-		wr_lock(&blk_lock);
-		/* Only keep the last hour's worth of blocks in memory since
-		 * work from blocks before this is virtually impossible and we
-		 * want to prevent memory usage from continually rising */
-		if (HASH_COUNT(blocks) > 6) {
-			struct block *oldblock;
-
-			HASH_SORT(blocks, block_sort);
-			oldblock = blocks;
-			deleted_block = oldblock->block_no;
-			HASH_DEL(blocks, oldblock);
-			free(oldblock);
-		}
-		HASH_ADD_STR(blocks, hash, s);
-		set_blockdiff(work);
-		wr_unlock(&blk_lock);
-
-		if (deleted_block)
-			applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
-		set_curblock(hexstr, bedata);
+	if (!block_exists(hexstr, bedata, work)) {
 		/* Copy the information to this pool's prev_block since it
 		 * knows the new block exists. */
 		cg_memcpy(pool->prev_block, bedata, 32);
