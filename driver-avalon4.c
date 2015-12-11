@@ -384,7 +384,7 @@ static uint32_t decode_voltage_ncp5392p(uint32_t v)
 static inline uint32_t adjust_fan(struct avalon4_info *info, int id)
 {
 	uint32_t pwm;
-	int t = info->temp[id];
+	int t = info->temp[id], diff, fandiff = opt_avalon4_fan_max - opt_avalon4_fan_min;
 
 	if (info->mod_type[id] == AVA4_TYPE_MM60) {
 		int t1, t2;
@@ -400,21 +400,17 @@ static inline uint32_t adjust_fan(struct avalon4_info *info, int id)
 		return pwm;
 	}
 
-	if (t > info->temp_target[id] + 4 || t > info->toverheat[id] - 3)
-		info->fan_pct[id] = opt_avalon4_fan_max;
-	else if (t > info->temp_target[id] + 2)
-		info->fan_pct[id] += 20;
-	else if (t > info->temp_target[id] + 1)
-		info->fan_pct[id] += 4;
-	else if (t < info->temp_target[id] - 1)
-		info->fan_pct[id] -= 4;
-	else if (t < info->temp_target[id] - 10)
-		info->fan_pct[id] = opt_avalon4_fan_min;
-
-	if (info->fan_pct[id] < opt_avalon4_fan_min)
-		info->fan_pct[id] = opt_avalon4_fan_min;
-	if (info->fan_pct[id] > opt_avalon4_fan_max)
-		info->fan_pct[id] = opt_avalon4_fan_max;
+	/* Scale fan% non linearly relatively to target temperature. It will
+	 * not try to keep the temperature at temp_target that accurately but
+	 * avoids temperature overshoot in both directions. */
+	diff = t - opt_avalon4_temp_target + 22;
+	if (diff > 32)
+		diff = 32;
+	else if (diff < 0)
+		diff = 0;
+	diff *= diff;
+	fandiff = fandiff * diff / 1024;
+	info->fan_pct[id] = opt_avalon4_fan_min + fandiff;
 
 	pwm = get_fan_pwm(info->fan_pct[id]);
 	if (info->cutoff[id])
@@ -1215,21 +1211,23 @@ static void detect_modules(struct cgpu_info *avalon4)
 			info->mod_type[i] = AVA4_TYPE_MM50;
 		}
 		if (!strncmp((char *)&(info->mm_version[i]), AVA4_MM60_PREFIXSTR, 2)) {
+			avalon4->drv->name = "AV6";
 			info->miner_count[i] = AVA4_MM60_MINER_CNT;
 			info->asic_count[i] = AVA4_MM60_ASIC_CNT;
 			if (opt_avalon4_autov)
 				applog(LOG_NOTICE, "%s-%d-%d: Module do not support autov",
 				       avalon4->drv->name, avalon4->device_id, i);
 			info->autov[i] = false;
+			/* These are both limited to safe levels by the input
+			 * mechanism in cgminer.c */
 			info->toverheat[i] = opt_avalon4_overheat;
-			if (info->toverheat[i] > AVA4_DEFAULT_TEMP_OVERHEAT)
-				info->toverheat[i] = AVA4_DEFAULT_TEMP_OVERHEAT;
-
+			if (opt_avalon4_temp_target > opt_avalon4_overheat - 15) {
+				opt_avalon4_temp_target = opt_avalon4_overheat - 15;
+				applog(LOG_WARNING, "%s-%d-%d: Decreasing avalon4 temp target to safe overheat headroom of %d",
+				       avalon4->drv->name, avalon4->device_id, i, opt_avalon4_temp_target);
+			}
 			info->temp_target[i] = opt_avalon4_temp_target;
-			if (info->temp_target[i] > AVA4_DEFAULT_TEMP_TARGET)
-				info->temp_target[i] = AVA4_DEFAULT_TEMP_TARGET;
 			info->mod_type[i] = AVA4_TYPE_MM60;
-			avalon4->drv->name = "AV6";
 		}
 		info->ntime_offset[i] = (opt_avalon4_ntime_offset > info->asic_count[i]) ? info->asic_count[i] : opt_avalon4_ntime_offset;
 		info->fan_pct[i] = AVA4_DEFAULT_FAN_START;
