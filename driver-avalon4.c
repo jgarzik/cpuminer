@@ -1513,16 +1513,6 @@ static void avalon4_set_freq(struct cgpu_info *avalon4, int addr, uint8_t miner_
 	uint8_t set = 0;
 	int i, j;
 
-	/* No optional frequencies were set, choose default frequencies */
-	for (i = 0; i < 3; i++) {
-		if (!info->set_frequency[i]) {
-			if (info->mod_type[addr] == AVA4_TYPE_MM60)
-				freq[i] = info->set_frequency[i] = AVA6_DEFAULT_FREQUENCY;
-			else
-				freq[i] = info->set_frequency[i] = AVA4_DEFAULT_FREQUENCY;
-		}
-	}
-
 	/* Note: 0 (miner_id and chip_id) is reserved for all devices */
 	if (!miner_id || !chip_id) {
 		if (memcmp(freq, info->set_frequency, sizeof(int) * 3) || !info->get_frequency[addr]) {
@@ -1588,6 +1578,7 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 	struct avalon4_info *info = avalon4->device_data;
 	struct avalon4_pkg send_pkg;
 	uint32_t tmp = 0, range, start, volt;
+	int i;
 
 	/* Set the NTime, Voltage and Frequency */
 	memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
@@ -1616,6 +1607,16 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 		tmp = encode_voltage_ncp5392p(volt);
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + 4, &tmp, 4);
+
+	/* No optional frequencies were set, choose default frequencies */
+	for (i = 0; i < 3; i++) {
+		if (!info->set_frequency[i]) {
+			if (info->mod_type[addr] == AVA4_TYPE_MM60)
+				info->set_frequency[i] = AVA6_DEFAULT_FREQUENCY;
+			else
+				info->set_frequency[i] = AVA4_DEFAULT_FREQUENCY;
+		}
+	}
 
 	tmp = info->set_frequency[0] | (info->set_frequency[1] << 10) | (info->set_frequency[2] << 20);
 	if (avalon4_freezsafemode)
