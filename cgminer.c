@@ -81,6 +81,10 @@ char *curly = ":D";
 #include "driver-avalon4.h"
 #endif
 
+#ifdef USE_AVALON_MINER
+#include "driver-avalon-miner.h"
+#endif
+
 #ifdef USE_BFLSC
 #include "driver-bflsc.h"
 #endif
@@ -243,6 +247,10 @@ static char *opt_set_avalon2_voltage;
 static char *opt_set_avalon4_fan;
 static char *opt_set_avalon4_voltage;
 static char *opt_set_avalon4_freq;
+#endif
+#ifdef USE_AVALON_MINER
+static char *opt_set_avalonm_voltage;
+static char *opt_set_avalonm_freq;
 #endif
 #ifdef USE_BLOCKERUPTER
 int opt_bet_clk = 0;
@@ -780,6 +788,11 @@ static char *set_int_0_to_255(const char *arg, int *i)
         return set_int_range(arg, i, 0, 255);
 }
 
+static char *set_int_1_to_255(const char *arg, int *i)
+{
+        return set_int_range(arg, i, 1, 255);
+}
+
 static char *set_int_0_to_200(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 0, 200);
@@ -790,14 +803,14 @@ static char *set_int_32_to_63(const char *arg, int *i)
 	return set_int_range(arg, i, 32, 63);
 }
 
-static char *set_int_22_to_55(const char *arg, int *i)
+static char *set_int_22_to_75(const char *arg, int *i)
 {
-	return set_int_range(arg, i, 22, 55);
+	return set_int_range(arg, i, 22, 75);
 }
 
-static char *set_int_42_to_65(const char *arg, int *i)
+static char *set_int_42_to_85(const char *arg, int *i)
 {
-	return set_int_range(arg, i, 42, 62);
+	return set_int_range(arg, i, 42, 85);
 }
 
 static char *set_int_1_to_10(const char *arg, int *i)
@@ -1230,10 +1243,10 @@ static struct opt_table opt_config_table[] = {
 		     set_avalon4_fan, NULL, &opt_set_avalon4_fan,
 		     "Set Avalon4 target fan speed range"),
 	OPT_WITH_ARG("--avalon4-temp",
-		     set_int_22_to_55, opt_show_intval, &opt_avalon4_temp_target,
+		     set_int_22_to_75, opt_show_intval, &opt_avalon4_temp_target,
 		     "Set Avalon4 target temperature"),
 	OPT_WITH_ARG("--avalon4-cutoff",
-		     set_int_42_to_65, opt_show_intval, &opt_avalon4_overheat,
+		     set_int_42_to_85, opt_show_intval, &opt_avalon4_overheat,
 		     "Set Avalon4 overheat cut off temperature"),
 	OPT_WITH_ARG("--avalon4-polling-delay",
 		     set_int_1_to_65535, opt_show_intval, &opt_avalon4_polling_delay,
@@ -1247,6 +1260,50 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalon4-aucxdelay",
 		     opt_set_intval, opt_show_intval, &opt_avalon4_aucxdelay,
 		     "Set Avalon4 AUC IIC xfer read delay, 4800 ~= 1ms"),
+	OPT_WITH_ARG("--avalon4-miningmode",
+		     opt_set_intval, opt_show_intval, &opt_avalon4_miningmode,
+		     "Set Avalon4 mining mode(0:custom, 1:eco, 2:normal, 3:turbo"),
+	OPT_WITHOUT_ARG("--avalon4-freezesafe",
+			opt_set_bool, &opt_avalon4_freezesafe,
+			"Make Avalon4 running as a radiator when stratum server failed"),
+	OPT_WITH_ARG("--avalon4-ntcb",
+		     opt_set_intval, opt_show_intval, &opt_avalon4_ntcb,
+		     "Set Avalon4 MM NTC B value"),
+	OPT_WITH_ARG("--avalon4-freq-min",
+		     opt_set_intval, opt_show_intval, &opt_avalon4_freq_min,
+		     "Set minimum frequency for Avalon4"),
+	OPT_WITH_ARG("--avalon4-freq-max",
+		     opt_set_intval, opt_show_intval, &opt_avalon4_freq_max,
+		     "Set maximum frequency for Avalon4"),
+	OPT_WITHOUT_ARG("--avalon4-noncecheck-off",
+			opt_set_invbool, &opt_avalon4_noncecheck,
+			"Disable MM noncheck"),
+	OPT_WITHOUT_ARG("--avalon4-smart-speed-off",
+			opt_set_invbool, &opt_avalon4_smart_speed,
+			"Disable Smart Speed"),
+	OPT_WITH_ARG("--avalon4-speed-bingo",
+		     set_int_1_to_255, opt_show_intval, &opt_avalon4_speed_bingo,
+		     "Set Avalon4 speed bingo"),
+	OPT_WITH_ARG("--avalon4-speed-error",
+		     set_int_1_to_255, opt_show_intval, &opt_avalon4_speed_error,
+		     "Set Avalon4 speed error"),
+#endif
+#ifdef USE_AVALON_MINER
+	OPT_WITH_CBARG("--avalonm-voltage",
+		     set_avalonm_voltage, NULL, &opt_set_avalonm_voltage,
+		     "Set Avalon miner core voltage, in millivolts, step: 125"),
+	OPT_WITH_CBARG("--avalonm-freq",
+		     set_avalonm_freq, NULL, &opt_set_avalonm_freq,
+		     "Set frequency for Avalon miner, 1 to 3 values, example: 275:250:200"),
+	OPT_WITH_ARG("--avalonm-ntime-offset",
+		     opt_set_intval, opt_show_intval, &opt_avalonm_ntime_offset,
+		     "Set Avalon miner ntime rolling max offset, range 0-4"),
+	OPT_WITH_ARG("--avalonm-spispeed",
+		     opt_set_intval, opt_show_intval, &opt_avalonm_spispeed,
+		     "Set spi speed for Avalon miner"),
+	OPT_WITHOUT_ARG("--avalonm-automatic-freq",
+			opt_set_bool, &opt_avalonm_autof,
+			"Automatic adjust frequency base on chip HW"),
 #endif
 #ifdef USE_BAB
 	OPT_WITH_ARG("--bab-options",
@@ -1872,6 +1929,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_AVALON4
 		"avalon4 "
+#endif
+#ifdef USE_AVALON_MINER
+		"avalon miner"
 #endif
 #ifdef USE_BFLSC
 		"bflsc "
@@ -4986,11 +5046,12 @@ void write_config(FILE *fcfg)
 			     (void *)opt->cb_arg == (void *)set_int_1_to_10 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_100 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_255 ||
+			     (void *)opt->cb_arg == (void *)set_int_1_to_255 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_200 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_4 ||
 			     (void *)opt->cb_arg == (void *)set_int_32_to_63 ||
-			     (void *)opt->cb_arg == (void *)set_int_22_to_55 ||
-			     (void *)opt->cb_arg == (void *)set_int_42_to_65)) {
+			     (void *)opt->cb_arg == (void *)set_int_22_to_75 ||
+			     (void *)opt->cb_arg == (void *)set_int_42_to_85)) {
 				fprintf(fcfg, ",\n\"%s\" : \"%d\"", p+2, *(int *)opt->u.arg);
 				continue;
 			}
@@ -6776,7 +6837,7 @@ void set_target(unsigned char *dest_target, double diff)
 	cg_memcpy(dest_target, target, 32);
 }
 
-#if defined (USE_AVALON2) || defined (USE_AVALON4) || defined (USE_HASHRATIO)
+#if defined (USE_AVALON2) || defined (USE_AVALON4) || defined (USE_AVALON_MINER) || defined (USE_HASHRATIO)
 bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool,
 			 uint32_t nonce2, uint32_t nonce,  uint32_t ntime)
 {
@@ -7628,6 +7689,19 @@ struct work *find_queued_work_byid(struct cgpu_info *cgpu, uint32_t id)
 
 	rd_lock(&cgpu->qlock);
 	ret = __find_work_byid(cgpu->queued_work, id);
+	rd_unlock(&cgpu->qlock);
+
+	return ret;
+}
+
+struct work *clone_queued_work_byid(struct cgpu_info *cgpu, uint32_t id)
+{
+	struct work *work, *ret = NULL;
+
+	rd_lock(&cgpu->qlock);
+	work = __find_work_byid(cgpu->queued_work, id);
+	if (work)
+		ret = copy_work(work);
 	rd_unlock(&cgpu->qlock);
 
 	return ret;

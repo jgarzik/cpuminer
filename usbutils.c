@@ -70,6 +70,7 @@ static cgtimer_t usb11_cgt;
 #define MODMINER_TIMEOUT_MS 999
 #define AVALON_TIMEOUT_MS 999
 #define AVALON4_TIMEOUT_MS 999
+#define AVALONM_TIMEOUT_MS 999
 #define KLONDIKE_TIMEOUT_MS 999
 #define COINTERRA_TIMEOUT_MS 999
 #define HASHFAST_TIMEOUT_MS 999
@@ -86,6 +87,7 @@ static cgtimer_t usb11_cgt;
 #define MODMINER_TIMEOUT_MS 100
 #define AVALON_TIMEOUT_MS 200
 #define AVALON4_TIMEOUT_MS 200
+#define AVALONM_TIMEOUT_MS 300
 #define KLONDIKE_TIMEOUT_MS 200
 #define COINTERRA_TIMEOUT_MS 200
 #define HASHFAST_TIMEOUT_MS 500
@@ -287,7 +289,24 @@ static struct usb_intinfo ava4_ints[] = {
 	USB_EPS(1, ava4_epinfos)
 };
 #endif
+#ifdef USE_AVALON_MINER
+static struct usb_epinfo avam_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	40,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	40,	EPO(1), 0, 0 }
+};
 
+static struct usb_intinfo avam_ints[] = {
+	USB_EPS(1, avam_epinfos)
+};
+static struct usb_epinfo av3u_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	40,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	40,	EPO(1), 0, 0 }
+};
+
+static struct usb_intinfo av3u_ints[] = {
+	USB_EPS(0, av3u_epinfos)
+};
+#endif
 #ifdef USE_KLONDIKE
 static struct usb_epinfo kln_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
@@ -661,6 +680,33 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = AVALON4_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
 		INTINFO(ava4_ints) },
+#endif
+#ifdef USE_AVALON_MINER
+	{
+		.drv = DRIVER_avalonm,
+		.name = "AV4M",
+		.ident = IDENT_AVM,
+		.idVendor = 0x29f1,
+		.idProduct = 0x40f1,
+		.iManufacturer = "CANAAN",
+		.iProduct = "Avalon4 mini",
+		.config = 1,
+		.timeout = AVALONM_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		INTINFO(avam_ints) },
+	{
+		.drv = DRIVER_avalonm,
+		.name = "AV3U",
+		.ident = IDENT_AVM,
+		.idVendor = 0x29f1,
+		.idProduct = 0x33f3,
+		.iManufacturer = "CANAAN",
+		.iProduct = "Avalon nano",
+		.config = 1,
+		.timeout = AVALONM_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		INTINFO(av3u_ints) },
+
 #endif
 #ifdef USE_HASHFAST
 	{
@@ -3706,6 +3752,7 @@ void usb_cleanup(void)
 			case DRIVER_avalon:
 			case DRIVER_avalon2:
 			case DRIVER_avalon4:
+			case DRIVER_avalonm:
 			case DRIVER_klondike:
 			case DRIVER_hashfast:
 				DEVWLOCK(cgpu, pstate);

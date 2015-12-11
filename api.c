@@ -31,7 +31,7 @@
 	defined(USE_KNC) || defined(USE_BAB) || defined(USE_DRILLBIT) || \
 	defined(USE_MINION) || defined(USE_COINTERRA) || defined(USE_BITMINE_A1) || \
 	defined(USE_ANT_S1) || defined(USE_ANT_S2) || defined(USE_ANT_S3) || defined(USE_SP10) || \
-	defined(USE_SP30) || defined(USE_ICARUS) || defined(USE_HASHRATIO)
+	defined(USE_SP30) || defined(USE_ICARUS) || defined(USE_HASHRATIO) || defined(USE_AVALON_MINER)
 #define HAVE_AN_ASIC 1
 #endif
 
@@ -2486,6 +2486,7 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 	bool io_open = false;
 	char *status, *lp;
 	int i;
+	double sdiff0 = 0.0;
 
 	if (total_pools == 0) {
 		message(io_data, MSG_NOPOOL, 0, NULL, isjson);
@@ -2557,10 +2558,13 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		root = api_add_diff(root, "Work Difficulty", &(pool->cgminer_pool_stats.last_diff), false);
 		root = api_add_bool(root, "Has Stratum", &(pool->has_stratum), false);
 		root = api_add_bool(root, "Stratum Active", &(pool->stratum_active), false);
-		if (pool->stratum_active)
+		if (pool->stratum_active) {
 			root = api_add_escape(root, "Stratum URL", pool->stratum_url, false);
-		else
+			root = api_add_diff(root, "Stratum Difficulty", &(pool->sdiff), false);
+		} else {
 			root = api_add_const(root, "Stratum URL", BLANK, false);
+			root = api_add_diff(root, "Stratum Difficulty", &(sdiff0), false);
+		}
 		root = api_add_bool(root, "Has GBT", &(pool->has_gbt), false);
 		root = api_add_uint64(root, "Best Share", &(pool->best_diff), true);
 		double rejp = (pool->diff_accepted + pool->diff_rejected + pool->diff_stale) ?
@@ -4447,7 +4451,7 @@ static void setup_ipaccess()
 				if (mask < 1 || (mask += ipv6 ? 0 : 96) > 128) {
 					applog(LOG_ERR, "API: ignored address with "
 							"invalid mask (%d) '%s'",
-							mask, original); 
+							mask, original);
 					goto popipo; // skip invalid/zero
 				}
 
@@ -4471,7 +4475,7 @@ static void setup_ipaccess()
 				if (INET_PTON(AF_INET6, ptr, &(ipaccess[ips].ip)) != 1) {
 					applog(LOG_ERR, "API: ignored invalid "
 							"IPv6 address '%s'",
-							original); 
+							original);
 					goto popipo;
 				}
 			}
@@ -4506,7 +4510,7 @@ static void setup_ipaccess()
 				if (INET_PTON(AF_INET6, tmp, &(ipaccess[ips].ip)) != 1) {
 					applog(LOG_ERR, "API: ignored invalid "
 							"IPv4 address '%s' (as %s)",
-							original, tmp); 
+							original, tmp);
 					goto popipo;
 				}
 			}

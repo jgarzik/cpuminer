@@ -208,6 +208,16 @@ if test "x$avalon4" = xyes; then
 fi
 AM_CONDITIONAL([HAS_AVALON4], [test x$avalon4 = xyes])
 
+avalon_miner="no"
+
+AC_ARG_ENABLE([avalon_miner],
+	[AC_HELP_STRING([--enable-avalon-miner],[Compile support for Avalon miner(default disabled)])],
+	[avalon_miner=$enableval]
+	)
+if test "x$avalon_miner" = xyes; then
+	AC_DEFINE([USE_AVALON_MINER], [1], [Defined to 1 if Avalon miner support is wanted])
+fi
+AM_CONDITIONAL([HAS_AVALON_MINER], [test x$avalon_miner = xyes])
 
 bab="no"
 
@@ -473,7 +483,7 @@ fi
 
 
 #Add a new device to this list if it needs libusb, along with a no on the end.
-if test x$avalon$avalon2$avalon4$bitforce$bitfury$blockerupter$modminer$bflsc$icarus$hashfast$hashratio$klondike$drillbit$cointerra$ants1$ants3 != xnononononononononononononononono; then
+if test x$avalon$avalon2$avalon4$avalon_miner$bitforce$bitfury$blockerupter$modminer$bflsc$icarus$hashfast$hashratio$klondike$drillbit$cointerra$ants1$ants3 != xnonononononononononononononononono; then
 	want_usbutils=true
 else
 	want_usbutils=false
@@ -485,7 +495,7 @@ else
 	want_libbitfury=false
 fi
 
-if test x$avalon2$avalon4$hashratio != xnonono; then
+if test x$avalon2$avalon4$avalon_miner$hashratio != xnononono; then
 	want_crc16=true
 else
 	want_crc16=false
@@ -747,6 +757,12 @@ else
 	echo "  Avalon4.ASICs........: Disabled"
 fi
 
+if test "x$avalon_miner" = xyes; then
+	echo "  Avalon miner.ASICs...: Enabled"
+else
+	echo "  Avalon miner.ASICs...: Disabled"
+fi
+
 if test "x$minion" = xyes; then
 	echo "  BlackArrowMinion.ASIC: Enabled"
 else
@@ -852,7 +868,7 @@ else
 fi
 
 #Add any new device to this, along with a no on the end of the test
-if test "x$avalon$avalon2$avalon4$bab$bflsc$bitforce$bitfury$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$ants3$sp10$sp30" = xnonononononononononononononononononononononono; then
+if test "x$avalon$avalon2$avalon4$avalon_miner$bab$bflsc$bitforce$bitfury$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$ants3$sp10$sp30" = xnononononononononononononononononononononononono; then
 	echo
 	AC_MSG_ERROR([No mining devices configured in])
 	echo
