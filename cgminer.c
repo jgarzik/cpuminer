@@ -8913,10 +8913,16 @@ static void noop_hash_work(struct thr_info __maybe_unused *thr)
 {
 }
 
+static void generic_zero_stats(struct cgpu_info *cgpu)
+{
+	cgpu->diff_accepted =
+	cgpu->diff_rejected =
+	cgpu->hw_errors = 0;
+}
+
 #define noop_flush_work noop_reinit_device
 #define noop_update_work noop_reinit_device
 #define noop_queue_full noop_get_stats
-#define noop_zero_stats noop_reinit_device
 #define noop_identify_device noop_reinit_device
 
 /* Fill missing driver drv functions with noops */
@@ -8955,7 +8961,7 @@ void fill_device_drv(struct device_drv *drv)
 	if (!drv->queue_full)
 		drv->queue_full = &noop_queue_full;
 	if (!drv->zero_stats)
-		drv->zero_stats = &noop_zero_stats;
+		drv->zero_stats = &generic_zero_stats;
 	/* If drivers support internal diff they should set a max_diff or
 	 * we will assume they don't and set max to 1. */
 	if (!drv->max_diff)
@@ -8985,7 +8991,7 @@ void null_device_drv(struct device_drv *drv)
 	drv->thread_shutdown = &noop_thread_shutdown;
 	drv->thread_enable = &noop_thread_enable;
 
-	drv->zero_stats = &noop_zero_stats;
+	drv->zero_stats = &generic_zero_stats;
 
 	drv->hash_work = &noop_hash_work;
 
@@ -8993,7 +8999,6 @@ void null_device_drv(struct device_drv *drv)
 	drv->flush_work = &noop_flush_work;
 	drv->update_work = &noop_update_work;
 
-	drv->zero_stats = &noop_zero_stats;
 	drv->max_diff = 1;
 	drv->min_diff = 1;
 }
