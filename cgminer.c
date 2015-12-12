@@ -4762,6 +4762,13 @@ static bool test_work_current(struct work *work)
 		height--;
 	}
 
+	cg_wlock(&pool->data_lock);
+	if (pool->swork.clean) {
+		pool->swork.clean = false;
+		work->longpoll = true;
+	}
+	cg_wunlock(&pool->data_lock);
+
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
 	if (!block_exists(hexstr, bedata, work)) {
@@ -4774,13 +4781,6 @@ static bool test_work_current(struct work *work)
 		}
 
 		work->work_block = ++work_block;
-
-		cg_wlock(&pool->data_lock);
-		if (pool->swork.clean) {
-			pool->swork.clean = false;
-			work->longpoll = true;
-		}
-		cg_wunlock(&pool->data_lock);
 
 		if (work->longpoll) {
 			if (work->stratum) {
