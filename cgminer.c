@@ -793,6 +793,11 @@ static char *set_int_1_to_255(const char *arg, int *i)
         return set_int_range(arg, i, 1, 255);
 }
 
+static char *set_int_0_to_7680(const char *arg, int *i)
+{
+        return set_int_range(arg, i, 0, 7680);
+}
+
 static char *set_int_0_to_200(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 0, 200);
@@ -1287,6 +1292,12 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalon4-speed-error",
 		     set_int_1_to_255, opt_show_intval, &opt_avalon4_speed_error,
 		     "Set A3218 speed error for smart speed"),
+	OPT_WITH_ARG("--avalon4-least-pll",
+		     set_int_0_to_7680, opt_show_intval, &opt_avalon4_least_pll_check,
+		     "Set Avalon4 least pll check threshold"),
+	OPT_WITH_ARG("--avalon4-most-pll",
+		     set_int_0_to_7680, opt_show_intval, &opt_avalon4_most_pll_check,
+		     "Set Avalon4 most pll check threshold"),
 #endif
 #ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",
@@ -5049,6 +5060,7 @@ void write_config(FILE *fcfg)
 			     (void *)opt->cb_arg == (void *)set_int_0_to_100 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_255 ||
 			     (void *)opt->cb_arg == (void *)set_int_1_to_255 ||
+			     (void *)opt->cb_arg == (void *)set_int_0_to_7680 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_200 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_4 ||
 			     (void *)opt->cb_arg == (void *)set_int_32_to_63 ||
