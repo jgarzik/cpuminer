@@ -153,8 +153,8 @@
 #define AVA4_FREQ_PLLADJ_MODE	0x3
 
 /* pll check range [0, 7680], 0 means turn off check */
-#define AVA4_DEFAULT_LEAST_PLL	0
-#define AVA4_DEFAULT_MOST_PLL	0
+#define AVA4_DEFAULT_LEAST_PLL	768
+#define AVA4_DEFAULT_MOST_PLL	256
 
 #define AVA4_DEFAULT_FDEC_TIME	60.0
 #define AVA4_DEFAULT_FINC_TIME	1200.0
