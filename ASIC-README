@@ -48,7 +48,9 @@ Avalon2/3 will come up as AV2.
 
 Avalon2/3 devices need the --enable-avalon2 option when compiling cgminer.
 
-Avalon4/4.1/6 will come up as AV4, Please use the MM version to distinguish.
+Avalon4/4.1 will come up as AV4, Please use the MM version to distinguish.
+
+Avalon6 will come up as AV6.
 
 Avalon4/4.1/6 devies need the --enable-avalon4 option when compiling cgminer.
 
@@ -566,8 +568,10 @@ Avalon4 Devices
 --avalon4-ntcb <arg> Set Avalon4 MM NTC B value (default: 3450)
 --avalon4-freq-min <arg> Set minimum frequency for Avalon4 (default: 100)
 --avalon4-freq-max <arg> Set maximum frequency for Avalon4 (default: 1000)
---avalon4-noncecheck-off Disable MM noncheck
---avalon4-smart-speed-off Disable Smart Speed
+--avalon4-noncecheck-off Disable A3218 inside nonce check function
+--avalon4-smart-speed-off Disable A3218 smart speed funciton
+--avalon4-speed-bingo <arg> Set A3218 speed bingo for smart speed (default: 255)
+--avalon4-speed-error <arg> Set A3218 speed error for smart speed (default: 3)
 
 
 BFLSC Devices
