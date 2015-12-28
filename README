@@ -118,8 +118,8 @@ CGMiner specific configuration options:
   --enable-ants2          Compile support for Antminer S2 Bitmain (default
                           disabled)
   --enable-avalon         Compile support for Avalon (default disabled)
-  --enable-avalon2        Compile support for Avalon2 (default disabled)
-  --enable-avalon4        Compile support for Avalon4 (default disabled)
+  --enable-avalon2        Compile support for Avalon2/3 (default disabled)
+  --enable-avalon4        Compile support for Avalon4/4.1/6 (default disabled)
   --enable-bab            Compile support for BlackArrow Bitfury (default
                           disabled)
   --enable-bflsc          Compile support for BFL ASICs (default disabled)
@@ -218,6 +218,15 @@ Options for both config file and command line:
 --avalon4-ntime-offset <arg> Set Avalon4 MM ntime rolling max offset (default: 4)
 --avalon4-aucspeed <arg> Set Avalon4 AUC IIC bus speed (default: 400000)
 --avalon4-aucxdelay <arg> Set Avalon4 AUC IIC xfer read delay, 4800 ~= 1ms (default: 9600)
+--avalon4-miningmode <arg> Set Avalon4 mining mode(0:custom, 1:eco, 2:normal, 3:turbo (default: 0)
+--avalon4-freezesafe Make Avalon4 running as a radiator when stratum server failed
+--avalon4-ntcb <arg> Set Avalon4 MM NTC B value (default: 3450)
+--avalon4-freq-min <arg> Set minimum frequency for Avalon4 (default: 100)
+--avalon4-freq-max <arg> Set maximum frequency for Avalon4 (default: 1000)
+--avalon4-noncecheck-off Disable A3218 inside nonce check function
+--avalon4-smart-speed-off Disable A3218 smart speed funciton
+--avalon4-speed-bingo <arg> Set A3218 speed bingo for smart speed (default: 255)
+--avalon4-speed-error <arg> Set A3218 speed error for smart speed (default: 3)
 --bab-options <arg> Set BaB options max:def:min:up:down:hz:delay:trf
 --balance           Change multipool strategy from failover to even share balance
 --benchfile <arg>   Run cgminer in benchmark mode using a work file - produces no shares
