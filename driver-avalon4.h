@@ -57,9 +57,14 @@
 #define AVA4_DEFAULT_ADJ_TIMES	6
 #define AVA4_DEFAULT_NTCB	3450
 #define AVA4_DEFAULT_NCHECK	true
-#define AVA4_DEFAULT_SMART_SPEED	true
 #define AVA4_DEFAULT_SPEED_BINGO	255
 #define AVA4_DEFAULT_SPEED_ERROR	3
+
+#define AVA4_DEFAULT_SMARTSPEED_OFF 0
+#define AVA4_DEFAULT_SMARTSPEED_MODE1 1
+#define AVA4_DEFAULT_SMARTSPEED_MODE2 2
+#define AVA4_DEFAULT_SMARTSPEED_MODE3 3
+#define AVA4_DEFAULT_SMART_SPEED	(AVA4_DEFAULT_SMARTSPEED_MODE2)
 
 #define AVA4_DH_INC	0.03
 #define AVA4_DH_DEC	0.002
@@ -158,6 +163,7 @@
 
 #define AVA4_DEFAULT_FDEC_TIME	60.0
 #define AVA4_DEFAULT_FINC_TIME	1200.0
+#define AVA4_DEFAULT_FAVG_TIME	(15 * 60.0)
 
 struct avalon4_pkg {
 	uint8_t head[2];
@@ -234,6 +240,7 @@ struct avalon4_info {
 	struct timeval last_5s;
 	struct timeval last_finc[AVA4_DEFAULT_MODULARS];
 	struct timeval last_fdec[AVA4_DEFAULT_MODULARS];
+	struct timeval last_favg[AVA4_DEFAULT_MODULARS];
 
 	int matching_work[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINER_MAX];
 	int chipmatching_work[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINER_MAX][AVA4_DEFAULT_ASIC_MAX];
@@ -285,7 +292,7 @@ extern int opt_avalon4_ntcb;
 extern int opt_avalon4_freq_min;
 extern int opt_avalon4_freq_max;
 extern bool opt_avalon4_noncecheck;
-extern bool opt_avalon4_smart_speed;
+extern int opt_avalon4_smart_speed;
 extern int opt_avalon4_speed_bingo;
 extern int opt_avalon4_speed_error;
 extern int opt_avalon4_least_pll_check;
