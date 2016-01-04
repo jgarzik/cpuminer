@@ -1915,7 +1915,11 @@ static void avalon4_update(struct cgpu_info *avalon4)
 								(device_tdiff < 0)) {
 							copy_time(&info->last_favg[i], &current);
 							tmp = (info->get_frequency[i] / 96);
-							tmp = (uint32_t)ceil(tmp / 25.0) * 25;
+							tmp = (uint32_t)ceil(tmp / 25.0) * 25 + 25;
+							if (tmp < AVA4_DEFAULT_FREQUENCY_MIN)
+								tmp = AVA4_DEFAULT_FREQUENCY_MIN;
+							if (tmp > AVA4_MM60_FREQUENCY_MAX)
+								tmp = AVA4_MM60_FREQUENCY_MAX;
 							info->set_smart_frequency[i][0] = info->set_smart_frequency[i][1] = info->set_smart_frequency[i][2] = tmp;
 						}
 					}
