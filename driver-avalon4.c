@@ -1980,7 +1980,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	device_tdiff = tdiff(&current, &(info->last_5s));
 	if (device_tdiff >= 5.0 || device_tdiff < 0) {
 		copy_time(&info->last_5s, &current);
-		if (info->i_5s++ >= AVA4_DEFAULT_ADJ_TIMES)
+		if (++info->i_5s >= AVA4_DEFAULT_ADJ_TIMES)
 			info->i_5s = 0;
 
 		for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
