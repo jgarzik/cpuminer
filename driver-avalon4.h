@@ -209,6 +209,7 @@ struct avalon4_info {
 	bool enable[AVA4_DEFAULT_MODULARS];
 
 	struct timeval elapsed[AVA4_DEFAULT_MODULARS];
+	struct timeval firsthash;
 	char mm_version[AVA4_DEFAULT_MODULARS][AVA4_MM_VER_LEN + 1];
 	uint8_t mm_dna[AVA4_DEFAULT_MODULARS][AVA4_MM_DNA_LEN + 1];
 	int get_voltage[AVA4_DEFAULT_MODULARS];

@@ -1106,6 +1106,7 @@ static bool avalon4_prepare(struct thr_info *thr)
 
 	info->polling_first = 1;
 
+	memset(&(info->firsthash), 0, sizeof(info->firsthash));
 	cgtime(&(info->last_fan));
 	cgtime(&(info->last_30s));
 	cgtime(&(info->last_5s));
@@ -2122,6 +2123,12 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 			}
 		}
 	}
+
+	if (h && !info->firsthash.tv_sec) {
+		cgtime(&info->firsthash);
+		copy_time(&(avalon4->dev_start_tv), &(info->firsthash));
+	}
+
 	return h * 0xffffffffull;
 }
 
