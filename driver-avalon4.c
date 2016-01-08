@@ -1140,6 +1140,22 @@ static bool avalon4_prepare(struct thr_info *thr)
 	return true;
 }
 
+static int check_module_exits(struct cgpu_info *avalon4, uint8_t mm_dna[AVA4_MM_DNA_LEN + 1])
+{
+	struct avalon4_info *info = avalon4->device_data;
+	int i;
+
+	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+		if (info->enable[i]) {
+			/* last byte is \0 */
+			if (!memcmp(info->mm_dna[i], mm_dna, AVA4_MM_DNA_LEN))
+				return 1;
+		}
+	}
+
+	return 0;
+}
+
 static void detect_modules(struct cgpu_info *avalon4)
 {
 	struct avalon4_info *info = avalon4->device_data;
@@ -1187,6 +1203,9 @@ static void detect_modules(struct cgpu_info *avalon4)
 		       avalon4->drv->name, avalon4->device_id, i, ret_pkg.type);
 		if (ret_pkg.type != AVA4_P_ACKDETECT)
 			break;
+
+		if (check_module_exits(avalon4, ret_pkg.data))
+			continue;
 
 		cgtime(&info->elapsed[i]);
 		cgtime(&info->last_finc[i]);
