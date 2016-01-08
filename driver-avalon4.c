@@ -1775,7 +1775,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	struct work *work;
 	struct pool *pool;
 	int coinbase_len_posthash, coinbase_len_prehash;
-	int i, count = 0;
+	int i;
 	struct timeval current;
 	double device_tdiff;
 	uint32_t tmp;
@@ -1834,8 +1834,6 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
 		if (!info->enable[i])
 			continue;
-
-		count++;
 
 		if (get_temp_max(info, i) >= info->toverheat[i] || thr->pause)
 			info->cutoff[i] = 1;
@@ -1957,7 +1955,6 @@ static void avalon4_update(struct cgpu_info *avalon4)
 			avalon4_adjust_vf(avalon4, i, 0);
 		}
 	}
-	info->mm_count = count;
 
 	/* Step 6: Send out finish pkg */
 	avalon4_stratum_finish(avalon4);
@@ -1971,7 +1968,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	double device_tdiff, hwp;
 	uint32_t a = 0, b = 0;
 	int64_t h;
-	int i, j, k;
+	int i, j, k, count = 0;
 
 	if (unlikely(avalon4->usbinfo.nodev)) {
 		applog(LOG_ERR, "%s-%d: Device disappeared, shutting down thread",
@@ -2128,20 +2125,24 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 		}
 	}
 
-	/* Step 4: Calculate hash */
+	/* Step 4: Calculate mm count and hash */
 	h = 0;
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
-		if (info->enable[i] && (info->local_work[i] > info->hw_work[i])) {
-			if (info->mod_type[i] == AVA4_TYPE_MM60) {
-				h += avalon4->diff1 - info->newnonce;
-				info->newnonce = avalon4->diff1;
-			} else {
-				h += (info->local_work[i] - info->hw_work[i]);
-				info->local_work[i] = 0;
-				info->hw_work[i] = 0;
+		if (info->enable[i]) {
+			count++;
+			if (info->local_work[i] > info->hw_work[i]) {
+				if (info->mod_type[i] == AVA4_TYPE_MM60) {
+					h += avalon4->diff1 - info->newnonce;
+					info->newnonce = avalon4->diff1;
+				} else {
+					h += (info->local_work[i] - info->hw_work[i]);
+					info->local_work[i] = 0;
+					info->hw_work[i] = 0;
+				}
 			}
 		}
 	}
+	info->mm_count = count;
 
 	if (h && !info->firsthash.tv_sec) {
 		cgtime(&info->firsthash);
