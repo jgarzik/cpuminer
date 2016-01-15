@@ -1366,14 +1366,18 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 		avalon4_init_pkg(&send_pkg, AVA4_P_POLLING, 1, 1);
 		ret = avalon4_iic_xfer_pkg(avalon4, i, &send_pkg, &ar);
 		if (ret == AVA4_SEND_OK)
-			decode_err =  decode_pkg(thr, &ar, i);
+			decode_err = decode_pkg(thr, &ar, i);
 
 		if (ret != AVA4_SEND_OK || decode_err) {
 			info->polling_err_cnt[i]++;
 			memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
 			avalon4_init_pkg(&send_pkg, AVA4_P_RSTMMTX, 1, 1);
 			avalon4_iic_xfer_pkg(avalon4, i, &send_pkg, NULL);
-			if (info->polling_err_cnt[i] >= 4) {
+			if ((info->polling_err_cnt[i] >= 4) ||
+				(info->mm_dna[i][AVA4_MM_DNA_LEN - 1] != ar.opt)) {
+				if (info->mm_dna[i][AVA4_MM_DNA_LEN - 1] != ar.opt)
+					applog(LOG_ERR, "%s-%d-%d: Dup address found", avalon4->drv->name, avalon4->device_id, i);
+
 				info->polling_err_cnt[i] = 0;
 				info->mod_type[i] = AVA4_TYPE_NULL;
 				info->enable[i] = 0;
