@@ -1376,7 +1376,9 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 			if ((info->polling_err_cnt[i] >= 4) ||
 				(info->mm_dna[i][AVA4_MM_DNA_LEN - 1] != ar.opt)) {
 				if (info->mm_dna[i][AVA4_MM_DNA_LEN - 1] != ar.opt)
-					applog(LOG_ERR, "%s-%d-%d: Dup address found", avalon4->drv->name, avalon4->device_id, i);
+					applog(LOG_ERR, "%s-%d-%d: Dup address found %d-%d",
+							avalon4->drv->name, avalon4->device_id, i,
+							info->mm_dna[i][AVA4_MM_DNA_LEN - 1], ar.opt);
 
 				info->polling_err_cnt[i] = 0;
 				info->mod_type[i] = AVA4_TYPE_NULL;
