@@ -1321,11 +1321,56 @@ static void detect_modules(struct cgpu_info *avalon4)
 	}
 }
 
-static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalon4_info *info)
+static void detach_module(struct cgpu_info *avalon4, int addr)
 {
+	struct avalon4_info *info = avalon4->device_data;
+	int i, j;
+
+	info->polling_err_cnt[addr] = 0;
+	info->mod_type[addr] = AVA4_TYPE_NULL;
+	info->enable[addr] = 0;
+	info->get_voltage[addr] = 0;
+	info->get_frequency[addr] = 0;
+	info->power_good[addr] = 0;
+	info->error_code[addr] = 0;
+	info->local_work[addr] = 0;
+	info->local_works[addr] = 0;
+	info->hw_work[addr] = 0;
+	info->hw_works[addr] = 0;
+	info->total_asics[addr] = 0;
+	info->toverheat[addr] = opt_avalon4_overheat;
+	info->temp_target[addr] = opt_avalon4_temp_target;
+	info->speed_bingo[addr] = opt_avalon4_speed_bingo;
+	info->speed_error[addr] = opt_avalon4_speed_error;
+	memset(info->set_frequency, 0, sizeof(int) * 3);
+	for (i = 0; i < AVA4_DEFAULT_ADJ_TIMES; i++) {
+		info->lw5[addr][i] = 0;
+		info->hw5[addr][i] = 0;
+	}
+
+	for (i = 0; i < info->miner_count[addr]; i++) {
+		info->matching_work[addr][i] = 0;
+		memset(info->chipmatching_work[addr][i], 0, sizeof(int) * info->asic_count[addr]);
+		info->local_works_i[addr][i] = 0;
+		info->hw_works_i[addr][i] = 0;
+		memset(info->lw5_i[addr][i], 0, AVA4_DEFAULT_ADJ_TIMES * sizeof(uint32_t));
+		memset(info->hw5_i[addr][i], 0, AVA4_DEFAULT_ADJ_TIMES * sizeof(uint32_t));
+		memset(info->ma_sum[addr][i], 0, sizeof(uint8_t) * info->asic_count[addr]);
+		for (j = 0; j < info->asic_count[addr]; j++)
+			memset(info->set_frequency_i[addr][i][j], 0, sizeof(int) * 3);
+	}
+	info->freq_mode[addr] = AVA4_FREQ_INIT_MODE;
+	applog(LOG_NOTICE, "%s-%d: Module detached! ID[%d]",
+			avalon4->drv->name, avalon4->device_id, addr);
+}
+
+static int polling(struct cgpu_info *avalon4)
+{
+	struct avalon4_info *info = avalon4->device_data;
+	struct thr_info *thr = avalon4->thr[0];
 	struct avalon4_pkg send_pkg;
 	struct avalon4_ret ar;
-	int i, j, k, tmp, ret, decode_err = 0, do_polling = 0;
+	int i, tmp, ret, decode_err = 0, do_polling = 0;
 	struct timeval current_fan;
 	int do_adjust_fan = 0;
 	uint32_t fan_pwm;
@@ -1373,54 +1418,21 @@ static int polling(struct thr_info *thr, struct cgpu_info *avalon4, struct avalo
 			memset(send_pkg.data, 0, AVA4_P_DATA_LEN);
 			avalon4_init_pkg(&send_pkg, AVA4_P_RSTMMTX, 1, 1);
 			avalon4_iic_xfer_pkg(avalon4, i, &send_pkg, NULL);
-			if ((info->polling_err_cnt[i] >= 4) ||
-				(info->mm_dna[i][AVA4_MM_DNA_LEN - 1] != ar.opt)) {
-				if (info->mm_dna[i][AVA4_MM_DNA_LEN - 1] != ar.opt)
-					applog(LOG_ERR, "%s-%d-%d: Dup address found %d-%d",
-							avalon4->drv->name, avalon4->device_id, i,
-							info->mm_dna[i][AVA4_MM_DNA_LEN - 1], ar.opt);
-
-				info->polling_err_cnt[i] = 0;
-				info->mod_type[i] = AVA4_TYPE_NULL;
-				info->enable[i] = 0;
-				info->get_voltage[i] = 0;
-				info->get_frequency[i] = 0;
-				info->power_good[i] = 0;
-				info->error_code[i] = 0;
-				info->local_work[i] = 0;
-				info->local_works[i] = 0;
-				info->hw_work[i] = 0;
-				info->hw_works[i] = 0;
-				info->total_asics[i] = 0;
-				info->toverheat[i] = opt_avalon4_overheat;
-				info->temp_target[i] = opt_avalon4_temp_target;
-				info->speed_bingo[i] = opt_avalon4_speed_bingo;
-				info->speed_error[i] = opt_avalon4_speed_error;
-				memset(info->set_frequency, 0, sizeof(int) * 3);
-				for (j = 0; j < AVA4_DEFAULT_ADJ_TIMES; j++) {
-					info->lw5[i][j] = 0;
-					info->hw5[i][j] = 0;
-				}
-
-				for (j = 0; j < info->miner_count[i]; j++) {
-					info->matching_work[i][j] = 0;
-					memset(info->chipmatching_work[i][j], 0, sizeof(int) * info->asic_count[i]);
-					info->local_works_i[i][j] = 0;
-					info->hw_works_i[i][j] = 0;
-					memset(info->lw5_i[i][j], 0, AVA4_DEFAULT_ADJ_TIMES * sizeof(uint32_t));
-					memset(info->hw5_i[i][j], 0, AVA4_DEFAULT_ADJ_TIMES * sizeof(uint32_t));
-					memset(info->ma_sum[i][j], 0, sizeof(uint8_t) * info->asic_count[i]);
-					for (k = 0; k < info->asic_count[i]; k++)
-						memset(info->set_frequency_i[i][j][k], 0, sizeof(int) * 3);
-				}
-				info->freq_mode[i] = AVA4_FREQ_INIT_MODE;
-				applog(LOG_NOTICE, "%s-%d: Module detached! ID[%d]",
-				       avalon4->drv->name, avalon4->device_id, i);
-			}
+			if (info->polling_err_cnt[i] >= 4)
+				detach_module(avalon4, i);
 		}
 
-		if (ret == AVA4_SEND_OK && !decode_err)
+		if (ret == AVA4_SEND_OK && !decode_err) {
 			info->polling_err_cnt[i] = 0;
+
+			if (info->mm_dna[i][AVA4_MM_DNA_LEN - 1] != ar.opt) {
+				applog(LOG_ERR, "%s-%d-%d: Dup address found %d-%d",
+						avalon4->drv->name, avalon4->device_id, i,
+						info->mm_dna[i][AVA4_MM_DNA_LEN - 1], ar.opt);
+				hexdump((uint8_t *)&ar, sizeof(ar));
+				detach_module(avalon4, i);
+			}
+		}
 	}
 
 	if (!do_polling)
@@ -1995,7 +2007,7 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 
 	/* Step 2: Polling  */
 	cg_rlock(&info->update_lock);
-	polling(thr, avalon4, info);
+	polling(avalon4);
 	cg_runlock(&info->update_lock);
 
 	/* Step 3: Adjust voltage */
