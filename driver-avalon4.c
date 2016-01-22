@@ -1831,22 +1831,20 @@ static void avalon4_update(struct cgpu_info *avalon4)
 		return;
 	}
 
-	/* Step 3: Send out stratum pkgs */
 	cg_wlock(&info->update_lock);
-	cg_rlock(&pool->data_lock);
+	/* Step 3: Try to detect new modules */
+	detect_modules(avalon4);
 
+	/* Step 4: Send out stratum pkgs */
+	cg_rlock(&pool->data_lock);
 	cgtime(&info->last_stratum);
 	info->pool_no = pool->pool_no;
 	copy_pool_stratum(&info->pool2, &info->pool1);
 	copy_pool_stratum(&info->pool1, &info->pool0);
 	copy_pool_stratum(&info->pool0, pool);
+
 	avalon4_stratum_pkgs(avalon4, pool);
-
 	cg_runlock(&pool->data_lock);
-	cg_wunlock(&info->update_lock);
-
-	/* Step 4: Try to detect new modules */
-	detect_modules(avalon4);
 
 	/* Step 5: Configure the parameter from outside */
 	for (i = 1; i < AVA4_DEFAULT_MODULARS; i++) {
@@ -1976,6 +1974,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 
 	/* Step 6: Send out finish pkg */
 	avalon4_stratum_finish(avalon4);
+	cg_wunlock(&info->update_lock);
 }
 
 static int64_t avalon4_scanhash(struct thr_info *thr)
