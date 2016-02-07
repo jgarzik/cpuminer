@@ -1762,10 +1762,9 @@ static void avalon4_update(struct cgpu_info *avalon4)
 
 		count++;
 
-		if (get_temp_max(info, i) >= info->toverheat[i])
+		if (get_temp_max(info, i) >= info->toverheat[i] || thr->pause)
 			info->cutoff[i] = 1;
-
-		if (info->cutoff[i] && (get_temp_max(info, i) <= (info->toverheat[i] - 10)))
+		else if (info->cutoff[i] && (get_temp_max(info, i) <= (info->toverheat[i] - 10)))
 			info->cutoff[i] = 0;
 
 		if (info->cutoff[i])
