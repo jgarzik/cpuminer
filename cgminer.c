@@ -8483,7 +8483,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			snprintf(dev_str, sizeof(dev_str), "%s %d", cgpu->drv->name, cgpu->device_id);
 
 			/* Thread is waiting on getwork or disabled */
-			if (thr->getwork || *denable == DEV_DISABLED)
+			if (thr->getwork || *denable == DEV_DISABLED || thr->pause)
 				continue;
 
 			if (cgpu->status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME)) {
