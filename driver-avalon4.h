@@ -25,6 +25,7 @@
 #define AVA4_DEFAULT_TEMP_OVERHEAT	85
 #define AVA4_MM40_TEMP_TARGET	42
 #define AVA4_MM40_TEMP_OVERHEAT	65
+#define AVA4_MM60_TEMP_FREQADJ	75
 
 #define AVA4_DEFAULT_VOLTAGE_MIN	4000
 #define AVA4_DEFAULT_VOLTAGE_MAX	9000
@@ -33,6 +34,7 @@
 #define AVA4_DEFAULT_FREQUENCY_MIN	100
 #define AVA4_DEFAULT_FREQUENCY_MAX	1000
 #define AVA4_FREEZESAFE_FREQUENCY	100
+#define AVA4_MM60_FREQUENCY_MAX	500
 
 #define AVA4_DEFAULT_MODULARS	64
 #define AVA4_DEFAULT_MINER_MAX	10
@@ -55,9 +57,14 @@
 #define AVA4_DEFAULT_ADJ_TIMES	6
 #define AVA4_DEFAULT_NTCB	3450
 #define AVA4_DEFAULT_NCHECK	true
-#define AVA4_DEFAULT_SMART_SPEED	true
 #define AVA4_DEFAULT_SPEED_BINGO	255
 #define AVA4_DEFAULT_SPEED_ERROR	3
+
+#define AVA4_DEFAULT_SMARTSPEED_OFF 0
+#define AVA4_DEFAULT_SMARTSPEED_MODE1 1
+#define AVA4_DEFAULT_SMARTSPEED_MODE2 2
+#define AVA4_DEFAULT_SMARTSPEED_MODE3 3
+#define AVA4_DEFAULT_SMART_SPEED	(AVA4_DEFAULT_SMARTSPEED_MODE3)
 
 #define AVA4_DH_INC	0.03
 #define AVA4_DH_DEC	0.002
@@ -145,6 +152,19 @@
 #define AVA4_IIC_XFER		0xa5
 #define AVA4_IIC_INFO		0xa6
 
+#define AVA4_FREQ_INIT_MODE	0x0
+#define AVA4_FREQ_CUTOFF_MODE	0x1
+#define AVA4_FREQ_TEMPADJ_MODE	0x2
+#define AVA4_FREQ_PLLADJ_MODE	0x3
+
+/* pll check range [0, 7680], 0 means turn off check */
+#define AVA4_DEFAULT_LEAST_PLL	768
+#define AVA4_DEFAULT_MOST_PLL	256
+
+#define AVA4_DEFAULT_FDEC_TIME	60.0
+#define AVA4_DEFAULT_FINC_TIME	1200.0
+#define AVA4_DEFAULT_FAVG_TIME	(15 * 60.0)
+
 struct avalon4_pkg {
 	uint8_t head[2];
 	uint8_t type;
@@ -178,7 +198,8 @@ struct avalon4_info {
 
 	int mm_count;
 
-	uint32_t set_frequency[3];
+	unsigned int set_frequency[3];
+	unsigned int set_smart_frequency[AVA4_DEFAULT_MODULARS][3];
 	int set_frequency_i[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINER_MAX][AVA4_DEFAULT_ASIC_MAX][3];
 	int set_voltage[AVA4_DEFAULT_MODULARS];
 	uint16_t set_voltage_i[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINER_MAX];
@@ -188,6 +209,7 @@ struct avalon4_info {
 	bool enable[AVA4_DEFAULT_MODULARS];
 
 	struct timeval elapsed[AVA4_DEFAULT_MODULARS];
+	struct timeval firsthash;
 	char mm_version[AVA4_DEFAULT_MODULARS][AVA4_MM_VER_LEN + 1];
 	uint8_t mm_dna[AVA4_DEFAULT_MODULARS][AVA4_MM_DNA_LEN + 1];
 	int get_voltage[AVA4_DEFAULT_MODULARS];
@@ -217,6 +239,9 @@ struct avalon4_info {
 	int i_5s;
 	struct timeval last_30s;
 	struct timeval last_5s;
+	struct timeval last_finc[AVA4_DEFAULT_MODULARS];
+	struct timeval last_fdec[AVA4_DEFAULT_MODULARS];
+	struct timeval last_favg[AVA4_DEFAULT_MODULARS];
 
 	int matching_work[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINER_MAX];
 	int chipmatching_work[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINER_MAX][AVA4_DEFAULT_ASIC_MAX];
@@ -234,6 +259,7 @@ struct avalon4_info {
 	int temp_target[AVA4_DEFAULT_MODULARS];
 	uint8_t speed_bingo[AVA4_DEFAULT_MODULARS];
 	uint8_t speed_error[AVA4_DEFAULT_MODULARS];
+	uint32_t freq_mode[AVA4_DEFAULT_MODULARS];
 };
 
 struct avalon4_iic_info {
@@ -267,8 +293,10 @@ extern int opt_avalon4_ntcb;
 extern int opt_avalon4_freq_min;
 extern int opt_avalon4_freq_max;
 extern bool opt_avalon4_noncecheck;
-extern bool opt_avalon4_smart_speed;
+extern int opt_avalon4_smart_speed;
 extern int opt_avalon4_speed_bingo;
 extern int opt_avalon4_speed_error;
+extern int opt_avalon4_least_pll_check;
+extern int opt_avalon4_most_pll_check;
 #endif /* USE_AVALON4 */
 #endif	/* _AVALON4_H_ */

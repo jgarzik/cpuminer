@@ -273,9 +273,11 @@ ASIC SPECIFIC COMMANDS
 --avalon4-freq-min <arg> Set minimum frequency for Avalon4 (default: 100)
 --avalon4-freq-max <arg> Set maximum frequency for Avalon4 (default: 1000)
 --avalon4-noncecheck-off Disable A3218 inside nonce check function
---avalon4-smart-speed-off Disable A3218 smart speed funciton
---avalon4-speed-bingo <arg> Set A3218 speed bingo for smart speed (default: 255)
---avalon4-speed-error <arg> Set A3218 speed error for smart speed (default: 3)
+--avalon4-smart-speed <arg> Set smart speed, range 0-3. 0 means Disable (default: 2)
+--avalon4-speed-bingo <arg> Set A3218 speed bingo for smart speed mode 1 (default: 255)
+--avalon4-speed-error <arg> Set A3218 speed error for smart speed mode 1 (default: 3)
+--avalon4-least-pll <arg> Set least pll check threshold for smart speed mode 2 (default: 768)
+--avalon4-most-pll <arg> Set most pll check threshold for smart speed mode 2 (default: 256)
 --bab-options <arg> Set BaB options max:def:min:up:down:hz:delay:trf
 --bet-clk <arg>     Set clockspeed of ASICMINER Tube/Prisma to (arg+1)*10MHz (default: 23)
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
@@ -569,10 +571,11 @@ Avalon4 Devices
 --avalon4-freq-min <arg> Set minimum frequency for Avalon4 (default: 100)
 --avalon4-freq-max <arg> Set maximum frequency for Avalon4 (default: 1000)
 --avalon4-noncecheck-off Disable A3218 inside nonce check function
---avalon4-smart-speed-off Disable A3218 smart speed funciton
---avalon4-speed-bingo <arg> Set A3218 speed bingo for smart speed (default: 255)
---avalon4-speed-error <arg> Set A3218 speed error for smart speed (default: 3)
-
+--avalon4-smart-speed <arg> Set smart speed, range 0-3. 0 means Disable (default: 2)
+--avalon4-speed-bingo <arg> Set A3218 speed bingo for smart speed mode 1 (default: 255)
+--avalon4-speed-error <arg> Set A3218 speed error for smart speed mode 1 (default: 3)
+--avalon4-least-pll <arg> Set least pll check threshold for smart speed mode 2 (default: 768)
+--avalon4-most-pll <arg> Set most pll check threshold for smart speed mode 2 (default: 256)
 
 BFLSC Devices
 
