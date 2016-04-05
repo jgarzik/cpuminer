@@ -4780,6 +4780,9 @@ static bool test_work_current(struct work *work)
 		pool->swork.clean = false;
 		work->longpoll = true;
 	}
+	if (pool->current_height != height) {
+		pool->current_height = height;
+	}
 	cg_wunlock(&pool->data_lock);
 
 	/* Search to see if this block exists yet and if not, consider it a

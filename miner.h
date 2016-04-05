@@ -1341,6 +1341,7 @@ struct pool {
 	char ntime[12];
 	double next_diff;
 	double sdiff;
+	uint32_t current_height;
 
 	struct timeval tv_lastwork;
 };
