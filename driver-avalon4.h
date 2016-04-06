@@ -12,6 +12,7 @@
 #define _AVALON4_H_
 
 #include "util.h"
+#include "i2c-context.h"
 
 #ifdef USE_AVALON4
 
@@ -65,6 +66,8 @@
 #define AVA4_DEFAULT_SMARTSPEED_MODE3 3
 #define AVA4_DEFAULT_SMART_SPEED	(AVA4_DEFAULT_SMARTSPEED_MODE3)
 
+#define AVA4_DEFAULT_IIC_DETECT	false
+
 #define AVA4_DH_INC	0.03
 #define AVA4_DH_DEC	0.002
 
@@ -81,6 +84,9 @@
 #define AVA4_MOD_ECO    0x1
 #define AVA4_MOD_NORMAL 0x2
 #define AVA4_MOD_TURBO  0x3
+
+#define AVA4_CONNECTER_AUC	1
+#define AVA4_CONNECTER_IIC	2
 
 /* Avalon4 protocol package type from MM protocol.h
  * https://github.com/Canaan-Creative/MM/blob/avalon4/firmware/protocol.h */
@@ -197,6 +203,7 @@ struct avalon4_info {
 	int auc_temp;
 
 	int mm_count;
+	uint8_t connecter;
 
 	unsigned int set_frequency[3];
 	unsigned int set_smart_frequency[AVA4_DEFAULT_MODULARS][3];
@@ -260,6 +267,7 @@ struct avalon4_info {
 	uint8_t speed_bingo[AVA4_DEFAULT_MODULARS];
 	uint8_t speed_error[AVA4_DEFAULT_MODULARS];
 	uint32_t freq_mode[AVA4_DEFAULT_MODULARS];
+	struct i2c_ctx *i2c_slaves[AVA4_DEFAULT_MODULARS];
 };
 
 struct avalon4_iic_info {
@@ -298,5 +306,6 @@ extern int opt_avalon4_speed_bingo;
 extern int opt_avalon4_speed_error;
 extern int opt_avalon4_least_pll_check;
 extern int opt_avalon4_most_pll_check;
+extern bool opt_avalon4_iic_detect;
 #endif /* USE_AVALON4 */
 #endif	/* _AVALON4_H_ */

@@ -59,6 +59,7 @@ int opt_avalon4_least_pll_check = AVA4_DEFAULT_LEAST_PLL;
 int opt_avalon4_most_pll_check = AVA4_DEFAULT_MOST_PLL;
 int opt_avalon4_speed_bingo = AVA4_DEFAULT_SPEED_BINGO;
 int opt_avalon4_speed_error = AVA4_DEFAULT_SPEED_ERROR;
+bool opt_avalon4_iic_detect = AVA4_DEFAULT_IIC_DETECT;
 
 static uint8_t avalon4_freezsafemode = 0;
 /* Only for Avalon4 */
@@ -685,7 +686,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon4_ret *ar, int modular_
  #    INIT: clock_rate[4] + reserved[4] + payload[52]
  #    XFER: txSz[1]+rxSz[1]+options[1]+slaveAddr[1] + payload[56]
  */
-static int avalon4_iic_init_pkg(uint8_t *iic_pkg, struct avalon4_iic_info *iic_info, uint8_t *buf, int wlen, int rlen)
+static int avalon4_auc_init_pkg(uint8_t *iic_pkg, struct avalon4_iic_info *iic_info, uint8_t *buf, int wlen, int rlen)
 {
 	memset(iic_pkg, 0, AVA4_AUC_P_SIZE);
 
@@ -725,7 +726,46 @@ static int avalon4_iic_init_pkg(uint8_t *iic_pkg, struct avalon4_iic_info *iic_i
 	return 0;
 }
 
-static int avalon4_iic_xfer(struct cgpu_info *avalon4,
+static int avalon4_iic_xfer(struct cgpu_info *avalon4, uint8_t slave_addr,
+			    uint8_t *wbuf, int wlen,
+			    uint8_t *rbuf, int rlen)
+{
+	struct avalon4_info *info = avalon4->device_data;
+	struct i2c_ctx *pctx = NULL;
+	int err = 1;
+	bool ret = false;
+
+	pctx = info->i2c_slaves[slave_addr];
+	if (!pctx) {
+		applog(LOG_ERR, "%s-%d: IIC xfer i2c slaves null!", avalon4->drv->name, avalon4->device_id);
+		goto out;
+	}
+
+	if (wbuf) {
+		ret = pctx->write_raw(pctx, wbuf, wlen);
+		if (!ret) {
+			applog(LOG_DEBUG, "%s-%d: IIC xfer write raw failed!", avalon4->drv->name, avalon4->device_id);
+			goto out;
+		}
+	}
+
+	cgsleep_ms(5);
+
+	if (rbuf) {
+		ret = pctx->read_raw(pctx, rbuf, rlen);
+		if (!ret) {
+			applog(LOG_DEBUG, "%s-%d: IIC xfer read raw failed!", avalon4->drv->name, avalon4->device_id);
+			hexdump(rbuf, rlen);
+			goto out;
+		}
+	}
+
+	return 0;
+out:
+	return err;
+}
+
+static int avalon4_auc_xfer(struct cgpu_info *avalon4,
 			    uint8_t *wbuf, int wlen, int *write,
 			    uint8_t *rbuf, int rlen, int *read)
 {
@@ -775,10 +815,10 @@ static int avalon4_auc_init(struct cgpu_info *avalon4, char *ver)
 	/* Reset */
 	iic_info.iic_op = AVA4_IIC_RESET;
 	rlen = 0;
-	avalon4_iic_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
+	avalon4_auc_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
 
 	memset(rbuf, 0, AVA4_AUC_P_SIZE);
-	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_AUC_P_SIZE, &wlen, rbuf, rlen, &rlen);
+	err = avalon4_auc_xfer(avalon4, wbuf, AVA4_AUC_P_SIZE, &wlen, rbuf, rlen, &rlen);
 	if (err) {
 		applog(LOG_ERR, "%s-%d: Failed to reset Avalon USB2IIC Converter", avalon4->drv->name, avalon4->device_id);
 		return 1;
@@ -787,10 +827,10 @@ static int avalon4_auc_init(struct cgpu_info *avalon4, char *ver)
 	/* Deinit */
 	iic_info.iic_op = AVA4_IIC_DEINIT;
 	rlen = 0;
-	avalon4_iic_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
+	avalon4_auc_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
 
 	memset(rbuf, 0, AVA4_AUC_P_SIZE);
-	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_AUC_P_SIZE, &wlen, rbuf, rlen, &rlen);
+	err = avalon4_auc_xfer(avalon4, wbuf, AVA4_AUC_P_SIZE, &wlen, rbuf, rlen, &rlen);
 	if (err) {
 		applog(LOG_ERR, "%s-%d: Failed to deinit Avalon USB2IIC Converter", avalon4->drv->name, avalon4->device_id);
 		return 1;
@@ -801,10 +841,10 @@ static int avalon4_auc_init(struct cgpu_info *avalon4, char *ver)
 	iic_info.iic_param.aucParam[0] = opt_avalon4_aucspeed;
 	iic_info.iic_param.aucParam[1] = opt_avalon4_aucxdelay;
 	rlen = AVA4_AUC_VER_LEN;
-	avalon4_iic_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
+	avalon4_auc_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
 
 	memset(rbuf, 0, AVA4_AUC_P_SIZE);
-	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_AUC_P_SIZE, &wlen, rbuf, rlen, &rlen);
+	err = avalon4_auc_xfer(avalon4, wbuf, AVA4_AUC_P_SIZE, &wlen, rbuf, rlen, &rlen);
 	if (err) {
 		applog(LOG_ERR, "%s-%d: Failed to init Avalon USB2IIC Converter", avalon4->drv->name, avalon4->device_id);
 		return 1;
@@ -835,10 +875,10 @@ static int avalon4_auc_getinfo(struct cgpu_info *avalon4)
 	 * respRdIndex, respWrIndex, tx_flags, state
 	 * */
 	rlen = 7;
-	avalon4_iic_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
+	avalon4_auc_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
 
 	memset(rbuf, 0, AVA4_AUC_P_SIZE);
-	err = avalon4_iic_xfer(avalon4, wbuf, AVA4_AUC_P_SIZE, &wlen, rbuf, rlen, &rlen);
+	err = avalon4_auc_xfer(avalon4, wbuf, AVA4_AUC_P_SIZE, &wlen, rbuf, rlen, &rlen);
 	if (err) {
 		applog(LOG_ERR, "%s-%d: AUC Failed to get info ", avalon4->drv->name, avalon4->device_id);
 		return 1;
@@ -868,34 +908,57 @@ static int avalon4_iic_xfer_pkg(struct cgpu_info *avalon4, uint8_t slave_addr,
 
 	struct avalon4_info *info = avalon4->device_data;
 
-	iic_info.iic_op = AVA4_IIC_XFER;
-	iic_info.iic_param.slave_addr = slave_addr;
 	if (ret)
 		rlen = AVA4_READ_SIZE;
 
-	avalon4_iic_init_pkg(wbuf, &iic_info, (uint8_t *)pkg, AVA4_WRITE_SIZE, rlen);
-	err = avalon4_iic_xfer(avalon4, wbuf, wbuf[0], &wcnt, rbuf, rlen, &rcnt);
-	if ((pkg->type != AVA4_P_DETECT) && err == -7 && !rcnt && rlen) {
-		avalon4_iic_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
-		err = avalon4_iic_xfer(avalon4, wbuf, wbuf[0], &wcnt, rbuf, rlen, &rcnt);
-		applog(LOG_DEBUG, "%s-%d-%d: IIC read again!(type:0x%x, err:%d)", avalon4->drv->name, avalon4->device_id, slave_addr, pkg->type, err);
-	}
-	if (err || rcnt != rlen) {
-		if (info->xfer_err_cnt++ == 100) {
-			applog(LOG_DEBUG, "%s-%d-%d: AUC xfer_err_cnt reach err = %d, rcnt = %d, rlen = %d",
-					avalon4->drv->name, avalon4->device_id, slave_addr,
-					err, rcnt, rlen);
+	if (info->connecter == AVA4_CONNECTER_AUC) {
+		iic_info.iic_op = AVA4_IIC_XFER;
+		iic_info.iic_param.slave_addr = slave_addr;
 
-			cgsleep_ms(5 * 1000); /* Wait MM reset */
-			avalon4_auc_init(avalon4, info->auc_version);
+		avalon4_auc_init_pkg(wbuf, &iic_info, (uint8_t *)pkg, AVA4_WRITE_SIZE, rlen);
+		err = avalon4_auc_xfer(avalon4, wbuf, wbuf[0], &wcnt, rbuf, rlen, &rcnt);
+		if ((pkg->type != AVA4_P_DETECT) && err == -7 && !rcnt && rlen) {
+			avalon4_auc_init_pkg(wbuf, &iic_info, NULL, 0, rlen);
+			err = avalon4_auc_xfer(avalon4, wbuf, wbuf[0], &wcnt, rbuf, rlen, &rcnt);
+			applog(LOG_DEBUG, "%s-%d-%d: AUC read again!(type:0x%x, err:%d)", avalon4->drv->name, avalon4->device_id, slave_addr, pkg->type, err);
 		}
-		return AVA4_SEND_ERROR;
+		if (err || rcnt != rlen) {
+			if (info->xfer_err_cnt++ == 100) {
+				applog(LOG_DEBUG, "%s-%d-%d: AUC xfer_err_cnt reach err = %d, rcnt = %d, rlen = %d",
+						avalon4->drv->name, avalon4->device_id, slave_addr,
+						err, rcnt, rlen);
+
+				cgsleep_ms(5 * 1000); /* Wait MM reset */
+				avalon4_auc_init(avalon4, info->auc_version);
+			}
+			return AVA4_SEND_ERROR;
+		}
+
+		if (ret)
+			memcpy((char *)ret, rbuf + 4, AVA4_READ_SIZE);
+
+		info->xfer_err_cnt = 0;
 	}
 
-	if (ret)
-		memcpy((char *)ret, rbuf + 4, AVA4_READ_SIZE);
+	if (info->connecter == AVA4_CONNECTER_IIC) {
+		err = avalon4_iic_xfer(avalon4, slave_addr, (uint8_t *)pkg, AVA4_WRITE_SIZE, (uint8_t *)ret, AVA4_READ_SIZE);
+		if ((pkg->type != AVA4_P_DETECT) && err) {
+			err = avalon4_iic_xfer(avalon4, slave_addr, (uint8_t *)pkg, AVA4_WRITE_SIZE, (uint8_t *)ret, AVA4_READ_SIZE);
+			applog(LOG_DEBUG, "%s-%d-%d: IIC read again!(type:0x%x, err:%d)", avalon4->drv->name, avalon4->device_id, slave_addr, pkg->type, err);
+		}
+		if (err) {
+			if (info->xfer_err_cnt++ == 100) {
+				applog(LOG_DEBUG, "%s-%d-%d: IIC xfer_err_cnt reach err = %d, rcnt = %d, rlen = %d",
+						avalon4->drv->name, avalon4->device_id, slave_addr,
+						err, rcnt, rlen);
 
-	info->xfer_err_cnt = 0;
+				cgsleep_ms(5 * 1000); /* Wait MM reset */
+			}
+			return AVA4_SEND_ERROR;
+		}
+
+		info->xfer_err_cnt = 0;
+	}
 	return AVA4_SEND_OK;
 }
 
@@ -914,6 +977,7 @@ static int avalon4_send_bc_pkgs(struct cgpu_info *avalon4, const struct avalon4_
 
 static void avalon4_stratum_pkgs(struct cgpu_info *avalon4, struct pool *pool)
 {
+	struct avalon4_info *info = avalon4->device_data;
 	const int merkle_offset = 36;
 	struct avalon4_pkg pkg;
 	int i, a, b, tmp;
@@ -1035,7 +1099,69 @@ static void avalon4_stratum_pkgs(struct cgpu_info *avalon4, struct pool *pool)
 			return;
 	}
 
-	avalon4_auc_getinfo(avalon4);
+	if (info->connecter == AVA4_CONNECTER_AUC)
+		avalon4_auc_getinfo(avalon4);
+}
+
+static struct cgpu_info *avalon4_iic_detect(void)
+{
+	int i;
+	struct avalon4_info *info;
+	struct cgpu_info *avalon4 = NULL;
+	struct i2c_ctx *i2c_slave = NULL;
+
+	i2c_slave = i2c_slave_open(I2C_BUS, 0);
+	if (!i2c_slave) {
+		applog(LOG_ERR, "Avalon4 init iic failed\n");
+		return NULL;
+	}
+
+	i2c_slave->exit(i2c_slave);
+	i2c_slave = NULL;
+
+	avalon4 = cgcalloc(1, sizeof(*avalon4));
+	avalon4->drv = &avalon4_drv;
+	avalon4->deven = DEV_ENABLED;
+	avalon4->threads = 1;
+	add_cgpu(avalon4);
+
+	applog(LOG_INFO, "%s-%d: Found at %s", avalon4->drv->name, avalon4->device_id,
+	       I2C_BUS);
+
+	avalon4->device_data = cgcalloc(sizeof(struct avalon4_info), 1);
+	info = avalon4->device_data;
+
+	info->polling_first = 1;
+	info->newnonce = 0;
+
+	for (i = 0; i < AVA4_DEFAULT_MODULARS; i++) {
+		info->enable[i] = 0;
+		info->mod_type[i] = AVA4_TYPE_NULL;
+		info->fan_pct[i] = AVA4_DEFAULT_FAN_START;
+		info->set_voltage[i] = opt_avalon4_voltage_min;
+		memcpy(info->set_smart_frequency[i], opt_avalon4_freq, sizeof(opt_avalon4_freq));
+		info->i2c_slaves[i] = i2c_slave_open(I2C_BUS, i);
+		if (!info->i2c_slaves[i]) {
+			applog(LOG_ERR, "Avalon4 init i2c slaves failed\n");
+			free(avalon4->device_data);
+			avalon4->device_data = NULL;
+			free(avalon4);
+			avalon4 = NULL;
+			return NULL;
+		}
+	}
+
+	info->enable[0] = 1;
+	info->mod_type[0] = AVA4_TYPE_MM40;
+	info->temp[0] = -273;
+
+	memcpy(info->set_frequency, opt_avalon4_freq, sizeof(opt_avalon4_freq));
+
+	info->speed_bingo[0] = opt_avalon4_speed_bingo;
+	info->speed_error[0] = opt_avalon4_speed_error;
+	info->connecter = AVA4_CONNECTER_IIC;
+
+	return avalon4;
 }
 
 static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct usb_find_devices *found)
@@ -1092,12 +1218,15 @@ static struct cgpu_info *avalon4_auc_detect(struct libusb_device *dev, struct us
 
 	info->speed_bingo[0] = opt_avalon4_speed_bingo;
 	info->speed_error[0] = opt_avalon4_speed_error;
+	info->connecter = AVA4_CONNECTER_AUC;
 	return avalon4;
 }
 
 static inline void avalon4_detect(bool __maybe_unused hotplug)
 {
 	usb_detect(&avalon4_drv, avalon4_auc_detect);
+	if (!hotplug && opt_avalon4_iic_detect)
+		avalon4_iic_detect();
 }
 
 static bool avalon4_prepare(struct thr_info *thr)
@@ -2690,10 +2819,16 @@ static struct api_data *avalon4_api_stats(struct cgpu_info *cgpu)
 		root = api_add_bool(root, "Automatic Voltage", &opt_avalon4_autov, true);
 	root = api_add_int(root, "Smart Speed", &opt_avalon4_smart_speed, true);
 	root = api_add_bool(root, "Nonce check", &opt_avalon4_noncecheck, true);
-	root = api_add_string(root, "AUC VER", info->auc_version, false);
-	root = api_add_int(root, "AUC I2C Speed", &(info->auc_speed), true);
-	root = api_add_int(root, "AUC I2C XDelay", &(info->auc_xdelay), true);
-	root = api_add_int(root, "AUC ADC", &(info->auc_temp), true);
+	if (info->connecter == AVA4_CONNECTER_IIC)
+		root = api_add_string(root, "Connecter", "IIC", true);
+
+	if (info->connecter == AVA4_CONNECTER_AUC) {
+		root = api_add_string(root, "Connecter", "AUC", true);
+		root = api_add_string(root, "AUC VER", info->auc_version, false);
+		root = api_add_int(root, "AUC I2C Speed", &(info->auc_speed), true);
+		root = api_add_int(root, "AUC I2C XDelay", &(info->auc_xdelay), true);
+		root = api_add_int(root, "AUC ADC", &(info->auc_temp), true);
+	}
 
 	return root;
 }
