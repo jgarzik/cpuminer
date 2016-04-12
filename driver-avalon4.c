@@ -912,6 +912,9 @@ static int avalon4_iic_xfer_pkg(struct cgpu_info *avalon4, uint8_t slave_addr,
 		rlen = AVA4_READ_SIZE;
 
 	if (info->connecter == AVA4_CONNECTER_AUC) {
+		if (unlikely(avalon4->usbinfo.nodev))
+			return AVA4_SEND_ERROR;
+
 		iic_info.iic_op = AVA4_IIC_XFER;
 		iic_info.iic_param.slave_addr = slave_addr;
 
@@ -967,8 +970,6 @@ static int avalon4_send_bc_pkgs(struct cgpu_info *avalon4, const struct avalon4_
 	int ret;
 
 	do {
-		if (unlikely(avalon4->usbinfo.nodev))
-			return -1;
 		ret = avalon4_iic_xfer_pkg(avalon4, AVA4_MODULE_BROADCAST, pkg, NULL);
 	} while (ret != AVA4_SEND_OK);
 
@@ -2119,9 +2120,10 @@ static int64_t avalon4_scanhash(struct thr_info *thr)
 	int64_t h;
 	int i, j, k, count = 0;
 
-	if (unlikely(avalon4->usbinfo.nodev)) {
+	if ((info->connecter == AVA4_CONNECTER_AUC) &&
+		(unlikely(avalon4->usbinfo.nodev))) {
 		applog(LOG_ERR, "%s-%d: Device disappeared, shutting down thread",
-		       avalon4->drv->name, avalon4->device_id);
+				avalon4->drv->name, avalon4->device_id);
 		return -1;
 	}
 
