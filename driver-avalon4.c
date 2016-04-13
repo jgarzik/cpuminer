@@ -950,6 +950,10 @@ static int avalon4_iic_xfer_pkg(struct cgpu_info *avalon4, uint8_t slave_addr,
 			applog(LOG_DEBUG, "%s-%d-%d: IIC read again!(type:0x%x, err:%d)", avalon4->drv->name, avalon4->device_id, slave_addr, pkg->type, err);
 		}
 		if (err) {
+			/* FIXME: Don't care broadcast message with no reply, or it will block other thread when called by avalon4_send_bc_pkgs */
+			if ((pkg->type != AVA4_P_DETECT) && (slave_addr == AVA4_MODULE_BROADCAST))
+				return AVA4_SEND_OK;
+
 			if (info->xfer_err_cnt++ == 100) {
 				applog(LOG_DEBUG, "%s-%d-%d: IIC xfer_err_cnt reach err = %d, rcnt = %d, rlen = %d",
 						avalon4->drv->name, avalon4->device_id, slave_addr,
