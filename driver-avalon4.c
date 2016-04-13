@@ -1934,6 +1934,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	struct timeval current;
 	double device_tdiff;
 	uint32_t tmp;
+	int max_temp;
 
 	applog(LOG_DEBUG, "%s-%d: New stratum: restart: %d, update: %d",
 	       avalon4->drv->name, avalon4->device_id,
@@ -1988,10 +1989,11 @@ static void avalon4_update(struct cgpu_info *avalon4)
 		if (!info->enable[i])
 			continue;
 
-		if (get_temp_max(info, i) >= info->toverheat[i])
+		max_temp = get_temp_max(info, i);
+		if (max_temp >= info->toverheat[i])
 			info->cutoff[i] = 1;
 
-		if (info->cutoff[i] && (get_temp_max(info, i) <= (info->toverheat[i] - 10)))
+		if (info->cutoff[i] && (max_temp <= (info->toverheat[i] - 10)))
 			info->cutoff[i] = 0;
 
 		if (info->cutoff[i])
@@ -2030,7 +2032,7 @@ static void avalon4_update(struct cgpu_info *avalon4)
 						info->freq_mode[i] = AVA4_FREQ_CUTOFF_MODE;
 						break;
 					}
-					if (get_temp_max(info, i) <= info->temp_target[i]) {
+					if (max_temp <= info->temp_target[i]) {
 						memcpy(info->set_frequency, opt_avalon4_freq, sizeof(opt_avalon4_freq));
 						memcpy(info->set_smart_frequency[i], info->set_frequency, sizeof(info->set_frequency));
 						info->freq_mode[i] = AVA4_FREQ_INIT_MODE;
@@ -2054,7 +2056,8 @@ static void avalon4_update(struct cgpu_info *avalon4)
 						break;
 					}
 
-					if (get_temp_max(info, i) >= AVA4_MM60_TEMP_FREQADJ) {
+					if (max_temp >= AVA4_MM60_TEMP_FREQADJ) {
+						avalon4_freq_dec(avalon4, i, info->set_smart_frequency[i], 100);
 						info->freq_mode[i] = AVA4_FREQ_TEMPADJ_MODE;
 						break;
 					}
