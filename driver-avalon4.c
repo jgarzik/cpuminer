@@ -955,6 +955,7 @@ static int avalon4_iic_xfer_pkg(struct cgpu_info *avalon4, uint8_t slave_addr,
 				return AVA4_SEND_OK;
 
 			if (info->xfer_err_cnt++ == 100) {
+				info->xfer_err_cnt = 0;
 				applog(LOG_DEBUG, "%s-%d-%d: IIC xfer_err_cnt reach err = %d, rcnt = %d, rlen = %d",
 						avalon4->drv->name, avalon4->device_id, slave_addr,
 						err, rcnt, rlen);
