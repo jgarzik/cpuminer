@@ -786,11 +786,11 @@ static int avalon4_auc_xfer(struct cgpu_info *avalon4,
 
 	rlen += 4;		/* Add 4 bytes IIC header */
 	err = usb_read(avalon4, (char *)rbuf, rlen, read, C_AVA4_READ);
-	if (err || *read != rlen) {
-		applog(LOG_DEBUG, "%s-%d: AUC xfer %d, r(%d-%d)!", avalon4->drv->name, avalon4->device_id, err, rlen - 4, *read);
+	if (err || *read != rlen || *read != rbuf[0]) {
+		applog(LOG_DEBUG, "%s-%d: AUC xfer %d, r(%d-%d-%d)!", avalon4->drv->name, avalon4->device_id, err, rlen - 4, *read, rbuf[0]);
 		hexdump(rbuf, rlen);
+		return -1;
 	}
-
 	*read = rbuf[0] - 4;	/* Remove 4 bytes IIC header */
 out:
 	return err;
