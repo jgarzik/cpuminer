@@ -798,6 +798,11 @@ static char *set_int_0_to_7680(const char *arg, int *i)
         return set_int_range(arg, i, 0, 7680);
 }
 
+static char *set_int_1_to_60(const char *arg, int *i)
+{
+        return set_int_range(arg, i, 1, 60);
+}
+
 static char *set_int_0_to_200(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 0, 200);
@@ -1307,6 +1312,18 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--avalon4-iic-detect",
 		     opt_set_bool, &opt_avalon4_iic_detect,
 		     "Enable miner detect through iic controller"),
+	OPT_WITH_ARG("--avalon4-freqadj-time",
+		     set_int_1_to_60, opt_show_intval, &opt_avalon4_freqadj_time,
+		     "Set Avalon4 check interval when run in AVA4_FREQ_TEMPADJ_MODE"),
+	OPT_WITH_ARG("--avalon4-delta-temp",
+		     opt_set_intval, opt_show_intval, &opt_avalon4_delta_temp,
+		     "Set Avalon4 delta temperature when reset freq in AVA4_FREQ_TEMPADJ_MODE"),
+	OPT_WITH_ARG("--avalon4-delta-freq",
+		     opt_set_intval, opt_show_intval, &opt_avalon4_delta_freq,
+		     "Set Avalon4 delta freq when adjust freq in AVA4_FREQ_TEMPADJ_MODE"),
+	OPT_WITH_ARG("--avalon4-freqadj-temp",
+		     opt_set_intval, opt_show_intval, &opt_avalon4_freqadj_temp,
+		     "Set Avalon4 check temperature when run into AVA4_FREQ_TEMPADJ_MODE"),
 #endif
 #ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",
