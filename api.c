@@ -2575,6 +2575,8 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		root = api_add_percent(root, "Pool Stale%", &stalep, false);
 		root = api_add_uint64(root, "Bad Work", &(pool->bad_work), true);
 		root = api_add_uint32(root, "Current Block Height", &(pool->current_height), true);
+		uint32_t nversion = (uint32_t)strtoul(pool->bbversion, NULL, 16);
+		root = api_add_uint32(root, "Current Block Version", &nversion, true);
 
 		root = print_data(io_data, root, isjson, isjson && (i > 0));
 	}
