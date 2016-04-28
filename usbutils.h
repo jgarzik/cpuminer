@@ -166,6 +166,7 @@ enum sub_ident {
 	IDENT_CMR2,
 	IDENT_CTA,
 	IDENT_DRB,
+    IDENT_GSC,
 	IDENT_HFA,
 	IDENT_HRO,
 	IDENT_ICA,
