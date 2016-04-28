@@ -343,7 +343,7 @@ struct ICARUS_INFO {
 	int workid;
 	bool ant;
 	bool u3;
-    bool compac;
+	bool compac;
 };
 
 #define ICARUS_MIDSTATE_SIZE 32
@@ -633,7 +633,7 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 		case IDENT_AMU:
 		case IDENT_ANU:
 		case IDENT_AU3:
-        case IDENT_GSC:
+		case IDENT_GSC:
 		case IDENT_LIN:
 			// Enable the UART
 			transfer(icarus, CP210X_TYPE_OUT, CP210X_REQUEST_IFC_ENABLE,
@@ -1326,9 +1326,9 @@ static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb
 		case IDENT_AU3:
 			info->timeout = AU3_WAIT_TIMEOUT;
 			break;
-        case IDENT_GSC:
-            info->timeout = GSC_WAIT_TIMEOUT;
-            break;
+		case IDENT_GSC:
+			info->timeout = GSC_WAIT_TIMEOUT;
+			break;
 		case IDENT_CMR2:
 			if (found->intinfo_count != CAIRNSMORE2_INTS) {
 				quithere(1, "CMR2 Interface count (%d) isn't expected: %d",
@@ -1439,15 +1439,15 @@ retry:
 
 	if (!ok) {
 		if (info->ident != IDENT_CMR2) {
-            if (strcasecmp(icarus->usbdev->prod_string, "Compac BM1384 Bitcoin Miner") == 0) {
-                if (info->compac)
-                    goto unshin;
-                info->compac = true;
-            } else {
-                if (info->u3)
-                	goto unshin;
-                info->u3 = true;
-            }
+			if (strcasecmp(icarus->usbdev->prod_string, "Compac BM1384 Bitcoin Miner") == 0) {
+				if (info->compac)
+					goto unshin;
+				info->compac = true;
+			} else {
+				if (info->u3)
+					goto unshin;
+				info->u3 = true;
+			}
 			goto retry;
 		}
 
