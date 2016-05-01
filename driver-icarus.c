@@ -1839,6 +1839,13 @@ static bool icarus_prepare(struct thr_info *thr)
 
 	if (info->ant)
 		info->antworks = cgcalloc(sizeof(struct work *), ANT_QUEUE_NUM);
+	if (info->compac) {
+		char *tmp_str;
+		tmp_str=malloc(50*sizeof(char));
+		strncpy(tmp_str,icarus->unique_id,11);
+		strncpy(icarus->unique_id,"\0\0\0\0\0\0\0\0\0\0\0",11);
+		strncpy(icarus->unique_id,(tmp_str)+3*sizeof(char),8);
+	}
 	return true;
 }
 
