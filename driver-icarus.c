@@ -1567,17 +1567,6 @@ static struct cgpu_info *gekko_detect_one(struct libusb_device *dev, struct usb_
 		info->ident == IDENT_GSC) {
 
 		int this_option_offset = ++option_offset;
-
-		// Block 171874 nonce = (0xa2870100) = 0x000187a2
-		// N.B. golden_ob MUST take less time to calculate
-		//	than the timeout set in icarus_open()
-		const char golden_ob[] =
-			"4679ba4ec99876bf4bfe086082b40025"
-			"4df6c356451471139a3afa71e48f544a"
-			"00000000000000000000000000000000"
-			"0000000087320b1a1426674f2fa722ce";
-
-		const char golden_nonce[] = "000187a2";
 		const uint32_t golden_nonce_val = 0x000187a2;
 		unsigned char nonce_bin[ICARUS_READ_SIZE];
 		int baud, uninitialised_var(work_division), uninitialised_var(fpga_count);
