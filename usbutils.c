@@ -779,8 +779,8 @@ static struct usb_find_devices find_dev[] = {
  		INTINFO(ica1_ints) },
 	{
 		.drv = DRIVER_icarus,
-		.name = "GSB",
-		.ident = IDENT_GSB,
+		.name = "BSC",
+		.ident = IDENT_BSC,
 		.idVendor = 0x10c4,
 		.idProduct = 0xea60,
 		.iManufacturer = "bitshopperde",
