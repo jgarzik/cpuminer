@@ -99,7 +99,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 
 #define ANTU3_READ_COUNT_TIMING		100
 
-#define GEKKO_COMPAC_READ_COUNT_TIMING	5000
+#define COMPAC_READ_COUNT_TIMING	5000
 
 #define ICARUS_READ_COUNT_MIN		ICARUS_WAIT_TIMEOUT
 #define SECTOMS(s)	((int)((s) * 1000))
@@ -125,8 +125,8 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define ANTMINERUSB_HASH_TIME (ANTMINERUSB_HASH_MHZ / (double)(opt_anu_freq))
 #define ANTU3_HASH_MHZ 0.0000000032
 #define ANTU3_HASH_TIME (ANTU3_HASH_MHZ / (double)(opt_au3_freq))
-#define GEKKO_COMPAC_HASH_MHZ 0.0000000064
-#define GEKKO_COMPAC_HASH_TIME (GEKKO_COMPAC_HASH_MHZ / (double)(opt_gsc_freq))
+#define COMPAC_HASH_MHZ 0.0000000128
+#define COMPAC_HASH_TIME (COMPAC_HASH_MHZ / (double)(opt_compac_freq))
 
 #define CAIRNSMORE2_INTS 4
 
@@ -344,6 +344,8 @@ struct ICARUS_INFO {
 	bool ant;
 	bool u3;
 	bool compac;
+	float compac_ramp_freq;
+	uint16_t compac_ramp_idx;
 };
 
 #define ICARUS_MIDSTATE_SIZE 32
@@ -388,8 +390,8 @@ struct ICARUS_WORK {
 #define ANT_U1_DEFFREQ 200
 #define ANT_U3_DEFFREQ 225
 #define ANT_U3_MAXFREQ 250
-#define GEKKO_COMPAC_DEFFREQ 150 
-#define GEKKO_COMPAC_MAXFREQ 500
+#define COMPAC_DEFFREQ 150 
+#define COMPAC_MAXFREQ 500
 struct {
 	float freq;
 	uint16_t hex;
@@ -633,6 +635,7 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 		case IDENT_AMU:
 		case IDENT_ANU:
 		case IDENT_AU3:
+		case IDENT_BSC:
 		case IDENT_GSC:
 		case IDENT_LIN:
 			// Enable the UART
@@ -801,9 +804,10 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 			info->Hs = ANTU3_HASH_TIME;
 			read_count_timing = ANTU3_READ_COUNT_TIMING;
 			break;
+		case IDENT_BSC:
 		case IDENT_GSC:
-			info->Hs = GEKKO_COMPAC_HASH_TIME;
-			read_count_timing = GEKKO_COMPAC_READ_COUNT_TIMING;
+			info->Hs = COMPAC_HASH_TIME;
+			read_count_timing = COMPAC_READ_COUNT_TIMING;
 			break;
 		default:
 			quit(1, "Icarus get_options() called with invalid %s ident=%d",
@@ -968,6 +972,7 @@ static void get_options(int this_option_offset, struct cgpu_info *icarus, int *b
 		case IDENT_AMU:
 		case IDENT_ANU:
 		case IDENT_AU3:
+		case IDENT_BSC:
 		case IDENT_GSC:
 			*baud = ICARUS_IO_SPEED;
 			*work_division = 1;
@@ -1133,24 +1138,6 @@ static uint16_t anu3_find_freqhex(void)
 			anu_freq_hex = u3freqtable[i].hex;
 		i++;
 	} while (u3freq < ANT_U3_MAXFREQ);
-
-	return anu_freq_hex;
-}
-
-static uint16_t compac_find_freqhex(void)
-{
-	int i = 0, freq = opt_gsc_freq, compacfreq;
-	uint16_t anu_freq_hex = 0x0b83;
-
-	if (!freq)
-		freq = GEKKO_COMPAC_DEFFREQ;
-
-	do {
-		compacfreq = compacfreqtable[i].freq;
-		if (compacfreq <= freq)
-			anu_freq_hex = compacfreqtable[i].hex;
-		i++;
-	} while (compacfreq < GEKKO_COMPAC_MAXFREQ);
 
 	return anu_freq_hex;
 }
@@ -1326,9 +1313,6 @@ static struct cgpu_info *icarus_detect_one(struct libusb_device *dev, struct usb
 		case IDENT_AU3:
 			info->timeout = AU3_WAIT_TIMEOUT;
 			break;
-		case IDENT_GSC:
-			info->timeout = GSC_WAIT_TIMEOUT;
-			break;
 		case IDENT_CMR2:
 			if (found->intinfo_count != CAIRNSMORE2_INTS) {
 				quithere(1, "CMR2 Interface count (%d) isn't expected: %d",
@@ -1356,20 +1340,7 @@ retry:
 		icarus_clear(icarus, info);
 		icarus_initialise(icarus, baud);
 
-		if (info->compac) {
-			uint16_t compac_freq_hex = compac_find_freqhex();
-
-			if (!set_anu_freq(icarus, info, compac_freq_hex)) {
-				applog(LOG_WARNING, "%s %i: Failed to set frequency, too much overclock?",
-				       icarus->drv->name, icarus->device_id);
-				continue;
-			}
-			icarus->usbdev->ident = info->ident = IDENT_GSC;
-			info->Hs = GEKKO_COMPAC_HASH_TIME;
-			icarus->drv->name = "GSC";
-			applog(LOG_DEBUG, "%s %i: Detected GekkoScience Compac", icarus->drv->name,
-			       icarus->device_id);
-		} else if (info->u3) {
+		if (info->u3) {
 			uint16_t anu_freq_hex = anu3_find_freqhex();
 
 			set_anu_volt(icarus);
@@ -1439,15 +1410,9 @@ retry:
 
 	if (!ok) {
 		if (info->ident != IDENT_CMR2) {
-			if (strcasecmp(icarus->usbdev->prod_string, "Compac BM1384 Bitcoin Miner") == 0) {
-				if (info->compac)
-					goto unshin;
-				info->compac = true;
-			} else {
-				if (info->u3)
-					goto unshin;
-				info->u3 = true;
-			}
+			if (info->u3)
+				goto unshin;
+			info->u3 = true;
 			goto retry;
 		}
 
@@ -1525,7 +1490,7 @@ retry:
 	timersub(&tv_finish, &tv_start, &(info->golden_tv));
 
 	set_timing_mode(this_option_offset, icarus);
-	
+
 	if (info->ident == IDENT_CMR2) {
 		int i;
 		for (i = info->intinfo + 1; i < icarus->usbdev->found->intinfo_count; i++) {
@@ -1577,6 +1542,83 @@ shin:
 
 	icarus = usb_free_cgpu(icarus);
 
+	return NULL;
+}
+
+static struct cgpu_info *compac_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
+{
+	struct ICARUS_INFO *info;
+	struct timeval tv_start, tv_finish;
+
+	struct cgpu_info *icarus;
+	icarus = usb_alloc_cgpu(&icarus_drv, 1);
+
+	if (!usb_init(icarus, dev, found)) {
+		icarus = usb_free_cgpu(icarus);
+		return NULL;
+	}
+
+	info = cgcalloc(1, sizeof(struct ICARUS_INFO));
+	icarus->device_data = (void *)info;
+
+	info->ident = usb_ident(icarus);
+
+	if (info->ident == IDENT_BSC ||
+		info->ident == IDENT_GSC) {
+
+		int this_option_offset = ++option_offset;
+		const uint32_t golden_nonce_val = 0x000187a2;
+		unsigned char nonce_bin[ICARUS_READ_SIZE];
+		int baud, uninitialised_var(work_division), uninitialised_var(fpga_count);
+
+		applog(LOG_DEBUG, "%s %i: Detected GekkoScience Compac", icarus->drv->name,
+			   icarus->device_id);
+
+		get_options(this_option_offset, icarus, &baud, &work_division, &fpga_count);
+
+		info->compac_ramp_idx = 0;
+		info->compac_ramp_freq = compacfreqtable[info->compac_ramp_idx].freq;
+
+		uint16_t compac_freq_hex = compacfreqtable[info->compac_ramp_idx].hex;
+
+		if (!set_anu_freq(icarus, info, compac_freq_hex)) {
+			applog(LOG_WARNING, "%s %i: Failed to set frequency, too much overclock?",
+				   icarus->drv->name, icarus->device_id);
+		}
+
+		applog(LOG_DEBUG, "%s %d: Init baud=%d work_division=%d fpga_count=%d",
+			   icarus->drv->name, icarus->device_id, baud, work_division, fpga_count);
+
+		info->ant = true;
+		info->compac = true;
+		info->baud = baud;
+		info->work_division = work_division;
+		info->fpga_count = fpga_count;
+		info->nonce_mask = mask(work_division);
+		info->nonce_size = ANT_READ_SIZE;
+
+		if (add_cgpu(icarus)) {
+			char *tmp_str;
+			tmp_str=malloc(50*sizeof(char));
+			strncpy(tmp_str,icarus->unique_id,11);
+			strncpy(icarus->unique_id,"\0\0\0\0\0\0\0\0\0\0\0",11);
+			strncpy(icarus->unique_id,(tmp_str)+3*sizeof(char),8);
+
+			update_usb_stats(icarus);
+
+			info->golden_hashes = (golden_nonce_val & info->nonce_mask) * fpga_count;
+			timersub(&tv_finish, &tv_start, &(info->golden_tv));
+
+			set_timing_mode(this_option_offset, icarus);
+			return icarus;
+		}
+	}
+
+	usb_uninit(icarus);
+	free(info);
+	icarus->device_data = NULL;
+
+	icarus = usb_free_cgpu(icarus);
 	return NULL;
 }
 
@@ -1829,6 +1871,7 @@ shin:
 static void icarus_detect(bool __maybe_unused hotplug)
 {
 	usb_detect(&icarus_drv, rock_detect_one);
+	usb_detect(&icarus_drv, compac_detect_one);
 	usb_detect(&icarus_drv, icarus_detect_one);
 }
 
@@ -1839,13 +1882,6 @@ static bool icarus_prepare(struct thr_info *thr)
 
 	if (info->ant)
 		info->antworks = cgcalloc(sizeof(struct work *), ANT_QUEUE_NUM);
-	if (info->compac) {
-		char *tmp_str;
-		tmp_str=malloc(50*sizeof(char));
-		strncpy(tmp_str,icarus->unique_id,11);
-		strncpy(icarus->unique_id,"\0\0\0\0\0\0\0\0\0\0\0",11);
-		strncpy(icarus->unique_id,(tmp_str)+3*sizeof(char),8);
-	}
 	return true;
 }
 
@@ -2096,6 +2132,19 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	struct work *work;
 	int64_t estimate_hashes;
 	uint8_t workid = 0;
+
+	if(info->compac && info->compac_ramp_freq < opt_compac_freq)
+	{
+		uint16_t compac_freq_hex = compacfreqtable[info->compac_ramp_idx++].hex;
+
+		if (!set_anu_freq(icarus, info, compac_freq_hex)) {
+			applog(LOG_WARNING, "%s %i: Failed to set frequency, too much overclock?",
+				   icarus->drv->name, icarus->device_id);
+			opt_compac_freq = info->compac_ramp_freq;
+		} else {
+			info->compac_ramp_freq = compacfreqtable[info->compac_ramp_idx].freq;
+		}
+	}
 
 	if (unlikely(share_work_tdiff(icarus) > info->fail_time)) {
 		if (info->failing) {
@@ -2507,7 +2556,7 @@ static void icarus_statline_before(char *buf, size_t bufsiz, struct cgpu_info *c
 
 	if (info->ant) {
 		if (info->compac)
-			tailsprintf(buf, bufsiz, "%3.0fMHz", opt_gsc_freq);
+			tailsprintf(buf, bufsiz, "%3.0fMHz", info->compac_ramp_freq);
 		else if (info->u3)
 			tailsprintf(buf, bufsiz, "%3.0fMHz %3dmV", opt_au3_freq, opt_au3_volt);
 		else
