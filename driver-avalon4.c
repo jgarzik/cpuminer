@@ -1835,10 +1835,10 @@ static void avalon4_stratum_set(struct cgpu_info *avalon4, struct pool *pool, in
 
 	/* Configure the nonce2 offset and range */
 	if (pool->n2size == 3)
-		range = 0xffffff / (total_devices + 1);
+		range = 0xffffff / (total_devices ? total_devices : 1);
 	else
-		range = 0xffffffff / (total_devices + 1);
-	start = range * (avalon4->device_id + 1);
+		range = 0xffffffff / (total_devices ? total_devices : 1);
+	start = range * avalon4->device_id;
 
 	tmp = be32toh(start);
 	memcpy(send_pkg.data + 12, &tmp, 4);
