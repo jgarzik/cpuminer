@@ -1490,7 +1490,7 @@ retry:
 	timersub(&tv_finish, &tv_start, &(info->golden_tv));
 
 	set_timing_mode(this_option_offset, icarus);
-
+	
 	if (info->ident == IDENT_CMR2) {
 		int i;
 		for (i = info->intinfo + 1; i < icarus->usbdev->found->intinfo_count; i++) {
@@ -2135,7 +2135,7 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 
 	if(info->compac && info->compac_ramp_freq < opt_compac_freq)
 	{
-		uint16_t compac_freq_hex = compacfreqtable[info->compac_ramp_idx++].hex;
+		uint16_t compac_freq_hex = compacfreqtable[++info->compac_ramp_idx].hex;
 
 		if (!set_anu_freq(icarus, info, compac_freq_hex)) {
 			applog(LOG_WARNING, "%s %i: Failed to set frequency, too much overclock?",
