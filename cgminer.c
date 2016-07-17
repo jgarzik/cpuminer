@@ -2568,21 +2568,16 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 	if (pool->gbt_solo) {
 		if (unlikely(!gbt_solo_decode(pool, res_val)))
 			goto out;
-		ret = true;
+		goto out_true;
+	}
+	if (unlikely(!gbt_decode(pool, res_val)))
 		goto out;
-	}
-	if (unlikely(!gbt_decode(pool, res_val))) {
-			goto out;
-		work->gbt = true;
-		ret = true;
-	}
-
+	work->gbt = true;
 	memset(work->hash, 0, sizeof(work->hash));
 
 	cgtime(&work->tv_staged);
-
+out_true:
 	ret = true;
-
 out:
 	return ret;
 }
