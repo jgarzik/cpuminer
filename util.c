@@ -2817,7 +2817,7 @@ void suspend_stratum(struct pool *pool)
 bool initiate_stratum(struct pool *pool)
 {
 	bool ret = false, recvd = false, noresume = false, sockd = false;
-	char s[RBUFSIZE], *sret = NULL, *nonce1, *sessionid;
+	char s[RBUFSIZE], *sret = NULL, *nonce1, *sessionid, *tmp;
 	json_t *val = NULL, *res_val, *err_val;
 	json_error_t err;
 	int n2size;
@@ -2890,6 +2890,7 @@ resend:
 	if (!valid_hex(nonce1)) {
 		applog(LOG_INFO, "Failed to get valid nonce1 in initiate_stratum");
 		free(sessionid);
+		free(nonce1);
 		goto out;
 	}
 	n2size = json_integer_value(json_array_get(res_val, 2));
@@ -2906,8 +2907,12 @@ resend:
 	}
 
 	cg_wlock(&pool->data_lock);
+	tmp = pool->sessionid;
 	pool->sessionid = sessionid;
+	free(tmp);
+	tmp = pool->nonce1;
 	pool->nonce1 = nonce1;
+	free(tmp);
 	pool->n1_len = strlen(nonce1) / 2;
 	free(pool->nonce1bin);
 	pool->nonce1bin = cgcalloc(pool->n1_len, 1);

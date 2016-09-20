@@ -871,17 +871,24 @@ static char *set_rr(enum pool_strategy *strategy)
  * stratum+tcp or by detecting a stratum server response */
 bool detect_stratum(struct pool *pool, char *url)
 {
+	bool ret = false;
+
 	if (!extract_sockaddr(url, &pool->sockaddr_url, &pool->stratum_port))
-		return false;
+		goto out;
 
 	if (!strncasecmp(url, "stratum+tcp://", 14)) {
 		pool->rpc_url = strdup(url);
 		pool->has_stratum = true;
 		pool->stratum_url = pool->sockaddr_url;
-		return true;
+		ret = true;
 	}
-
-	return false;
+out:
+	if (!ret) {
+		free(pool->sockaddr_url);
+		free(pool->stratum_port);
+		pool->stratum_port = pool->sockaddr_url = NULL;
+	}
+	return ret;
 }
 
 static struct pool *add_url(void)
@@ -902,9 +909,8 @@ static char *setup_url(struct pool *pool, char *arg)
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
 	    strncmp(arg, "https://", 8)) {
-		char *httpinput;
+		char httpinput[256];
 
-		httpinput = cgmalloc(256);
 		strcpy(httpinput, "stratum+tcp://");
 		strncat(httpinput, arg, 242);
 		detect_stratum(pool, httpinput);
