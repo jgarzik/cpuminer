@@ -4836,17 +4836,18 @@ void api(int api_thr_id)
 	bool addrok;
 	char group;
 	json_error_t json_err;
-	json_t *json_config = NULL;
+	json_t *json_config;
 	json_t *json_val;
 	bool isjson;
-	bool did, isjoin = false, firstjoin;
+	bool did, isjoin, firstjoin;
 	int i;
 	struct addrinfo hints, *res, *host;
-
 	SOCKETTYPE *apisock;
 
 	apisock = cgmalloc(sizeof(*apisock));
 	*apisock = INVSOCK;
+	json_config = NULL;
+	isjoin = false;
 
 	if (!opt_api_listen) {
 		applog(LOG_DEBUG, "API not running%s", UNAVAILABLE);
