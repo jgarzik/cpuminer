@@ -644,6 +644,36 @@ static void sharelog(const char*disposition, const struct work*work)
 static char *gbt_req = "{\"id\": 0, \"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": [\"coinbasetxn\", \"workid\", \"coinbase/append\"]}]}\n";
 
 static char *gbt_solo_req = "{\"id\": 0, \"method\": \"getblocktemplate\"}\n";
+static const char* gbt_understood_rules[1] = { NULL };
+static const char* gbt_solo_understood_rules[1] = { NULL };
+
+static bool gbt_check_required_rule(const char* rule, const char** understood_rules)
+{
+	if (!understood_rules || !rule)
+		return false;
+	const char* understood_rule;
+	while((understood_rule = *understood_rules++)) {
+		if (strcmp(understood_rule, rule) == 0)
+			return true;
+	}
+	return false;
+}
+
+
+static bool gbt_check_rules(json_t* rules_arr, const char** understood_rules)
+{
+	if (!rules_arr)
+		return true;
+	int rule_count =  json_array_size(rules_arr);
+	const char* rule;
+	int i;
+	for (i = 0; i < rule_count; i++) {
+		rule = json_string_value(json_array_get(rules_arr, i));
+		if (rule && *rule++ == '!' && !gbt_check_required_rule(rule, understood_rules))
+			return false;
+	}
+	return true;
+}
 
 /* Adjust all the pools' quota to the greatest common denominator after a pool
  * has been added or the quotas changed. */
@@ -6575,7 +6605,26 @@ retry_stratum:
 	if (!pool->probed) {
 		applog(LOG_DEBUG, "Probing for GBT support");
 		val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
-				    gbt_req, true, false, &rolltime, pool, false);
+					gbt_req, true, false, &rolltime, pool, false);
+		if (val) {
+			json_t* rules_arr = json_object_get(val, "rules");
+			if (!gbt_check_rules(rules_arr, gbt_understood_rules)) {
+				applog(LOG_DEBUG, "Not all rules understood for GBT");
+				json_decref(val);
+				val = NULL;
+			}
+		}
+		if (!val) {
+			applog(LOG_DEBUG, "Probing for GBT solo support");
+			val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
+					gbt_solo_req, true, false, &rolltime, pool, false);
+			json_t* rules_arr = json_object_get(val, "rules");
+			if (!gbt_check_rules(rules_arr, gbt_solo_understood_rules)) {
+				applog(LOG_DEBUG, "Not all rules understood for GBT solo");
+				json_decref(val);
+				val = NULL;
+			}
+		}
 		if (val) {
 			bool append = false, submit = false, transactions = false;
 			json_t *res_val, *mutables;
