@@ -643,9 +643,10 @@ static void sharelog(const char*disposition, const struct work*work)
 
 static char *gbt_req = "{\"id\": 0, \"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": [\"coinbasetxn\", \"workid\", \"coinbase/append\"]}]}\n";
 
-static char *gbt_solo_req = "{\"id\": 0, \"method\": \"getblocktemplate\"}\n";
+static char *gbt_solo_req = "{\"id\": 0, \"method\": \"getblocktemplate\", \"params\": [{\"rules\" : [\"segwit\"]}]}\n";
+
 static const char* gbt_understood_rules[1] = { NULL };
-static const char* gbt_solo_understood_rules[1] = { NULL };
+static const char* gbt_solo_understood_rules[2] = {"segwit", NULL};
 
 static bool gbt_check_required_rule(const char* rule, const char** understood_rules)
 {
