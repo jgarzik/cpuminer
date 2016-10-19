@@ -7818,8 +7818,6 @@ void hash_queued_work(struct thr_info *mythr)
 		struct timeval diff;
 		int64_t hashes;
 
-		mythr->work_update = false;
-
 		fill_queue(mythr, cgpu, drv, thr_id);
 
 		hashes = drv->scanwork(mythr);
@@ -7849,8 +7847,10 @@ void hash_queued_work(struct thr_info *mythr)
 		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
 			mt_disable(mythr, thr_id, drv);
 
-		if (mythr->work_update)
+		if (mythr->work_update) {
 			drv->update_work(cgpu);
+			mythr->work_update = false;
+		}
 	}
 	cgpu->deven = DEV_DISABLED;
 }
@@ -7870,8 +7870,6 @@ void hash_driver_work(struct thr_info *mythr)
 	while (likely(!cgpu->shutdown)) {
 		struct timeval diff;
 		int64_t hashes;
-
-		mythr->work_update = false;
 
 		hashes = drv->scanwork(mythr);
 
@@ -7900,8 +7898,10 @@ void hash_driver_work(struct thr_info *mythr)
 		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
 			mt_disable(mythr, thr_id, drv);
 
-		if (mythr->work_update)
+		if (mythr->work_update) {
 			drv->update_work(cgpu);
+			mythr->work_update = false;
+		}
 	}
 	cgpu->deven = DEV_DISABLED;
 }
