@@ -31,7 +31,7 @@ bool opt_avalon4_autov;
 bool opt_avalon4_freezesafe;
 int opt_avalon4_voltage_min = AVA4_DEFAULT_VOLTAGE;
 int opt_avalon4_voltage_max = AVA4_DEFAULT_VOLTAGE;
-int opt_avalon4_freq[3] = {AVA4_DEFAULT_FREQUENCY,
+unsigned int opt_avalon4_freq[3] = {AVA4_DEFAULT_FREQUENCY,
 			   AVA4_DEFAULT_FREQUENCY,
 			   AVA4_DEFAULT_FREQUENCY};
 
@@ -1707,7 +1707,7 @@ static uint32_t avalon4_get_cpm(unsigned int freq)
 	return g_freq_array[0][1];
 }
 
-static void avalon4_set_freq(struct cgpu_info *avalon4, int addr, uint8_t miner_id, uint8_t chip_id, int freq[])
+static void avalon4_set_freq(struct cgpu_info *avalon4, int addr, uint8_t miner_id, uint8_t chip_id, unsigned int freq[])
 {
 	struct avalon4_info *info = avalon4->device_data;
 	struct avalon4_pkg send_pkg;
@@ -1940,9 +1940,6 @@ static void avalon4_update(struct cgpu_info *avalon4)
 	struct pool *pool;
 	int coinbase_len_posthash, coinbase_len_prehash;
 	int i;
-	struct timeval current;
-	double device_tdiff;
-	uint32_t tmp;
 	int max_temp;
 
 	applog(LOG_DEBUG, "%s-%d: New stratum: restart: %d, update: %d",
@@ -2809,7 +2806,7 @@ char *set_avalon4_device_freq(struct cgpu_info *avalon4, char *arg)
 {
 	struct avalon4_info *info = avalon4->device_data;
 	char *colon1, *colon2, *param = arg;
-	int val[3], addr = 0, i;
+	unsigned int val[3], addr = 0, i;
 	uint32_t miner_id = 0, chip_id = 0;
 
 	if (!(*arg))
