@@ -1675,21 +1675,14 @@ static void avalon7_sswork_update(struct cgpu_info *avalon7)
 {
 	struct avalon7_info *info = avalon7->device_data;
 	struct thr_info *thr = avalon7->thr[0];
-	struct work *work;
 	struct pool *pool;
 	int coinbase_len_posthash, coinbase_len_prehash;
 
 	applog(LOG_DEBUG, "%s-%d: New stratum: restart: %d, update: %d",
 	       avalon7->drv->name, avalon7->device_id,
 	       thr->work_restart, thr->work_update);
-	thr->work_update = false;
-	thr->work_restart = false;
 
-	/* Step 1: Make sure pool is ready */
-	work = get_work(thr, thr->id);
-	discard_work(work); /* Don't leak memory */
-
-	/* Step 2: MM protocol check */
+	/* Step 1: MM protocol check */
 	pool = current_pool();
 	if (!pool->has_stratum)
 		quit(1, "%s-%d: MM has to use stratum pools", avalon7->drv->name, avalon7->device_id);
@@ -1713,7 +1706,7 @@ static void avalon7_sswork_update(struct cgpu_info *avalon7)
 	}
 	cg_wlock(&info->update_lock);
 
-	/* Step 3: Send out stratum pkgs */
+	/* Step 2: Send out stratum pkgs */
 	cg_rlock(&pool->data_lock);
 	cgtime(&info->last_stratum);
 	info->pool_no = pool->pool_no;
@@ -1724,7 +1717,7 @@ static void avalon7_sswork_update(struct cgpu_info *avalon7)
 	avalon7_stratum_pkgs(avalon7, pool);
 	cg_runlock(&pool->data_lock);
 
-	/* Step 4: Send out finish pkg */
+	/* Step 3: Send out finish pkg */
 	avalon7_stratum_finish(avalon7);
 	cg_wunlock(&info->update_lock);
 }

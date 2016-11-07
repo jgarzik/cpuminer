@@ -9929,9 +9929,11 @@ begin_bench:
 				cgsleep_ms(5);
 		};
 		if (pool->has_stratum) {
+#ifndef USE_AVALON7
 			gen_stratum_work(pool, work);
 			applog(LOG_DEBUG, "Generated stratum work");
 			stage_work(work);
+#endif
 			continue;
 		}
 
