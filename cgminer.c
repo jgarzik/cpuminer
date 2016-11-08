@@ -327,6 +327,7 @@ static bool usb_polling;
 
 char *opt_kernel_path;
 char *cgminer_path;
+bool opt_gen_stratum_work;
 
 #if defined(USE_BITFORCE)
 bool opt_bfl_noncerange;
@@ -9173,6 +9174,8 @@ void fill_device_drv(struct device_drv *drv)
 	 * we will assume they don't and set max to 1. */
 	if (!drv->max_diff)
 		drv->max_diff = 1;
+	if (!drv->genwork)
+		opt_gen_stratum_work = true;
 }
 
 void null_device_drv(struct device_drv *drv)
@@ -9929,11 +9932,11 @@ begin_bench:
 				cgsleep_ms(5);
 		};
 		if (pool->has_stratum) {
-#ifndef USE_AVALON7
-			gen_stratum_work(pool, work);
-			applog(LOG_DEBUG, "Generated stratum work");
-			stage_work(work);
-#endif
+			if (opt_gen_stratum_work) {
+				gen_stratum_work(pool, work);
+				applog(LOG_DEBUG, "Generated stratum work");
+				stage_work(work);
+			}
 			continue;
 		}
 

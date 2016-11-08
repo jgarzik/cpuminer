@@ -361,6 +361,9 @@ struct device_drv {
 
 	/* Lowest diff the controller can safely run at */
 	double min_diff;
+
+	/* Does this device generate work itself and not require stratum work generation? */
+	bool genwork;
 };
 
 extern struct device_drv *copy_drv(struct device_drv*);

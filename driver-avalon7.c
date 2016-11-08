@@ -2480,4 +2480,5 @@ struct device_drv avalon7_drv = {
 	.update_work = avalon7_sswork_update,
 	.scanwork = avalon7_scanhash,
 	.max_diff = AVA7_DRV_DIFFMAX,
+	.genwork = true,
 };
