@@ -645,29 +645,30 @@ static char *gbt_req = "{\"id\": 0, \"method\": \"getblocktemplate\", \"params\"
 
 static char *gbt_solo_req = "{\"id\": 0, \"method\": \"getblocktemplate\", \"params\": [{\"rules\" : [\"segwit\"]}]}\n";
 
-static const char* gbt_understood_rules[1] = { NULL };
-static const char* gbt_solo_understood_rules[2] = {"segwit", NULL};
+static const char *gbt_understood_rules[1] = { NULL };
+static const char *gbt_solo_understood_rules[2] = {"segwit", NULL};
 
 static bool gbt_check_required_rule(const char* rule, const char** understood_rules)
 {
+	const char *understood_rule;
+
 	if (!understood_rules || !rule)
 		return false;
-	const char* understood_rule;
-	while((understood_rule = *understood_rules++)) {
+	while ((understood_rule = *understood_rules++)) {
 		if (strcmp(understood_rule, rule) == 0)
 			return true;
 	}
 	return false;
 }
 
-
 static bool gbt_check_rules(json_t* rules_arr, const char** understood_rules)
 {
+	int i, rule_count;
+	const char *rule;
+
 	if (!rules_arr)
 		return true;
-	int rule_count =  json_array_size(rules_arr);
-	const char* rule;
-	int i;
+	rule_count = json_array_size(rules_arr);
 	for (i = 0; i < rule_count; i++) {
 		rule = json_string_value(json_array_get(rules_arr, i));
 		if (rule && *rule++ == '!' && !gbt_check_required_rule(rule, understood_rules))
@@ -2464,12 +2465,12 @@ static const int witness_nonce_size = sizeof(witness_nonce);
 static const unsigned char witness_header[] = {0xaa, 0x21, 0xa9, 0xed};
 static const int witness_header_size = sizeof(witness_header);
 
-static bool gbt_witness_data(json_t *transaction_arr, unsigned char* witnessdata, unsigned int avail_size)
+static bool gbt_witness_data(json_t *transaction_arr, unsigned char* witnessdata, int avail_size)
 {
 	int i, binlen, txncount = json_array_size(transaction_arr);
-	const char* hash;
-	json_t *arr_val;
 	unsigned char *hashbin;
+	const char *hash;
+	json_t *arr_val;
 
 	binlen = txncount * 32 + 32;
 	hashbin = alloca(binlen + 32);
@@ -2562,7 +2563,8 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	if (rules_arr) {
 		int i;
 		int rule_count = json_array_size(rules_arr);
-		const char* rule;
+		const char *rule;
+
 		for (i = 0; i < rule_count; i++) {
 			rule = json_string_value(json_array_get(rules_arr, i));
 			if (!rule)
@@ -2603,17 +2605,18 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	hex2bin((unsigned char *)&pool->gbt_bits, bits, 4);
 	gbt_merkle_bins(pool, transaction_arr);
 
-	if(insert_witness) {
+	if (insert_witness) {
+		char witness_str[sizeof(witnessdata) * 2];
+
 		witnessdata_size = sizeof(witnessdata);
 		if (!gbt_witness_data(transaction_arr, witnessdata, witnessdata_size)) {
 			applog(LOG_ERR, "error calculating witness data");
 			return false;
 		}
-		char witness_str[sizeof(witnessdata) * 2];
 		__bin2hex(witness_str, witnessdata, witnessdata_size);
 		applog(LOG_DEBUG, "calculated witness data: %s", witness_str);
 		if (default_witness_commitment) {
-			if(strncmp(witness_str, default_witness_commitment + 4, witnessdata_size * 2) != 0) {
+			if (strncmp(witness_str, default_witness_commitment + 4, witnessdata_size * 2) != 0) {
 				applog(LOG_ERR, "bad witness data. %s != %s", default_witness_commitment + 4, witness_str);
 				return false;
 			}
@@ -2675,7 +2678,7 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 		+ 1 + 25 // txout
 		+ 4; // lock
 
-	if(insert_witness) {
+	if (insert_witness) {
 		len +=  8 //value
 			+   1 + 2 + witnessdata_size; // total scriptPubKey size + OP_RETURN + push size + data
 	}
@@ -2689,7 +2692,8 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	*u64 = htole64(coinbasevalue);
 
 	if (insert_witness) {
-		unsigned char* witness = &pool->coinbase[41 + ofs + 4 + 1 + 8 + 1 + 25];
+		unsigned char *witness = &pool->coinbase[41 + ofs + 4 + 1 + 8 + 1 + 25];
+
 		memset(witness, 0, 8);
 		witness_txout_len += 8;
 		witness[witness_txout_len++] = witnessdata_size + 2; // total scriptPubKey size
@@ -6735,7 +6739,8 @@ retry_stratum:
 		val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
 					gbt_req, true, false, &rolltime, pool, false);
 		if (val) {
-			json_t* rules_arr = json_object_get(val, "rules");
+			json_t *rules_arr = json_object_get(val, "rules");
+
 			if (!gbt_check_rules(rules_arr, gbt_understood_rules)) {
 				applog(LOG_DEBUG, "Not all rules understood for GBT");
 				json_decref(val);
@@ -6743,10 +6748,12 @@ retry_stratum:
 			}
 		}
 		if (!val) {
+			json_t *rules_arr;
+
 			applog(LOG_DEBUG, "Probing for GBT solo support");
 			val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
 					gbt_solo_req, true, false, &rolltime, pool, false);
-			json_t* rules_arr = json_object_get(val, "rules");
+			rules_arr = json_object_get(val, "rules");
 			if (!gbt_check_rules(rules_arr, gbt_solo_understood_rules)) {
 				applog(LOG_DEBUG, "Not all rules understood for GBT solo");
 				json_decref(val);
