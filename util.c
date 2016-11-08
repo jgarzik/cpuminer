@@ -46,6 +46,9 @@
 #include "util.h"
 
 #define DEFAULT_SOCKWAIT 60
+#ifndef STRATUM_USER_AGENT
+#define STRATUM_USER_AGENT
+#endif
 
 bool successful_connect = false;
 
@@ -1674,13 +1677,13 @@ bool extract_sockaddr(char *url, char **sockaddr_url, char **sockaddr_port)
 
 	if (url_len < 1)
 		return false;
-	
+
 	/* Get rid of the [] */
 	if (ipv6_begin && ipv6_end && ipv6_end > ipv6_begin) {
 		url_len -= 2;
 		url_begin++;
 	}
-	
+
 	snprintf(url_address, 254, "%.*s", url_len, url_begin);
 
 	if (port_len) {
@@ -2228,7 +2231,7 @@ static bool send_version(struct pool *pool, json_t *val)
 		return false;
 	id = json_integer_value(json_object_get(val, "id"));
 
-	sprintf(s, "{\"id\": %d, \"result\": \""PACKAGE"/"VERSION"\", \"error\": null}", id);
+	sprintf(s, "{\"id\": %d, \"result\": \""PACKAGE"/"VERSION""STRATUM_USER_AGENT"\", \"error\": null}", id);
 	if (!stratum_send(pool, s, strlen(s)))
 		return false;
 
@@ -2836,9 +2839,9 @@ resend:
 		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 	} else {
 		if (pool->sessionid)
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\", \"%s\"]}", swork_id++, pool->sessionid);
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION""STRATUM_USER_AGENT"\", \"%s\"]}", swork_id++, pool->sessionid);
 		else
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\"]}", swork_id++);
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION""STRATUM_USER_AGENT"\"]}", swork_id++);
 	}
 
 	if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {

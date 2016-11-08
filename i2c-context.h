@@ -12,6 +12,10 @@ struct i2c_ctx {
 	bool (*write)(struct i2c_ctx *ctx, uint8_t reg, uint8_t val);
 	/* read one byte from given register */
 	bool (*read)(struct i2c_ctx *ctx, uint8_t reg, uint8_t *val);
+	/* write multiple bytes to addr */
+	bool (*write_raw)(struct i2c_ctx *ctx, uint8_t *buf, uint32_t len);
+	/* read multiple bytes from addr */
+	bool (*read_raw)(struct i2c_ctx *ctx, uint8_t *buf, uint32_t len);
 
 	/* common data */
 	uint8_t addr;
