@@ -643,7 +643,38 @@ static void sharelog(const char*disposition, const struct work*work)
 
 static char *gbt_req = "{\"id\": 0, \"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": [\"coinbasetxn\", \"workid\", \"coinbase/append\"]}]}\n";
 
-static char *gbt_solo_req = "{\"id\": 0, \"method\": \"getblocktemplate\"}\n";
+static char *gbt_solo_req = "{\"id\": 0, \"method\": \"getblocktemplate\", \"params\": [{\"rules\" : [\"segwit\"]}]}\n";
+
+static const char* gbt_understood_rules[1] = { NULL };
+static const char* gbt_solo_understood_rules[2] = {"segwit", NULL};
+
+static bool gbt_check_required_rule(const char* rule, const char** understood_rules)
+{
+	if (!understood_rules || !rule)
+		return false;
+	const char* understood_rule;
+	while((understood_rule = *understood_rules++)) {
+		if (strcmp(understood_rule, rule) == 0)
+			return true;
+	}
+	return false;
+}
+
+
+static bool gbt_check_rules(json_t* rules_arr, const char** understood_rules)
+{
+	if (!rules_arr)
+		return true;
+	int rule_count =  json_array_size(rules_arr);
+	const char* rule;
+	int i;
+	for (i = 0; i < rule_count; i++) {
+		rule = json_string_value(json_array_get(rules_arr, i));
+		if (rule && *rule++ == '!' && !gbt_check_required_rule(rule, understood_rules))
+			return false;
+	}
+	return true;
+}
 
 /* Adjust all the pools' quota to the greatest common denominator after a pool
  * has been added or the quotas changed. */
@@ -2359,13 +2390,21 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 		for (i = 0; i < pool->transactions; i++) {
 			unsigned char binswap[32];
 			const char *hash;
+			const char *txid;
 
 			arr_val = json_array_get(transaction_arr, i);
+			txid = json_string_value(json_object_get(arr_val, "txid"));
 			hash = json_string_value(json_object_get(arr_val, "hash"));
+			if(!txid)
+				txid = hash;
 			txn = json_string_value(json_object_get(arr_val, "data"));
 			len = strlen(txn);
 			cg_memcpy(pool->txn_data + ofs, txn, len);
 			ofs += len;
+#if 0
+			// This logic no longer works post-segwit. The txids will always need to be sent,
+			// as the full txns will also contain witness data that must be omitted in these
+			// hashes.
 			if (!hash) {
 				unsigned char *txn_bin;
 				int txn_len;
@@ -2378,8 +2417,13 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 				gen_hash(txn_bin, hashbin + 32 + 32 * i, txn_len);
 				continue;
 			}
-			if (!hex2bin(binswap, hash, 32)) {
-				applog(LOG_ERR, "Failed to hex2bin hash in gbt_merkle_bins");
+#endif
+			if (!txid) {
+				applog(LOG_ERR, "missing txid in gbt_merkle_bins");
+				return;
+			}
+			if (!hex2bin(binswap, txid, 32)) {
+				applog(LOG_ERR, "Failed to hex2bin txid in gbt_merkle_bins");
 				return;
 			}
 			swab256(hashbin + 32 + 32 * i, binswap);
@@ -2415,6 +2459,60 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 		pool->pool_no);
 }
 
+static const unsigned char witness_nonce[32] = {0};
+static const int witness_nonce_size = sizeof(witness_nonce);
+static const unsigned char witness_header[] = {0xaa, 0x21, 0xa9, 0xed};
+static const int witness_header_size = sizeof(witness_header);
+
+static bool gbt_witness_data(json_t *transaction_arr, unsigned char* witnessdata, unsigned int avail_size)
+{
+	int i, binlen, txncount = json_array_size(transaction_arr);
+	const char* hash;
+	json_t *arr_val;
+	unsigned char *hashbin;
+
+	binlen = txncount * 32 + 32;
+	hashbin = alloca(binlen + 32);
+	memset(hashbin, 0, 32);
+
+	if (avail_size < witness_header_size + 32)
+		return false;
+
+	for (i = 0; i < txncount; i++) {
+		unsigned char binswap[32];
+
+		arr_val = json_array_get(transaction_arr, i);
+		hash = json_string_value(json_object_get(arr_val, "hash"));
+		if (unlikely(!hash)) {
+			applog(LOG_ERR, "Hash missing for transaction");
+			return false;
+		}
+		if (!hex2bin(binswap, hash, 32)) {
+			applog(LOG_ERR, "Failed to hex2bin hash in gbt_witness_data");
+			return false;
+		}
+		swab256(hashbin + 32 + 32 * i, binswap);
+	}
+
+	// Build merkle root (copied from libblkmaker)
+	for (txncount++ ; txncount > 1 ; txncount /= 2) {
+		if (txncount % 2) {
+			// Odd number, duplicate the last
+			memcpy(hashbin + 32 * txncount, hashbin + 32 * (txncount - 1), 32);
+			txncount++;
+		}
+		for (i = 0; i < txncount; i += 2) {
+			// We overlap input and output here, on the first pair
+			gen_hash(hashbin + 32 * i, hashbin + 32 * (i / 2), 64);
+		}
+	}
+
+	memcpy(witnessdata, witness_header, witness_header_size);
+	memcpy(hashbin + 32, &witness_nonce, witness_nonce_size);
+	gen_hash(hashbin, witnessdata + witness_header_size, 32 + witness_nonce_size);
+	return true;
+}
+
 static double diff_from_target(void *target);
 
 static const char scriptsig_header[] = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff";
@@ -2422,7 +2520,7 @@ static unsigned char scriptsig_header_bin[41];
 
 static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 {
-	json_t *transaction_arr, *coinbase_aux;
+	json_t *transaction_arr, *rules_arr, *coinbase_aux;
 	const char *previousblockhash;
 	unsigned char hash_swap[32];
 	struct timeval now;
@@ -2437,10 +2535,16 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	int version;
 	int curtime;
 	int height;
+	int witness_txout_len = 0;
+	int witnessdata_size = 0;
+	bool insert_witness = false;
+	unsigned char witnessdata[36] = {};
+	const char *default_witness_commitment;
 
 	previousblockhash = json_string_value(json_object_get(res_val, "previousblockhash"));
 	target = json_string_value(json_object_get(res_val, "target"));
 	transaction_arr = json_object_get(res_val, "transactions");
+	rules_arr = json_object_get(res_val, "rules");
 	version = json_integer_value(json_object_get(res_val, "version"));
 	curtime = json_integer_value(json_object_get(res_val, "curtime"));
 	bits = json_string_value(json_object_get(res_val, "bits"));
@@ -2448,11 +2552,30 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	coinbasevalue = json_integer_value(json_object_get(res_val, "coinbasevalue"));
 	coinbase_aux = json_object_get(res_val, "coinbaseaux");
 	flags = json_string_value(json_object_get(coinbase_aux, "flags"));
+	default_witness_commitment = json_string_value(json_object_get(res_val, "default_witness_commitment"));
 
 	if (!previousblockhash || !target || !version || !curtime || !bits || !coinbase_aux || !flags) {
 		applog(LOG_ERR, "Pool %d JSON failed to decode GBT", pool->pool_no);
 		return false;
 	}
+
+	if (rules_arr) {
+		int i;
+		int rule_count = json_array_size(rules_arr);
+		const char* rule;
+		for (i = 0; i < rule_count; i++) {
+			rule = json_string_value(json_array_get(rules_arr, i));
+			if (!rule)
+				continue;
+			if (*rule == '!')
+				rule++;
+			if (strncmp(rule, "segwit", 6)) {
+				insert_witness = true;
+				break;
+			}
+		}
+	}
+
 
 	applog(LOG_DEBUG, "previousblockhash: %s", previousblockhash);
 	applog(LOG_DEBUG, "target: %s", target);
@@ -2479,6 +2602,24 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	pool->nValue = coinbasevalue;
 	hex2bin((unsigned char *)&pool->gbt_bits, bits, 4);
 	gbt_merkle_bins(pool, transaction_arr);
+
+	if(insert_witness) {
+		witnessdata_size = sizeof(witnessdata);
+		if (!gbt_witness_data(transaction_arr, witnessdata, witnessdata_size)) {
+			applog(LOG_ERR, "error calculating witness data");
+			return false;
+		}
+		char witness_str[sizeof(witnessdata) * 2];
+		__bin2hex(witness_str, witnessdata, witnessdata_size);
+		applog(LOG_DEBUG, "calculated witness data: %s", witness_str);
+		if (default_witness_commitment) {
+			if(strncmp(witness_str, default_witness_commitment + 4, witnessdata_size * 2) != 0) {
+				applog(LOG_ERR, "bad witness data. %s != %s", default_witness_commitment + 4, witness_str);
+				return false;
+			}
+		}
+	}
+
 	if (pool->transactions < 3)
 		pool->bad_work++;
 	pool->height = height;
@@ -2529,21 +2670,38 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 	len = 	41 // prefix
 		+ ofs // Template length
 		+ 4 // txin sequence no
-		+ 1 // transactions
+		+ 1 // txouts
 		+ 8 // value
 		+ 1 + 25 // txout
 		+ 4; // lock
+
+	if(insert_witness) {
+		len +=  8 //value
+			+   1 + 2 + witnessdata_size; // total scriptPubKey size + OP_RETURN + push size + data
+	}
+
 	free(pool->coinbase);
 	pool->coinbase = cgcalloc(len, 1);
 	cg_memcpy(pool->coinbase + 41, pool->scriptsig_base, ofs);
 	cg_memcpy(pool->coinbase + 41 + ofs, "\xff\xff\xff\xff", 4);
-	pool->coinbase[41 + ofs + 4] = 1;
+	pool->coinbase[41 + ofs + 4] = insert_witness ? 2 : 1;
 	u64 = (uint64_t *)&(pool->coinbase[41 + ofs + 4 + 1]);
 	*u64 = htole64(coinbasevalue);
 
+	if (insert_witness) {
+		unsigned char* witness = &pool->coinbase[41 + ofs + 4 + 1 + 8 + 1 + 25];
+		memset(witness, 0, 8);
+		witness_txout_len += 8;
+		witness[witness_txout_len++] = witnessdata_size + 2; // total scriptPubKey size
+		witness[witness_txout_len++] = 0x6a; // OP_RETURN
+		witness[witness_txout_len++] = witnessdata_size;
+		memcpy(&witness[witness_txout_len], witnessdata, witnessdata_size);
+		witness_txout_len += witnessdata_size;
+	}
+
 	pool->nonce2 = 0;
 	pool->n2size = 4;
-	pool->coinbase_len = 41 + ofs + 4 + 1 + 8 + 1 + 25 + 4;
+	pool->coinbase_len = 41 + ofs + 4 + 1 + 8 + 1 + 25 + witness_txout_len + 4;
 	cg_wunlock(&pool->gbt_lock);
 
 	snprintf(header, 225, "%s%s%s%s%s%s%s",
@@ -6575,7 +6733,26 @@ retry_stratum:
 	if (!pool->probed) {
 		applog(LOG_DEBUG, "Probing for GBT support");
 		val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
-				    gbt_req, true, false, &rolltime, pool, false);
+					gbt_req, true, false, &rolltime, pool, false);
+		if (val) {
+			json_t* rules_arr = json_object_get(val, "rules");
+			if (!gbt_check_rules(rules_arr, gbt_understood_rules)) {
+				applog(LOG_DEBUG, "Not all rules understood for GBT");
+				json_decref(val);
+				val = NULL;
+			}
+		}
+		if (!val) {
+			applog(LOG_DEBUG, "Probing for GBT solo support");
+			val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
+					gbt_solo_req, true, false, &rolltime, pool, false);
+			json_t* rules_arr = json_object_get(val, "rules");
+			if (!gbt_check_rules(rules_arr, gbt_solo_understood_rules)) {
+				applog(LOG_DEBUG, "Not all rules understood for GBT solo");
+				json_decref(val);
+				val = NULL;
+			}
+		}
 		if (val) {
 			bool append = false, submit = false, transactions = false;
 			json_t *res_val, *mutables;
