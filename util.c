@@ -44,6 +44,11 @@
 #include "elist.h"
 #include "compat.h"
 #include "util.h"
+#include "libssplus.h"
+
+#ifdef USE_AVALON7
+#include "driver-avalon7.h"
+#endif
 
 #define DEFAULT_SOCKWAIT 60
 #ifndef STRATUM_USER_AGENT
@@ -2151,8 +2156,13 @@ out_unlock:
 	/* A notify message is the closest stratum gets to a getwork */
 	pool->getwork_requested++;
 	total_getworks++;
-	if (pool == current_pool())
+	if (pool == current_pool()) {
 		opt_work_update = true;
+#ifdef USE_AVALON7
+		if (opt_avalon7_ssplus_enable & pool->has_stratum)
+			ssp_hasher_update_stratum(pool, true);
+#endif
+	}
 out:
 	return ret;
 }
