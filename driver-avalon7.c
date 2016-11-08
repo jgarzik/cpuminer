@@ -2184,7 +2184,7 @@ char *set_avalon7_device_voltage(struct cgpu_info *avalon7, char *arg)
 	if (val < AVA7_DEFAULT_VOLTAGE_MIN || val > AVA7_DEFAULT_VOLTAGE_MAX)
 		return "Invalid value passed to set_avalon7_device_voltage";
 
-	if (addr < 0 || addr>= AVA7_DEFAULT_MODULARS) {
+	if (addr >= AVA7_DEFAULT_MODULARS) {
 		applog(LOG_ERR, "invalid modular index: %d, valid range 0-%d", addr, (AVA7_DEFAULT_MODULARS - 1));
 		return "Invalid modular index to set_avalon7_device_voltage";
 	}
@@ -2193,7 +2193,7 @@ char *set_avalon7_device_voltage(struct cgpu_info *avalon7, char *arg)
 		applog(LOG_ERR, "Disabled modular:%d", addr);
 		return "Disabled modular to set_avalon7_device_voltage";
 	}
-	if (miner_id < 0 || miner_id > info->miner_count[addr]) {
+	if (miner_id > info->miner_count[addr]) {
 		applog(LOG_ERR, "invalid miner index: %d, valid range 0-%d", miner_id, info->miner_count[addr]);
 		return "Invalid miner index to set_avalon7_device_voltage";
 	}
@@ -2247,7 +2247,7 @@ char *set_avalon7_device_freq(struct cgpu_info *avalon7, char *arg)
 	if (val < AVA7_DEFAULT_FREQUENCY_MIN || val > AVA7_DEFAULT_FREQUENCY_MAX)
 		return "Invalid value passed to set_avalon7_device_freq";
 
-	if (addr < 0 || addr >= AVA7_DEFAULT_MODULARS) {
+	if (addr >= AVA7_DEFAULT_MODULARS) {
 		applog(LOG_ERR, "invalid modular index: %d, valid range 0-%d", addr, (AVA7_DEFAULT_MODULARS - 1));
 		return "Invalid modular index to set_avalon7_device_freq";
 	}
@@ -2255,7 +2255,7 @@ char *set_avalon7_device_freq(struct cgpu_info *avalon7, char *arg)
 		applog(LOG_ERR, "Disabled modular:%d", addr);
 		return "Disabled modular to set_avalon7_device_freq";
 	}
-	if (miner_id < 0 || miner_id > info->miner_count[addr]) {
+	if (miner_id > info->miner_count[addr]) {
 		applog(LOG_ERR, "invalid miner index: %d, valid range 0-%d", miner_id, info->miner_count[addr]);
 		return "Invalid miner index to set_avalon7_device_freq";
 	}
