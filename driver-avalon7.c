@@ -198,6 +198,11 @@ static uint32_t decode_voltage(struct avalon7_info *info, int modular_id, uint32
 	return (volt * AVA7_VOLT_ADC_RATIO / info->asic_count[modular_id]);
 }
 
+static uint16_t decode_vin(uint16_t volt)
+{
+	return (volt * AVA7_VIN_ADC_RATIO);
+}
+
 static double decode_pvt_temp(uint16_t pvt_code)
 {
 	double a4 = -1.1876E-11;
@@ -434,6 +439,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 	int pool_no;
 	uint32_t i;
 	int64_t last_diff1;
+	uint16_t vin;
 
 	if (ar->head[0] != AVA7_H1 && ar->head[1] != AVA7_H2) {
 		applog(LOG_DEBUG, "%s-%d-%d: H1 %02x, H2 %02x",
@@ -553,12 +559,17 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 
 		break;
 	case AVA7_P_STATUS_PMU:
-		/* TODO: decode ntc vin led from PMU */
+		/* TODO: decode ntc led from PMU */
 		applog(LOG_DEBUG, "%s-%d-%d: AVA7_P_STATUS_PMU", avalon7->drv->name, avalon7->device_id, modular_id);
 		info->power_good[modular_id] = ar->data[16];
 		for (i = 0; i < AVA7_DEFAULT_PMU_CNT; i++) {
 			memcpy(&info->pmu_version[modular_id][i], ar->data + 24 + (i * 4), 4);
 			info->pmu_version[modular_id][i][4] = '\0';
+		}
+
+		for (i = 0; i < info->miner_count[modular_id]; i++) {
+			memcpy(&vin, ar->data + 8 + i * 2, 2);
+			info->get_vin[modular_id][i] = decode_vin(be16toh(vin));
 		}
 		break;
 	case AVA7_P_STATUS_VOLT:
@@ -1300,6 +1311,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 		for (j = 0; j < info->miner_count[i]; j++) {
 			info->set_voltage[i][j] = opt_avalon7_voltage;
 			info->get_voltage[i][j] = 0;
+			info->get_vin[i][j] = 0;
 		}
 
 		info->freq_mode[i] = AVA7_FREQ_INIT_MODE;
@@ -2000,6 +2012,14 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 
 		sprintf(buf, " FanR[%d%%]", info->fan_pct[i]);
 		strcat(statbuf, buf);
+
+		sprintf(buf, " Vi[");
+		strcat(statbuf, buf);
+		for (j = 0; j < info->miner_count[i]; j++) {
+			sprintf(buf, "%d ", info->get_vin[i][j]);
+			strcat(statbuf, buf);
+		}
+		statbuf[strlen(statbuf) - 1] = ']';
 
 		sprintf(buf, " Vo[");
 		strcat(statbuf, buf);

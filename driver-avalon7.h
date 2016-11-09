@@ -163,6 +163,7 @@
 #define AVA7_DEFAULT_DELTA_FREQ	100
 
 #define AVA7_VOLT_ADC_RATIO	(3.3 / 1024.0 * 125.0 / 43.0 * 10000.0)
+#define AVA7_VIN_ADC_RATIO	(3.3 / 1024.0 * 27.15 / 7.15 * 100.0)
 
 struct avalon7_pkg {
 	uint8_t head[2];
@@ -238,6 +239,7 @@ struct avalon7_info {
 	uint32_t set_voltage[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
 	uint32_t set_frequency[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_DEFAULT_PLL_CNT];
 
+	uint16_t get_vin[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
 	uint32_t get_voltage[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
 	uint32_t get_pll[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_DEFAULT_PLL_CNT];
 	/* spd_pass(4B), spd_fail(4B), sum_failed(4B), sum_num(4B), sum_xor(4B), PLL(6 * 4B) */
