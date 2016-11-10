@@ -1753,10 +1753,17 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		return -1;
 	}
 
-	/* Step 1: Stop polling the device if there is no stratum in 3 minutes, network is down */
+	/* Step 1: Stop polling and detach the device if there is no stratum in 3 minutes, network is down */
 	cgtime(&current);
-	if (tdiff(&current, &(info->last_stratum)) > 180.0)
+	if (tdiff(&current, &(info->last_stratum)) > 180.0) {
+		for (i = 1; i < AVA7_DEFAULT_MODULARS; i++) {
+			if (!info->enable[i])
+				continue;
+			detach_module(avalon7, i);
+		}
+		info->mm_count = 0;
 		return 0;
+	}
 
 	/* Step 2: Try to detect new modules */
 	if ((tdiff(&current, &(info->last_detect)) > AVA7_MODULE_DETECT_INTERVAL) ||
