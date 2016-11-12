@@ -197,6 +197,8 @@ struct avalon7_info {
 	struct pool pool1;
 	struct pool pool2;
 
+	bool work_restart;
+
 	/* For connecter */
 	char auc_version[AVA7_AUC_VER_LEN + 1];
 
