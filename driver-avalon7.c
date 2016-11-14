@@ -965,7 +965,8 @@ static void avalon7_stratum_pkgs(struct cgpu_info *avalon7, struct pool *pool)
 	struct avalon7_info *info = avalon7->device_data;
 	const int merkle_offset = 36;
 	struct avalon7_pkg pkg;
-	int i, a, b, tmp;
+	int i, a, b;
+	uint32_t tmp;
 	unsigned char target[32];
 	int job_id_len, n2size;
 	unsigned short crc;
@@ -1043,14 +1044,17 @@ static void avalon7_stratum_pkgs(struct cgpu_info *avalon7, struct pool *pool)
 	applog(LOG_DEBUG, "%s-%d: Pool stratum message JOBS_ID[%04x]: %s",
 	       avalon7->drv->name, avalon7->device_id,
 	       crc, pool->swork.job_id);
-
-	pkg.data[0] = (crc & 0xff00) >> 8;
-	pkg.data[1] = crc & 0xff;
-	pkg.data[2] = pool->pool_no & 0xff;
-	pkg.data[3] = (pool->pool_no & 0xff00) >> 8;
-	avalon7_init_pkg(&pkg, AVA7_P_JOB_ID, 1, 1);
-	if (avalon7_send_bc_pkgs(avalon7, &pkg))
-		return;
+	tmp = ((crc << 16) | pool->pool_no);
+	if (info->last_jobid != tmp) {
+		info->last_jobid = tmp;
+		pkg.data[0] = (crc & 0xff00) >> 8;
+		pkg.data[1] = crc & 0xff;
+		pkg.data[2] = pool->pool_no & 0xff;
+		pkg.data[3] = (pool->pool_no & 0xff00) >> 8;
+		avalon7_init_pkg(&pkg, AVA7_P_JOB_ID, 1, 1);
+		if (avalon7_send_bc_pkgs(avalon7, &pkg))
+			return;
+	}
 
 	coinbase_len_prehash = pool->nonce2_offset - (pool->nonce2_offset % SHA256_BLOCK_SIZE);
 	coinbase_len_posthash = pool->coinbase_len - coinbase_len_prehash;

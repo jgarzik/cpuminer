@@ -199,6 +199,8 @@ struct avalon7_info {
 
 	bool work_restart;
 
+	uint32_t last_jobid;
+
 	/* For connecter */
 	char auc_version[AVA7_AUC_VER_LEN + 1];
 
