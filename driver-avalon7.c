@@ -263,7 +263,7 @@ char *set_avalon7_fan(char *arg)
 
 	ret = sscanf(arg, "%d-%d", &val1, &val2);
 	if (ret < 1)
-		return "No values passed to avalon7-fan";
+		return "No value passed to avalon7-fan";
 	if (ret == 1)
 		val2 = val1;
 
@@ -325,7 +325,7 @@ char *set_avalon7_voltage(char *arg)
 
 	ret = sscanf(arg, "%d", &val);
 	if (ret < 1)
-		return "No values passed to avalon7-voltage";
+		return "No value passed to avalon7-voltage";
 
 	if (val < AVA7_DEFAULT_VOLTAGE_MIN || val > AVA7_DEFAULT_VOLTAGE_MAX)
 		return "Invalid value passed to avalon7-voltage";
@@ -1339,7 +1339,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 		memset(info->pmu_version[i], 0, sizeof(char) * 5 * AVA7_DEFAULT_PMU_CNT);
 		info->diff1[i] = 0;
 
-		applog(LOG_NOTICE, "%s-%d: New module detect! ID[%d-%x]",
+		applog(LOG_NOTICE, "%s-%d: New module detected! ID[%d-%x]",
 		       avalon7->drv->name, avalon7->device_id, i, info->mm_dna[i][AVA7_MM_DNA_LEN - 1]);
 
 		/* Tell MM, it has been detected */
