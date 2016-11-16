@@ -1246,7 +1246,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 	uint8_t rbuf[AVA7_AUC_P_SIZE];
 
 	/* Detect new modules here */
-	for (i = 1; i < AVA7_DEFAULT_MODULARS; i++) {
+	for (i = 1; i < AVA7_DEFAULT_MODULARS + 1; i++) {
 		if (info->enable[i])
 			continue;
 
@@ -1279,6 +1279,14 @@ static void detect_modules(struct cgpu_info *avalon7)
 
 		if (check_module_exist(avalon7, ret_pkg.data))
 			continue;
+
+		/* Check count of modulars */
+		if (i == AVA7_DEFAULT_MODULARS) {
+			applog(LOG_NOTICE, "You have connected more than %d machines. This is discouraged.", (AVA7_DEFAULT_MODULARS - 1));
+			info->conn_overloaded = true;
+			break;
+		} else
+			info->conn_overloaded = false;
 
 		info->enable[i] = 1;
 		cgtime(&info->elapsed[i]);
@@ -2187,6 +2195,8 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 		auc_temp = decode_auc_temp(info->auc_sensor);
 		root = api_add_temp(root, "AUC Temperature", &auc_temp, true);
 	}
+
+	root = api_add_bool(root, "Connection Overloaded", &info->conn_overloaded, true);
 
 	return root;
 }
