@@ -1423,7 +1423,7 @@ static int polling(struct cgpu_info *avalon7)
 			memset(send_pkg.data, 0, AVA7_P_DATA_LEN);
 			avalon7_init_pkg(&send_pkg, AVA7_P_RSTMMTX, 1, 1);
 			avalon7_iic_xfer_pkg(avalon7, i, &send_pkg, NULL);
-			if (info->error_polling_cnt[i] >= 4)
+			if (info->error_polling_cnt[i] >= 10)
 				detach_module(avalon7, i);
 		}
 
