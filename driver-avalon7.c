@@ -1843,7 +1843,7 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 				break;
 			case AVA7_FREQ_CUTOFF_MODE:
 				if (!info->cutoff[i])
-					info->freq_mode[i] = AVA7_FREQ_PLLADJ_MODE;
+					info->freq_mode[i] = AVA7_FREQ_INIT_MODE;
 				break;
 			case AVA7_FREQ_TEMPADJ_MODE:
 				if (freq_adj_check) {
