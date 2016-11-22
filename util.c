@@ -1444,7 +1444,7 @@ void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
 }
 #endif /* WIN32 */
 
-#if defined(CLOCK_MONOTONIC) && !defined(__FreeBSD__) /* Essentially just linux */
+#if defined(CLOCK_MONOTONIC) && !defined(__FreeBSD__) && !defined(__APPLE__) /* Essentially just linux */
 //#ifdef CLOCK_MONOTONIC /* Essentially just linux */
 void cgtimer_time(cgtimer_t *ts_start)
 {
