@@ -2503,11 +2503,14 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 		}
 	}
 
-	if (ret == USB_INIT_FAIL)
-		applog(LOG_ERR, "%s detect (%d:%d) failed to initialise (incorrect device?)",
+	if (ret == USB_INIT_FAIL) {
+		applog(LOG_ERR, "%s detect (%d:%d) failed to initialise (incorrect device?), resetting",
 				cgpu->drv->dname,
 				(int)(cgpu->usbinfo.bus_number),
 				(int)(cgpu->usbinfo.device_address));
+		if (cgpu->usbdev && cgpu->usbdev->handle)
+			libusb_reset_device(cgpu->usbdev->handle);
+	}
 
 	return (ret == USB_INIT_OK);
 }
