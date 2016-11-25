@@ -3255,6 +3255,9 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		err = usb_perform_transfer(cgpu, usbdev, intinfo, epinfo, ptr, usbbufread,
 					&got, timeout, MODE_BULK_READ, cmd,
 					first ? SEQ0 : SEQ1, cancellable, false);
+		if (NODEV(err))
+			goto out_noerrmsg;
+
 		cgtime(&tv_finish);
 		ptr[got] = '\0';
 
@@ -3290,6 +3293,10 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		} else {
 			tried_reset = 0;
 		}
+
+		if (NODEV(err))
+			goto out_noerrmsg;
+
 		ptr += got;
 		bufleft -= got;
 		if (bufleft < 1)
@@ -3392,6 +3399,9 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 		err = usb_perform_transfer(cgpu, usbdev, intinfo, epinfo, (unsigned char *)buf,
 					tosend, &sent, timeout, MODE_BULK_WRITE,
 					cmd, first ? SEQ0 : SEQ1, false, usbdev->tt);
+		if (NODEV(err))
+			goto out_noerrmsg;
+
 		cgtime(&tv_finish);
 
 		USBDEBUG("USB debug: @_usb_write(%s (nodev=%s)) err=%d%s sent=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), sent);
