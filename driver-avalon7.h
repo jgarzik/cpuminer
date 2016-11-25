@@ -59,7 +59,7 @@
 #define AVA7_DEFAULT_TH_INIT	(0xffff / 2)
 #define AVA7_DEFAULT_TH_MS	1
 #define AVA7_DEFAULT_TH_TIMEOUT	0
-#define AVA7_DEFAULT_NONCE_MASK 31
+#define AVA7_DEFAULT_NONCE_MASK 29
 
 #define AVA7_DEFAULT_IIC_DETECT	false
 
@@ -163,6 +163,7 @@
 #define AVA7_DEFAULT_DELTA_FREQ	100
 
 #define AVA7_VOLT_ADC_RATIO	(3.3 / 1024.0 * 125.0 / 43.0 * 10000.0)
+#define AVA7_VIN_ADC_RATIO	(3.3 / 1024.0 * 27.15 / 7.15 * 100.0)
 
 struct avalon7_pkg {
 	uint8_t head[2];
@@ -195,6 +196,10 @@ struct avalon7_info {
 	struct pool pool0;
 	struct pool pool1;
 	struct pool pool2;
+
+	bool work_restart;
+
+	uint32_t last_jobid;
 
 	/* For connecter */
 	char auc_version[AVA7_AUC_VER_LEN + 1];
@@ -238,6 +243,7 @@ struct avalon7_info {
 	uint32_t set_voltage[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
 	uint32_t set_frequency[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_DEFAULT_PLL_CNT];
 
+	uint16_t get_vin[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
 	uint32_t get_voltage[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
 	uint32_t get_pll[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_DEFAULT_PLL_CNT];
 	/* spd_pass(4B), spd_fail(4B), sum_failed(4B), sum_num(4B), sum_xor(4B), PLL(6 * 4B) */
@@ -256,6 +262,8 @@ struct avalon7_info {
 	uint8_t power_good[AVA7_DEFAULT_MODULARS];
 	char pmu_version[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_PMU_CNT][5];
 	uint64_t diff1[AVA7_DEFAULT_MODULARS];
+
+	bool conn_overloaded;
 };
 
 struct avalon7_iic_info {
