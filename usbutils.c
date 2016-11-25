@@ -3179,18 +3179,15 @@ void usb_reset(struct cgpu_info *cgpu)
 {
 	int pstate, err = 0;
 
-	DEVRLOCK(cgpu, pstate);
+	DEVWLOCK(cgpu, pstate);
 	if (!cgpu->usbinfo.nodev) {
 		err = libusb_reset_device(cgpu->usbdev->handle);
 		applog(LOG_WARNING, "%s %i attempted reset got err:(%d) %s",
 			cgpu->drv->name, cgpu->device_id, err, libusb_error_name(err));
 	}
-	if (NODEV(err)) {
-		cg_ruwlock(&cgpu->usbinfo.devlock);
+	if (NODEV(err))
 		release_cgpu(cgpu);
-		DEVWUNLOCK(cgpu, pstate);
-	} else
-		DEVRUNLOCK(cgpu, pstate);
+	DEVWUNLOCK(cgpu, pstate);
 }
 
 int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz,
