@@ -198,6 +198,11 @@ static uint32_t decode_voltage(struct avalon7_info *info, int modular_id, uint32
 	return (volt * AVA7_VOLT_ADC_RATIO / info->asic_count[modular_id]);
 }
 
+static uint16_t decode_vin(uint16_t volt)
+{
+	return (volt * AVA7_VIN_ADC_RATIO);
+}
+
 static double decode_pvt_temp(uint16_t pvt_code)
 {
 	double a4 = -1.1876E-11;
@@ -258,7 +263,7 @@ char *set_avalon7_fan(char *arg)
 
 	ret = sscanf(arg, "%d-%d", &val1, &val2);
 	if (ret < 1)
-		return "No values passed to avalon7-fan";
+		return "No value passed to avalon7-fan";
 	if (ret == 1)
 		val2 = val1;
 
@@ -320,7 +325,7 @@ char *set_avalon7_voltage(char *arg)
 
 	ret = sscanf(arg, "%d", &val);
 	if (ret < 1)
-		return "No values passed to avalon7-voltage";
+		return "No value passed to avalon7-voltage";
 
 	if (val < AVA7_DEFAULT_VOLTAGE_MIN || val > AVA7_DEFAULT_VOLTAGE_MAX)
 		return "Invalid value passed to avalon7-voltage";
@@ -434,6 +439,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 	int pool_no;
 	uint32_t i;
 	int64_t last_diff1;
+	uint16_t vin;
 
 	if (ar->head[0] != AVA7_H1 && ar->head[1] != AVA7_H2) {
 		applog(LOG_DEBUG, "%s-%d-%d: H1 %02x, H2 %02x",
@@ -553,12 +559,17 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 
 		break;
 	case AVA7_P_STATUS_PMU:
-		/* TODO: decode ntc vin led from PMU */
+		/* TODO: decode ntc led from PMU */
 		applog(LOG_DEBUG, "%s-%d-%d: AVA7_P_STATUS_PMU", avalon7->drv->name, avalon7->device_id, modular_id);
 		info->power_good[modular_id] = ar->data[16];
 		for (i = 0; i < AVA7_DEFAULT_PMU_CNT; i++) {
 			memcpy(&info->pmu_version[modular_id][i], ar->data + 24 + (i * 4), 4);
 			info->pmu_version[modular_id][i][4] = '\0';
+		}
+
+		for (i = 0; i < info->miner_count[modular_id]; i++) {
+			memcpy(&vin, ar->data + 8 + i * 2, 2);
+			info->get_vin[modular_id][i] = decode_vin(be16toh(vin));
 		}
 		break;
 	case AVA7_P_STATUS_VOLT:
@@ -954,7 +965,8 @@ static void avalon7_stratum_pkgs(struct cgpu_info *avalon7, struct pool *pool)
 	struct avalon7_info *info = avalon7->device_data;
 	const int merkle_offset = 36;
 	struct avalon7_pkg pkg;
-	int i, a, b, tmp;
+	int i, a, b;
+	uint32_t tmp;
 	unsigned char target[32];
 	int job_id_len, n2size;
 	unsigned short crc;
@@ -999,6 +1011,12 @@ static void avalon7_stratum_pkgs(struct cgpu_info *avalon7, struct pool *pool)
 	tmp = be32toh(range);
 	memcpy(pkg.data + 24, &tmp, 4);
 
+	if (info->work_restart) {
+		info->work_restart = false;
+		tmp = be32toh(0x1);
+		memcpy(pkg.data + 28, &tmp, 4);
+	}
+
 	avalon7_init_pkg(&pkg, AVA7_P_STATIC, 1, 1);
 	if (avalon7_send_bc_pkgs(avalon7, &pkg))
 		return;
@@ -1026,14 +1044,17 @@ static void avalon7_stratum_pkgs(struct cgpu_info *avalon7, struct pool *pool)
 	applog(LOG_DEBUG, "%s-%d: Pool stratum message JOBS_ID[%04x]: %s",
 	       avalon7->drv->name, avalon7->device_id,
 	       crc, pool->swork.job_id);
-
-	pkg.data[0] = (crc & 0xff00) >> 8;
-	pkg.data[1] = crc & 0xff;
-	pkg.data[2] = pool->pool_no & 0xff;
-	pkg.data[3] = (pool->pool_no & 0xff00) >> 8;
-	avalon7_init_pkg(&pkg, AVA7_P_JOB_ID, 1, 1);
-	if (avalon7_send_bc_pkgs(avalon7, &pkg))
-		return;
+	tmp = ((crc << 16) | pool->pool_no);
+	if (info->last_jobid != tmp) {
+		info->last_jobid = tmp;
+		pkg.data[0] = (crc & 0xff00) >> 8;
+		pkg.data[1] = crc & 0xff;
+		pkg.data[2] = pool->pool_no & 0xff;
+		pkg.data[3] = (pool->pool_no & 0xff00) >> 8;
+		avalon7_init_pkg(&pkg, AVA7_P_JOB_ID, 1, 1);
+		if (avalon7_send_bc_pkgs(avalon7, &pkg))
+			return;
+	}
 
 	coinbase_len_prehash = pool->nonce2_offset - (pool->nonce2_offset % SHA256_BLOCK_SIZE);
 	coinbase_len_posthash = pool->coinbase_len - coinbase_len_prehash;
@@ -1235,7 +1256,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 	uint8_t rbuf[AVA7_AUC_P_SIZE];
 
 	/* Detect new modules here */
-	for (i = 1; i < AVA7_DEFAULT_MODULARS; i++) {
+	for (i = 1; i < AVA7_DEFAULT_MODULARS + 1; i++) {
 		if (info->enable[i])
 			continue;
 
@@ -1269,6 +1290,14 @@ static void detect_modules(struct cgpu_info *avalon7)
 		if (check_module_exist(avalon7, ret_pkg.data))
 			continue;
 
+		/* Check count of modulars */
+		if (i == AVA7_DEFAULT_MODULARS) {
+			applog(LOG_NOTICE, "You have connected more than %d machines. This is discouraged.", (AVA7_DEFAULT_MODULARS - 1));
+			info->conn_overloaded = true;
+			break;
+		} else
+			info->conn_overloaded = false;
+
 		info->enable[i] = 1;
 		cgtime(&info->elapsed[i]);
 		memcpy(info->mm_dna[i], ret_pkg.data, AVA7_MM_DNA_LEN);
@@ -1300,6 +1329,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 		for (j = 0; j < info->miner_count[i]; j++) {
 			info->set_voltage[i][j] = opt_avalon7_voltage;
 			info->get_voltage[i][j] = 0;
+			info->get_vin[i][j] = 0;
 		}
 
 		info->freq_mode[i] = AVA7_FREQ_INIT_MODE;
@@ -1327,7 +1357,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 		memset(info->pmu_version[i], 0, sizeof(char) * 5 * AVA7_DEFAULT_PMU_CNT);
 		info->diff1[i] = 0;
 
-		applog(LOG_NOTICE, "%s-%d: New module detect! ID[%d-%x]",
+		applog(LOG_NOTICE, "%s-%d: New module detected! ID[%d-%x]",
 		       avalon7->drv->name, avalon7->device_id, i, info->mm_dna[i][AVA7_MM_DNA_LEN - 1]);
 
 		/* Tell MM, it has been detected */
@@ -1403,7 +1433,7 @@ static int polling(struct cgpu_info *avalon7)
 			memset(send_pkg.data, 0, AVA7_P_DATA_LEN);
 			avalon7_init_pkg(&send_pkg, AVA7_P_RSTMMTX, 1, 1);
 			avalon7_iic_xfer_pkg(avalon7, i, &send_pkg, NULL);
-			if (info->error_polling_cnt[i] >= 4)
+			if (info->error_polling_cnt[i] >= 10)
 				detach_module(avalon7, i);
 		}
 
@@ -1678,6 +1708,12 @@ static void avalon7_sswork_update(struct cgpu_info *avalon7)
 	struct pool *pool;
 	int coinbase_len_posthash, coinbase_len_prehash;
 
+	/*
+	 * NOTE: We need mark work_restart to private information,
+	 * So that it cann't reset by hash_driver_work
+	 */
+	if (thr->work_restart)
+		info->work_restart = thr->work_restart;
 	applog(LOG_DEBUG, "%s-%d: New stratum: restart: %d, update: %d",
 	       avalon7->drv->name, avalon7->device_id,
 	       thr->work_restart, thr->work_update);
@@ -1741,10 +1777,17 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		return -1;
 	}
 
-	/* Step 1: Stop polling the device if there is no stratum in 3 minutes, network is down */
+	/* Step 1: Stop polling and detach the device if there is no stratum in 3 minutes, network is down */
 	cgtime(&current);
-	if (tdiff(&current, &(info->last_stratum)) > 180.0)
+	if (tdiff(&current, &(info->last_stratum)) > 180.0) {
+		for (i = 1; i < AVA7_DEFAULT_MODULARS; i++) {
+			if (!info->enable[i])
+				continue;
+			detach_module(avalon7, i);
+		}
+		info->mm_count = 0;
 		return 0;
+	}
 
 	/* Step 2: Try to detect new modules */
 	if ((tdiff(&current, &(info->last_detect)) > AVA7_MODULE_DETECT_INTERVAL) ||
@@ -1816,7 +1859,7 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 				break;
 			case AVA7_FREQ_CUTOFF_MODE:
 				if (!info->cutoff[i])
-					info->freq_mode[i] = AVA7_FREQ_PLLADJ_MODE;
+					info->freq_mode[i] = AVA7_FREQ_INIT_MODE;
 				break;
 			case AVA7_FREQ_TEMPADJ_MODE:
 				if (freq_adj_check) {
@@ -2001,6 +2044,14 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 		sprintf(buf, " FanR[%d%%]", info->fan_pct[i]);
 		strcat(statbuf, buf);
 
+		sprintf(buf, " Vi[");
+		strcat(statbuf, buf);
+		for (j = 0; j < info->miner_count[i]; j++) {
+			sprintf(buf, "%d ", info->get_vin[i][j]);
+			strcat(statbuf, buf);
+		}
+		statbuf[strlen(statbuf) - 1] = ']';
+
 		sprintf(buf, " Vo[");
 		strcat(statbuf, buf);
 		for (j = 0; j < info->miner_count[i]; j++) {
@@ -2160,6 +2211,8 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 		auc_temp = decode_auc_temp(info->auc_sensor);
 		root = api_add_temp(root, "AUC Temperature", &auc_temp, true);
 	}
+
+	root = api_add_bool(root, "Connection Overloaded", &info->conn_overloaded, true);
 
 	return root;
 }
