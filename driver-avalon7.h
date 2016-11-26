@@ -178,7 +178,9 @@ struct avalon7_pkg {
 
 struct avalon7_info {
 	/* Public data */
-	double newnonce;
+	int64_t last_diff1;
+	int64_t pending_diff1;
+	double last_rej;
 
 	int mm_count;
 	int xfer_err_cnt;

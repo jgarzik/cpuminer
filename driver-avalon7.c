@@ -1211,7 +1211,9 @@ static bool avalon7_prepare(struct thr_info *thr)
 	struct cgpu_info *avalon7 = thr->cgpu;
 	struct avalon7_info *info = avalon7->device_data;
 
-	info->newnonce = 0;
+	info->last_diff1 = 0;
+	info->pending_diff1 = 0;
+	info->last_rej = 0;
 	info->mm_count = 0;
 	info->xfer_err_cnt = 0;
 	info->pool_no = 0;
@@ -1763,9 +1765,10 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 	struct cgpu_info *avalon7 = thr->cgpu;
 	struct avalon7_info *info = avalon7->device_data;
 	struct timeval current;
-	double device_tdiff, h;
 	int i, j, k, count = 0;
+	double device_tdiff;
 	int temp_max;
+	int64_t ret;
 	bool update_settings = false;
 	bool freq_dec_check = false;
 	bool freq_adj_check = false;
@@ -1926,15 +1929,26 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 	}
 	info->mm_count = count;
 
-	/* Step 6: Calculate hashes */
-	h = avalon7->diff_accepted - info->newnonce;
-	info->newnonce = avalon7->diff_accepted;
-	if (h && !info->firsthash.tv_sec) {
+	/* Step 6: Calculate hashes. Use the diff1 value which is scaled by
+	 * device diff and is usually lower than pool diff which will give a
+	 * more stable result, but remove diff rejected shares to more closely
+	 * approximate diff accepted values. */
+	info->pending_diff1 += avalon7->diff1 - info->last_diff1;
+	info->last_diff1 = avalon7->diff1;
+	info->pending_diff1 -= avalon7->diff_rejected - info->last_rej;
+	info->last_rej = avalon7->diff_rejected;
+	if (info->pending_diff1 && !info->firsthash.tv_sec) {
 		cgtime(&info->firsthash);
 		copy_time(&(avalon7->dev_start_tv), &(info->firsthash));
 	}
 
-	return (int64_t)(h * 0xffffffffull);
+	if (info->pending_diff1 <= 0)
+		ret = 0;
+	else {
+		ret = info->pending_diff1;
+		info->pending_diff1 = 0;
+	}
+	return ret * 0xffffffffull;
 }
 
 static float avalon7_hash_cal(struct cgpu_info *avalon7, int modular_id)
