@@ -1364,7 +1364,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 
 		info->temp_overheat[i] = AVA7_DEFAULT_TEMP_OVERHEAT;
 		info->temp_target[i] = opt_avalon7_temp_target;
-		info->fan_pct[i] = opt_avalon7_fan_min;
+		info->fan_pct[i] = opt_avalon7_fan_min + (opt_avalon7_fan_min + opt_avalon7_fan_max) / 3;
 		for (j = 0; j < info->miner_count[i]; j++) {
 			info->set_voltage[i][j] = opt_avalon7_voltage;
 			info->get_voltage[i][j] = 0;
