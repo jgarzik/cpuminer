@@ -47,7 +47,7 @@
 
 #define AVA7_DEFAULT_MODULARS	7	/* Only support 6 modules maximum with one AUC */
 #define AVA7_DEFAULT_MINER_CNT	4
-#define AVA7_DEFAULT_ASIC_MAX	20
+#define AVA7_DEFAULT_ASIC_MAX	22
 #define AVA7_DEFAULT_PLL_CNT	6
 #define AVA7_DEFAULT_PMU_CNT	2
 
@@ -165,8 +165,11 @@
 #define AVA7_DEFAULT_DELTA_T	0
 #define AVA7_DEFAULT_DELTA_FREQ	100
 
-#define AVA7_VOLT_ADC_RATIO	(3.3 / 1024.0 * 125.0 / 43.0 * 10000.0)
 #define AVA7_VIN_ADC_RATIO	(3.3 / 1024.0 * 27.15 / 7.15 * 100.0)
+
+#define AVA7_MM711_VOUT_ADC_RATIO	(3.3 / 1024.0 * 125.0 / 43.0 * 10000.0 * 100.0)
+#define AVA7_MM721_VOUT_ADC_RATIO	(3.3 / 1024.0 * 125.0 / 43.0 * 10000.0 * 100.0)
+#define AVA7_MM741_VOUT_ADC_RATIO	(3.3 / 1024.0 * 63.0 / 20.0 * 10000.0 * 100.0)
 
 struct avalon7_pkg {
 	uint8_t head[2];
@@ -268,6 +271,8 @@ struct avalon7_info {
 	uint8_t power_good[AVA7_DEFAULT_MODULARS];
 	char pmu_version[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_PMU_CNT][5];
 	uint64_t diff1[AVA7_DEFAULT_MODULARS];
+
+	uint16_t vout_adc_ratio[AVA7_DEFAULT_MODULARS];
 
 	bool conn_overloaded;
 };
