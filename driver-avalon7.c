@@ -195,7 +195,7 @@ static uint32_t encode_voltage(uint32_t volt)
 
 static uint32_t decode_voltage(struct avalon7_info *info, int modular_id, uint32_t volt)
 {
-	return (volt * AVA7_VOLT_ADC_RATIO / info->asic_count[modular_id]);
+	return (volt * info->vout_adc_ratio[modular_id] / info->asic_count[modular_id] / 100);
 }
 
 static uint16_t decode_vin(uint16_t volt)
@@ -1311,16 +1311,19 @@ static void detect_modules(struct cgpu_info *avalon7)
 		if (!strncmp((char *)&(info->mm_version[i]), AVA7_MM711_PREFIXSTR, 3)) {
 			info->mod_type[i] = AVA7_TYPE_MM711;
 			info->asic_count[i] = AVA7_MM711_ASIC_CNT;
+			info->vout_adc_ratio[i] = AVA7_MM711_VOUT_ADC_RATIO;
 		}
 
 		if (!strncmp((char *)&(info->mm_version[i]), AVA7_MM721_PREFIXSTR, 3)) {
 			info->mod_type[i] = AVA7_TYPE_MM721;
 			info->asic_count[i] = AVA7_MM721_ASIC_CNT;
+			info->vout_adc_ratio[i] = AVA7_MM721_VOUT_ADC_RATIO;
 		}
 
 		if (!strncmp((char *)&(info->mm_version[i]), AVA7_MM741_PREFIXSTR, 3)) {
 			info->mod_type[i] = AVA7_TYPE_MM741;
 			info->asic_count[i] = AVA7_MM741_ASIC_CNT;
+			info->vout_adc_ratio[i] = AVA7_MM741_VOUT_ADC_RATIO;
 		}
 
 		info->temp_overheat[i] = AVA7_DEFAULT_TEMP_OVERHEAT;
