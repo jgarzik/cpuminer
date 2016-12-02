@@ -323,6 +323,8 @@ bool opt_usb_list_all;
 cgsem_t usb_resource_sem;
 static pthread_t usb_poll_thread;
 static bool usb_polling;
+static bool polling_usb;
+static bool usb_reinit;
 #endif
 
 char *opt_kernel_path;
@@ -9557,6 +9559,23 @@ static void hotplug_process(void)
 
 #define DRIVER_DRV_DETECT_HOTPLUG(X) X##_drv.drv_detect(true);
 
+static void reinit_usb(void)
+{
+	int err;
+
+	usb_reinit = true;
+	/* Wait till libusb_poll_thread is no longer polling */
+	while (polling_usb)
+		cgsleep_ms(100);
+
+	applog(LOG_DEBUG, "Reinitialising libusb");
+	libusb_exit(NULL);
+	err = libusb_init(NULL);
+	if (err)
+		quit(1, "Reinit of libusb failed err %d:%s", err, libusb_error_name(err));
+	usb_reinit = false;
+}
+
 static void *hotplug_thread(void __maybe_unused *userdata)
 {
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
@@ -9582,6 +9601,11 @@ static void *hotplug_thread(void __maybe_unused *userdata)
 
 			if (new_devices)
 				hotplug_process();
+
+			/* If we have no active devices, libusb may need to
+			 * be re-initialised to work properly */
+			if (total_devices == zombie_devs)
+				reinit_usb();
 
 			// hotplug_time >0 && <=9999
 			cgsleep_ms(hotplug_time * 1000);
@@ -9617,6 +9641,11 @@ static void *libusb_poll_thread(void __maybe_unused *arg)
 	while (likely(usb_polling)) {
 		tv_end.tv_sec = 0;
 		tv_end.tv_usec = 100000;
+		while (usb_reinit) {
+			polling_usb = false;
+			cgsleep_ms(100);
+		}
+		polling_usb = true;
 		libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
 	}
 
