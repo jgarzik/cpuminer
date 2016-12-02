@@ -852,10 +852,12 @@ static char *set_int_0_to_7680(const char *arg, int *i)
         return set_int_range(arg, i, 0, 7680);
 }
 
+#if defined(USE_AVALON4) || defined(USE_AVALON7)
 static char *set_int_1_to_60(const char *arg, int *i)
 {
         return set_int_range(arg, i, 1, 60);
 }
+#endif
 
 static char *set_int_0_to_200(const char *arg, int *i)
 {
