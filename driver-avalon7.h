@@ -44,7 +44,7 @@
 
 #define AVA7_DEFAULT_MODULARS	7	/* Only support 6 modules maximum with one AUC */
 #define AVA7_DEFAULT_MINER_CNT	4
-#define AVA7_DEFAULT_ASIC_MAX	20
+#define AVA7_DEFAULT_ASIC_MAX	22
 #define AVA7_DEFAULT_PLL_CNT	6
 #define AVA7_DEFAULT_PMU_CNT	2
 
