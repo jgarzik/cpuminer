@@ -463,14 +463,14 @@ out:
 	return pwm;
 }
 
-static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_id)
+static int decode_pkg(struct cgpu_info *avalon7, struct avalon7_ret *ar, int modular_id)
 {
-	struct cgpu_info *avalon7 = thr->cgpu;
 	struct avalon7_info *info = avalon7->device_data;
 	struct pool *pool, *real_pool;
 	struct pool *pool_stratum0 = &info->pool0;
 	struct pool *pool_stratum1 = &info->pool1;
 	struct pool *pool_stratum2 = &info->pool2;
+	struct thr_info *thr = NULL;
 
 	unsigned short expected_crc;
 	unsigned short actual_crc;
@@ -481,6 +481,8 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 	int64_t last_diff1;
 	uint16_t vin;
 
+	if (likely(avalon7->thr))
+		thr = avalon7->thr[0];
 	if (ar->head[0] != AVA7_H1 && ar->head[1] != AVA7_H2) {
 		applog(LOG_DEBUG, "%s-%d-%d: H1 %02x, H2 %02x",
 				avalon7->drv->name, avalon7->device_id, modular_id,
@@ -556,11 +558,16 @@ static int decode_pkg(struct thr_info *thr, struct avalon7_ret *ar, int modular_
 				applog(LOG_ERR, "%s-%d-%d: Cannot match to any stratum! (%s)",
 						avalon7->drv->name, avalon7->device_id, modular_id,
 						pool->swork.job_id);
-				inc_hw_errors(thr);
+				if (likely(thr))
+					inc_hw_errors(thr);
 				info->hw_works_i[modular_id][miner]++;
 				break;
 			}
 		}
+
+		/* Can happen during init sequence before add_cgpu */
+		if (unlikely(!thr))
+			break;
 
 		last_diff1 = avalon7->diff1;
 		if (!submit_nonce2_nonce(thr, pool, real_pool, nonce2, nonce, ntime))
@@ -1199,9 +1206,11 @@ static struct cgpu_info *avalon7_iic_detect(void)
 	return avalon7;
 }
 
+static void detect_modules(struct cgpu_info *avalon7);
+
 static struct cgpu_info *avalon7_auc_detect(struct libusb_device *dev, struct usb_find_devices *found)
 {
-	int i;
+	int i, modules = 0;
 	struct avalon7_info *info;
 	struct cgpu_info *avalon7 = usb_alloc_cgpu(&avalon7_drv, 1);
 	char auc_ver[AVA7_AUC_VER_LEN];
@@ -1219,11 +1228,6 @@ static struct cgpu_info *avalon7_auc_detect(struct libusb_device *dev, struct us
 	if (avalon7_auc_init(avalon7, auc_ver) && avalon7_auc_init(avalon7, auc_ver))
 		return NULL;
 
-	/* We have an avalon7 AUC connected */
-	avalon7->threads = 1;
-	add_cgpu(avalon7);
-
-	update_usb_stats(avalon7);
 	applog(LOG_INFO, "%s-%d: Found at %s", avalon7->drv->name, avalon7->device_id,
 	       avalon7->device_path);
 
@@ -1239,6 +1243,23 @@ static struct cgpu_info *avalon7_auc_detect(struct libusb_device *dev, struct us
 		info->enable[i] = 0;
 
 	info->connecter = AVA7_CONNECTER_AUC;
+
+	detect_modules(avalon7);
+	for (i = 0; i < AVA7_DEFAULT_MODULARS; i++)
+		modules += info->enable[i];
+
+	if (!modules) {
+		applog(LOG_INFO, "avalon7 found but no modules initialised");
+		free(info);
+		avalon7 = usb_free_cgpu(avalon7);
+		return NULL;
+	}
+
+	/* We have an avalon7 AUC connected */
+	avalon7->threads = 1;
+	add_cgpu(avalon7);
+
+	update_usb_stats(avalon7);
 
 	return avalon7;
 }
@@ -1294,7 +1315,6 @@ static int check_module_exist(struct cgpu_info *avalon7, uint8_t mm_dna[AVA7_MM_
 static void detect_modules(struct cgpu_info *avalon7)
 {
 	struct avalon7_info *info = avalon7->device_data;
-	struct thr_info *thr = avalon7->thr[0];
 	struct avalon7_pkg send_pkg;
 	struct avalon7_ret ret_pkg;
 	uint32_t tmp;
@@ -1315,7 +1335,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 		avalon7_init_pkg(&send_pkg, AVA7_P_DETECT, 1, 1);
 		err = avalon7_iic_xfer_pkg(avalon7, AVA7_MODULE_BROADCAST, &send_pkg, &ret_pkg);
 		if (err == AVA7_SEND_OK) {
-			if (decode_pkg(thr, &ret_pkg, AVA7_MODULE_BROADCAST)) {
+			if (decode_pkg(avalon7, &ret_pkg, AVA7_MODULE_BROADCAST)) {
 				applog(LOG_DEBUG, "%s-%d: Should be AVA7_P_ACKDETECT(%d), but %d",
 				       avalon7->drv->name, avalon7->device_id, AVA7_P_ACKDETECT, ret_pkg.type);
 				continue;
@@ -1475,7 +1495,7 @@ static int polling(struct cgpu_info *avalon7)
 		avalon7_init_pkg(&send_pkg, AVA7_P_POLLING, 1, 1);
 		ret = avalon7_iic_xfer_pkg(avalon7, i, &send_pkg, &ar);
 		if (ret == AVA7_SEND_OK)
-			decode_err = decode_pkg(thr, &ar, i);
+			decode_err = decode_pkg(avalon7, &ar, i);
 
 		if (ret != AVA7_SEND_OK || decode_err) {
 			info->error_polling_cnt[i]++;
