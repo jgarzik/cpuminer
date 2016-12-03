@@ -950,7 +950,11 @@ static int avalon7_iic_xfer_pkg(struct cgpu_info *avalon7, uint8_t slave_addr,
 						err, rcnt, rlen);
 
 				cgsleep_ms(5 * 1000); /* Wait MM reset */
-				avalon7_auc_init(avalon7, info->auc_version);
+				if (avalon7_auc_init(avalon7, info->auc_version)) {
+					applog(LOG_WARNING, "%s-%d: Failed to re-init auc, unplugging for new hotplug",
+					       avalon7->drv->name, avalon7->device_id);
+					usb_nodev(avalon7);
+				}
 			}
 			return AVA7_SEND_ERROR;
 		}
