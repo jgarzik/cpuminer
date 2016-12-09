@@ -1452,7 +1452,6 @@ static void detach_module(struct cgpu_info *avalon7, int addr)
 static int polling(struct cgpu_info *avalon7)
 {
 	struct avalon7_info *info = avalon7->device_data;
-	struct thr_info *thr = avalon7->thr[0];
 	struct avalon7_pkg send_pkg;
 	struct avalon7_ret ar;
 	int i, tmp, ret, decode_err = 0;
