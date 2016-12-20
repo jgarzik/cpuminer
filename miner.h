@@ -1519,6 +1519,7 @@ extern bool successful_connect;
 extern void adl(void);
 extern void app_restart(void);
 extern void roll_work(struct work *work);
+extern void roll_work_ntime(struct work *work, int noffset);
 extern struct work *make_clone(struct work *work);
 extern void clean_work(struct work *work);
 extern void _free_work(struct work **workptr, const char *file, const char *func, const int line);
