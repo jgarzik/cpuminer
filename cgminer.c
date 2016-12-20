@@ -4331,6 +4331,29 @@ void roll_work(struct work *work)
 	work->id = total_work_inc();
 }
 
+void roll_work_ntime(struct work *work, int noffset)
+{
+	uint32_t *work_ntime;
+	uint32_t ntime;
+
+	work_ntime = (uint32_t *)(work->data + 68);
+	ntime = be32toh(*work_ntime);
+	ntime += noffset;
+	*work_ntime = htobe32(ntime);
+	local_work++;
+	work->rolls += noffset;
+	work->nonce = 0;
+	applog(LOG_DEBUG, "Successfully rolled work");
+
+	/* Change the ntime field if this is stratum work */
+	if (work->ntime)
+		modify_ntime(work->ntime, noffset);
+
+	/* This is now a different work item so it needs a different ID for the
+	 * hashtable */
+	work->id = total_work_inc();
+}
+
 struct work *make_clone(struct work *work)
 {
 	struct work *work_clone = copy_work(work);
@@ -7174,9 +7197,7 @@ bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *r
 	cg_wunlock(&pool->data_lock);
 
 	gen_stratum_work(pool, work);
-	while (ntime--) {
-		roll_work(work);
-	}
+	roll_work_ntime(work, ntime);
 
 	work->pool = real_pool;
 	/* Inherit the sdiff from the original stratum */
