@@ -255,6 +255,8 @@ static char *opt_set_avalon4_freq;
 #ifdef USE_AVALON7
 static char *opt_set_avalon7_fan;
 static char *opt_set_avalon7_voltage;
+static char *opt_set_avalon7_voltage_level;
+static char *opt_set_avalon7_voltage_offset;
 static char *opt_set_avalon7_freq;
 #endif
 #ifdef USE_AVALON_MINER
@@ -1390,6 +1392,12 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_CBARG("--avalon7-voltage",
 		     set_avalon7_voltage, NULL, &opt_set_avalon7_voltage,
 		     "Set Avalon7 default core voltage, in millivolts, step: 78"),
+	OPT_WITH_CBARG("--avalon7-voltage-level",
+		     set_avalon7_voltage_level, NULL, &opt_set_avalon7_voltage_level,
+		     "Set Avalon7 default level of core voltage, range:[0, 15], step: 1"),
+	OPT_WITH_CBARG("--avalon7-voltage-offset",
+		     set_avalon7_voltage_offset, NULL, &opt_set_avalon7_voltage_offset,
+		     "Set Avalon7 default offset of core voltage, range:[-2, 1], step: 1"),
 	OPT_WITH_CBARG("--avalon7-freq",
 		     set_avalon7_freq, NULL, &opt_set_avalon7_freq,
 		     "Set Avalon7 default frequency, range:[24, 1404], step: 12, example: 500"),

@@ -282,6 +282,8 @@ ASIC SPECIFIC COMMANDS
 --avalon4-least-pll <arg> Set least pll check threshold for smart speed mode 2 (default: 768)
 --avalon4-most-pll <arg> Set most pll check threshold for smart speed mode 2 (default: 256)
 --avalon7-voltage   Set Avalon7 default core voltage, in millivolts, step: 78
+--avalon7-voltage-level Set Avalon7 default level of core voltage, range:[0, 15], step: 1
+--avalon7-voltage-offset Set Avalon7 default offset of core voltage, range:[-2, 1], step: 1
 --avalon7-freq      Set Avalon7 default frequency, range:[24, 1404], step: 12, example: 500
 --avalon7-freq-sel <arg> Set Avalon7 default frequency select, range:[0, 5], step: 1, example: 3 (default: 0)
 --avalon7-fan       Set Avalon7 target fan speed, range:[0, 100], step: 1, example: 0-100
@@ -604,6 +606,8 @@ Avalon4 Devices
 Avalon7 Devices
 
 --avalon7-voltage   Set Avalon7 default core voltage, in millivolts, step: 78
+--avalon7-voltage-level Set Avalon7 default level of core voltage, range:[0, 15], step: 1
+--avalon7-voltage-offset Set Avalon7 default offset of core voltage, range:[-2, 1], step: 1
 --avalon7-freq      Set Avalon7 default frequency, range:[24, 1404], step: 12, example: 500
 --avalon7-freq-sel <arg> Set Avalon7 default frequency select, range:[0, 5], step: 1, example: 3 (default: 0)
 --avalon7-fan       Set Avalon7 target fan speed, range:[0, 100], step: 1, example: 0-100

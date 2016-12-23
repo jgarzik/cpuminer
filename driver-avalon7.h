@@ -30,6 +30,14 @@
 #define AVA7_DEFAULT_VOLTAGE_MIN	3889
 #define AVA7_DEFAULT_VOLTAGE_MAX	5059
 #define AVA7_INVALID_VOLTAGE	0
+#define AVA7_DEFAULT_VOLTAGE_STEP	78
+
+#define AVA7_DEFAULT_VOLTAGE_LEVEL_MIN	0
+#define AVA7_DEFAULT_VOLTAGE_LEVEL_MAX	15
+
+#define AVA7_DEFAULT_VOLTAGE_OFFSET_MIN	-2
+#define AVA7_DEFAULT_VOLTAGE_OFFSET	0
+#define AVA7_DEFAULT_VOLTAGE_OFFSET_MAX	1
 
 #define AVA7_DEFAULT_FREQUENCY_MIN	24 /* NOTE: It cann't support 0 */
 #define AVA7_DEFAULT_FREQUENCY_0	600
@@ -289,6 +297,8 @@ struct avalon7_dev_description {
 extern char *set_avalon7_fan(char *arg);
 extern char *set_avalon7_freq(char *arg);
 extern char *set_avalon7_voltage(char *arg);
+extern char *set_avalon7_voltage_level(char *arg);
+extern char *set_avalon7_voltage_offset(char *arg);
 extern int opt_avalon7_temp_target;
 extern int opt_avalon7_polling_delay;
 extern int opt_avalon7_aucspeed;

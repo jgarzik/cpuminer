@@ -24,6 +24,8 @@ int opt_avalon7_fan_min = AVA7_DEFAULT_FAN_MIN;
 int opt_avalon7_fan_max = AVA7_DEFAULT_FAN_MAX;
 
 int opt_avalon7_voltage = AVA7_INVALID_VOLTAGE;
+int opt_avalon7_voltage_offset = AVA7_DEFAULT_VOLTAGE_OFFSET;
+
 int opt_avalon7_freq[AVA7_DEFAULT_PLL_CNT] = {AVA7_DEFAULT_FREQUENCY_0,
 					      AVA7_DEFAULT_FREQUENCY_1,
 					      AVA7_DEFAULT_FREQUENCY_2,
@@ -218,7 +220,15 @@ static uint32_t encode_voltage(uint32_t volt)
 	if (volt < AVA7_DEFAULT_VOLTAGE_MIN)
 	      volt = AVA7_DEFAULT_VOLTAGE_MIN;
 
-	return 0x8000 | ((volt - AVA7_DEFAULT_VOLTAGE_MIN) / 78);
+	return 0x8000 | ((volt - AVA7_DEFAULT_VOLTAGE_MIN) / AVA7_DEFAULT_VOLTAGE_STEP);
+}
+
+static uint32_t convert_voltage_level(uint32_t level)
+{
+	if (level > AVA7_DEFAULT_VOLTAGE_LEVEL_MAX)
+             level = AVA7_DEFAULT_VOLTAGE_LEVEL_MAX;
+
+       return AVA7_DEFAULT_VOLTAGE_MIN + level * AVA7_DEFAULT_VOLTAGE_STEP;
 }
 
 static uint32_t decode_voltage(struct avalon7_info *info, int modular_id, uint32_t volt)
@@ -361,6 +371,38 @@ char *set_avalon7_voltage(char *arg)
 	opt_avalon7_voltage = val;
 
 	return NULL;
+}
+
+char *set_avalon7_voltage_level(char *arg)
+{
+       int val, ret;
+
+       ret = sscanf(arg, "%d", &val);
+       if (ret < 1)
+               return "No value passed to avalon7-voltage-level";
+
+       if (val < AVA7_DEFAULT_VOLTAGE_LEVEL_MIN || val > AVA7_DEFAULT_VOLTAGE_LEVEL_MAX)
+               return "Invalid value passed to avalon7-voltage-level";
+
+       opt_avalon7_voltage = convert_voltage_level(val);
+
+       return NULL;
+}
+
+char *set_avalon7_voltage_offset(char *arg)
+{
+       int val, ret;
+
+       ret = sscanf(arg, "%d", &val);
+       if (ret < 1)
+               return "No value passed to avalon7-voltage-offset";
+
+       if (val < AVA7_DEFAULT_VOLTAGE_OFFSET_MIN || val > AVA7_DEFAULT_VOLTAGE_OFFSET_MAX)
+               return "Invalid value passed to avalon7-voltage-offset";
+
+       opt_avalon7_voltage_offset = val;
+
+       return NULL;
 }
 
 static int avalon7_init_pkg(struct avalon7_pkg *pkg, uint8_t type, uint8_t idx, uint8_t cnt)
@@ -1639,7 +1681,8 @@ static void avalon7_set_voltage(struct cgpu_info *avalon7, int addr, unsigned in
 
 	/* FIXME: miner_count should <= 8 */
 	for (i = 0; i < info->miner_count[addr]; i++) {
-		tmp = be32toh(encode_voltage(voltage[i]));
+		tmp = be32toh(encode_voltage(voltage[i] +
+				opt_avalon7_voltage_offset * AVA7_DEFAULT_VOLTAGE_STEP));
 		memcpy(send_pkg.data + i * 4, &tmp, 4);
 	}
 	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set voltage miner %d, (%d-%d)",
@@ -2319,6 +2362,7 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 	}
 
 	root = api_add_bool(root, "Connection Overloaded", &info->conn_overloaded, true);
+	root = api_add_int(root, "Voltage Offset", &opt_avalon7_voltage_offset, true);
 
 	return root;
 }
