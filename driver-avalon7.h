@@ -19,10 +19,6 @@
 #define AVA7_TEMP_FREQADJ		104
 #define AVA7_FREQUENCY_MAX	1404
 
-#define AVA7_MM711_ASIC_CNT		18
-#define AVA7_MM721_ASIC_CNT		18
-#define AVA7_MM741_ASIC_CNT		22
-
 #define AVA7_DEFAULT_FAN_MIN		5 /* % */
 #define AVA7_DEFAULT_FAN_MAX		100
 #define AVA7_DEFAULT_FAN_INTERVAL	15 /* Seconds */
@@ -32,8 +28,8 @@
 #define AVA7_DEFAULT_TEMP_HYSTERESIS	5
 
 #define AVA7_DEFAULT_VOLTAGE_MIN	3889
-#define AVA7_DEFAULT_VOLTAGE	4981
 #define AVA7_DEFAULT_VOLTAGE_MAX	5059
+#define AVA7_INVALID_VOLTAGE	0
 
 #define AVA7_DEFAULT_FREQUENCY_MIN	24 /* NOTE: It cann't support 0 */
 #define AVA7_DEFAULT_FREQUENCY_0	600
@@ -137,16 +133,6 @@
 
 #define AVA7_MODULE_BROADCAST	0
 /* End of avalon7 protocol package type */
-
-#define AVA7_MM711_PREFIXSTR	"711"
-#define AVA7_MM721_PREFIXSTR	"721"
-#define AVA7_MM741_PREFIXSTR	"741"
-#define AVA7_MM_VERNULL		"NONE"
-
-#define AVA7_TYPE_MM711		711
-#define AVA7_TYPE_MM721		721
-#define AVA7_TYPE_MM741		741
-#define AVA7_TYPE_NULL		00
 
 #define AVA7_IIC_RESET		0xa0
 #define AVA7_IIC_INIT		0xa1
@@ -283,6 +269,15 @@ struct avalon7_iic_info {
 		uint32_t aucParam[2];
 		uint8_t slave_addr;
 	} iic_param;
+};
+
+struct avalon7_dev_description {
+	uint8_t dev_id_str[8];
+	int mod_type;
+	uint8_t miner_count; /* it should not greater than AVA7_DEFAULT_MINER_CNT */
+	uint8_t asic_count; /* asic count each miner, it should not great than AVA7_DEFAULT_ASIC_MAX */
+	uint16_t vout_adc_ratio;
+	uint32_t set_voltage;
 };
 
 #define AVA7_WRITE_SIZE (sizeof(struct avalon7_pkg))

@@ -23,7 +23,7 @@ int opt_avalon7_temp_target = AVA7_DEFAULT_TEMP_TARGET;
 int opt_avalon7_fan_min = AVA7_DEFAULT_FAN_MIN;
 int opt_avalon7_fan_max = AVA7_DEFAULT_FAN_MAX;
 
-int opt_avalon7_voltage = AVA7_DEFAULT_VOLTAGE;
+int opt_avalon7_voltage = AVA7_INVALID_VOLTAGE;
 int opt_avalon7_freq[AVA7_DEFAULT_PLL_CNT] = {AVA7_DEFAULT_FREQUENCY_0,
 					      AVA7_DEFAULT_FREQUENCY_1,
 					      AVA7_DEFAULT_FREQUENCY_2,
@@ -176,6 +176,33 @@ uint32_t cpm_table[] =
 	0x01272813,
 	0x01273813,
 	0x01274813,
+};
+
+struct avalon7_dev_description avalon7_dev_table[] = {
+	{
+		"711",
+		711,
+		4,
+		18,
+		AVA7_MM711_VOUT_ADC_RATIO,
+		4981
+	},
+	{
+		"721",
+		721,
+		4,
+		18,
+		AVA7_MM721_VOUT_ADC_RATIO,
+		4981
+	},
+	{
+		"741",
+		741,
+		4,
+		22,
+		AVA7_MM741_VOUT_ADC_RATIO,
+		4825,
+	}
 };
 
 static uint32_t api_get_cpm(uint32_t freq)
@@ -1319,6 +1346,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 	struct avalon7_ret ret_pkg;
 	uint32_t tmp;
 	int i, j, err, rlen;
+	uint8_t dev_index;
 	uint8_t rbuf[AVA7_AUC_P_SIZE];
 
 	/* Detect new modules here */
@@ -1364,39 +1392,37 @@ static void detect_modules(struct cgpu_info *avalon7)
 		} else
 			info->conn_overloaded = false;
 
+		memcpy(info->mm_version[i], ret_pkg.data + AVA7_MM_DNA_LEN, AVA7_MM_VER_LEN);
+		info->mm_version[i][AVA7_MM_VER_LEN] = '\0';
+		for (dev_index = 0; dev_index < (sizeof(avalon7_dev_table) / sizeof(avalon7_dev_table[0])); dev_index++) {
+			if (!strncmp((char *)&(info->mm_version[i]), (char *)(avalon7_dev_table[dev_index].dev_id_str), 3)) {
+				info->mod_type[i] = avalon7_dev_table[dev_index].mod_type;
+				info->miner_count[i] = avalon7_dev_table[dev_index].miner_count;
+				info->asic_count[i] = avalon7_dev_table[dev_index].asic_count;
+				info->vout_adc_ratio[i] = avalon7_dev_table[dev_index].vout_adc_ratio;
+				break;
+			}
+		}
+		if (dev_index == (sizeof(avalon7_dev_table) / sizeof(avalon7_dev_table[0]))) {
+			applog(LOG_NOTICE, "%s-%d: The modular version %s cann't be support",
+				       avalon7->drv->name, avalon7->device_id, info->mm_version[i]);
+			break;
+		}
+
 		info->enable[i] = 1;
 		cgtime(&info->elapsed[i]);
 		memcpy(info->mm_dna[i], ret_pkg.data, AVA7_MM_DNA_LEN);
-		memcpy(info->mm_version[i], ret_pkg.data + AVA7_MM_DNA_LEN, AVA7_MM_VER_LEN);
 		memcpy(&tmp, ret_pkg.data + AVA7_MM_DNA_LEN + AVA7_MM_VER_LEN, 4);
 		tmp = be32toh(tmp);
-		info->mm_version[i][AVA7_MM_VER_LEN] = '\0';
 		info->total_asics[i] = tmp;
-
-		info->miner_count[i] = AVA7_DEFAULT_MINER_CNT;
-		if (!strncmp((char *)&(info->mm_version[i]), AVA7_MM711_PREFIXSTR, 3)) {
-			info->mod_type[i] = AVA7_TYPE_MM711;
-			info->asic_count[i] = AVA7_MM711_ASIC_CNT;
-			info->vout_adc_ratio[i] = AVA7_MM711_VOUT_ADC_RATIO;
-		}
-
-		if (!strncmp((char *)&(info->mm_version[i]), AVA7_MM721_PREFIXSTR, 3)) {
-			info->mod_type[i] = AVA7_TYPE_MM721;
-			info->asic_count[i] = AVA7_MM721_ASIC_CNT;
-			info->vout_adc_ratio[i] = AVA7_MM721_VOUT_ADC_RATIO;
-		}
-
-		if (!strncmp((char *)&(info->mm_version[i]), AVA7_MM741_PREFIXSTR, 3)) {
-			info->mod_type[i] = AVA7_TYPE_MM741;
-			info->asic_count[i] = AVA7_MM741_ASIC_CNT;
-			info->vout_adc_ratio[i] = AVA7_MM741_VOUT_ADC_RATIO;
-		}
-
 		info->temp_overheat[i] = AVA7_DEFAULT_TEMP_OVERHEAT;
 		info->temp_target[i] = opt_avalon7_temp_target;
 		info->fan_pct[i] = opt_avalon7_fan_min + (opt_avalon7_fan_min + opt_avalon7_fan_max) / 3;
 		for (j = 0; j < info->miner_count[i]; j++) {
-			info->set_voltage[i][j] = opt_avalon7_voltage;
+			if (opt_avalon7_voltage == AVA7_INVALID_VOLTAGE)
+				info->set_voltage[i][j] = avalon7_dev_table[dev_index].set_voltage;
+			else
+				info->set_voltage[i][j] = opt_avalon7_voltage;
 			info->get_voltage[i][j] = 0;
 			info->get_vin[i][j] = 0;
 		}
