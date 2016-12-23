@@ -383,7 +383,7 @@ static inline int get_temp_max(struct avalon7_info *info, int addr)
 	int i;
 	int max = -273;
 
-	for (i = 0; i < AVA7_DEFAULT_MINER_CNT; i++) {
+	for (i = 0; i < info->miner_count[addr]; i++) {
 		if (info->temp[addr][i][3] > max)
 			max = info->temp[addr][i][3];
 	}
@@ -1661,7 +1661,7 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, int miner_id, 
 			miner_id, be32toh(tmp));
 
 	/* Package the data */
-	avalon7_init_pkg(&send_pkg, AVA7_P_SET_PLL, miner_id + 1, AVA7_DEFAULT_MINER_CNT);
+	avalon7_init_pkg(&send_pkg, AVA7_P_SET_PLL, miner_id + 1, info->miner_count[addr]);
 
 	if (addr == AVA7_MODULE_BROADCAST)
 		avalon7_send_bc_pkgs(avalon7, &send_pkg);
