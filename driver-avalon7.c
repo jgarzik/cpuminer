@@ -2363,6 +2363,7 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 
 	root = api_add_bool(root, "Connection Overloaded", &info->conn_overloaded, true);
 	root = api_add_int(root, "Voltage Offset", &opt_avalon7_voltage_offset, true);
+	root = api_add_uint32(root, "Nonce Mask", &opt_avalon7_nonce_mask, true);
 
 	return root;
 }
