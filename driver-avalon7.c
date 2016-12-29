@@ -1379,7 +1379,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 	struct avalon7_pkg send_pkg;
 	struct avalon7_ret ret_pkg;
 	uint32_t tmp;
-	int i, j, err, rlen;
+	int i, j, k, err, rlen;
 	uint8_t dev_index;
 	uint8_t rbuf[AVA7_AUC_P_SIZE];
 
@@ -1459,6 +1459,9 @@ static void detect_modules(struct cgpu_info *avalon7)
 				info->set_voltage[i][j] = opt_avalon7_voltage;
 			info->get_voltage[i][j] = 0;
 			info->get_vin[i][j] = 0;
+
+			for (k = 0; k < 5; k++)
+				info->temp[i][j][k] = -273;
 		}
 
 		info->freq_mode[i] = AVA7_FREQ_INIT_MODE;
