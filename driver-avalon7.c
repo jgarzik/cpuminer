@@ -1904,18 +1904,13 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		temp_max = get_temp_max(info, i);
 
 		/* Enter too hot */
-		if (temp_max >= info->temp_overheat[i]) {
+		if (temp_max >= info->temp_overheat[i])
 			info->cutoff[i] = 1;
-			info->freq_mode[i] = AVA7_FREQ_CUTOFF_MODE;
-		}
 
 		/* Exit too hot */
 		if (info->cutoff[i] && (temp_max <= (info->temp_overheat[i] - 10)))
 			info->cutoff[i] = 0;
 
-		/* State machine for settings
-		 * https://en.bitcoin.it/wiki/Avalon6#Frequency_Statechart
-		 * */
 		switch (info->freq_mode[i]) {
 			case AVA7_FREQ_INIT_MODE:
 				update_settings = true;
@@ -1927,10 +1922,6 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 				avalon7_init_setting(avalon7, i);
 
 				info->freq_mode[i] = AVA7_FREQ_PLLADJ_MODE;
-				break;
-			case AVA7_FREQ_CUTOFF_MODE:
-				if (!info->cutoff[i])
-					info->freq_mode[i] = AVA7_FREQ_INIT_MODE;
 				break;
 			case AVA7_FREQ_PLLADJ_MODE:
 				if (opt_avalon7_smart_speed == AVA7_DEFAULT_SMARTSPEED_OFF)
