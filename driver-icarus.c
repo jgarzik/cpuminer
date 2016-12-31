@@ -345,6 +345,7 @@ struct ICARUS_INFO {
 	bool u3;
 	bool compac;
 	float compac_ramp_freq;
+	float compac_target_freq;
 	uint16_t compac_ramp_idx;
 };
 
@@ -1490,7 +1491,7 @@ retry:
 	timersub(&tv_finish, &tv_start, &(info->golden_tv));
 
 	set_timing_mode(this_option_offset, icarus);
-
+	
 	if (info->ident == IDENT_CMR2) {
 		int i;
 		for (i = info->intinfo + 1; i < icarus->usbdev->found->intinfo_count; i++) {
@@ -1578,6 +1579,7 @@ static struct cgpu_info *compac_detect_one(struct libusb_device *dev, struct usb
 
 		info->compac_ramp_idx = 0;
 		info->compac_ramp_freq = compacfreqtable[info->compac_ramp_idx].freq;
+		info->compac_target_freq = opt_compac_freq;
 
 		uint16_t compac_freq_hex = compacfreqtable[info->compac_ramp_idx].hex;
 
@@ -2133,14 +2135,14 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	int64_t estimate_hashes;
 	uint8_t workid = 0;
 
-	if(info->compac && info->compac_ramp_freq < opt_compac_freq)
+	if(info->compac && info->compac_ramp_freq < info->compac_target_freq)
 	{
-		uint16_t compac_freq_hex = compacfreqtable[info->compac_ramp_idx++].hex;
+		uint16_t compac_freq_hex = compacfreqtable[++info->compac_ramp_idx].hex;
 
 		if (!set_anu_freq(icarus, info, compac_freq_hex)) {
 			applog(LOG_WARNING, "%s %i: Failed to set frequency, too much overclock?",
 				   icarus->drv->name, icarus->device_id);
-			opt_compac_freq = info->compac_ramp_freq;
+			info->compac_target_freq = info->compac_ramp_freq;
 		} else {
 			info->compac_ramp_freq = compacfreqtable[info->compac_ramp_idx].freq;
 		}

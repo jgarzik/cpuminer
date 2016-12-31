@@ -1113,6 +1113,19 @@ static void load_temp_cutoffs()
 	}
 }
 
+static char *set_float_100_to_500(const char *arg, float *i)
+{
+	char *err = opt_set_floatval(arg, i);
+
+	if (err)
+		return err;
+
+	if (*i < 100 || *i > 500)
+		return "Value out of range";
+
+	return NULL;
+}
+
 static char *set_float_125_to_500(const char *arg, float *i)
 {
 	char *err = opt_set_floatval(arg, i);
@@ -1195,8 +1208,8 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_9999, &opt_show_intval, &opt_au3_volt,
 		     "Set AntminerU3 voltage in mv, range 725-850, 0 to not set"),
 	OPT_WITH_ARG("--compac-freq",
-		     set_float_125_to_500, &opt_show_floatval, &opt_compac_freq,
-		     "Set GekkoScience Compac frequency in MHz, range 125-500"),
+		     set_float_100_to_500, &opt_show_floatval, &opt_compac_freq,
+		     "Set GekkoScience Compac frequency in MHz, range 100-500"),
 #endif
 #ifdef USE_AVALON
 	OPT_WITHOUT_ARG("--avalon-auto",
