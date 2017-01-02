@@ -5106,13 +5106,15 @@ static bool test_work_current(struct work *work)
 				applog(LOG_NOTICE, "Stratum from pool %d detected new block at height %d",
 				       pool->pool_no, height);
 			} else {
-				applog(LOG_NOTICE, "%sLONGPOLL from pool %d detected new block",
-				       work->gbt ? "GBT " : "", work->pool->pool_no);
+				applog(LOG_NOTICE, "%sLONGPOLL from pool %d detected new block at height %d",
+				       work->gbt ? "GBT " : "", pool->pool_no, height);
 			}
 		} else if (have_longpoll && !pool->gbt_solo)
-			applog(LOG_NOTICE, "New block detected on network before pool notification");
+			applog(LOG_NOTICE, "New block detected on network before pool notification from pool %d at height %d",
+			       pool->pool_no, height);
 		else if (!pool->gbt_solo)
-			applog(LOG_NOTICE, "New block detected on network");
+			applog(LOG_NOTICE, "New block detected on network from pool %d at height %d",
+			       pool->pool_no, height);
 		restart_threads();
 	} else {
 		if (memcmp(pool->prev_block, bedata, 32)) {
@@ -5146,7 +5148,7 @@ static bool test_work_current(struct work *work)
 					       pool->pool_no);
 				} else {
 					applog(LOG_NOTICE, "%sLONGPOLL from pool %d requested work restart",
-					       work->gbt ? "GBT " : "", work->pool->pool_no);
+					       work->gbt ? "GBT " : "", pool->pool_no);
 				}
 				restart_threads();
 			}
