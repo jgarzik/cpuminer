@@ -109,6 +109,10 @@ char *curly = ":D";
 #include "driver-bitfury.h"
 #endif
 
+#ifdef USE_BITFURY16
+#include "driver-bitfury16.h"
+#endif
+
 #ifdef USE_COINTERRA
 #include "driver-cointerra.h"
 #endif
@@ -889,6 +893,11 @@ static char *set_int_24_to_32(const char *arg, int *i)
 	return set_int_range(arg, i, 24, 32);
 }
 
+static char __maybe_unused *set_int_0_to_2(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 0, 2);
+}
+
 static char __maybe_unused *set_int_0_to_4(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 0, 4);
@@ -1588,6 +1597,48 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_100, opt_show_intval, &opt_bxm_bits,
 		     "Set BXM bits for overclocking"),
 #endif
+#ifdef USE_BITFURY16
+	OPT_WITHOUT_ARG("--bf16-set-clock",
+			opt_set_bool, &opt_bf16_set_clock,
+			"Set clock to all chips"),
+	OPT_WITH_ARG("--bf16-test-chip",
+			opt_set_charp, NULL, &opt_bf16_test_chip,
+			"Test BF16 chip communication: [board_id:bcm250_id:chip_id]"),
+	OPT_WITH_ARG("--bf16-clock",
+			opt_set_charp, NULL, &opt_bf16_clock,
+			"BF16 chips clock value"),
+	OPT_WITH_ARG("--bf16-renonce-clock",
+			opt_set_charp, NULL, &opt_bf16_renonce_clock,
+			"BF16 renonce chip clock value"),
+	OPT_WITHOUT_ARG("--bf16-enable-stats",
+			opt_set_bool, &opt_bf16_stats_enabled,
+			"Enable statistics thread"),
+	OPT_WITHOUT_ARG("--bf16-disable-power-management",
+			opt_set_bool, &opt_bf16_power_management_disabled,
+			"Disable automatic power management"),
+	OPT_WITH_ARG("--bf16-renonce",
+			set_int_0_to_2, NULL, &opt_bf16_renonce,
+			"Renonce functionality: 0 - disabled, 1 - one chip, 2 - chip per board"),
+#ifdef MINER_X5
+	OPT_WITHOUT_ARG("--bf16-manual-pid-enable",
+			opt_set_bool, &opt_bf16_manual_pid_enabled,
+			"Enable manual PID regulator"),
+#endif
+#ifdef MINER_X6
+	OPT_WITHOUT_ARG("--bf16-manual-pid-disable",
+			opt_set_bool, &opt_bf16_manual_pid_disabled,
+			"Disable manual PID regulator"),
+#endif
+	OPT_WITH_ARG("--bf16-fan-speed",
+		     set_int_0_to_100, NULL, &opt_bf16_fan_speed,
+		     "Set fan speed in '%' range (0 - 100)"),
+	OPT_WITH_ARG("--bf16-target-temp",
+		     set_int_0_to_100, NULL, &opt_bf16_target_temp,
+		     "Set control board target temperature range (0 - 100)"),
+	OPT_WITH_ARG("--bf16-alarm-temp",
+		     set_int_0_to_100, NULL, &opt_bf16_alarm_temp,
+		     "Set control board alarm temperature range (0 - 100)"),
+#endif
 #ifdef USE_BLOCKERUPTER
         OPT_WITH_ARG("--bet-clk",
                      opt_set_intval, opt_show_intval, &opt_bet_clk,
@@ -2107,6 +2158,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_BITFURY
 		"bitfury "
+#endif
+#ifdef USE_BITFURY16
+		"bitfury16 "
 #endif
 #ifdef USE_COINTERRA
 		"cointerra "
