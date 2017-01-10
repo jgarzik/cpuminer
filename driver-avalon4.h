@@ -12,6 +12,7 @@
 #define _AVALON4_H_
 
 #include "util.h"
+#include "i2c-context.h"
 
 #ifdef USE_AVALON4
 
@@ -21,11 +22,11 @@
 #define AVA4_DEFAULT_FAN_START	15
 #define AVA4_FREEZESAFE_FAN	10
 
-#define AVA4_DEFAULT_TEMP_TARGET	68
+#define AVA4_DEFAULT_TEMP_TARGET	65
 #define AVA4_DEFAULT_TEMP_OVERHEAT	85
 #define AVA4_MM40_TEMP_TARGET	42
 #define AVA4_MM40_TEMP_OVERHEAT	65
-#define AVA4_MM60_TEMP_FREQADJ	75
+#define AVA4_MM60_TEMP_FREQADJ	70
 
 #define AVA4_DEFAULT_VOLTAGE_MIN	4000
 #define AVA4_DEFAULT_VOLTAGE_MAX	9000
@@ -36,7 +37,7 @@
 #define AVA4_FREEZESAFE_FREQUENCY	100
 #define AVA4_MM60_FREQUENCY_MAX	500
 
-#define AVA4_DEFAULT_MODULARS	64
+#define AVA4_DEFAULT_MODULARS	7	/* Only support 6 modules maximum with one AUC */
 #define AVA4_DEFAULT_MINER_MAX	10
 #define AVA4_DEFAULT_ASIC_MAX	40
 #define AVA4_DEFAULT_ADC_MAX	6 /* RNTC1-4, VCC12, VCC3VC */
@@ -51,7 +52,6 @@
 
 #define AVA4_DEFAULT_VOLTAGE	6875
 #define AVA4_DEFAULT_FREQUENCY	200
-#define AVA6_DEFAULT_FREQUENCY	450
 #define AVA4_DEFAULT_POLLING_DELAY	20 /* ms */
 
 #define AVA4_DEFAULT_ADJ_TIMES	6
@@ -65,6 +65,8 @@
 #define AVA4_DEFAULT_SMARTSPEED_MODE2 2
 #define AVA4_DEFAULT_SMARTSPEED_MODE3 3
 #define AVA4_DEFAULT_SMART_SPEED	(AVA4_DEFAULT_SMARTSPEED_MODE3)
+
+#define AVA4_DEFAULT_IIC_DETECT	false
 
 #define AVA4_DH_INC	0.03
 #define AVA4_DH_DEC	0.002
@@ -82,6 +84,9 @@
 #define AVA4_MOD_ECO    0x1
 #define AVA4_MOD_NORMAL 0x2
 #define AVA4_MOD_TURBO  0x3
+
+#define AVA4_CONNECTER_AUC	1
+#define AVA4_CONNECTER_IIC	2
 
 /* Avalon4 protocol package type from MM protocol.h
  * https://github.com/Canaan-Creative/MM/blob/avalon4/firmware/protocol.h */
@@ -161,9 +166,14 @@
 #define AVA4_DEFAULT_LEAST_PLL	768
 #define AVA4_DEFAULT_MOST_PLL	256
 
+/* seconds */
 #define AVA4_DEFAULT_FDEC_TIME	60.0
 #define AVA4_DEFAULT_FINC_TIME	1200.0
 #define AVA4_DEFAULT_FAVG_TIME	(15 * 60.0)
+#define AVA4_DEFAULT_FREQADJ_TIME	60
+
+#define AVA4_DEFAULT_DELTA_T	0
+#define AVA4_DEFAULT_DELTA_FREQ	100
 
 struct avalon4_pkg {
 	uint8_t head[2];
@@ -197,8 +207,9 @@ struct avalon4_info {
 	int auc_temp;
 
 	int mm_count;
+	uint8_t connecter;
 
-	unsigned int set_frequency[3];
+	unsigned int set_frequency[AVA4_DEFAULT_MODULARS][3];
 	unsigned int set_smart_frequency[AVA4_DEFAULT_MODULARS][3];
 	int set_frequency_i[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINER_MAX][AVA4_DEFAULT_ASIC_MAX][3];
 	int set_voltage[AVA4_DEFAULT_MODULARS];
@@ -242,6 +253,8 @@ struct avalon4_info {
 	struct timeval last_finc[AVA4_DEFAULT_MODULARS];
 	struct timeval last_fdec[AVA4_DEFAULT_MODULARS];
 	struct timeval last_favg[AVA4_DEFAULT_MODULARS];
+	struct timeval last_fadj;
+	struct timeval last_tcheck;
 
 	int matching_work[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINER_MAX];
 	int chipmatching_work[AVA4_DEFAULT_MODULARS][AVA4_DEFAULT_MINER_MAX][AVA4_DEFAULT_ASIC_MAX];
@@ -260,6 +273,8 @@ struct avalon4_info {
 	uint8_t speed_bingo[AVA4_DEFAULT_MODULARS];
 	uint8_t speed_error[AVA4_DEFAULT_MODULARS];
 	uint32_t freq_mode[AVA4_DEFAULT_MODULARS];
+	struct i2c_ctx *i2c_slaves[AVA4_DEFAULT_MODULARS];
+	int last_maxtemp[AVA4_DEFAULT_MODULARS];
 };
 
 struct avalon4_iic_info {
@@ -298,5 +313,10 @@ extern int opt_avalon4_speed_bingo;
 extern int opt_avalon4_speed_error;
 extern int opt_avalon4_least_pll_check;
 extern int opt_avalon4_most_pll_check;
+extern bool opt_avalon4_iic_detect;
+extern int opt_avalon4_freqadj_time;
+extern int opt_avalon4_delta_temp;
+extern int opt_avalon4_delta_freq;
+extern int opt_avalon4_freqadj_temp;
 #endif /* USE_AVALON4 */
 #endif	/* _AVALON4_H_ */

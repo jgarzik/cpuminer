@@ -1,6 +1,7 @@
 /*
  * generic I2C slave access interface
  *
+ * Copyright 2014-2016 Mikeqin <Fengling.Qin@gmail.com>
  * Copyright 2014 Zefir Kurtisi <zefir.kurtisi@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -8,7 +9,6 @@
  * Software Foundation; either version 3 of the License, or (at your option)
  * any later version.  See COPYING for more details.
  */
-
 
 #include <sys/ioctl.h>
 #include <errno.h>
@@ -26,7 +26,6 @@
 
 #include "miner.h"
 #include "i2c-context.h"
-
 
 static bool i2c_slave_write(struct i2c_ctx *ctx, uint8_t reg, uint8_t val)
 {
@@ -69,6 +68,30 @@ static bool i2c_slave_read(struct i2c_ctx *ctx, uint8_t reg, uint8_t *val)
 	return true;
 }
 
+static bool i2c_slave_write_raw(struct i2c_ctx *ctx, uint8_t *buf, uint32_t len)
+{
+	/* SMBus cann't support write bytes > 32, use plain i2c write */
+	if (len != write(ctx->file, buf, len)) {
+		applog(LOG_INFO, "i2c 0x%02x: failed to write raw to fdesc %d: %s",
+		       ctx->addr, ctx->file, strerror(errno));
+		return false;
+	}
+	applog(LOG_DEBUG, "I2C-W-RAW(0x%02x)", ctx->addr);
+	return true;
+}
+
+static bool i2c_slave_read_raw(struct i2c_ctx *ctx, uint8_t *buf, uint32_t len)
+{
+	/* SMBus cann't support read bytes > 32, use plain i2c read */
+	if (len != read(ctx->file, buf, len)) {
+		applog(LOG_INFO, "i2c 0x%02x: failed to read raw from fdesc %d: %s",
+		       ctx->addr, ctx->file, strerror(errno));
+		return false;
+	}
+	applog(LOG_DEBUG, "I2C-R-RAW(0x%02x)", ctx->addr);
+	return true;
+}
+
 static void i2c_slave_exit(struct i2c_ctx *ctx)
 {
 	if (ctx->file == -1)
@@ -81,7 +104,7 @@ extern struct i2c_ctx *i2c_slave_open(char *i2c_bus, uint8_t slave_addr)
 {
 	int file = open(i2c_bus, O_RDWR);
 	if (file < 0) {
-		applog(LOG_INFO, "Failed to open i2c-1: %s", strerror(errno));
+		applog(LOG_INFO, "Failed to open %s: %s", i2c_bus, strerror(errno));
 		return NULL;
 	}
 
@@ -97,6 +120,8 @@ extern struct i2c_ctx *i2c_slave_open(char *i2c_bus, uint8_t slave_addr)
 	ctx->exit = i2c_slave_exit;
 	ctx->read = i2c_slave_read;
 	ctx->write = i2c_slave_write;
+	ctx->read_raw = i2c_slave_read_raw;
+	ctx->write_raw = i2c_slave_write_raw;
 	return ctx;
 }
 

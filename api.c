@@ -31,7 +31,8 @@
 	defined(USE_KNC) || defined(USE_BAB) || defined(USE_DRILLBIT) || \
 	defined(USE_MINION) || defined(USE_COINTERRA) || defined(USE_BITMINE_A1) || \
 	defined(USE_ANT_S1) || defined(USE_ANT_S2) || defined(USE_ANT_S3) || defined(USE_SP10) || \
-	defined(USE_SP30) || defined(USE_ICARUS) || defined(USE_HASHRATIO) || defined(USE_AVALON_MINER)
+	defined(USE_SP30) || defined(USE_ICARUS) || defined(USE_HASHRATIO) || defined(USE_AVALON_MINER) || \
+	defined(USE_AVALON7)
 #define HAVE_AN_ASIC 1
 #endif
 
@@ -4836,17 +4837,18 @@ void api(int api_thr_id)
 	bool addrok;
 	char group;
 	json_error_t json_err;
-	json_t *json_config = NULL;
+	json_t *json_config;
 	json_t *json_val;
 	bool isjson;
-	bool did, isjoin = false, firstjoin;
+	bool did, isjoin, firstjoin;
 	int i;
 	struct addrinfo hints, *res, *host;
-
 	SOCKETTYPE *apisock;
 
 	apisock = cgmalloc(sizeof(*apisock));
 	*apisock = INVSOCK;
+	json_config = NULL;
+	isjoin = false;
 
 	if (!opt_api_listen) {
 		applog(LOG_DEBUG, "API not running%s", UNAVAILABLE);

@@ -46,6 +46,9 @@
 #include "util.h"
 
 #define DEFAULT_SOCKWAIT 60
+#ifndef STRATUM_USER_AGENT
+#define STRATUM_USER_AGENT
+#endif
 
 bool successful_connect = false;
 
@@ -1441,7 +1444,7 @@ void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
 }
 #endif /* WIN32 */
 
-#if defined(CLOCK_MONOTONIC) && !defined(__FreeBSD__) /* Essentially just linux */
+#if defined(CLOCK_MONOTONIC) && !defined(__FreeBSD__) && !defined(__APPLE__) /* Essentially just linux */
 //#ifdef CLOCK_MONOTONIC /* Essentially just linux */
 void cgtimer_time(cgtimer_t *ts_start)
 {
@@ -1674,13 +1677,13 @@ bool extract_sockaddr(char *url, char **sockaddr_url, char **sockaddr_port)
 
 	if (url_len < 1)
 		return false;
-	
+
 	/* Get rid of the [] */
 	if (ipv6_begin && ipv6_end && ipv6_end > ipv6_begin) {
 		url_len -= 2;
 		url_begin++;
 	}
-	
+
 	snprintf(url_address, 254, "%.*s", url_len, url_begin);
 
 	if (port_len) {
@@ -2228,7 +2231,7 @@ static bool send_version(struct pool *pool, json_t *val)
 		return false;
 	id = json_integer_value(json_object_get(val, "id"));
 
-	sprintf(s, "{\"id\": %d, \"result\": \""PACKAGE"/"VERSION"\", \"error\": null}", id);
+	sprintf(s, "{\"id\": %d, \"result\": \""PACKAGE"/"VERSION""STRATUM_USER_AGENT"\", \"error\": null}", id);
 	if (!stratum_send(pool, s, strlen(s)))
 		return false;
 
@@ -2817,7 +2820,7 @@ void suspend_stratum(struct pool *pool)
 bool initiate_stratum(struct pool *pool)
 {
 	bool ret = false, recvd = false, noresume = false, sockd = false;
-	char s[RBUFSIZE], *sret = NULL, *nonce1, *sessionid;
+	char s[RBUFSIZE], *sret = NULL, *nonce1, *sessionid, *tmp;
 	json_t *val = NULL, *res_val, *err_val;
 	json_error_t err;
 	int n2size;
@@ -2836,9 +2839,9 @@ resend:
 		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 	} else {
 		if (pool->sessionid)
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\", \"%s\"]}", swork_id++, pool->sessionid);
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION""STRATUM_USER_AGENT"\", \"%s\"]}", swork_id++, pool->sessionid);
 		else
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\"]}", swork_id++);
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION""STRATUM_USER_AGENT"\"]}", swork_id++);
 	}
 
 	if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {
@@ -2890,6 +2893,7 @@ resend:
 	if (!valid_hex(nonce1)) {
 		applog(LOG_INFO, "Failed to get valid nonce1 in initiate_stratum");
 		free(sessionid);
+		free(nonce1);
 		goto out;
 	}
 	n2size = json_integer_value(json_array_get(res_val, 2));
@@ -2906,8 +2910,12 @@ resend:
 	}
 
 	cg_wlock(&pool->data_lock);
+	tmp = pool->sessionid;
 	pool->sessionid = sessionid;
+	free(tmp);
+	tmp = pool->nonce1;
 	pool->nonce1 = nonce1;
+	free(tmp);
 	pool->n1_len = strlen(nonce1) / 2;
 	free(pool->nonce1bin);
 	pool->nonce1bin = cgcalloc(pool->n1_len, 1);
