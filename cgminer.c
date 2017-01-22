@@ -4954,7 +4954,7 @@ static void restart_threads(void)
 
 	cgtime(&restart_tv_start);
 	if (unlikely(pthread_create(&rthread, NULL, restart_thread, NULL)))
-		quit(1, "Failed to create restart thread");
+		quithere(1, "Failed to create restart thread errno=%d", errno);
 }
 
 static void signal_work_update(void)
