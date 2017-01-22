@@ -1925,13 +1925,16 @@ static char *parse_config(json_t *config, bool fileconf)
 		/* We don't handle subtables. */
 		assert(!(opt->type & OPT_SUBTABLE));
 
-		if (!opt->names)
+		if (!opt->names || !strlen(opt->names))
 			continue;
 
 		/* Pull apart the option name(s). */
 		name = strdup(opt->names);
 		for (p = strtok(name, "|"); p; p = strtok(NULL, "|")) {
 			char *err = NULL;
+
+			if (strlen(p) < 3)
+				continue;
 
 			/* Ignore short options. */
 			if (p[1] != '-')
