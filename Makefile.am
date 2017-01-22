@@ -140,11 +140,13 @@ endif
 
 if HAS_AVALON4
 cgminer_SOURCES += driver-avalon4.c driver-avalon4.h
-cgminer_SOURCES += i2c-context.c
 endif
 
 if HAS_AVALON7
 cgminer_SOURCES += driver-avalon7.c driver-avalon7.h
+endif
+
+if NEED_I2C_CONTEXT
 cgminer_SOURCES += i2c-context.c
 endif
 

@@ -519,6 +519,7 @@ AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 AM_CONDITIONAL([WANT_CRC16], [test x$want_crc16 != xfalse])
+AM_CONDITIONAL([NEED_I2C_CONTEXT], [test x$avalon4$avalon7 != xnono])
 
 if test "x$want_usbutils" != xfalse; then
 	AC_DEFINE([USE_USBUTILS], [1], [Defined to 1 if usbutils support required])
