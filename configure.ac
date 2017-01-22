@@ -581,8 +581,8 @@ if test "x$djansson" != xno; then
 			;;
 	esac
 else
-	AC_CONFIG_SUBDIRS([compat/jansson-2.6])
-	JANSSON_LIBS="compat/jansson-2.6/src/.libs/libjansson.a"
+	AC_CONFIG_SUBDIRS([compat/jansson-2.9])
+	JANSSON_LIBS="compat/jansson-2.9/src/.libs/libjansson.a"
 fi
 
 AM_CONDITIONAL([WANT_STATIC_JANSSON], [test x$djansson = xno])
