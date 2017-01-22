@@ -97,6 +97,9 @@ Optional:
 	curses dev library
 	(libncurses5-dev or libpdcurses on WIN32 for text user interface)
 
+	libusb-1 dev library (libusb-1.0-0-dev)
+	(This is only required for USB device support)
+
 	libudev dev library (libudev-dev)
 	(This is only required for USB device support and is linux only)
 
@@ -149,8 +152,6 @@ CGMiner specific configuration options:
   --enable-libsystemd     Compile support for system watchdog and status
                           notifications (default disabled)
   --without-curses        Compile support for curses TUI (default enabled)
-  --with-system-libusb    Compile against dynamic system libusb (default use
-                          included static libusb)
   --with-system-jansson   Compile against dynamic system jansson (default use
                           included static jansson)
 

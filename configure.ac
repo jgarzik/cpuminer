@@ -521,47 +521,20 @@ AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 AM_CONDITIONAL([WANT_CRC16], [test x$want_crc16 != xfalse])
 
 if test "x$want_usbutils" != xfalse; then
-	dlibusb="no"
 	AC_DEFINE([USE_USBUTILS], [1], [Defined to 1 if usbutils support required])
-	AC_ARG_WITH([system-libusb],
-		[AC_HELP_STRING([--with-system-libusb],[NOT RECOMMENDED! Compile against dynamic system libusb. (Default use included static libusb)])],
-		[dlibusb=$withval]
-	)
-
-	if test "x$dlibusb" != xno; then
-		case $target in
-			*-*-freebsd*)
-				LIBUSB_LIBS="-lusb"
-				LIBUSB_CFLAGS=""
-				AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])
-				;;
-			*)
-				PKG_CHECK_MODULES(LIBUSB, libusb-1.0, [AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])], [AC_MSG_ERROR([Could not find usb library - please install libusb-1.0])])
-				;;
-		esac
-	else
-		AC_CONFIG_SUBDIRS([compat/libusb-1.0])
-		LIBUSB_LIBS="compat/libusb-1.0/libusb/.libs/libusb-1.0.a"
-		if test "x$have_linux" = "xtrue"; then
-			AC_ARG_ENABLE([udev],
-				[AC_HELP_STRING([--disable-udev],[Disable building libusb with udev])],
-				[udev=$enableval]
-				)
-
-			if test "x$udev" != xno; then
-				LIBUSB_LIBS+=" -ludev"
-			fi
-		fi
-		if test "x$have_darwin" = "xtrue"; then
-			LIBUSB_LIBS+=" -lobjc"
-			LDFLAGS+=" -framework CoreFoundation -framework IOKit"
-		fi
-	fi
+	case $target in
+		*-*-freebsd*)
+			LIBUSB_LIBS="-lusb"
+			LIBUSB_CFLAGS=""
+			AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])
+			;;
+		*)
+			PKG_CHECK_MODULES(LIBUSB, libusb-1.0, [AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])], [AC_MSG_ERROR([Could not find usb library - please install libusb-1.0])])
+			;;
+	esac
 else
 	LIBUSB_LIBS=""
 fi
-
-AM_CONDITIONAL([WANT_STATIC_LIBUSB], [test x$dlibusb = xno])
 
 djansson="no"
 AC_ARG_WITH([system-jansson],
@@ -909,11 +882,4 @@ echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
 echo
-if test "x$want_usbutils$dlibusb" = xyesyes; then
-echo "*** SYSTEM LIBUSB BEING ADDED - NOT RECOMMENDED UNLESS YOU ARE UNABLE TO COMPILE THE INCLUDED LIBUSB ***"
-echo
-fi
-if test "x$djansson" = xyes; then
-echo "*** SYSTEM JANSSON BEING ADDED - NOT RECOMMENDED UNLESS YOU ARE UNABLE TO COMPILE THE INCLUDED JANSSON ***"
-echo
-fi
+
