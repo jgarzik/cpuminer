@@ -179,7 +179,7 @@ int opt_log_interval = 5;
 static const int max_queue = 1;
 const int max_scantime = 60;
 const int max_expiry = 600;
-unsigned long long global_hashrate;
+uint64_t global_hashrate;
 unsigned long global_quota_gcd = 1;
 time_t last_getwork;
 int opt_pool_fallback = 120;
