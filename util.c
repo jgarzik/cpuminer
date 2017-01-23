@@ -2004,13 +2004,17 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	cg_wlock(&pool->data_lock);
 	free(pool->swork.job_id);
 	pool->swork.job_id = job_id;
+	if (memcmp(pool->prev_hash, prev_hash, 65)) {
+		pool->swork.clean = true;
+	} else {
+		pool->swork.clean = clean;
+	}
 	snprintf(pool->prev_hash, 65, "%s", prev_hash);
 	cb1_len = strlen(coinbase1) / 2;
 	cb2_len = strlen(coinbase2) / 2;
 	snprintf(pool->bbversion, 9, "%s", bbversion);
 	snprintf(pool->nbit, 9, "%s", nbit);
 	snprintf(pool->ntime, 9, "%s", ntime);
-	pool->swork.clean = clean;
 	if (pool->next_diff > 0) {
 		pool->sdiff = pool->next_diff;
 		pool->next_diff = pool->diff_after;
