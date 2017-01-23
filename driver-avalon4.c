@@ -2856,7 +2856,7 @@ char *set_avalon4_device_freq(struct cgpu_info *avalon4, char *arg)
 	colon1 = strchr(param, '-');
 	if (colon1) {
 		sscanf(colon1, "-%d-%d-%d", &addr, &miner_id, &chip_id);
-		if (addr < 0 || miner_id >= AVA4_DEFAULT_MODULARS) {
+		if (miner_id >= AVA4_DEFAULT_MODULARS) {
 			applog(LOG_ERR, "invalid dev index: %d, valid range 0-%d", addr, (AVA4_DEFAULT_MODULARS - 1));
 			return "Invalid dev index to set_avalon4_device_freq";
 		}
@@ -2864,11 +2864,11 @@ char *set_avalon4_device_freq(struct cgpu_info *avalon4, char *arg)
 			applog(LOG_ERR, "Disabled dev:%d", addr);
 			return "Disabled dev to set_avalon4_device_freq";
 		}
-		if (miner_id < 0 || miner_id > info->miner_count[addr]) {
+		if (miner_id > info->miner_count[addr]) {
 			applog(LOG_ERR, "invalid miner index: %d, valid range 0-%d", chip_id, info->miner_count[addr]);
 			return "Invalid miner index to set_avalon4_device_freq";
 		}
-		if (chip_id < 0 || chip_id > info->asic_count[addr]) {
+		if (chip_id > info->asic_count[addr]) {
 			applog(LOG_ERR, "invalid asic index: %d, valid range 0-%d", chip_id, info->asic_count[addr]);
 			return "Invalid asic index to set_avalon4_device_freq";
 		}
