@@ -1344,6 +1344,7 @@ struct pool {
 	char nbit[12];
 	char ntime[12];
 	double next_diff;
+	double diff_after;
 	double sdiff;
 	uint32_t current_height;
 

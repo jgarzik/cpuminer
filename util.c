@@ -2013,6 +2013,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->swork.clean = clean;
 	if (pool->next_diff > 0) {
 		pool->sdiff = pool->next_diff;
+		pool->next_diff = pool->diff_after;
+		pool->diff_after = 0;
 	}
 	alloc_len = pool->coinbase_len = cb1_len + pool->n1_len + pool->n2size + cb2_len;
 	pool->nonce2_offset = cb1_len + pool->n1_len;
@@ -2119,17 +2121,17 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	double old_diff, diff;
 
 	diff = json_number_value(json_array_get(val, 0));
-	if (diff == 0)
+	if (diff <= 0)
 		return false;
 
+	/* We can only change one diff per notify so assume diffs are being
+	 * stacked for successive notifies. */
 	cg_wlock(&pool->data_lock);
-	if (pool->next_diff > 0) {
-		old_diff = pool->next_diff;
+	if (pool->next_diff)
+		pool->diff_after = diff;
+	else
 		pool->next_diff = diff;
-	} else {
-		old_diff = pool->sdiff;
-		pool->next_diff = pool->sdiff = diff;
-	}
+	old_diff = pool->sdiff;
 	cg_wunlock(&pool->data_lock);
 
 	if (old_diff != diff) {
@@ -2932,7 +2934,7 @@ out:
 		if (!pool->stratum_url)
 			pool->stratum_url = pool->sockaddr_url;
 		pool->stratum_active = true;
-		pool->next_diff = 0;
+		pool->next_diff = pool->diff_after = 0;
 		pool->sdiff = 1;
 		if (opt_protocol) {
 			applog(LOG_DEBUG, "Pool %d confirmed mining.subscribe with extranonce1 %s extran2size %d",
