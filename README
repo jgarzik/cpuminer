@@ -107,13 +107,10 @@ If building from git:
 	autoconf
 	automake
 
-If building on Red Hat:
-        sudo yum install autoconf automake autoreconf libtool openssl-compat-bitcoin-devel.x86_64 \
-                         curl libcurl libcurl-devel openssh
-
 If building on Ubuntu:
 	sudo apt-get install build-essential autoconf automake libtool pkg-config \
-                             libcurl3-dev libudev-dev
+                             libcurl4-openssl-dev libudev-dev libusb-1.0-0-dev \
+                             libncurses5-dev
 
 CGMiner specific configuration options:
   --enable-ants1          Compile support for Antminer S1 Bitmain (default
