@@ -9,6 +9,12 @@ else
 USBUTILS_CPPFLAGS =
 endif
 
+if STATIC_CURL
+LIBCURL_CPPFLAGS = -DCURL_STATICLIB
+else
+LIBCURL_CPPFLAGS =
+endif
+
 EXTRA_DIST	= example.conf linux-usb-cgminer \
 		  api-example.php miner.php	\
 		  API.class API.java api-example.c windows-build.txt \
@@ -18,7 +24,7 @@ EXTRA_DIST	= example.conf linux-usb-cgminer \
 
 SUBDIRS		= lib compat ccan
 
-cgminer_CPPFLAGS = $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_CPPFLAGS) $(USBUTILS_CPPFLAGS)
+cgminer_CPPFLAGS = $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_CPPFLAGS) $(USBUTILS_CPPFLAGS) $(LIBCURL_CPPFLAGS)
 
 bin_PROGRAMS	= cgminer
 
