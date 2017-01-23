@@ -1280,9 +1280,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--au3-volt",
 		     set_int_0_to_9999, &opt_show_intval, &opt_au3_volt,
 		     "Set AntminerU3 voltage in mv, range 725-850, 0 to not set"),
-	OPT_WITH_ARG("--compac-freq",
-		     set_float_100_to_500, &opt_show_floatval, &opt_compac_freq,
-		     "Set GekkoScience Compac frequency in MHz, range 100-500"),
 #endif
 #ifdef USE_AVALON
 	OPT_WITHOUT_ARG("--avalon-auto",
@@ -1618,6 +1615,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--btc-sig",
 		     opt_set_charp, NULL, &opt_btc_sig,
 		     "Set signature to add to coinbase when solo mining (optional)"),
+#endif
+#ifdef USE_ICARUS
+	OPT_WITH_ARG("--compac-freq",
+		     set_float_100_to_500, &opt_show_floatval, &opt_compac_freq,
+		     "Set GekkoScience Compac frequency in MHz, range 100-500"),
 #endif
 #ifdef HAVE_CURSES
 	OPT_WITHOUT_ARG("--compact",

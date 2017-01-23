@@ -280,6 +280,7 @@ Options for both config file and command line:
 --bxm-bits <arg>    Set BXM bits for overclocking (default: 54)
 --btc-address <arg> Set bitcoin target address when solo mining to bitcoind
 --btc-sig <arg>     Set signature to add to coinbase when solo mining (optional)
+--compac-freq <arg> Set GekkoScience Compac frequency in MHz, range 100-500 (default: 150.0)
 --compact           Use compact display without per device statistics
 --debug|-D          Enable debug output
 --disable-rejecting Automatically disable pools that continually reject shares
@@ -420,6 +421,7 @@ ASIC only options:
 --bitmine-a1-options <ref_clk>:<sys_clk>:<spi_clk>:<max_chip>
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
 --bxm-bits <arg>    Set BXM bits for overclocking (default: 50)
+--compac-freq <arg> Set GekkoScience Compac frequency in MHz, range 100-500 (default: 150.0)
 --hfa-hash-clock <arg> Set hashfast clock speed (default: 550)
 --hfa-fail-drop <arg> Set how many MHz to drop clockspeed each failure on an overlocked hashfast device (default: 10)
 --hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)
