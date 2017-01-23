@@ -2004,7 +2004,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	cg_wlock(&pool->data_lock);
 	free(pool->swork.job_id);
 	pool->swork.job_id = job_id;
-	if (memcmp(pool->prev_hash, prev_hash, 65)) {
+	if (memcmp(pool->prev_hash, prev_hash, 64)) {
 		pool->swork.clean = true;
 	} else {
 		pool->swork.clean = clean;
