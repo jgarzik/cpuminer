@@ -1315,20 +1315,8 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 		if ($section == 'total')
 			break;
 		$ret = $value.'&deg;C';
-		if (!isset($alldata['GPU']))
-		{
-			if ($value == 0)
-				$ret = '&nbsp;';
-			break;
-		}
-	case 'GPU Clock':
-	case 'Memory Clock':
-	case 'GPU Voltage':
-	case 'GPU Activity':
-		if ($section == 'total')
-			break;
 		if ($value == 0)
-			$class = $warnclass;
+			$ret = '&nbsp;';
 		break;
 	case 'Fan Percent':
 		if ($section == 'total')
@@ -1488,8 +1476,6 @@ function fmt($section, $name, $value, $when, $alldata, $cf = NULL)
 	// BUTTON.
 	case 'Rig':
 	case 'Pool':
-	case 'GPU':
-		break;
 	// Sample GEN fields
 	case 'Mined':
 		if ($value != '')
@@ -1732,102 +1718,6 @@ function details($cmd, $list, $rig)
 #
 global $devs;
 $devs = null;
-#
-function gpubuttons($count, $rig)
-{
- global $devs;
-
- $basic = array( 'GPU', 'Enable', 'Disable', 'Restart' );
-
- $options = array(	'intensity' => 'Intensity',
-			'fan' => 'Fan Percent',
-			'engine' => 'GPU Clock',
-			'mem' => 'Memory Clock',
-			'vddc' => 'GPU Voltage' );
-
- newtable();
- newrow();
-
- foreach ($basic as $head)
-	echo "<td class=h>$head</td>";
-
- foreach ($options as $name => $des)
-	echo "<td class=h nowrap>$des</td>";
-
- $n = 0;
- for ($c = 0; $c < $count; $c++)
- {
-	endrow();
-	newrow();
-
-	foreach ($basic as $name)
-	{
-		list($ignore, $class) = fmt('BUTTON', 'GPU', '', 0, null);
-		echo "<td$class>";
-
-		if ($name == 'GPU')
-			echo $c;
-		else
-		{
-			echo "<input type=button value='$name $c' onclick='prs(\"gpu";
-			echo strtolower($name);
-			echo "|$c\",$rig)'>";
-		}
-
-		echo '</td>';
-	}
-
-	foreach ($options as $name => $des)
-	{
-		list($ignore, $class) = fmt('BUTTON', 'GPU', '', 0, null);
-		echo "<td$class>";
-
-		if (!isset($devs["GPU$c"][$des]))
-			echo '&nbsp;';
-		else
-		{
-			$value = $devs["GPU$c"][$des];
-			echo "<input type=button value='Set $c:' onclick='prs2(\"gpu$name|$c\",$n,$rig)'>";
-			echo "<input size=7 type=text name=gi$n value='$value' id=gi$n>";
-			$n++;
-		}
-
-		echo '</td>';
-	}
-
- }
- endrow();
- endtable();
-}
-#
-function processgpus($rig)
-{
- global $error;
- global $warnfont, $warnoff;
-
- $gpus = api($rig, 'gpucount');
-
- if ($error != null)
-	otherrow("<td>Error getting GPU count: $warnfont$error$warnoff</td>");
- else
- {
-	if (!isset($gpus['GPUS']['Count']))
-	{
-		$rw = '<td>No GPU count returned: '.$warnfont;
-		$rw .= $gpus['STATUS']['STATUS'].' '.$gpus['STATUS']['Msg'];
-		$rw .= $warnoff.'</td>';
-		otherrow($rw);
-	}
-	else
-	{
-		$count = $gpus['GPUS']['Count'];
-		if ($count == 0)
-			otherrow('<td>No GPUs</td>');
-		else
-			gpubuttons($count, $rig);
-	}
- }
-}
 #
 function showpoolinputs($rig, $ans)
 {
@@ -2121,16 +2011,13 @@ function doOne($rig, $preprocess)
 
  process($cmds, $rig);
 
- if ($haderror == false && $readonly === false)
-	processgpus($rig);
-
  if ($placebuttons == 'bot' || $placebuttons == 'both')
 	pagebuttons($rig, null);
 }
 #
 global $sectionmap;
 # map sections to their api command
-# DEVS is a special case that will match GPU, PGA or ASC
+# DEVS is a special case that will match PGA or ASC
 # so you can have a single table with both in it
 # DATE is hard coded so not in here
 $sectionmap = array(
@@ -2139,7 +2026,6 @@ $sectionmap = array(
 	'POOL' => 'pools',
 	'DEVS' => 'devs',
 	'EDEVS' => 'edevs',
-	'GPU' => 'devs',	// You would normally use DEVS
 	'PGA' => 'devs',	// You would normally use DEVS
 	'ASC' => 'devs',	// You would normally use DEVS
 	'NOTIFY' => 'notify',
@@ -2327,19 +2213,6 @@ function joinsections($sections, $results, $errors)
 {
  global $sectionmap;
 
- // GPU's don't have Name,ID fields - so create them
- foreach ($results as $section => $res)
-	foreach ($res as $rig => $result)
-		foreach ($result as $name => $fields)
-		{
-			$subname = preg_replace('/[0-9]/', '', $name);
-			if ($subname == 'GPU' and isset($result[$name]['GPU']))
-			{
-				$results[$section][$rig][$name]['Name'] = 'GPU';
-				$results[$section][$rig][$name]['ID'] = $result[$name]['GPU'];
-			}
-		}
-
  foreach ($sections as $section => $fields)
 	if ($section != 'DATE' && !isset($sectionmap[$section]))
 	{
@@ -2417,7 +2290,7 @@ function secmatch($section, $field)
 	return true;
 
  if (($section == 'DEVS' || $section == 'EDEVS')
- &&  ($field == 'GPU' || $field == 'PGA' || $field == 'ASC'))
+ &&  ($field == 'PGA' || $field == 'ASC'))
 	return true;
 
  return false;
