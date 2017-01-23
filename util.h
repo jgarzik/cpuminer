@@ -31,6 +31,7 @@
 	}
 #elif defined WIN32
 	#include <winsock2.h>
+	#include <windows.h>
 	#include <ws2tcpip.h>
 
 	#define SOCKETTYPE SOCKET
@@ -147,8 +148,8 @@ int ms_tdiff(struct timeval *end, struct timeval *start);
 double tdiff(struct timeval *end, struct timeval *start);
 bool stratum_send(struct pool *pool, char *s, ssize_t len);
 bool sock_full(struct pool *pool);
-void _recalloc(void **ptr, size_t old, size_t new, const char *file, const char *func, const int line);
-#define recalloc(ptr, old, new) _recalloc((void *)&(ptr), old, new, __FILE__, __func__, __LINE__)
+void ckrecalloc(void **ptr, size_t old, size_t new, const char *file, const char *func, const int line);
+#define recalloc(ptr, old, new) ckrecalloc((void *)&(ptr), old, new, __FILE__, __func__, __LINE__)
 char *recv_line(struct pool *pool);
 bool parse_method(struct pool *pool, char *s);
 bool extract_sockaddr(char *url, char **sockaddr_url, char **sockaddr_port);

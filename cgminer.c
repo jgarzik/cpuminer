@@ -44,6 +44,7 @@
 #ifndef WIN32
 #include <sys/resource.h>
 #else
+#include <winsock2.h>
 #include <windows.h>
 #endif
 #include <ccan/opt/opt.h>
@@ -4172,13 +4173,8 @@ static void kill_mining(void)
 		if (thr && PTH(thr) != 0L)
 			pth = &thr->pth;
 		thr_info_cancel(thr);
-#ifndef WIN32
 		if (pth && *pth)
 			pthread_join(*pth, NULL);
-#else
-		if (pth && pth->p)
-			pthread_join(*pth, NULL);
-#endif
 	}
 }
 

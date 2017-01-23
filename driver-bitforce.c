@@ -24,10 +24,6 @@
 #include "usbutils.h"
 #include "util.h"
 
-#ifdef WIN32
-#include <windows.h>
-#endif /* WIN32 */
-
 #define BITFORCE_IDENTIFY "ZGX"
 #define BITFORCE_IDENTIFY_LEN (sizeof(BITFORCE_IDENTIFY)-1)
 #define BITFORCE_FLASH "ZMX"

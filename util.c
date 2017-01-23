@@ -643,7 +643,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	if (likely(global_hashrate)) {
 		char ghashrate[255];
 
-		sprintf(ghashrate, "X-Mining-Hashrate: %llu", global_hashrate);
+		sprintf(ghashrate, "X-Mining-Hashrate: %"PRIu64, global_hashrate);
 		headers = curl_slist_append(headers, ghashrate);
 	}
 
@@ -1444,7 +1444,7 @@ void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
 }
 #endif /* WIN32 */
 
-#if defined(CLOCK_MONOTONIC) && !defined(__FreeBSD__) && !defined(__APPLE__) /* Essentially just linux */
+#if defined(CLOCK_MONOTONIC) && !defined(__FreeBSD__) && !defined(__APPLE__) && !defined(WIN32) /* Essentially just linux */
 //#ifdef CLOCK_MONOTONIC /* Essentially just linux */
 void cgtimer_time(cgtimer_t *ts_start)
 {
@@ -1834,7 +1834,7 @@ static void clear_sock(struct pool *pool)
 }
 
 /* Realloc memory to new size and zero any extra memory added */
-void _recalloc(void **ptr, size_t old, size_t new, const char *file, const char *func, const int line)
+void ckrecalloc(void **ptr, size_t old, size_t new, const char *file, const char *func, const int line)
 {
 	if (new == old)
 		return;

@@ -11,6 +11,7 @@
 #include "miner.h"  // for timersub
 #include "util.h"
 
+#include <winsock2.h>
 #include <windows.h>
 
 #ifndef HAVE_LIBWINPTHREAD
@@ -46,7 +47,7 @@ static inline int nanosleep(const struct timespec *req, struct timespec *rem)
 	return 0;
 }
 #endif
-
+#if 0
 static inline int sleep(unsigned int secs)
 {
 	struct timespec req, rem;
@@ -56,7 +57,7 @@ static inline int sleep(unsigned int secs)
 		return 0;
 	return rem.tv_sec + (rem.tv_nsec ? 1 : 0);
 }
-
+#endif
 enum {
 	PRIO_PROCESS		= 0,
 };

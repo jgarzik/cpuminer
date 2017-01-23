@@ -15,7 +15,6 @@
 #define O_CLOEXEC 0
 #endif
 #else
-#include <windows.h>
 #include <io.h>
 #endif
 

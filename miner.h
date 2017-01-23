@@ -8,17 +8,7 @@
 #include <sys/time.h>
 #include <pthread.h>
 #include <jansson.h>
-#ifdef HAVE_LIBCURL
-#include <curl/curl.h>
-#else
-typedef char CURL;
-extern char *curly;
-#define curl_easy_init(curl) (curly)
-#define curl_easy_cleanup(curl) {}
-#define curl_global_cleanup() {}
-#define CURL_GLOBAL_ALL 0
-#define curl_global_init(X) (0)
-#endif
+
 #include <sched.h>
 
 #include "elist.h"
@@ -68,12 +58,23 @@ void *alloca (size_t);
 #endif
 
 #ifdef __MINGW32__
-#include <windows.h>
 #include <io.h>
 static inline int fsync (int fd)
 {
 	return (FlushFileBuffers ((HANDLE) _get_osfhandle (fd))) ? 0 : -1;
 }
+
+#ifdef HAVE_LIBCURL
+#include <curl/curl.h>
+#else
+typedef char CURL;
+extern char *curly;
+#define curl_easy_init(curl) (curly)
+#define curl_easy_cleanup(curl) {}
+#define curl_global_cleanup() {}
+#define CURL_GLOBAL_ALL 0
+#define curl_global_init(X) (0)
+#endif
 
 #ifndef EWOULDBLOCK
 # define EWOULDBLOCK EAGAIN

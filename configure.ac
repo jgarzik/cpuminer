@@ -93,7 +93,7 @@ case $target in
     WS2_LIBS="-lws2_32"
     MM_LIBS="-lwinmm"
     RT_LIBS=""
-    AC_DEFINE([_WIN32_WINNT], [0x0501], "WinNT version for XP+ support")
+    #AC_DEFINE([_WIN32_WINNT], [0x0501], "WinNT version for XP+ support")
     ;;
   powerpc-*-darwin*)
     have_darwin=true
@@ -477,7 +477,7 @@ AC_ARG_WITH([curses],
 if test "x$curses" = "xno"; then
 	cursesmsg='User specified --without-curses. TUI support DISABLED'
 else
-	AC_SEARCH_LIBS(addstr, ncurses pdcurses, [
+	AC_SEARCH_LIBS(addstr, pdcurses ncurses pdcurses, [
 		curses=yes
 		cursesmsg="FOUND: ${ac_cv_search_addstr}"
 		AC_DEFINE([HAVE_CURSES], [1], [Defined to 1 if curses TUI support is wanted])
