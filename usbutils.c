@@ -3965,7 +3965,7 @@ static LPSECURITY_ATTRIBUTES mksec(const char *dname, uint8_t bus_number, uint8_
 	LPSECURITY_ATTRIBUTES sec_att = NULL;
 	PSECURITY_DESCRIPTOR sec_des = NULL;
 
-	sec_des = cgmalloc(sizeof(*sec_des));
+	sec_des = cgmalloc(SECURITY_DESCRIPTOR_MIN_LENGTH);
 
 	if (!InitializeSecurityDescriptor(sec_des, SECURITY_DESCRIPTOR_REVISION)) {
 		applog(LOG_ERR,
