@@ -15,7 +15,8 @@ static device_t*   ctrl_device;
 static device_t*   gpio_device;
 
 /* transfer functions */
-int8_t device_spi_transfer(spi_channel_id_t channel_id, uint8_t* data, int size) {
+int8_t device_spi_transfer(spi_channel_id_t channel_id, uint8_t* data, int size)
+{
 	switch (channel_id) {
 	case SPI_CHANNEL1:
 		memset(spi0_device->tx, 0, spi0_device->size);
@@ -44,7 +45,8 @@ int8_t device_spi_transfer(spi_channel_id_t channel_id, uint8_t* data, int size)
 	return 0;
 }
 
-int8_t device_spi_txrx(spi_channel_id_t channel_id, uint8_t* tx, uint8_t* rx, int size) {
+int8_t device_spi_txrx(spi_channel_id_t channel_id, uint8_t* tx, uint8_t* rx, int size)
+{
 	switch (channel_id) {
 	case SPI_CHANNEL1:
 		memset(spi0_device->tx, 0, spi0_device->size);
@@ -73,7 +75,8 @@ int8_t device_spi_txrx(spi_channel_id_t channel_id, uint8_t* tx, uint8_t* rx, in
 	return 0;
 }
 
-static void add_crc(char* data) {
+static void add_crc(char* data)
+{
 	uint8_t crc = 0;
 
 	while (*data) {
@@ -84,7 +87,8 @@ static void add_crc(char* data) {
 	sprintf(data, "#%d\n", crc);
 }
 
-int8_t device_uart_transfer(uart_channel_id_t channel_id, char* cmd) {
+int8_t device_uart_transfer(uart_channel_id_t channel_id, char* cmd)
+{
 	uint8_t buff[MSP_BUFF_SIZE];
 	memset(buff, 0, MSP_BUFF_SIZE);
 
@@ -118,7 +122,8 @@ int8_t device_uart_transfer(uart_channel_id_t channel_id, char* cmd) {
 	return 0;
 }
 
-int16_t device_uart_txrx(uart_channel_id_t channel_id, char* cmd, char* data) {
+int16_t device_uart_txrx(uart_channel_id_t channel_id, char* cmd, char* data)
+{
 	uint8_t buff[MSP_BUFF_SIZE];
 	memset(buff, 0, MSP_BUFF_SIZE);
 
@@ -164,7 +169,8 @@ int16_t device_uart_txrx(uart_channel_id_t channel_id, char* cmd, char* data) {
 	return 0;
 }
 
-int8_t device_ctrl_transfer(uint8_t channel_id, int state, int fn) {
+int8_t device_ctrl_transfer(uint8_t channel_id, int state, int fn)
+{
 	int8_t ret = 0;
 	char* cmd = get_ctrl_data(channel_id, state, fn);
 
@@ -181,7 +187,8 @@ int8_t device_ctrl_transfer(uint8_t channel_id, int state, int fn) {
 	return ret;
 }
 
-int8_t device_ctrl_txrx(uint8_t channel_id, int state, int fn, char* data) {
+int8_t device_ctrl_txrx(uint8_t channel_id, int state, int fn, char* data)
+{
 	int8_t ret = 0;
 	char* cmd = get_ctrl_data(channel_id, state, fn);
 
@@ -201,7 +208,8 @@ int8_t device_ctrl_txrx(uint8_t channel_id, int state, int fn, char* data) {
 }
 
 /* open device functions */
-int8_t open_spi_device(spi_channel_id_t channel_id) {
+int8_t open_spi_device(spi_channel_id_t channel_id)
+{
 	switch (channel_id) {
 	case SPI_CHANNEL1:
 		if ((spi0_device = malloc(sizeof(device_t))) == NULL)
@@ -222,7 +230,8 @@ int8_t open_spi_device(spi_channel_id_t channel_id) {
 	return 0;
 }
 
-int8_t open_uart_device(uart_channel_id_t channel_id) {
+int8_t open_uart_device(uart_channel_id_t channel_id)
+{
 	switch (channel_id) {
 	case UART_CHANNEL1:
 		if ((uart1_device = malloc(sizeof(device_t))) == NULL)
@@ -244,7 +253,8 @@ int8_t open_uart_device(uart_channel_id_t channel_id) {
 	return 0;
 }
 
-int8_t open_ctrl_device() {
+int8_t open_ctrl_device(void)
+{
 	if ((ctrl_device = malloc(sizeof(device_t))) == NULL)
 		quit(1, "Failed to allocate ctrl_device memory: %s", strerror(errno));
 
@@ -264,7 +274,8 @@ int8_t open_ctrl_device() {
 }
 
 /* close device functions */
-int8_t close_spi_device(spi_channel_id_t channel_id) {
+int8_t close_spi_device(spi_channel_id_t channel_id)
+{
 	switch (channel_id) {
 	case SPI_CHANNEL1:
 		spi_release(spi0_device);
@@ -279,7 +290,8 @@ int8_t close_spi_device(spi_channel_id_t channel_id) {
 	return 0;
 }
 
-int8_t close_uart_device(uart_channel_id_t channel_id) {
+int8_t close_uart_device(uart_channel_id_t channel_id)
+{
 	switch (channel_id) {
 	case UART_CHANNEL1:
 		uart_release(uart1_device);
@@ -294,7 +306,8 @@ int8_t close_uart_device(uart_channel_id_t channel_id) {
 	return 0;
 }
 
-int8_t close_ctrl_device() {
+int8_t close_ctrl_device(void)
+{
 	ctrl_release(ctrl_device);
 	gpio_release(gpio_device);
 	free(ctrl_device);

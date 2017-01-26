@@ -8,17 +8,7 @@
 #include <sys/time.h>
 #include <pthread.h>
 #include <jansson.h>
-#ifdef HAVE_LIBCURL
-#include <curl/curl.h>
-#else
-typedef char CURL;
-extern char *curly;
-#define curl_easy_init(curl) (curly)
-#define curl_easy_cleanup(curl) {}
-#define curl_global_cleanup() {}
-#define CURL_GLOBAL_ALL 0
-#define curl_global_init(X) (0)
-#endif
+
 #include <sched.h>
 
 #include "elist.h"
@@ -67,8 +57,19 @@ void *alloca (size_t);
 # endif
 #endif
 
+#ifdef HAVE_LIBCURL
+#include <curl/curl.h>
+#else
+typedef char CURL;
+extern char *curly;
+#define curl_easy_init(curl) (curly)
+#define curl_easy_cleanup(curl) {}
+#define curl_global_cleanup() {}
+#define CURL_GLOBAL_ALL 0
+#define curl_global_init(X) (0)
+#endif
+
 #ifdef __MINGW32__
-#include <windows.h>
 #include <io.h>
 static inline int fsync (int fd)
 {
@@ -1010,6 +1011,7 @@ extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern float opt_anu_freq;
 extern float opt_au3_freq;
+extern float opt_compac_freq;
 extern int opt_au3_volt;
 extern float opt_rock_freq;
 #endif
@@ -1177,7 +1179,7 @@ extern unsigned int local_work;
 extern unsigned int total_go, total_ro;
 extern const int opt_cutofftemp;
 extern int opt_log_interval;
-extern unsigned long long global_hashrate;
+extern uint64_t global_hashrate;
 extern char current_hash[68];
 extern double current_diff;
 extern uint64_t best_diff;
@@ -1345,6 +1347,7 @@ struct pool {
 	char nbit[12];
 	char ntime[12];
 	double next_diff;
+	double diff_after;
 	double sdiff;
 	uint32_t current_height;
 

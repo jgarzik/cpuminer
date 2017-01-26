@@ -1,12 +1,9 @@
-#pragma once
+#ifndef BF16_BRD_CONTROL_H
+#define BF16_BRD_CONTROL_H
 
 #include <stdint.h>
 
 #include "bf16-gpiodevice.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #define BIT_STATE(data, pin) ( (data & BV(pin)) >> pin )
 #define BIT_INV_STATE(data, pin) ( BIT_STATE(data, pin) ^ 1 )
@@ -28,13 +25,13 @@ extern "C" {
 #define CH2_SPI_RES_PIN 29  //  GPIO1[29], GPIO_61, X8.26
 
 
-void brd_init();
+void brd_init(void);
 
-int get_hw_ver();
-int get_btn_fr();
-int get_btn_discovery();
-int get_ch1_det();
-int get_ch2_det();
+int get_hw_ver(void);
+int get_btn_fr(void);
+int get_btn_discovery(void);
+int get_ch1_det(void);
+int get_ch2_det(void);
 int8_t set_buzzer(uint8_t state);
 int8_t set_led_green(uint8_t state);
 int8_t set_led_red(uint8_t state);
@@ -43,8 +40,4 @@ int8_t set_ch2_rst(uint8_t state);
 int8_t set_ch1_spi(uint8_t state);
 int8_t set_ch2_spi(uint8_t state);
 
-/** @endcond */
-#ifdef __cplusplus
-} /*extern "C" */
-#endif
-
+#endif /* BF16_BRD_CONTROL_H */

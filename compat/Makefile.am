@@ -1,11 +1,5 @@
 SUBDIRS =
 
 if WANT_STATIC_JANSSON
-SUBDIRS	+= jansson-2.6
-endif
-
-if WANT_USBUTILS
-if WANT_STATIC_LIBUSB
-SUBDIRS += libusb-1.0
-endif
+SUBDIRS	+= jansson-2.9
 endif

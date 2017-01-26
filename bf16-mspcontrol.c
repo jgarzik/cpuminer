@@ -3,7 +3,39 @@
 #include "bf16-communication.h"
 #include "bf16-ctrldevice.h"
 
-static char* get_int_val(char* data, char* name, char delim, int* value) {
+static bool check_crc(char* data)
+{
+	uint8_t crc = 0;
+	char crcdata[8];
+
+	char* mid = strchr(data, '#');
+	char* end = strchr(data, '\n');
+
+	if (mid == NULL)
+		return false;
+
+	if (end == NULL)
+		return false;
+
+	while (data != mid) {
+		crc += *data;
+		data++;
+	}
+
+	uint8_t value_len = end - mid;
+	memset(crcdata, 0, sizeof(crcdata));
+	cg_memcpy(crcdata, mid + 1, value_len - 1);
+
+	int expected_crc = atoi(crcdata);
+
+	if (expected_crc != crc)
+		return false;
+
+	return true;
+}
+
+static char* get_int_val(char* data, char* name, char delim, int* value)
+{
 	char rname[16];
 	char rvalue[32];
 
@@ -34,7 +66,8 @@ static char* get_int_val(char* data, char* name, char delim, int* value) {
 	return end + 1;
 }
 
-static char* get_str_val(char* data, char* name, char delim, char* value) {
+static char* get_str_val(char* data, char* name, char delim, char* value)
+{
 	char rname[16];
 	char rvalue[32];
 
@@ -65,8 +98,9 @@ static char* get_str_val(char* data, char* name, char delim, char* value) {
 	return end + 1;
 }
 
-void parse_board_detect(struct cgpu_info *bitfury, uint8_t board_id, char* data) {
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+void parse_board_detect(struct cgpu_info *bitfury, uint8_t board_id, char* data)
+{
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 	char* start = data;
 
 	char val[4];
@@ -94,8 +128,13 @@ void parse_board_detect(struct cgpu_info *bitfury, uint8_t board_id, char* data)
 	}
 }
 
-static void parse_board_version(struct cgpu_info *bitfury, uint8_t board_id, char* data) {
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+static void parse_board_version(struct cgpu_info *bitfury, uint8_t board_id, char* data)
+{
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
+
+	if (check_crc(data) == false)
+		quit(1, "%s: %s() invalid BOARD%d version data recieved: [%s]",
+				bitfury->drv->name, __func__, board_id + 1, data);
 
 	/* BRD */
 	char* start = data;
@@ -116,8 +155,9 @@ static void parse_board_version(struct cgpu_info *bitfury, uint8_t board_id, cha
 			bitfury->drv->name, __func__, board_id + 1);
 }
 
-void get_board_info(struct cgpu_info *bitfury, uint8_t board_id) {
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+void get_board_info(struct cgpu_info *bitfury, uint8_t board_id)
+{
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 	char buff[256];
 
 	if (info->chipboard[board_id].detected == true) {
@@ -137,9 +177,18 @@ void get_board_info(struct cgpu_info *bitfury, uint8_t board_id) {
 	}
 }
 
-int8_t parse_hwstats(struct bitfury_info *info, uint8_t board_id, char* data) {
+int8_t parse_hwstats(struct bitfury16_info *info, uint8_t board_id, char* data)
+{
+	uint8_t i;
 	int32_t value;
-	char    strvalue[16];
+	char    strvalue[17];
+
+	if (check_crc(data) == false) {
+		applog(LOG_ERR, "BF16: invalid BOARD%d hwstats recieved: [%s]",
+				board_id + 1, data);
+
+		return -1;
+	}
 
 	/* T */
 	char* start = data;
@@ -222,25 +271,30 @@ int8_t parse_hwstats(struct bitfury_info *info, uint8_t board_id, char* data) {
 	}
 
 	/* A - alarms - may be absent */
-	memset(strvalue, 0, sizeof(strvalue));
-	start = get_str_val(start, "A", ';', strvalue);
-	if (start == NULL)
-		return -1;
+	bool alarm = false;
+	for (i = 0; i < 3; i++) {
+		memset(strvalue, 0, sizeof(strvalue));
+		start = get_str_val(start, "A", ';', strvalue);
+		if (start == NULL)
+			return -1;
 
-	if (strcmp(strvalue, "T") == 0)
-		info->chipboard[board_id].a_temp = 1;
-	else
-		info->chipboard[board_id].a_temp = 0;
+		if (strcmp(strvalue, "T") == 0) {
+			info->chipboard[board_id].a_temp = 1;
+			alarm = true;
+		} else if (strcmp(strvalue, "I1") == 0) {
+			info->chipboard[board_id].a_ichain1 = 1;
+			alarm = true;
+		} else if (strcmp(strvalue, "I2") == 0) {
+			info->chipboard[board_id].a_ichain2 = 1;
+			alarm = true;
+		}
+	}
 
-	if (strcmp(strvalue, "I1") == 0)
-		info->chipboard[board_id].a_ichain1 = 1;
-	else
+	if (alarm == false) {
+		info->chipboard[board_id].a_temp    = 0;
 		info->chipboard[board_id].a_ichain1 = 0;
-
-	if (strcmp(strvalue, "I2") == 0)
-		info->chipboard[board_id].a_ichain2 = 1;
-	else
 		info->chipboard[board_id].a_ichain2 = 0;
+	}
 
 	/* F */
 	start = get_int_val(start, "F", ';', (int *)&value);
@@ -298,8 +352,9 @@ int8_t parse_hwstats(struct bitfury_info *info, uint8_t board_id, char* data) {
 	return 0;
 }
 
-int8_t enable_power_chain(struct cgpu_info *bitfury, uint8_t board_id, uint8_t chain) {
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+int8_t enable_power_chain(struct cgpu_info *bitfury, uint8_t board_id, uint8_t chain)
+{
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 
 	if (info->chipboard[board_id].detected == true) {
 		char uart_cmd[8];
@@ -348,8 +403,9 @@ int8_t enable_power_chain(struct cgpu_info *bitfury, uint8_t board_id, uint8_t c
 	return -1;
 }
 
-int8_t disable_power_chain(struct cgpu_info *bitfury, uint8_t board_id, uint8_t chain) {
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+int8_t disable_power_chain(struct cgpu_info *bitfury, uint8_t board_id, uint8_t chain)
+{
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 
 	if (info->chipboard[board_id].detected == true) {
 		char uart_cmd[8];
@@ -397,42 +453,48 @@ int8_t disable_power_chain(struct cgpu_info *bitfury, uint8_t board_id, uint8_t 
 	return -1;
 }
 
-void led_red_enable(struct bitfury_info *info) {
+void led_red_enable(struct bitfury16_info *info)
+{
 	if (device_ctrl_transfer(SPI_CHANNEL1, 1, F_LED2) == 0) {
 		info->led_red_enabled = true;
 		gettimeofday(&info->led_red_switch, NULL);
 	}
 }
 
-void led_red_disable(struct bitfury_info *info) {
+void led_red_disable(struct bitfury16_info *info)
+{
 	if (device_ctrl_transfer(SPI_CHANNEL1, 0, F_LED2) == 0) {
 		info->led_red_enabled = false;
 		gettimeofday(&info->led_red_switch, NULL);
 	}
 }
 
-void led_green_enable(struct bitfury_info *info) {
+void led_green_enable(struct bitfury16_info *info)
+{
 	if (device_ctrl_transfer(SPI_CHANNEL1, 1, F_LED1) == 0) {
 		info->led_green_enabled = true;
 		gettimeofday(&info->led_green_switch, NULL);
 	}
 }
 
-void led_green_disable(struct bitfury_info *info) {
+void led_green_disable(struct bitfury16_info *info)
+{
 	if (device_ctrl_transfer(SPI_CHANNEL1, 0, F_LED1) == 0) {
 		info->led_green_enabled = false;
 		gettimeofday(&info->led_green_switch, NULL);
 	}
 }
 
-void buzzer_enable(struct bitfury_info *info) {
+void buzzer_enable(struct bitfury16_info *info)
+{
 	if (device_ctrl_transfer(SPI_CHANNEL1, 1, F_BUZZER) == 0) {
 		info->buzzer_enabled = true;
 		gettimeofday(&info->buzzer_switch, NULL);
 	}
 }
 
-void buzzer_disable(struct bitfury_info *info) {
+void buzzer_disable(struct bitfury16_info *info)
+{
 	if (device_ctrl_transfer(SPI_CHANNEL1, 0, F_BUZZER) == 0) {
 		info->buzzer_enabled = false;
 		gettimeofday(&info->buzzer_switch, NULL);

@@ -30,7 +30,8 @@ typedef struct {
 static mmap_attr_t mmap_base;
 char *gpio_device_name  = "/dev/mem";
 
-int8_t gpio_write_ctrl(gpio_rq_t* rq) {
+int8_t gpio_write_ctrl(gpio_rq_t* rq)
+{
 	if (rq->gpioIndex < MAX_GPIO_INDEX && rq->regIndex < MAX_REGISTER_INDEX) {
 		gpio_attr_t* gpio_addr = (void*) &mmap_base;
 		gpio_attr_t gpio = gpio_addr[rq->gpioIndex];
@@ -44,7 +45,8 @@ int8_t gpio_write_ctrl(gpio_rq_t* rq) {
 	return -1;
 }
 
-int gpio_read_ctrl(gpio_rq_t* rq) {
+int gpio_read_ctrl(gpio_rq_t* rq)
+{
 	if (rq->gpioIndex < MAX_GPIO_INDEX && rq->regIndex < MAX_REGISTER_INDEX) {
 		gpio_attr_t* gpio_addr = (void*) &mmap_base;
 		gpio_attr_t gpio = gpio_addr[rq->gpioIndex];
@@ -57,7 +59,8 @@ int gpio_read_ctrl(gpio_rq_t* rq) {
 	return -1;
 }
 
-void* map_gpio(gpio_attr_t* gpioAttr, void* gpio) {
+void* map_gpio(gpio_attr_t* gpioAttr, void* gpio)
+{
 	gpioAttr->oe_addr  = gpio + GPIO_OE;
 	gpioAttr->data_out = gpio + GPIO_DATAOUT;
 	gpioAttr->data_set = gpio + GPIO_SETDATAOUT;
@@ -67,7 +70,8 @@ void* map_gpio(gpio_attr_t* gpioAttr, void* gpio) {
 	return gpio;
 }
 
-void* mmap_open(const char *device, uint32_t base, uint32_t size ) {
+void* mmap_open(const char *device, uint32_t base, uint32_t size)
+{
 	int fd = open(device, O_RDWR | O_SYNC);
 	if (fd < 0)
 		quit(1, "Failed to open /dev/mem: %s", strerror(errno));
@@ -81,7 +85,8 @@ void* mmap_open(const char *device, uint32_t base, uint32_t size ) {
 	return mmap_addr;
 }
 
-int8_t gpio_init(device_t* attr, char *device, uint16_t size) {
+int8_t gpio_init(device_t* attr, char *device, uint16_t size)
+{
 	attr->device = device;
 	attr->mode = 0;
 	attr->speed = 0;
@@ -99,7 +104,8 @@ int8_t gpio_init(device_t* attr, char *device, uint16_t size) {
 }
 
 
-void gpio_release(device_t *attr) {
+void gpio_release(device_t *attr)
+{
 	free(attr->rx);
 	free(attr->tx);
 }

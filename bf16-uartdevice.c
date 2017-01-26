@@ -9,7 +9,8 @@
 char *uart1_device_name = "/dev/ttyO1";
 char *uart2_device_name = "/dev/ttyO4";
 
-int8_t uart_init(device_t* attr, uart_channel_id_t channel_id, int8_t mode, uint32_t speed, uint16_t size) {
+int8_t uart_init(device_t* attr, uart_channel_id_t channel_id, int8_t mode, uint32_t speed, uint16_t size)
+{
 	switch (channel_id) {
 	case UART_CHANNEL1:
 		attr->device = uart1_device_name;
@@ -71,7 +72,8 @@ int8_t uart_init(device_t* attr, uart_channel_id_t channel_id, int8_t mode, uint
 }
 
 /* TODO: add errors processing */
-static int read_to(int fd, uint8_t* buffer, int len, int timeout) {
+static int read_to(int fd, uint8_t* buffer, int len, int timeout)
+{
 	fd_set readset;
 	int result;
 	struct timeval tv;
@@ -92,7 +94,8 @@ static int read_to(int fd, uint8_t* buffer, int len, int timeout) {
 	return -2;
 }
 
-static int write_to(int fd, uint8_t* buffer, int len, int timeout) {
+static int write_to(int fd, uint8_t* buffer, int len, int timeout)
+{
 	fd_set writeset;
 	int result;
 	struct timeval tv;
@@ -114,7 +117,8 @@ static int write_to(int fd, uint8_t* buffer, int len, int timeout) {
 	return -2;
 }
 
-int8_t uart_transfer(device_t *attr) {
+int8_t uart_transfer(device_t *attr)
+{
 	int ret;
 
 	if ((ret = write_to(attr->fd, attr->tx, attr->datalen, SRV_TIMEOUT)) < 1) {
@@ -137,7 +141,8 @@ int8_t uart_transfer(device_t *attr) {
 	return 0;
 }
 
-void uart_release(device_t *attr) {
+void uart_release(device_t *attr)
+{
 	free(attr->rx);
 	free(attr->tx);
 	close(attr->fd);

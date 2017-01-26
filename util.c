@@ -643,7 +643,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	if (likely(global_hashrate)) {
 		char ghashrate[255];
 
-		sprintf(ghashrate, "X-Mining-Hashrate: %llu", global_hashrate);
+		sprintf(ghashrate, "X-Mining-Hashrate: %"PRIu64, global_hashrate);
 		headers = curl_slist_append(headers, ghashrate);
 	}
 
@@ -1444,7 +1444,7 @@ void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
 }
 #endif /* WIN32 */
 
-#if defined(CLOCK_MONOTONIC) && !defined(__FreeBSD__) && !defined(__APPLE__) /* Essentially just linux */
+#if defined(CLOCK_MONOTONIC) && !defined(__FreeBSD__) && !defined(__APPLE__) && !defined(WIN32) /* Essentially just linux */
 //#ifdef CLOCK_MONOTONIC /* Essentially just linux */
 void cgtimer_time(cgtimer_t *ts_start)
 {
@@ -1834,7 +1834,7 @@ static void clear_sock(struct pool *pool)
 }
 
 /* Realloc memory to new size and zero any extra memory added */
-void _recalloc(void **ptr, size_t old, size_t new, const char *file, const char *func, const int line)
+void ckrecalloc(void **ptr, size_t old, size_t new, const char *file, const char *func, const int line)
 {
 	if (new == old)
 		return;
@@ -1969,7 +1969,7 @@ static char *blank_merkle = "000000000000000000000000000000000000000000000000000
 static bool parse_notify(struct pool *pool, json_t *val)
 {
 	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit,
-	     *ntime, header[228];
+	     *ntime, header[260];
 	unsigned char *cb1 = NULL, *cb2 = NULL;
 	size_t cb1_len, cb2_len, alloc_len;
 	bool clean, ret = false;
@@ -2004,15 +2004,21 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	cg_wlock(&pool->data_lock);
 	free(pool->swork.job_id);
 	pool->swork.job_id = job_id;
+	if (memcmp(pool->prev_hash, prev_hash, 64)) {
+		pool->swork.clean = true;
+	} else {
+		pool->swork.clean = clean;
+	}
 	snprintf(pool->prev_hash, 65, "%s", prev_hash);
 	cb1_len = strlen(coinbase1) / 2;
 	cb2_len = strlen(coinbase2) / 2;
 	snprintf(pool->bbversion, 9, "%s", bbversion);
 	snprintf(pool->nbit, 9, "%s", nbit);
 	snprintf(pool->ntime, 9, "%s", ntime);
-	pool->swork.clean = clean;
 	if (pool->next_diff > 0) {
 		pool->sdiff = pool->next_diff;
+		pool->next_diff = pool->diff_after;
+		pool->diff_after = 0;
 	}
 	alloc_len = pool->coinbase_len = cb1_len + pool->n1_len + pool->n2size + cb2_len;
 	pool->nonce2_offset = cb1_len + pool->n1_len;
@@ -2050,7 +2056,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	/* nonce */		 8 +
 	/* workpadding */	 96;
 #endif
-	snprintf(header, 225,
+	snprintf(header, 257,
 		"%s%s%s%s%s%s%s",
 		pool->bbversion,
 		pool->prev_hash,
@@ -2059,7 +2065,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		pool->nbit,
 		"00000000", /* nonce */
 		workpadding);
-	ret = hex2bin(pool->header_bin, header, 112);
+
+	ret = hex2bin(pool->header_bin, header, 128);
 	if (unlikely(!ret)) {
 		applog(LOG_ERR, "Failed to convert header to header_bin in parse_notify");
 		goto out_unlock;
@@ -2119,17 +2126,17 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	double old_diff, diff;
 
 	diff = json_number_value(json_array_get(val, 0));
-	if (diff == 0)
+	if (diff <= 0)
 		return false;
 
+	/* We can only change one diff per notify so assume diffs are being
+	 * stacked for successive notifies. */
 	cg_wlock(&pool->data_lock);
-	if (pool->next_diff > 0) {
-		old_diff = pool->next_diff;
+	if (pool->next_diff)
+		pool->diff_after = diff;
+	else
 		pool->next_diff = diff;
-	} else {
-		old_diff = pool->sdiff;
-		pool->next_diff = pool->sdiff = diff;
-	}
+	old_diff = pool->sdiff;
 	cg_wunlock(&pool->data_lock);
 
 	if (old_diff != diff) {
@@ -2932,7 +2939,7 @@ out:
 		if (!pool->stratum_url)
 			pool->stratum_url = pool->sockaddr_url;
 		pool->stratum_active = true;
-		pool->next_diff = 0;
+		pool->next_diff = pool->diff_after = 0;
 		pool->sdiff = 1;
 		if (opt_protocol) {
 			applog(LOG_DEBUG, "Pool %d confirmed mining.subscribe with extranonce1 %s extran2size %d",

@@ -93,7 +93,7 @@ case $target in
     WS2_LIBS="-lws2_32"
     MM_LIBS="-lwinmm"
     RT_LIBS=""
-    AC_DEFINE([_WIN32_WINNT], [0x0501], "WinNT version for XP+ support")
+    #AC_DEFINE([_WIN32_WINNT], [0x0501], "WinNT version for XP+ support")
     ;;
   powerpc-*-darwin*)
     have_darwin=true
@@ -285,12 +285,13 @@ AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
 bitfury16="no"
 
 AC_ARG_ENABLE([bitfury16],
-	[AC_HELP_STRING([--enable-bitfury16],[Compile support for BitFury 16nm ASICs (default disabled)])],
+	[AC_HELP_STRING([--enable-bitfury16],[Compile support for BitFury 16nm ASICs STANDALONE(default disabled)])],
 	[bitfury16=$enableval]
 	)
 if test "x$bitfury16" = xyes; then
 	AC_DEFINE([USE_BITFURY16], [1], [Defined to 1 if BitFury 16nm ASIC support is wanted])
 	drivercount=x$drivercount
+	standalone="yes"
 fi
 AM_CONDITIONAL([HAS_BITFURY16], [test x$bitfury16 = xyes])
 
@@ -488,7 +489,7 @@ AC_ARG_WITH([curses],
 if test "x$curses" = "xno"; then
 	cursesmsg='User specified --without-curses. TUI support DISABLED'
 else
-	AC_SEARCH_LIBS(addstr, ncurses pdcurses, [
+	AC_SEARCH_LIBS(addstr, pdcurses ncurses pdcurses, [
 		curses=yes
 		cursesmsg="FOUND: ${ac_cv_search_addstr}"
 		AC_DEFINE([HAVE_CURSES], [1], [Defined to 1 if curses TUI support is wanted])
@@ -530,49 +531,23 @@ AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 AM_CONDITIONAL([WANT_CRC16], [test x$want_crc16 != xfalse])
+AM_CONDITIONAL([NEED_I2C_CONTEXT], [test x$avalon4$avalon7 != xnono])
 
 if test "x$want_usbutils" != xfalse; then
-	dlibusb="no"
 	AC_DEFINE([USE_USBUTILS], [1], [Defined to 1 if usbutils support required])
-	AC_ARG_WITH([system-libusb],
-		[AC_HELP_STRING([--with-system-libusb],[NOT RECOMMENDED! Compile against dynamic system libusb. (Default use included static libusb)])],
-		[dlibusb=$withval]
-	)
-
-	if test "x$dlibusb" != xno; then
-		case $target in
-			*-*-freebsd*)
-				LIBUSB_LIBS="-lusb"
-				LIBUSB_CFLAGS=""
-				AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])
-				;;
-			*)
-				PKG_CHECK_MODULES(LIBUSB, libusb-1.0, [AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])], [AC_MSG_ERROR([Could not find usb library - please install libusb-1.0])])
-				;;
-		esac
-	else
-		AC_CONFIG_SUBDIRS([compat/libusb-1.0])
-		LIBUSB_LIBS="compat/libusb-1.0/libusb/.libs/libusb-1.0.a"
-		if test "x$have_linux" = "xtrue"; then
-			AC_ARG_ENABLE([udev],
-				[AC_HELP_STRING([--disable-udev],[Disable building libusb with udev])],
-				[udev=$enableval]
-				)
-
-			if test "x$udev" != xno; then
-				LIBUSB_LIBS+=" -ludev"
-			fi
-		fi
-		if test "x$have_darwin" = "xtrue"; then
-			LIBUSB_LIBS+=" -lobjc"
-			LDFLAGS+=" -framework CoreFoundation -framework IOKit"
-		fi
-	fi
+	case $target in
+		*-*-freebsd*)
+			LIBUSB_LIBS="-lusb"
+			LIBUSB_CFLAGS=""
+			AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])
+			;;
+		*)
+			PKG_CHECK_MODULES(LIBUSB, libusb-1.0, [AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])], [AC_MSG_ERROR([Could not find usb library - please install libusb-1.0])])
+			;;
+	esac
 else
 	LIBUSB_LIBS=""
 fi
-
-AM_CONDITIONAL([WANT_STATIC_LIBUSB], [test x$dlibusb = xno])
 
 djansson="no"
 AC_ARG_WITH([system-jansson],
@@ -592,8 +567,8 @@ if test "x$djansson" != xno; then
 			;;
 	esac
 else
-	AC_CONFIG_SUBDIRS([compat/jansson-2.6])
-	JANSSON_LIBS="compat/jansson-2.6/src/.libs/libjansson.a"
+	AC_CONFIG_SUBDIRS([compat/jansson-2.9])
+	JANSSON_LIBS="compat/jansson-2.9/src/.libs/libjansson.a"
 fi
 
 AM_CONDITIONAL([WANT_STATIC_JANSSON], [test x$djansson = xno])
@@ -618,6 +593,7 @@ AC_ARG_ENABLE([libcurl],
 	[libcurl=$enableval]
 	)
 
+static_curl="no"
 if test "x$libcurl" != xno; then
 	if test "x$have_win32" != xtrue; then
 		PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.25.0], [AC_DEFINE([CURL_HAS_KEEPALIVE], [1], [Defined if version of curl supports keepalive.])],
@@ -625,12 +601,14 @@ if test "x$libcurl" != xno; then
 	else
 		PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.25.0], ,[AC_MSG_ERROR([Missing required libcurl dev >= 7.25.0])])
 		AC_DEFINE([CURL_HAS_KEEPALIVE], [1])
+		static_curl="yes"
 	fi
 	AC_DEFINE([HAVE_LIBCURL], [1], [Defined to 1 if libcurl support built in])
 else
 	LIBCURL_LIBS=""
 fi
 AC_SUBST(LIBCURL_LIBS)
+AM_CONDITIONAL([STATIC_CURL], [test x$static_curl = xyes])
 
 libsystemd="no"
 
@@ -902,7 +880,7 @@ else
 fi
 
 #Add any new device to this, along with a no on the end of the test
-if test "x$avalon$avalon2$avalon4$avalon7$avalon_miner$bab$bflsc$bitforce$bitfury$bifury16$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$ants3$sp10$sp30" = xnononononononononononononononononononononononononono; then
+if test "x$avalon$avalon2$avalon4$avalon7$avalon_miner$bab$bflsc$bitforce$bitfury$bitfury16$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$ants3$sp10$sp30" = xnononononononononononononononononononononononononono; then
 	echo
 	AC_MSG_ERROR([No mining devices configured in])
 	echo
@@ -926,11 +904,4 @@ echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
 echo
-if test "x$want_usbutils$dlibusb" = xyesyes; then
-echo "*** SYSTEM LIBUSB BEING ADDED - NOT RECOMMENDED UNLESS YOU ARE UNABLE TO COMPILE THE INCLUDED LIBUSB ***"
-echo
-fi
-if test "x$djansson" = xyes; then
-echo "*** SYSTEM JANSSON BEING ADDED - NOT RECOMMENDED UNLESS YOU ARE UNABLE TO COMPILE THE INCLUDED JANSSON ***"
-echo
-fi
+

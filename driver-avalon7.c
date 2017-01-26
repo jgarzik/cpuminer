@@ -23,7 +23,9 @@ int opt_avalon7_temp_target = AVA7_DEFAULT_TEMP_TARGET;
 int opt_avalon7_fan_min = AVA7_DEFAULT_FAN_MIN;
 int opt_avalon7_fan_max = AVA7_DEFAULT_FAN_MAX;
 
-int opt_avalon7_voltage = AVA7_DEFAULT_VOLTAGE;
+int opt_avalon7_voltage = AVA7_INVALID_VOLTAGE;
+int opt_avalon7_voltage_offset = AVA7_DEFAULT_VOLTAGE_OFFSET;
+
 int opt_avalon7_freq[AVA7_DEFAULT_PLL_CNT] = {AVA7_DEFAULT_FREQUENCY_0,
 					      AVA7_DEFAULT_FREQUENCY_1,
 					      AVA7_DEFAULT_FREQUENCY_2,
@@ -178,6 +180,33 @@ uint32_t cpm_table[] =
 	0x01274813,
 };
 
+struct avalon7_dev_description avalon7_dev_table[] = {
+	{
+		"711",
+		711,
+		4,
+		18,
+		AVA7_MM711_VOUT_ADC_RATIO,
+		4981
+	},
+	{
+		"721",
+		721,
+		4,
+		18,
+		AVA7_MM721_VOUT_ADC_RATIO,
+		4981
+	},
+	{
+		"741",
+		741,
+		4,
+		22,
+		AVA7_MM741_VOUT_ADC_RATIO,
+		4825,
+	}
+};
+
 static uint32_t api_get_cpm(uint32_t freq)
 {
 	return cpm_table[freq / 12 - 2];
@@ -191,7 +220,15 @@ static uint32_t encode_voltage(uint32_t volt)
 	if (volt < AVA7_DEFAULT_VOLTAGE_MIN)
 	      volt = AVA7_DEFAULT_VOLTAGE_MIN;
 
-	return 0x8000 | ((volt - AVA7_DEFAULT_VOLTAGE_MIN) / 78);
+	return 0x8000 | ((volt - AVA7_DEFAULT_VOLTAGE_MIN) / AVA7_DEFAULT_VOLTAGE_STEP);
+}
+
+static uint32_t convert_voltage_level(uint32_t level)
+{
+	if (level > AVA7_DEFAULT_VOLTAGE_LEVEL_MAX)
+             level = AVA7_DEFAULT_VOLTAGE_LEVEL_MAX;
+
+       return AVA7_DEFAULT_VOLTAGE_MIN + level * AVA7_DEFAULT_VOLTAGE_STEP;
 }
 
 static uint32_t decode_voltage(struct avalon7_info *info, int modular_id, uint32_t volt)
@@ -336,6 +373,38 @@ char *set_avalon7_voltage(char *arg)
 	return NULL;
 }
 
+char *set_avalon7_voltage_level(char *arg)
+{
+       int val, ret;
+
+       ret = sscanf(arg, "%d", &val);
+       if (ret < 1)
+               return "No value passed to avalon7-voltage-level";
+
+       if (val < AVA7_DEFAULT_VOLTAGE_LEVEL_MIN || val > AVA7_DEFAULT_VOLTAGE_LEVEL_MAX)
+               return "Invalid value passed to avalon7-voltage-level";
+
+       opt_avalon7_voltage = convert_voltage_level(val);
+
+       return NULL;
+}
+
+char *set_avalon7_voltage_offset(char *arg)
+{
+       int val, ret;
+
+       ret = sscanf(arg, "%d", &val);
+       if (ret < 1)
+               return "No value passed to avalon7-voltage-offset";
+
+       if (val < AVA7_DEFAULT_VOLTAGE_OFFSET_MIN || val > AVA7_DEFAULT_VOLTAGE_OFFSET_MAX)
+               return "Invalid value passed to avalon7-voltage-offset";
+
+       opt_avalon7_voltage_offset = val;
+
+       return NULL;
+}
+
 static int avalon7_init_pkg(struct avalon7_pkg *pkg, uint8_t type, uint8_t idx, uint8_t cnt)
 {
 	unsigned short crc;
@@ -383,7 +452,7 @@ static inline int get_temp_max(struct avalon7_info *info, int addr)
 	int i;
 	int max = -273;
 
-	for (i = 0; i < AVA7_DEFAULT_MINER_CNT; i++) {
+	for (i = 0; i < info->miner_count[addr]; i++) {
 		if (info->temp[addr][i][3] > max)
 			max = info->temp[addr][i][3];
 	}
@@ -1319,6 +1388,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 	struct avalon7_ret ret_pkg;
 	uint32_t tmp;
 	int i, j, err, rlen;
+	uint8_t dev_index;
 	uint8_t rbuf[AVA7_AUC_P_SIZE];
 
 	/* Detect new modules here */
@@ -1364,39 +1434,37 @@ static void detect_modules(struct cgpu_info *avalon7)
 		} else
 			info->conn_overloaded = false;
 
+		memcpy(info->mm_version[i], ret_pkg.data + AVA7_MM_DNA_LEN, AVA7_MM_VER_LEN);
+		info->mm_version[i][AVA7_MM_VER_LEN] = '\0';
+		for (dev_index = 0; dev_index < (sizeof(avalon7_dev_table) / sizeof(avalon7_dev_table[0])); dev_index++) {
+			if (!strncmp((char *)&(info->mm_version[i]), (char *)(avalon7_dev_table[dev_index].dev_id_str), 3)) {
+				info->mod_type[i] = avalon7_dev_table[dev_index].mod_type;
+				info->miner_count[i] = avalon7_dev_table[dev_index].miner_count;
+				info->asic_count[i] = avalon7_dev_table[dev_index].asic_count;
+				info->vout_adc_ratio[i] = avalon7_dev_table[dev_index].vout_adc_ratio;
+				break;
+			}
+		}
+		if (dev_index == (sizeof(avalon7_dev_table) / sizeof(avalon7_dev_table[0]))) {
+			applog(LOG_NOTICE, "%s-%d: The modular version %s cann't be support",
+				       avalon7->drv->name, avalon7->device_id, info->mm_version[i]);
+			break;
+		}
+
 		info->enable[i] = 1;
 		cgtime(&info->elapsed[i]);
 		memcpy(info->mm_dna[i], ret_pkg.data, AVA7_MM_DNA_LEN);
-		memcpy(info->mm_version[i], ret_pkg.data + AVA7_MM_DNA_LEN, AVA7_MM_VER_LEN);
 		memcpy(&tmp, ret_pkg.data + AVA7_MM_DNA_LEN + AVA7_MM_VER_LEN, 4);
 		tmp = be32toh(tmp);
-		info->mm_version[i][AVA7_MM_VER_LEN] = '\0';
 		info->total_asics[i] = tmp;
-
-		info->miner_count[i] = AVA7_DEFAULT_MINER_CNT;
-		if (!strncmp((char *)&(info->mm_version[i]), AVA7_MM711_PREFIXSTR, 3)) {
-			info->mod_type[i] = AVA7_TYPE_MM711;
-			info->asic_count[i] = AVA7_MM711_ASIC_CNT;
-			info->vout_adc_ratio[i] = AVA7_MM711_VOUT_ADC_RATIO;
-		}
-
-		if (!strncmp((char *)&(info->mm_version[i]), AVA7_MM721_PREFIXSTR, 3)) {
-			info->mod_type[i] = AVA7_TYPE_MM721;
-			info->asic_count[i] = AVA7_MM721_ASIC_CNT;
-			info->vout_adc_ratio[i] = AVA7_MM721_VOUT_ADC_RATIO;
-		}
-
-		if (!strncmp((char *)&(info->mm_version[i]), AVA7_MM741_PREFIXSTR, 3)) {
-			info->mod_type[i] = AVA7_TYPE_MM741;
-			info->asic_count[i] = AVA7_MM741_ASIC_CNT;
-			info->vout_adc_ratio[i] = AVA7_MM741_VOUT_ADC_RATIO;
-		}
-
 		info->temp_overheat[i] = AVA7_DEFAULT_TEMP_OVERHEAT;
 		info->temp_target[i] = opt_avalon7_temp_target;
 		info->fan_pct[i] = opt_avalon7_fan_min + (opt_avalon7_fan_min + opt_avalon7_fan_max) / 3;
 		for (j = 0; j < info->miner_count[i]; j++) {
-			info->set_voltage[i][j] = opt_avalon7_voltage;
+			if (opt_avalon7_voltage == AVA7_INVALID_VOLTAGE)
+				info->set_voltage[i][j] = avalon7_dev_table[dev_index].set_voltage;
+			else
+				info->set_voltage[i][j] = opt_avalon7_voltage;
 			info->get_voltage[i][j] = 0;
 			info->get_vin[i][j] = 0;
 		}
@@ -1613,7 +1681,8 @@ static void avalon7_set_voltage(struct cgpu_info *avalon7, int addr, unsigned in
 
 	/* FIXME: miner_count should <= 8 */
 	for (i = 0; i < info->miner_count[addr]; i++) {
-		tmp = be32toh(encode_voltage(voltage[i]));
+		tmp = be32toh(encode_voltage(voltage[i] +
+				opt_avalon7_voltage_offset * AVA7_DEFAULT_VOLTAGE_STEP));
 		memcpy(send_pkg.data + i * 4, &tmp, 4);
 	}
 	applog(LOG_DEBUG, "%s-%d-%d: avalon7 set voltage miner %d, (%d-%d)",
@@ -1661,7 +1730,7 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, int miner_id, 
 			miner_id, be32toh(tmp));
 
 	/* Package the data */
-	avalon7_init_pkg(&send_pkg, AVA7_P_SET_PLL, miner_id + 1, AVA7_DEFAULT_MINER_CNT);
+	avalon7_init_pkg(&send_pkg, AVA7_P_SET_PLL, miner_id + 1, info->miner_count[addr]);
 
 	if (addr == AVA7_MODULE_BROADCAST)
 		avalon7_send_bc_pkgs(avalon7, &send_pkg);
@@ -2293,6 +2362,8 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 	}
 
 	root = api_add_bool(root, "Connection Overloaded", &info->conn_overloaded, true);
+	root = api_add_int(root, "Voltage Offset", &opt_avalon7_voltage_offset, true);
+	root = api_add_uint32(root, "Nonce Mask", &opt_avalon7_nonce_mask, true);
 
 	return root;
 }

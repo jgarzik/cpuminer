@@ -1,12 +1,18 @@
 
 ACLOCAL_AMFLAGS = -I m4
 
-JANSSON_CPPFLAGS= -I$(top_builddir)/compat/jansson-2.6/src -I$(top_srcdir)/compat/jansson-2.6/src
+JANSSON_CPPFLAGS= -I$(top_builddir)/compat/jansson-2.9/src -I$(top_srcdir)/compat/jansson-2.9/src
 
 if WANT_USBUTILS
-USBUTILS_CPPFLAGS = -I$(top_builddir)/compat/libusb-1.0/libusb -I$(top_srcdir)/compat/libusb-1.0/libusb
+USBUTILS_CPPFLAGS = `pkg-config libusb-1.0 --libs --cflags`
 else
 USBUTILS_CPPFLAGS =
+endif
+
+if STATIC_CURL
+LIBCURL_CPPFLAGS = -DCURL_STATICLIB
+else
+LIBCURL_CPPFLAGS =
 endif
 
 EXTRA_DIST	= example.conf linux-usb-cgminer \
@@ -18,7 +24,7 @@ EXTRA_DIST	= example.conf linux-usb-cgminer \
 
 SUBDIRS		= lib compat ccan
 
-cgminer_CPPFLAGS = $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_CPPFLAGS) $(USBUTILS_CPPFLAGS)
+cgminer_CPPFLAGS = $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_CPPFLAGS) $(USBUTILS_CPPFLAGS) $(LIBCURL_CPPFLAGS)
 
 bin_PROGRAMS	= cgminer
 
@@ -153,11 +159,13 @@ endif
 
 if HAS_AVALON4
 cgminer_SOURCES += driver-avalon4.c driver-avalon4.h
-cgminer_SOURCES += i2c-context.c
 endif
 
 if HAS_AVALON7
 cgminer_SOURCES += driver-avalon7.c driver-avalon7.h
+endif
+
+if NEED_I2C_CONTEXT
 cgminer_SOURCES += i2c-context.c
 endif
 

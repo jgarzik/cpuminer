@@ -1,12 +1,9 @@
-#pragma once
+#ifndef BF16_UARTDEVICE_H
+#define BF16_UARTDEVICE_H
 
 #include <termios.h>
 
 #include "bf16-device.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #define UART_BUFFER_SIZE 128
 
@@ -23,7 +20,4 @@ int8_t uart_init(device_t* attr, uart_channel_id_t channel_id,
 int8_t uart_transfer(device_t *attr);
 void uart_release(device_t *attr);
 
-/** @endcond */
-#ifdef __cplusplus
-} /*extern "C" */
-#endif
+#endif /* BF16_UARTDEVICE_H */

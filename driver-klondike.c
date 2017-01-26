@@ -21,10 +21,6 @@
 
 #include "config.h"
 
-#ifdef WIN32
-#include <windows.h>
-#endif
-
 #include "compat.h"
 #include "miner.h"
 #include "usbutils.h"

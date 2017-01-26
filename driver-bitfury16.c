@@ -259,17 +259,17 @@ static bf_chip_address_t renonce_chip_address[CHIPBOARD_NUM] = {
 	{
 		.board_id  = 0,
 		.bcm250_id = 0,
-		.chip_id   = 6
+		.chip_id   = 0
 	},
 	{
 		.board_id  = 1,
 		.bcm250_id = 0,
-		.chip_id   = 6
+		.chip_id   = 0
 	}
 };
 
 #ifdef FILELOG
-static int filelog(struct bitfury_info *info, const char* format, ...)
+static int filelog(struct bitfury16_info *info, const char* format, ...)
 {
 	char fmt[1024];
 	char datetime[64];
@@ -298,8 +298,12 @@ static int filelog(struct bitfury_info *info, const char* format, ...)
 
 	va_list args;
 	va_start(args, format);
+
+	mutex_lock(&info->logfile_mutex);
 	vfprintf(info->logfile, fmt, args);
 	fflush(info->logfile);
+	mutex_unlock(&info->logfile_mutex);
+
 	va_end(args);
 
 	return 0;
@@ -343,7 +347,7 @@ static uint8_t renonce_chip(bf_chip_address_t chip_address)
 	return 0;
 }
 
-static void get_next_chip_address(struct bitfury_info *info, bf_chip_address_t* chip_address)
+static void get_next_chip_address(struct bitfury16_info *info, bf_chip_address_t* chip_address)
 {
 	uint8_t board_id  = chip_address->board_id;
 	uint8_t bcm250_id = chip_address->bcm250_id;
@@ -382,7 +386,7 @@ static void get_next_chip_address(struct bitfury_info *info, bf_chip_address_t* 
 
 static int8_t change_renonce_chip_address(struct cgpu_info *bitfury, bf_chip_address_t chip_address)
 {
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 
 	uint8_t board_id  = chip_address.board_id;
 	uint8_t bcm250_id = chip_address.bcm250_id;
@@ -470,7 +474,7 @@ static int8_t change_renonce_chip_address(struct cgpu_info *bitfury, bf_chip_add
 	}
 }
 
-static void increase_good_nonces(struct bitfury_info *info, bf_chip_address_t chip_address)
+static void increase_good_nonces(struct bitfury16_info *info, bf_chip_address_t chip_address)
 {
 	uint8_t board_id  = chip_address.board_id;
 	uint8_t bcm250_id = chip_address.bcm250_id;
@@ -482,7 +486,7 @@ static void increase_good_nonces(struct bitfury_info *info, bf_chip_address_t ch
 	info->nonces_good_dx++;
 }
 
-static void increase_bad_nonces(struct bitfury_info *info, bf_chip_address_t chip_address)
+static void increase_bad_nonces(struct bitfury16_info *info, bf_chip_address_t chip_address)
 {
 	uint8_t board_id  = chip_address.board_id;
 	uint8_t bcm250_id = chip_address.bcm250_id;
@@ -494,7 +498,7 @@ static void increase_bad_nonces(struct bitfury_info *info, bf_chip_address_t chi
 	info->nonces_bad_dx++;
 }
 
-static void increase_re_nonces(struct bitfury_info *info, bf_chip_address_t chip_address)
+static void increase_re_nonces(struct bitfury16_info *info, bf_chip_address_t chip_address)
 {
 	uint8_t board_id  = chip_address.board_id;
 	uint8_t bcm250_id = chip_address.bcm250_id;
@@ -506,7 +510,7 @@ static void increase_re_nonces(struct bitfury_info *info, bf_chip_address_t chip
 	info->nonces_re_dx++;
 }
 
-static void increase_re_good_nonces(struct bitfury_info *info, bf_chip_address_t chip_address)
+static void increase_re_good_nonces(struct bitfury16_info *info, bf_chip_address_t chip_address)
 {
 	uint8_t board_id  = chip_address.board_id;
 	uint8_t bcm250_id = chip_address.bcm250_id;
@@ -521,7 +525,7 @@ static void increase_re_good_nonces(struct bitfury_info *info, bf_chip_address_t
 	}
 }
 
-static void increase_re_bad_nonces(struct bitfury_info *info, bf_chip_address_t chip_address)
+static void increase_re_bad_nonces(struct bitfury16_info *info, bf_chip_address_t chip_address)
 {
 	uint8_t board_id  = chip_address.board_id;
 	uint8_t bcm250_id = chip_address.bcm250_id;
@@ -536,7 +540,7 @@ static void increase_re_bad_nonces(struct bitfury_info *info, bf_chip_address_t 
 	}
 }
 
-static void increase_total_nonces(struct bitfury_info *info, bf_chip_address_t chip_address)
+static void increase_total_nonces(struct bitfury16_info *info, bf_chip_address_t chip_address)
 {
 	uint8_t board_id  = chip_address.board_id;
 	uint8_t bcm250_id = chip_address.bcm250_id;
@@ -552,7 +556,7 @@ static void increase_total_nonces(struct bitfury_info *info, bf_chip_address_t c
 	}
 }
 
-static void increase_task_switch(struct bitfury_info *info, bf_chip_address_t chip_address)
+static void increase_task_switch(struct bitfury16_info *info, bf_chip_address_t chip_address)
 {
 	uint8_t board_id  = chip_address.board_id;
 	uint8_t bcm250_id = chip_address.bcm250_id;
@@ -564,7 +568,7 @@ static void increase_task_switch(struct bitfury_info *info, bf_chip_address_t ch
 	info->task_switch_dx++;
 }
 
-static void increase_errors(struct bitfury_info *info, bf_chip_address_t chip_address)
+static void increase_errors(struct bitfury16_info *info, bf_chip_address_t chip_address)
 {
 	uint8_t board_id  = chip_address.board_id;
 	uint8_t bcm250_id = chip_address.bcm250_id;
@@ -623,11 +627,11 @@ static uint8_t* init_channel_path(uint8_t board_id, uint8_t btc250_num, uint8_t*
 
 static int8_t parse_chip_address(struct cgpu_info *bitfury, char* address, bf_chip_address_t* chip_address)
 {
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 
-	uint8_t board_id  = 0;
-	uint8_t bcm250_id = 0;
-	uint8_t chip_id   = 0;
+	int8_t board_id  = 0;
+	int8_t bcm250_id = 0;
+	int8_t chip_id   = 0;
 
 	char buff[16];
 
@@ -707,14 +711,18 @@ static int8_t parse_chip_address(struct cgpu_info *bitfury, char* address, bf_ch
 
 static void update_bcm250_map(struct cgpu_info *bitfury, uint8_t board_id)
 {
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 
 #ifdef MINER_X5
+	info->chipboard[board_id].board_type = CHIPBOARD_X5;
+
 	switch (info->chipboard[board_id].board_ver) {
 		/* 23 chip board version */
 		case 5:
-			bcm250_map[board_id][0].last_good_chip = BF16_NUM - 2;
-			bcm250_map[board_id][0].chips_num      = BF16_NUM - 2;
+			info->chipboard[board_id].board_rev     = CHIPBOARD_REV2;
+
+			bcm250_map[board_id][0].last_good_chip  = BF16_NUM - 2;
+			bcm250_map[board_id][0].chips_num       = BF16_NUM - 2;
 
 			bcm250_map[board_id][1].first_good_chip = 6;
 			bcm250_map[board_id][1].chips_num       = 5;
@@ -725,8 +733,10 @@ static void update_bcm250_map(struct cgpu_info *bitfury, uint8_t board_id)
 
 		/* 24 chip board version */
 		case 7:
-			bcm250_map[board_id][0].last_good_chip = BF16_NUM - 2;
-			bcm250_map[board_id][0].chips_num      = BF16_NUM - 2;
+			info->chipboard[board_id].board_rev     = CHIPBOARD_REV2;
+
+			bcm250_map[board_id][0].last_good_chip  = BF16_NUM - 2;
+			bcm250_map[board_id][0].chips_num       = BF16_NUM - 2;
 
 			bcm250_map[board_id][1].first_good_chip = 6;
 			bcm250_map[board_id][1].chips_num       = 5;
@@ -737,8 +747,10 @@ static void update_bcm250_map(struct cgpu_info *bitfury, uint8_t board_id)
 
 		/* 25 chip board version */
 		case 9:
-			bcm250_map[board_id][0].last_good_chip = BF16_NUM - 1;
-			bcm250_map[board_id][0].chips_num      = BF16_NUM - 1;
+			info->chipboard[board_id].board_rev     = CHIPBOARD_REV2;
+
+			bcm250_map[board_id][0].last_good_chip  = BF16_NUM - 1;
+			bcm250_map[board_id][0].chips_num       = BF16_NUM - 1;
 
 			bcm250_map[board_id][1].first_good_chip = 6;
 			bcm250_map[board_id][1].chips_num       = 5;
@@ -749,8 +761,10 @@ static void update_bcm250_map(struct cgpu_info *bitfury, uint8_t board_id)
 
 		/* 26 chip board version */
 		case 11:
-			bcm250_map[board_id][0].last_good_chip = BF16_NUM - 1;
-			bcm250_map[board_id][0].chips_num      = BF16_NUM - 1;
+			info->chipboard[board_id].board_rev     = CHIPBOARD_REV2;
+
+			bcm250_map[board_id][0].last_good_chip  = BF16_NUM - 1;
+			bcm250_map[board_id][0].chips_num       = BF16_NUM - 1;
 
 			bcm250_map[board_id][1].first_good_chip = 6;
 			bcm250_map[board_id][1].chips_num       = 5;
@@ -758,119 +772,167 @@ static void update_bcm250_map(struct cgpu_info *bitfury, uint8_t board_id)
 
 		/* 27 chip board version */
 		case 13:
+			info->chipboard[board_id].board_rev     = CHIPBOARD_REV2;
+
 			bcm250_map[board_id][1].first_good_chip = 6;
 			bcm250_map[board_id][1].chips_num       = 5;
 			break;
 
 		/* 26 chip board version - default */
+		case 1:
 		case 2:
+			info->chipboard[board_id].board_rev    = CHIPBOARD_REV1;
 		default:
 			break;
 	}
 #endif
 
 #ifdef MINER_X6
+	info->chipboard[board_id].board_type = CHIPBOARD_X6;
+
 	switch (info->chipboard[board_id].board_ver) {
 		/* 46 chip board version */
 		case 4:
-			bcm250_map[board_id][0].last_good_chip = BF16_NUM - 2;
-			bcm250_map[board_id][0].chips_num      = BF16_NUM - 2;
+			info->chipboard[board_id].board_rev     = CHIPBOARD_REV2;
+
+			bcm250_map[board_id][0].last_good_chip  = BF16_NUM - 2;
+			bcm250_map[board_id][0].chips_num       = BF16_NUM - 2;
 
 			bcm250_map[board_id][1].first_good_chip = 1;
 			bcm250_map[board_id][1].last_good_chip  = BF16_NUM - 1;
 			bcm250_map[board_id][1].chips_num       = BF16_NUM - 2;
 
-			bcm250_map[board_id][2].last_good_chip = 5;
-			bcm250_map[board_id][2].chips_num      = 5;
+			bcm250_map[board_id][2].last_good_chip  = 5;
+			bcm250_map[board_id][2].chips_num       = 5;
 
-			bcm250_map[board_id][3].last_good_chip = BF16_NUM - 2;
-			bcm250_map[board_id][3].chips_num      = BF16_NUM - 2;
+			bcm250_map[board_id][3].last_good_chip  = BF16_NUM - 2;
+			bcm250_map[board_id][3].chips_num       = BF16_NUM - 2;
 
 			bcm250_map[board_id][4].first_good_chip = 1;
 			bcm250_map[board_id][4].last_good_chip  = BF16_NUM - 1;
 			bcm250_map[board_id][4].chips_num       = BF16_NUM - 1;
 
-			bcm250_map[board_id][5].last_good_chip = 5;
-			bcm250_map[board_id][5].chips_num      = 5;
+			bcm250_map[board_id][5].last_good_chip  = 5;
+			bcm250_map[board_id][5].chips_num       = 5;
 			break;
 
 		/* 48 chip board version */
 		case 6:
-			bcm250_map[board_id][0].last_good_chip = BF16_NUM - 1;
-			bcm250_map[board_id][0].chips_num      = BF16_NUM - 1;
+			info->chipboard[board_id].board_rev     = CHIPBOARD_REV2;
+
+			bcm250_map[board_id][0].last_good_chip  = BF16_NUM - 1;
+			bcm250_map[board_id][0].chips_num       = BF16_NUM - 1;
 
 			bcm250_map[board_id][1].first_good_chip = 1;
 			bcm250_map[board_id][1].last_good_chip  = BF16_NUM - 1;
 			bcm250_map[board_id][1].chips_num       = BF16_NUM - 2;
 
-			bcm250_map[board_id][2].last_good_chip = 5;
-			bcm250_map[board_id][2].chips_num      = 5;
+			bcm250_map[board_id][2].last_good_chip  = 5;
+			bcm250_map[board_id][2].chips_num       = 5;
 
-			bcm250_map[board_id][3].last_good_chip = BF16_NUM - 1;
-			bcm250_map[board_id][3].chips_num      = BF16_NUM - 1;
+			bcm250_map[board_id][3].last_good_chip  = BF16_NUM - 1;
+			bcm250_map[board_id][3].chips_num       = BF16_NUM - 1;
 
 			bcm250_map[board_id][4].first_good_chip = 1;
 			bcm250_map[board_id][4].last_good_chip  = BF16_NUM - 1;
 			bcm250_map[board_id][4].chips_num       = BF16_NUM - 1;
 
-			bcm250_map[board_id][5].last_good_chip = 5;
-			bcm250_map[board_id][5].chips_num      = 5;
+			bcm250_map[board_id][5].last_good_chip  = 5;
+			bcm250_map[board_id][5].chips_num       = 5;
 			break;
 
 		/* 50 chip board version */
 		case 8:
-			bcm250_map[board_id][0].last_good_chip = BF16_NUM - 1;
-			bcm250_map[board_id][0].chips_num      = BF16_NUM - 1;
+			info->chipboard[board_id].board_rev     = CHIPBOARD_REV2;
 
-			bcm250_map[board_id][1].last_good_chip = BF16_NUM - 1;
-			bcm250_map[board_id][1].chips_num      = BF16_NUM - 1;
+			bcm250_map[board_id][0].last_good_chip  = BF16_NUM - 1;
+			bcm250_map[board_id][0].chips_num       = BF16_NUM - 1;
 
-			bcm250_map[board_id][2].last_good_chip = 5;
-			bcm250_map[board_id][2].chips_num      = 5;
+			bcm250_map[board_id][1].last_good_chip  = BF16_NUM - 1;
+			bcm250_map[board_id][1].chips_num       = BF16_NUM - 1;
 
-			bcm250_map[board_id][3].last_good_chip = BF16_NUM - 1;
-			bcm250_map[board_id][3].chips_num      = BF16_NUM - 1;
+			bcm250_map[board_id][2].last_good_chip  = 5;
+			bcm250_map[board_id][2].chips_num       = 5;
 
-			bcm250_map[board_id][4].last_good_chip = BF16_NUM - 1;
-			bcm250_map[board_id][4].chips_num      = BF16_NUM - 1;
+			bcm250_map[board_id][3].last_good_chip  = BF16_NUM - 1;
+			bcm250_map[board_id][3].chips_num       = BF16_NUM - 1;
 
-			bcm250_map[board_id][5].last_good_chip = 5;
-			bcm250_map[board_id][5].chips_num      = 5;
+			bcm250_map[board_id][4].last_good_chip  = BF16_NUM - 1;
+			bcm250_map[board_id][4].chips_num       = BF16_NUM - 1;
+
+			bcm250_map[board_id][5].last_good_chip  = 5;
+			bcm250_map[board_id][5].chips_num       = 5;
 			break;
 
 		/* 52 chip board version */
 		case 10:
-			bcm250_map[board_id][1].last_good_chip = BF16_NUM - 1;
-			bcm250_map[board_id][1].chips_num      = BF16_NUM - 1;
+			info->chipboard[board_id].board_rev     = CHIPBOARD_REV2;
 
-			bcm250_map[board_id][2].last_good_chip = 5;
-			bcm250_map[board_id][2].chips_num      = 5;
+			bcm250_map[board_id][1].last_good_chip  = BF16_NUM - 1;
+			bcm250_map[board_id][1].chips_num       = BF16_NUM - 1;
 
-			bcm250_map[board_id][4].last_good_chip = BF16_NUM - 1;
-			bcm250_map[board_id][4].chips_num      = BF16_NUM - 1;
+			bcm250_map[board_id][2].last_good_chip  = 5;
+			bcm250_map[board_id][2].chips_num       = 5;
 
-			bcm250_map[board_id][5].last_good_chip = 5;
-			bcm250_map[board_id][5].chips_num      = 5;
+			bcm250_map[board_id][4].last_good_chip  = BF16_NUM - 1;
+			bcm250_map[board_id][4].chips_num       = BF16_NUM - 1;
+
+			bcm250_map[board_id][5].last_good_chip  = 5;
+			bcm250_map[board_id][5].chips_num       = 5;
 			break;
 
 		/* 54 chip board version */
 		case 12:
-			bcm250_map[board_id][2].last_good_chip = 5;
-			bcm250_map[board_id][2].chips_num      = 5;
+			info->chipboard[board_id].board_rev     = CHIPBOARD_REV2;
 
-			bcm250_map[board_id][5].last_good_chip = 5;
-			bcm250_map[board_id][5].chips_num      = 5;
+			bcm250_map[board_id][2].last_good_chip  = 5;
+			bcm250_map[board_id][2].chips_num       = 5;
+
+			bcm250_map[board_id][5].last_good_chip  = 5;
+			bcm250_map[board_id][5].chips_num       = 5;
+			break;
+
+		/* 46 chip board version */
+		case 14:;
+			info->chipboard[board_id].board_rev     = CHIPBOARD_REV3;
+
+			uint8_t bcm250_channel_path[3][CHANNEL_DEPTH] = {
+				{ BF250_CHAN1, BF250_CHAN1, BF250_LOCAL, BF250_NONE  },
+				{ BF250_CHAN1, BF250_CHAN1, BF250_CHAN1, BF250_LOCAL },
+				{ BF250_CHAN1, BF250_CHAN1, BF250_CHAN2, BF250_LOCAL },
+			};
+
+			bcm250_map[board_id][0].first_good_chip = 0;
+			bcm250_map[board_id][0].last_good_chip  = 1;
+			bcm250_map[board_id][0].chips_num       = 1;
+
+			bcm250_map[board_id][2].first_good_chip = 0;
+			bcm250_map[board_id][2].last_good_chip  = BF16_NUM;
+			bcm250_map[board_id][2].chips_num       = BF16_NUM;
+
+			bcm250_map[board_id][3].first_good_chip = 0;
+			bcm250_map[board_id][3].last_good_chip  = 1;
+			bcm250_map[board_id][3].chips_num       = 1;
+			cg_memcpy(bcm250_map[board_id][3].channel_path, bcm250_channel_path[0], sizeof(bcm250_map[board_id][3].channel_path));
+
+			cg_memcpy(bcm250_map[board_id][4].channel_path, bcm250_channel_path[1], sizeof(bcm250_map[board_id][4].channel_path));
+
+			bcm250_map[board_id][5].first_good_chip = 0;
+			bcm250_map[board_id][5].last_good_chip  = BF16_NUM;
+			bcm250_map[board_id][5].chips_num       = BF16_NUM;
+			cg_memcpy(bcm250_map[board_id][5].channel_path, bcm250_channel_path[2], sizeof(bcm250_map[board_id][5].channel_path));
 			break;
 
 		/* 52 chip board version - default */
 		case 3:
+			info->chipboard[board_id].board_rev     = CHIPBOARD_REV1;
 		default:
 			break;
 	}
 #endif
 }
 
-static void reinit_x5(struct bitfury_info *info, bool chip_reinit)
+static void reinit_x5(struct bitfury16_info *info, bool chip_reinit)
 {
 	uint8_t board_id, bcm250_id, chip_id;
 
@@ -909,7 +971,7 @@ static void reinit_x5(struct bitfury_info *info, bool chip_reinit)
 static void init_x5(struct cgpu_info *bitfury)
 {
 	uint8_t board_id, bcm250_id, chip_id;
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 
 	info->chipboard = cgcalloc(CHIPBOARD_NUM, sizeof(bf_chipboard_t));
 
@@ -929,9 +991,6 @@ static void init_x5(struct cgpu_info *bitfury)
 	}
 
 	for (board_id = 0; board_id < CHIPBOARD_NUM; board_id++) {
-		info->chipboard[board_id].bcm250 = cgcalloc(BCM250_NUM, sizeof(bf_bcm250_t));
-		cmd_buffer_init(&info->chipboard[board_id].cmd_buffer);
-
 		/* detect board */
 		char buff[256];
 		memset(buff, 0, sizeof(buff));
@@ -941,6 +1000,10 @@ static void init_x5(struct cgpu_info *bitfury)
 
 		if (info->chipboard[board_id].detected == true) {
 			applog(LOG_NOTICE, "%s: BOARD%d detected", bitfury->drv->name, board_id + 1);
+
+			info->chipboard[board_id].bcm250 = cgcalloc(BCM250_NUM, sizeof(bf_bcm250_t));
+			cmd_buffer_init(&info->chipboard[board_id].cmd_buffer);
+
 			get_board_info(bitfury, board_id);
 			update_bcm250_map(bitfury, board_id);
 
@@ -984,7 +1047,7 @@ static void init_x5(struct cgpu_info *bitfury)
 static void deinit_x5(struct cgpu_info *bitfury)
 {
 	uint8_t board_id, bcm250_id, chip_id;
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 
 	workd_list_deinit(info->work_list,       bitfury);
 	workd_list_deinit(info->stale_work_list, bitfury);
@@ -1018,7 +1081,7 @@ static void deinit_x5(struct cgpu_info *bitfury)
 static void bitfury16_set_clock(struct cgpu_info *bitfury) 
 {
 	uint8_t board_id, bcm250_id, chip_id;
-	struct bitfury_info *info = (struct bitfury_info *)bitfury->device_data;
+	struct bitfury16_info *info = (struct bitfury16_info *)bitfury->device_data;
 
 	/* send reset to all boards */
 	spi_emit_reset(SPI_CHANNEL1);
@@ -1051,7 +1114,7 @@ static void bitfury16_set_clock(struct cgpu_info *bitfury)
 				if (result != 0)
 					fail = true;
 
-				result = set_clock(board_id + 1, channel_depth, chip_address, 0x20);
+				result = set_clock(board_id + 1, channel_depth, chip_address, bf16_chip_clock);
 				if ((result != 0) && (fail != true))
 					fail = true;
 
@@ -1071,7 +1134,7 @@ static void bitfury16_set_clock(struct cgpu_info *bitfury)
 
 static void bitfury16_test_chip(struct cgpu_info *bitfury, bf_chip_address_t chip_address) 
 {
-	struct bitfury_info *info = (struct bitfury_info *)bitfury->device_data;
+	struct bitfury16_info *info = (struct bitfury16_info *)bitfury->device_data;
 
 	uint8_t board_id  = chip_address.board_id;
 	uint8_t bcm250_id = chip_address.bcm250_id;
@@ -1092,7 +1155,7 @@ static void bitfury16_test_chip(struct cgpu_info *bitfury, bf_chip_address_t chi
 	if (result != 0)
 		fail = true;
 
-	result = set_clock(board_id + 1, channel_depth, chip_address, 0x20);
+	result = set_clock(board_id + 1, channel_depth, chip_address, bf16_chip_clock);
 	if ((result != 0) && (fail != true))
 		fail = true;
 
@@ -1101,19 +1164,19 @@ static void bitfury16_test_chip(struct cgpu_info *bitfury, bf_chip_address_t chi
 	else
 		applog(LOG_NOTICE, "%s: CHIP [%2d]: FAIL", bitfury->drv->name, chip_id);
 
-			/* destroy channel */
+	/* destroy channel */
 	destroy_channel(board_id + 1, info->chipboard[board_id].bcm250[bcm250_id].channel_depth);
 
 	deinit_x5(bitfury);
 }
 
-static void bitfury16_identify(struct cgpu_info *bitfury)
+static void bitfury16_identify(__maybe_unused struct cgpu_info *bitfury)
 {
 }
 
 static void set_fan_speed(struct cgpu_info *bitfury)
 {
-	struct bitfury_info *info = (struct bitfury_info *)bitfury->device_data;
+	struct bitfury16_info *info = (struct bitfury16_info *)bitfury->device_data;
 	uint8_t board_id;
 
 	for (board_id = 0; board_id < CHIPBOARD_NUM; board_id++) {
@@ -1143,7 +1206,7 @@ static void set_fan_speed(struct cgpu_info *bitfury)
 static void bitfury16_detect(bool hotplug)
 {
 	struct cgpu_info *bitfury = NULL;
-	struct bitfury_info *info = NULL;
+	struct bitfury16_info *info = NULL;
 	uint8_t board_id, bcm250_id, chip_id;
 
 	if (hotplug)
@@ -1158,7 +1221,7 @@ static void bitfury16_detect(bool hotplug)
 	bitfury->deven = DEV_ENABLED;
 	bitfury->threads = 1;
 
-	info = cgmalloc(sizeof(struct bitfury_info));
+	info = cgmalloc(sizeof(struct bitfury16_info));
 	if (unlikely(!info))
 		quit(1, "%s: %s() failed to malloc info",
 				bitfury->drv->name, __func__);
@@ -1185,19 +1248,22 @@ static void bitfury16_detect(bool hotplug)
 	/* general chip clock */
 	if (opt_bf16_clock != NULL)
 		bf16_chip_clock = strtol(opt_bf16_clock, NULL, 16);
+	else if ((opt_bf16_set_clock == true) || (opt_bf16_test_chip != NULL))
+		/* default chip clock if set_clock option is set */
+		bf16_chip_clock = 0x20;
 
 	/* open devices */
 	if (open_spi_device(SPI_CHANNEL1) < 0)
 		quit(1, "%s: %s() failed to open [%s] device",
-				bitfury->drv->name, __func__, spi1_device_name);
-
-	applog(LOG_INFO, "%s: opened [%s] device", bitfury->drv->name, spi1_device_name);
-
-	if (open_spi_device(SPI_CHANNEL2) < 0)
-		quit(1, "%s: %s() failed to open [%s] device",
 				bitfury->drv->name, __func__, spi0_device_name);
 
 	applog(LOG_INFO, "%s: opened [%s] device", bitfury->drv->name, spi0_device_name);
+
+	if (open_spi_device(SPI_CHANNEL2) < 0)
+		quit(1, "%s: %s() failed to open [%s] device",
+				bitfury->drv->name, __func__, spi1_device_name);
+
+	applog(LOG_INFO, "%s: opened [%s] device", bitfury->drv->name, spi1_device_name);
 
 	if (open_ctrl_device() < 0)
 		quit(1, "%s: %s() failed to open [%s] device",
@@ -1295,7 +1361,7 @@ static void bitfury16_detect(bool hotplug)
 	/* wait for power chain to enable */
 	cgsleep_us(POWER_WAIT_INTERVAL);
 
-	if (opt_bf16_set_clock) {
+	if (opt_bf16_set_clock == true) {
 		applog(LOG_INFO, "%s: setting clock [%02x] to all chips",
 				bitfury->drv->name, bf16_chip_clock);
 
@@ -1414,11 +1480,32 @@ static void bitfury16_detect(bool hotplug)
 		}
 	}
 
+	/* correct renonce chip address */
+	if (opt_bf16_renonce != RENONCE_DISABLED) {
+		for (board_id = 0; board_id < CHIPBOARD_NUM; board_id++) {
+			if ((info->chipboard[board_id].detected == true) &&
+			    (info->chipboard[board_id].active   == true) &&
+			    (renonce_chip_address[board_id].board_id != -1)) {
+				bcm250_id = renonce_chip_address[board_id].bcm250_id;
+
+				uint8_t first_good_chip = info->chipboard[board_id].bcm250[bcm250_id].first_good_chip;
+				uint8_t last_good_chip  = info->chipboard[board_id].bcm250[bcm250_id].last_good_chip;
+
+				if (renonce_chip_address[board_id].chip_id >= last_good_chip)
+					renonce_chip_address[board_id].chip_id = last_good_chip - 1;
+				else if (renonce_chip_address[board_id].chip_id < first_good_chip)
+					renonce_chip_address[board_id].chip_id = first_good_chip;
+			}
+		}
+	}
+
 #ifdef FILELOG
 	info->logfile = fopen(LOGFILE, "a");
 	if (info->logfile == NULL)
 		applog(LOG_ERR, "%s: failed to open logfile [%s]: %s",
 				bitfury->drv->name, LOGFILE, strerror(errno));
+	else
+		mutex_init(&info->logfile_mutex);
 #endif
 
 	/* exit if no boards present */
@@ -1463,7 +1550,7 @@ static void bitfury16_detect(bool hotplug)
 static uint8_t chip_task_update(struct cgpu_info *bitfury, bf_chip_address_t chip_address)
 {
 	uint8_t i;
-	uint8_t ret = 0;
+	int8_t ret = 0;
 	bf_works_t work;
 	time_t curr_time_t;
 	struct timeval curr_time;
@@ -1472,7 +1559,7 @@ static uint8_t chip_task_update(struct cgpu_info *bitfury, bf_chip_address_t chi
 	uint8_t bcm250_id = chip_address.bcm250_id;
 	uint8_t chip_id   = chip_address.chip_id;
 
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 	bf_cmd_buffer_t* cmd_buffer = &info->chipboard[board_id].cmd_buffer;
 
 	if (cmd_buffer->status != EMPTY)
@@ -1566,7 +1653,7 @@ static uint8_t chip_task_update(struct cgpu_info *bitfury, bf_chip_address_t chi
 				bf_data_t* wdata = info->work_list->head;
 
 				workd_list_push(info->stale_work_list, WORKD(wdata));
-				workd_list_remove(info->work_list, bitfury, &info->chipboard[board_id].bcm250[bcm250_id].chips[chip_id].cwork);
+				workd_list_remove(info->work_list, &info->chipboard[board_id].bcm250[bcm250_id].chips[chip_id].cwork);
 
 				gen_task_data(info->chipboard[board_id].bcm250[bcm250_id].chips[chip_id].cwork.payload.midstate,
 						info->chipboard[board_id].bcm250[bcm250_id].chips[chip_id].cwork.payload.m7,
@@ -1715,7 +1802,7 @@ static uint8_t chip_task_update(struct cgpu_info *bitfury, bf_chip_address_t chi
 static uint8_t renonce_task_update_loop(struct cgpu_info *bitfury, uint8_t board_id,
 		bf_renonce_stage_t stage, uint8_t renonce_count)
 {
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 	bf_cmd_buffer_t* cmd_buffer = &info->chipboard[board_id].cmd_buffer;
 
 	uint8_t bcm250_id = renonce_chip_address[board_id].bcm250_id;
@@ -1787,7 +1874,7 @@ static uint8_t renonce_task_update_loop(struct cgpu_info *bitfury, uint8_t board
 
 static void renonce_task_update(struct cgpu_info *bitfury, uint8_t board_id, uint8_t renonce_count)
 {
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 	bf_cmd_buffer_t* cmd_buffer = &info->chipboard[board_id].cmd_buffer;
 
 	bf_works_t work;
@@ -1842,7 +1929,7 @@ static void renonce_task_update(struct cgpu_info *bitfury, uint8_t board_id, uin
 static void fill_cmd_buffer_loop(struct cgpu_info *bitfury, uint8_t board_id, bool do_renonce, uint16_t renonce_count)
 {
 	uint8_t bcm250_id, chip_id;
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 	bf_cmd_buffer_t* cmd_buffer = &info->chipboard[board_id].cmd_buffer;
 
 	/* concentrator loop */
@@ -1881,7 +1968,7 @@ static void fill_cmd_buffer(struct cgpu_info *bitfury, uint8_t board_id)
 	static uint8_t do_renonce[CHIPBOARD_NUM];
 	uint16_t renonce_count = 0;
 
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 	bf_cmd_buffer_t* cmd_buffer = &info->chipboard[board_id].cmd_buffer;
 
 	if (cmd_buffer->status == EMPTY) {
@@ -1921,7 +2008,7 @@ static void fill_cmd_buffer(struct cgpu_info *bitfury, uint8_t board_id)
 
 static uint8_t update_chip_status(struct cgpu_info *bitfury, bf_cmd_status_t cmd_status)
 {
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 	uint8_t board_id  = cmd_status.chip_address.board_id;
 	uint8_t bcm250_id = cmd_status.chip_address.bcm250_id;
 	uint8_t chip_id   = cmd_status.chip_address.chip_id;
@@ -2083,7 +2170,7 @@ static uint8_t update_chip_status(struct cgpu_info *bitfury, bf_cmd_status_t cmd
 
 static uint8_t process_nonces(struct cgpu_info *bitfury, bf_cmd_status_t cmd_status, uint32_t* nonces)
 {
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 
 	uint8_t i;
 	uint32_t found_nonces[12];
@@ -2315,7 +2402,7 @@ static uint8_t process_nonces(struct cgpu_info *bitfury, bf_cmd_status_t cmd_sta
 /* routine sending-receiving data to chipboard */
 static void process_cmd_buffer(struct cgpu_info *bitfury, uint8_t board_id)
 {
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 	uint8_t i;
 	bf_cmd_status_t cmd_status;
 	bf_cmd_buffer_t* cmd_buffer = &info->chipboard[board_id].cmd_buffer;
@@ -2347,7 +2434,7 @@ static void process_cmd_buffer(struct cgpu_info *bitfury, uint8_t board_id)
 static void *bitfury_chipworker(void *userdata)
 {
 	struct cgpu_info *bitfury = (struct cgpu_info *)userdata;
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 	uint8_t board_id;
 
 	applog(LOG_INFO, "%s: started chipworker thread", bitfury->drv->name);
@@ -2360,8 +2447,8 @@ static void *bitfury_chipworker(void *userdata)
 	}
 
 	/* send reset sequence to boards */
-	spi_emit_reset(UART_CHANNEL1);
-	spi_emit_reset(UART_CHANNEL2);
+	spi_emit_reset(SPI_CHANNEL1);
+	spi_emit_reset(SPI_CHANNEL2);
 
 	while (bitfury->shutdown == false) {
 		if ((info->a_temp == false) &&
@@ -2425,7 +2512,7 @@ static void *bitfury_chipworker(void *userdata)
 
 static int16_t cleanup_older(struct cgpu_info *bitfury)
 {
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 	time_t curr_time = time(NULL);
 	uint16_t released = 0;
 
@@ -2449,7 +2536,7 @@ static int16_t cleanup_older(struct cgpu_info *bitfury)
 static void *bitfury_nonceworker(void *userdata)
 {
 	struct cgpu_info *bitfury = (struct cgpu_info *)userdata;
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 
 	applog(LOG_INFO, "%s: started nonceworker thread", bitfury->drv->name);
 
@@ -2604,7 +2691,7 @@ static void *bitfury_nonceworker(void *userdata)
 
 static bool test_renonce(struct cgpu_info *bitfury, bf_data_t* rdata, bf_data_t* rnwdata, bool owork)
 {
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 
 	uint8_t board_id  = RENONCEWORK(rnwdata)->src_address.board_id;
 	uint8_t bcm250_id = renonce_chip_address[board_id].bcm250_id;
@@ -2728,7 +2815,7 @@ static bool test_renonce(struct cgpu_info *bitfury, bf_data_t* rdata, bf_data_t*
 static void *bitfury_renonceworker(void *userdata)
 {
 	struct cgpu_info *bitfury = (struct cgpu_info *)userdata;
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 	bf_list_t* id_list = nonce_list_init();
 
 	applog(LOG_INFO, "%s: started renonceworker thread", bitfury->drv->name);
@@ -2922,7 +3009,7 @@ int16_t update_pid(bf_pid_t *pid, int16_t error)
 static void *bitfury_hwmonitor(void *userdata)
 {
 	struct cgpu_info *bitfury = (struct cgpu_info *)userdata;
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 
 	uint8_t board_id, bcm250_id, chip_id;
 	time_t curr_time;
@@ -2997,7 +3084,7 @@ static void *bitfury_hwmonitor(void *userdata)
 					t_alarm = info->chipboard[board_id].t_alarm;
 			}
 		}
-
+ 
 		/* enable temp alarm */
 		if ((a_temp == true) && (info->a_temp == false)) {
 			applog(LOG_ERR, "%s: temperature alarm enabled: [%5.1f]!!!",
@@ -3215,7 +3302,7 @@ static void *bitfury_hwmonitor(void *userdata)
 #endif
 
 #ifdef MINER_X6
-							if ((bcm250_id >= 0) && (bcm250_id < BCM250_NUM / 2)) {
+							if (bcm250_id < BCM250_NUM / 2) {
 								total_chips_chain1++;
 
 								if (info->chipboard[board_id].bcm250[bcm250_id].chips[chip_id].status == DISABLED)
@@ -3405,7 +3492,7 @@ static void *bitfury_hwmonitor(void *userdata)
 static void *bitfury_alarm(void *userdata)
 {
 	struct cgpu_info *bitfury = (struct cgpu_info *)userdata;
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 
 	struct pool *pool;
 	int i;
@@ -3536,7 +3623,7 @@ static void *bitfury_alarm(void *userdata)
 static void *bitfury_statistics(void *userdata)
 {
 	struct cgpu_info *bitfury = (struct cgpu_info *)userdata;
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 
 	struct timeval start_time, stop_time;
 	uint8_t board_id, bcm250_id, chip_id;
@@ -4009,7 +4096,7 @@ static void *bitfury_statistics(void *userdata)
 static bool bitfury16_thread_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *bitfury = thr->cgpu;
-	struct bitfury_info *info = (struct bitfury_info *)(bitfury->device_data);
+	struct bitfury16_info *info = (struct bitfury16_info *)(bitfury->device_data);
 
 	info->thr = thr;
 
@@ -4075,7 +4162,7 @@ static bool bitfury16_thread_prepare(struct thr_info *thr)
 static int64_t bitfury16_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *bitfury = thr->cgpu;
-	struct bitfury_info *info = bitfury->device_data;
+	struct bitfury16_info *info = bitfury->device_data;
 	int64_t hashcount = 0;
 
 	applog(LOG_INFO, "%s: scan work", bitfury->drv->name);
@@ -4092,7 +4179,7 @@ static int64_t bitfury16_scanwork(struct thr_info *thr)
 
 static void prepare_work(struct cgpu_info *bitfury, struct work *work, bool rolled)
 {
-	struct bitfury_info *info = (struct bitfury_info *)bitfury->device_data;
+	struct bitfury16_info *info = (struct bitfury16_info *)bitfury->device_data;
 
 	bf_workd_t* wdata = cgmalloc(sizeof(bf_workd_t));
 
@@ -4111,7 +4198,7 @@ static void prepare_work(struct cgpu_info *bitfury, struct work *work, bool roll
 
 static bool bitfury16_queue_full(struct cgpu_info *bitfury)
 {
-	struct bitfury_info *info = (struct bitfury_info *)bitfury->device_data;
+	struct bitfury16_info *info = (struct bitfury16_info *)bitfury->device_data;
 	struct work *work, *usework;
 	uint16_t need = 0;
 	uint16_t generated = 0;
@@ -4165,7 +4252,7 @@ static bool bitfury16_queue_full(struct cgpu_info *bitfury)
 
 static void bitfury16_flush_work(struct cgpu_info *bitfury)
 {
-	struct bitfury_info *info = (struct bitfury_info *)bitfury->device_data;
+	struct bitfury16_info *info = (struct bitfury16_info *)bitfury->device_data;
 	uint16_t flushed = 0;
 
 	if (info->initialised == false)
@@ -4179,7 +4266,7 @@ static void bitfury16_flush_work(struct cgpu_info *bitfury)
 	bf_data_t* wdata = info->work_list->head;
 	while (wdata != NULL) {
 		workd_list_push(info->stale_work_list, WORKD(wdata));
-		workd_list_remove(info->work_list, bitfury, &works);
+		workd_list_remove(info->work_list, &works);
 
 		wdata = info->work_list->head;
 		flushed++;
@@ -4222,7 +4309,7 @@ static void bitfury16_flush_work(struct cgpu_info *bitfury)
 static struct api_data *bitfury16_api_stats(struct cgpu_info *bitfury)
 {
 	uint8_t board_id, bcm250_id, chip_id;
-	struct bitfury_info *info = bitfury->device_data;
+	struct bitfury16_info *info = bitfury->device_data;
 	char data[128];
 	char value[128];
 	struct api_data *root = NULL;
@@ -4245,8 +4332,8 @@ static struct api_data *bitfury16_api_stats(struct cgpu_info *bitfury)
 	/* software revision chages according to comments in CHANGELOG */
 	root = api_add_string(root, "hwv1", "1", true);
 	root = api_add_string(root, "hwv2", "2", true);
-	root = api_add_string(root, "hwv3", "10", true);
-	root = api_add_string(root, "hwv4", "1", true);
+	root = api_add_string(root, "hwv3", "11", true);
+	root = api_add_string(root, "hwv4", "0", true);
 	root = api_add_string(root, "hwv5", "0", true);
 
 	/* U avg */
@@ -4518,7 +4605,7 @@ static struct api_data *bitfury16_api_stats(struct cgpu_info *bitfury)
 static void bitfury16_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *bitfury = thr->cgpu;
-	struct bitfury_info *info = (struct bitfury_info *)bitfury->device_data;
+	struct bitfury16_info *info = (struct bitfury16_info *)bitfury->device_data;
 	uint8_t board_id;
 
 	bitfury->shutdown = true;
@@ -4567,6 +4654,7 @@ static void bitfury16_shutdown(struct thr_info *thr)
 #ifdef FILELOG
 	filelog(info, "%s: cgminer stopped", bitfury->drv->name);
 	fclose(info->logfile);
+	mutex_destroy(&info->logfile_mutex);
 #endif
 
 	applog(LOG_INFO, "%s: driver shutdown", bitfury->drv->name);

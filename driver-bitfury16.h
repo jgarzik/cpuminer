@@ -1,5 +1,5 @@
-#ifndef BITFURY_H
-#define BITFURY_H
+#ifndef BITFURY16_H
+#define BITFURY16_H
 
 #include "miner.h"
 #include "bf16-bitfury16.h"
@@ -146,12 +146,26 @@ typedef struct {
 	int16_t     i_min;          /* minimum allowable integrator state */
 } bf_pid_t;
 
+typedef enum {
+	CHIPBOARD_X5,
+	CHIPBOARD_X6
+} bf_chipboard_type_t;
+
+typedef enum {
+	CHIPBOARD_REV1,
+	CHIPBOARD_REV2,
+	CHIPBOARD_REV3
+} bf_chipboard_rev_t;
+
 /* chipboard structure */
 typedef struct {
 	bool                detected;
 	bool                active;
 
 	bf_pid_t            pid;
+	bf_chipboard_type_t board_type;
+	bf_chipboard_rev_t  board_rev;
+
 	/* MSP version data */
 	uint32_t            board_ver;
 	uint32_t            board_fwver;
@@ -245,7 +259,7 @@ typedef struct {
 	uint64_t            bytes_transmitted;
 } bf_chipboard_t;
 
-struct bitfury_info {
+struct bitfury16_info {
 	struct thr_info *thr;
 	struct thr_info chipworker_thr;
 	struct thr_info nonceworker_thr;
@@ -256,6 +270,7 @@ struct bitfury_info {
 
 #ifdef FILELOG
 	FILE*           logfile;
+	pthread_mutex_t logfile_mutex;
 #endif
 
 	uint8_t         chipboard_num;
@@ -389,4 +404,4 @@ extern int opt_bf16_alarm_temp;
 /* test chip communication */
 extern char* opt_bf16_test_chip;
 
-#endif /* BITFURY_H */
+#endif /* BITFURY16_H */

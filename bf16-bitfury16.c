@@ -47,8 +47,10 @@ bf_cmd_description_t cmd_description[CHIP_CMD_NUM] = {
 	}
 };
 
-char* get_cmd_description(bf_cmd_code_t cmd_code) {
+char* get_cmd_description(bf_cmd_code_t cmd_code)
+{
 	uint8_t i;
+
 	for (i = 0; i < CHIP_CMD_NUM; i++)
 		if (cmd_description[i].cmd_code == cmd_code)
 			return cmd_description[i].cmd_description;
@@ -56,7 +58,8 @@ char* get_cmd_description(bf_cmd_code_t cmd_code) {
 	return NULL;
 }
 
-static void shift_bits(uint8_t* data, uint8_t size, uint8_t nbits) {
+static void shift_bits(uint8_t* data, uint8_t size, uint8_t nbits)
+{
 	uint8_t i;
 	uint8_t bytes = nbits / 8;
 	uint8_t bits  = nbits % 8;
@@ -68,11 +71,13 @@ static void shift_bits(uint8_t* data, uint8_t size, uint8_t nbits) {
 	}
 }
 
-static uint8_t extra_bytes(uint8_t depth) {
+static uint8_t extra_bytes(uint8_t depth)
+{
 	return (depth * 3) / 8 + 1;
 }
 
-static uint8_t analyze_rx_data(bf_command_t* command, bf_cmd_status_t* cmd_status, uint32_t* nonces) {
+static uint8_t analyze_rx_data(bf_command_t* command, bf_cmd_status_t* cmd_status, uint32_t* nonces)
+{
 	uint8_t i;
 	uint8_t res = 0;
 
@@ -87,8 +92,9 @@ static uint8_t analyze_rx_data(bf_command_t* command, bf_cmd_status_t* cmd_statu
 		if (nonces == NULL)
 			return 1;
 
-		/* fill nonces buffer */
 		uint32_t nonce = 0x00000000;
+
+		/* fill nonces buffer */
 		for (i = 0; i <= 48; i++) {
 			if ((i % 4 == 0) && (i != 0)) {
 				if ((nonce & 0x0fffffff) != 0x0fffffff)
@@ -187,20 +193,22 @@ static uint8_t analyze_rx_data(bf_command_t* command, bf_cmd_status_t* cmd_statu
 }
 
 /* SPI BTC250 primitives */
-int create_channel(spi_channel_id_t spi_channel, uint8_t* channel_path, uint8_t channel_length) {
+uint8_t create_channel(spi_channel_id_t spi_channel, uint8_t* channel_path, uint8_t channel_length)
+{
 	int res = 0;
 
 	uint8_t* channel_path_buff = cgcalloc(channel_length, sizeof(uint8_t));
 	cg_memcpy(channel_path_buff, channel_path, channel_length);
 
-	res =  device_spi_transfer(spi_channel, channel_path_buff, channel_length);
+	res = device_spi_transfer(spi_channel, channel_path_buff, channel_length);
 
 	free(channel_path_buff);
 
 	return res;
 }
 
-uint8_t destroy_channel(spi_channel_id_t spi_channel, uint8_t depth) {
+uint8_t destroy_channel(spi_channel_id_t spi_channel, uint8_t depth)
+{
 	bf_command_t chip_command;
 	bf_chip_address_t chip_address = { 0x00, 0x00, 0x0f };
 
@@ -210,7 +218,8 @@ uint8_t destroy_channel(spi_channel_id_t spi_channel, uint8_t depth) {
 }
 
 /* SPI BTC16 primitives  */
-void spi_emit_reset(spi_channel_id_t spi_channel) {
+void spi_emit_reset(spi_channel_id_t spi_channel)
+{
 	device_ctrl_transfer(spi_channel, 1, F_RST);
 
 	uint8_t data[2] = { 0x00, 0x00 };
@@ -219,7 +228,8 @@ void spi_emit_reset(spi_channel_id_t spi_channel) {
 	device_ctrl_transfer(spi_channel, 0, F_RST);
 }
 
-uint8_t send_toggle(spi_channel_id_t spi_channel, uint8_t depth, bf_chip_address_t chip_address) {
+uint8_t send_toggle(spi_channel_id_t spi_channel, uint8_t depth, bf_chip_address_t chip_address)
+{
 	bf_command_t chip_command;
 	uint8_t toggle[4] = { 0xa5, 0x00, 0x00, 0x02 };
 
@@ -227,7 +237,9 @@ uint8_t send_toggle(spi_channel_id_t spi_channel, uint8_t depth, bf_chip_address
 	return spi_command_exec(spi_channel, &chip_command, NULL);
 }
 
-uint8_t set_clock(spi_channel_id_t spi_channel, uint8_t depth, bf_chip_address_t chip_address, uint8_t clock) {
+uint8_t set_clock(spi_channel_id_t spi_channel, uint8_t depth,
+		bf_chip_address_t chip_address, uint8_t clock)
+{
 	bf_command_t chip_command;
 	uint8_t clock_buf[4];
 
@@ -237,20 +249,9 @@ uint8_t set_clock(spi_channel_id_t spi_channel, uint8_t depth, bf_chip_address_t
 	return spi_command_exec(spi_channel, &chip_command, NULL);
 }
 
-uint8_t set_mask(spi_channel_id_t spi_channel, uint8_t depth, bf_chip_address_t chip_address, uint32_t mask) {
-	uint8_t i;
-	bf_command_t chip_command;
-	uint8_t noncemask[4];
-
-	for (i = 0; i < 4; i++)
-		noncemask[i] = (mask >> (8*(4 - i - 1))) & 0xff;
-
-	spi_command_init(&chip_command, depth, chip_address, CHIP_CMD_SET_MASK, 3, noncemask);
-	return spi_command_exec(spi_channel, &chip_command, NULL);
-}
-
 /* cmd buffer primitives */
-int8_t cmd_buffer_init(bf_cmd_buffer_t* cmd_buffer) {
+int8_t cmd_buffer_init(bf_cmd_buffer_t* cmd_buffer)
+{
 	if (cmd_buffer == NULL)
 		return -1;
 
@@ -273,7 +274,8 @@ int8_t cmd_buffer_init(bf_cmd_buffer_t* cmd_buffer) {
 	return 0;
 }
 
-int8_t cmd_buffer_deinit(bf_cmd_buffer_t* cmd_buffer) {
+int8_t cmd_buffer_deinit(bf_cmd_buffer_t* cmd_buffer)
+{
 	if (cmd_buffer == NULL)
 		return -1;
 
@@ -299,7 +301,8 @@ int8_t cmd_buffer_deinit(bf_cmd_buffer_t* cmd_buffer) {
 	return 0;
 }
 
-int8_t cmd_buffer_clear(bf_cmd_buffer_t* cmd_buffer) {
+int8_t cmd_buffer_clear(bf_cmd_buffer_t* cmd_buffer)
+{
 	if (cmd_buffer == NULL)
 		return -1;
 
@@ -328,7 +331,8 @@ int8_t cmd_buffer_clear(bf_cmd_buffer_t* cmd_buffer) {
 int8_t cmd_buffer_push(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth,
 		const bf_chip_address_t chip_address, const bf_chip_address_t src_address,
 		const bf_works_t work, const uint32_t id,
-		const bf_cmd_code_t cmd_code, const uint8_t data_length, const uint8_t* tx) {
+		const bf_cmd_code_t cmd_code, const uint8_t data_length, const uint8_t* tx)
+{
 	uint8_t res = 0;
 
 	if (cmd_buffer == NULL)
@@ -403,7 +407,9 @@ int8_t cmd_buffer_push(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth,
 	return 0;
 }
 
-int8_t cmd_buffer_push_send_toggle(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth, const bf_chip_address_t chip_address) {
+int8_t cmd_buffer_push_send_toggle(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth,
+		const bf_chip_address_t chip_address)
+{
 	bf_works_t work;
 	uint8_t toggle[4] = { 0xa5, 0x00, 0x00, 0x02 };
 
@@ -411,7 +417,9 @@ int8_t cmd_buffer_push_send_toggle(bf_cmd_buffer_t* cmd_buffer, const uint8_t de
 			work, 0, CHIP_CMD_TOGGLE, 3, toggle);
 }
 
-int8_t cmd_buffer_push_set_clock(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth, const bf_chip_address_t chip_address, uint8_t clock) {
+int8_t cmd_buffer_push_set_clock(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth,
+		const bf_chip_address_t chip_address, uint8_t clock)
+{
 	bf_works_t work;
 	uint8_t clock_buf[4];
 
@@ -422,7 +430,9 @@ int8_t cmd_buffer_push_set_clock(bf_cmd_buffer_t* cmd_buffer, const uint8_t dept
 			work, 0, CHIP_CMD_SET_CLOCK, 3, clock_buf);
 }
 
-int8_t cmd_buffer_push_set_mask(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth, const bf_chip_address_t chip_address, uint8_t mask) {
+int8_t cmd_buffer_push_set_mask(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth,
+		const bf_chip_address_t chip_address, uint8_t mask)
+{
 	uint8_t i;
 	bf_works_t work;
 	uint8_t noncemask[4];
@@ -434,7 +444,9 @@ int8_t cmd_buffer_push_set_mask(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth
 			work, 0, CHIP_CMD_SET_MASK, 3, noncemask);
 }
 
-int8_t cmd_buffer_push_create_channel(bf_cmd_buffer_t* cmd_buffer, uint8_t* channel_path, uint8_t channel_length) {
+int8_t cmd_buffer_push_create_channel(bf_cmd_buffer_t* cmd_buffer,
+		uint8_t* channel_path, uint8_t channel_length)
+{
 	bf_works_t work;
 	bf_chip_address_t chip_address = { 0x00, 0x00, 0x00 };
 
@@ -442,7 +454,8 @@ int8_t cmd_buffer_push_create_channel(bf_cmd_buffer_t* cmd_buffer, uint8_t* chan
 			work, 0, CHIP_CMD_CREATE_CHANNEL, channel_length, channel_path);
 }
 
-int8_t cmd_buffer_push_destroy_channel(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth) {
+int8_t cmd_buffer_push_destroy_channel(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth)
+{
 	bf_works_t work;
 	bf_chip_address_t chip_address = { 0x00, 0x00, 0x0f };
 
@@ -450,12 +463,14 @@ int8_t cmd_buffer_push_destroy_channel(bf_cmd_buffer_t* cmd_buffer, const uint8_
 			work, 0, CHIP_CMD_TASK_SWITCH, 0, NULL);
 }
 
-bool match_nonce(uint32_t nonce, uint32_t mask, uint8_t nbits) {
+bool match_nonce(uint32_t nonce, uint32_t mask, uint8_t nbits)
+{
 	uint32_t fixed_mask = (uint32_t)(pow(2, nbits) - 1);
 	return ((nonce & fixed_mask) == (mask & fixed_mask));
 }
 
-uint8_t find_nonces(uint32_t* curr_nonces, uint32_t* prev_nonces, uint32_t* valid_nonces) {
+uint8_t find_nonces(uint32_t* curr_nonces, uint32_t* prev_nonces, uint32_t* valid_nonces)
+{
 	uint8_t i, j;
 	uint8_t found  = 0;
 	uint8_t nonces = 0;
@@ -475,14 +490,6 @@ uint8_t find_nonces(uint32_t* curr_nonces, uint32_t* prev_nonces, uint32_t* vali
 			diff++;
 	}
 
-#if 0
-	if (diff > 6) {
-		applog(LOG_ERR, "find_nonces: too many diffs: %d", diff);
-		for (i = 0; i < 12; i++)
-			applog(LOG_ERR, "%08x %08x", prev_nonces[i], curr_nonces[i]);
-	}
-#endif
-
 	for (i = 0; i < found; i++) {
 		if (found_nonces[i] == 0x00000000)
 			continue;
@@ -498,7 +505,8 @@ uint8_t find_nonces(uint32_t* curr_nonces, uint32_t* prev_nonces, uint32_t* vali
 	return nonces;
 }
 
-int8_t cmd_buffer_pop(bf_cmd_buffer_t* cmd_buffer, bf_cmd_status_t* cmd_status, uint32_t* nonces) {
+int8_t cmd_buffer_pop(bf_cmd_buffer_t* cmd_buffer, bf_cmd_status_t* cmd_status, uint32_t* nonces)
+{
 	if (cmd_buffer == NULL)
 		return -1;
 
@@ -557,7 +565,8 @@ int8_t cmd_buffer_pop(bf_cmd_buffer_t* cmd_buffer, bf_cmd_status_t* cmd_status, 
 	return 0;
 }
 
-int8_t cmd_buffer_exec(spi_channel_id_t spi_channel, bf_cmd_buffer_t* cmd_buffer) {
+int8_t cmd_buffer_exec(spi_channel_id_t spi_channel, bf_cmd_buffer_t* cmd_buffer)
+{
 	if (cmd_buffer == NULL)
 		return -1;
 
@@ -571,7 +580,8 @@ int8_t cmd_buffer_exec(spi_channel_id_t spi_channel, bf_cmd_buffer_t* cmd_buffer
 }
 
 /* BF16 command primitives */
-uint8_t gen_clock_data(uint8_t clock, uint8_t prescaler, uint8_t data[4]) {
+uint8_t gen_clock_data(uint8_t clock, uint8_t prescaler, uint8_t data[4])
+{
 	uint8_t i;
 	uint32_t data32 = 0x00000000;
 
@@ -605,7 +615,8 @@ uint8_t gen_clock_data(uint8_t clock, uint8_t prescaler, uint8_t data[4]) {
 }
 
 #ifdef FLIP_BITS
-static uint32_t flip_bits(uint32_t data, uint8_t nbits) {
+static uint32_t flip_bits(uint32_t data, uint8_t nbits)
+{
 	uint32_t ret = 0x00000000;
 	uint8_t i;
 
@@ -616,7 +627,8 @@ static uint32_t flip_bits(uint32_t data, uint8_t nbits) {
 }
 #endif
 
-uint32_t gen_mask(uint32_t nonce, uint8_t nbits) {
+uint32_t gen_mask(uint32_t nonce, uint8_t nbits)
+{
 	uint32_t mask = 0x00000000;
 
 	uint32_t mask_code = (nbits << 16);
@@ -635,7 +647,8 @@ uint32_t gen_mask(uint32_t nonce, uint8_t nbits) {
 	return mask;
 }
 
-void ms3steps16(uint32_t* p, uint32_t* w, uint32_t* task) {
+void ms3steps16(uint32_t* p, uint32_t* w, uint32_t* task)
+{
 	uint32_t a, b, c, d, e, f, g, h, new_e, new_a;
 	uint8_t i;
 
@@ -671,7 +684,9 @@ void ms3steps16(uint32_t* p, uint32_t* w, uint32_t* task) {
 	task[8]  = ntohl(h ^ 0xaaaaaaaa);
 }
 
-uint8_t gen_task_data(uint32_t* midstate, uint32_t merkle, uint32_t ntime, uint32_t nbits, uint32_t mask, uint8_t* task) {
+uint8_t gen_task_data(uint32_t* midstate, uint32_t merkle, uint32_t ntime,
+		uint32_t nbits, uint32_t mask, uint8_t* task)
+{
 	uint8_t  i;
 	uint32_t tmp;
 	uint32_t w[3];
@@ -702,8 +717,10 @@ uint8_t gen_task_data(uint32_t* midstate, uint32_t merkle, uint32_t ntime, uint3
 	return 0;
 }
 
-uint8_t spi_command_init(bf_command_t* command, const uint8_t depth, const bf_chip_address_t chip_address,
-		const bf_cmd_code_t cmd_code, const uint8_t data_length, const uint8_t* tx) {
+uint8_t spi_command_init(bf_command_t* command, const uint8_t depth,
+		const bf_chip_address_t chip_address, const bf_cmd_code_t cmd_code,
+		const uint8_t data_length, const uint8_t* tx)
+{
 	uint8_t i;
 
 	memset(command->tx, 0, sizeof(command->tx));
@@ -726,7 +743,7 @@ uint8_t spi_command_init(bf_command_t* command, const uint8_t depth, const bf_ch
 	command->tx[2] = command->cmd_code;
 	command->data_length++;
 
-	if ((data_length >=0) && (data_length <= 79)) {
+	if (data_length <= 79) {
 		command->tx[3] = data_length;
 		command->data_length++;
 	} else
@@ -754,7 +771,8 @@ uint8_t spi_command_init(bf_command_t* command, const uint8_t depth, const bf_ch
 	return 0;
 }
 
-uint8_t spi_command_exec(spi_channel_id_t spi_channel, bf_command_t* command, uint32_t* nonces) {
+uint8_t spi_command_exec(spi_channel_id_t spi_channel, bf_command_t* command, uint32_t* nonces)
+{
 	uint8_t buff[192];
 	uint8_t res = 0;
 	bf_cmd_status_t cmd_status;
@@ -797,7 +815,8 @@ uint8_t spi_command_exec(spi_channel_id_t spi_channel, bf_command_t* command, ui
 }
 
 /* dynamic work list primitives */
-bf_list_t* workd_list_init() {
+bf_list_t* workd_list_init(void)
+{
 	bf_list_t* list = cgmalloc(sizeof(bf_list_t));
 	list->head = NULL;
 	list->tail = NULL;
@@ -807,7 +826,8 @@ bf_list_t* workd_list_init() {
 	return list;
 }
 
-int8_t workd_list_deinit(bf_list_t* list, struct cgpu_info *bitfury) {
+int8_t workd_list_deinit(bf_list_t* list, struct cgpu_info *bitfury)
+{
 	if (list == NULL)
 		return -1;
 
@@ -833,7 +853,8 @@ int8_t workd_list_deinit(bf_list_t* list, struct cgpu_info *bitfury) {
 	return 0;
 }
 
-int8_t workd_list_push(bf_list_t* list, bf_workd_t* work) {
+int8_t workd_list_push(bf_list_t* list, bf_workd_t* work)
+{
 	if ((list == NULL) || (work == NULL))
 		return -1;
 
@@ -848,7 +869,8 @@ int8_t workd_list_push(bf_list_t* list, bf_workd_t* work) {
 	return 0;
 }
 
-int8_t workd_list_pop(bf_list_t* list, struct cgpu_info *bitfury) {
+int8_t workd_list_pop(bf_list_t* list, struct cgpu_info *bitfury)
+{
 	if (list == NULL)
 		return -1;
 
@@ -870,7 +892,8 @@ int8_t workd_list_pop(bf_list_t* list, struct cgpu_info *bitfury) {
 	return 0;
 }
 
-int8_t workd_list_remove(bf_list_t* list, struct cgpu_info *bitfury, bf_works_t* works) {
+int8_t workd_list_remove(bf_list_t* list, bf_works_t* works)
+{
 	if (list == NULL)
 		return -1;
 
@@ -890,7 +913,8 @@ int8_t workd_list_remove(bf_list_t* list, struct cgpu_info *bitfury, bf_works_t*
 }
 
 /* nonces list primitives */
-bf_list_t* nonce_list_init() {
+bf_list_t* nonce_list_init(void)
+{
 	bf_list_t* list = cgmalloc(sizeof(bf_list_t));
 	list->head = NULL;
 	list->tail = NULL;
@@ -900,7 +924,8 @@ bf_list_t* nonce_list_init() {
 	return list;
 }
 
-int8_t nonce_list_deinit(bf_list_t* list) {
+int8_t nonce_list_deinit(bf_list_t* list)
+{
 	if (list == NULL)
 		return -1;
 
@@ -921,7 +946,8 @@ int8_t nonce_list_deinit(bf_list_t* list) {
 	return 0;
 }
 
-int8_t nonce_list_push(bf_list_t* list, uint32_t nonce) {
+int8_t nonce_list_push(bf_list_t* list, uint32_t nonce)
+{
 	if (list == NULL)
 		return -1;
 
@@ -945,7 +971,8 @@ int8_t nonce_list_push(bf_list_t* list, uint32_t nonce) {
 	return 0;
 }
 
-uint32_t nonce_list_pop(bf_list_t* list) {
+uint32_t nonce_list_pop(bf_list_t* list)
+{
 	uint32_t nonce = 0;
 
 	bf_data_t* ndata = list->head;
@@ -962,7 +989,8 @@ uint32_t nonce_list_pop(bf_list_t* list) {
 }
 
 /* renoncework list primitives */
-bf_list_t* renoncework_list_init() {
+bf_list_t* renoncework_list_init(void)
+{
 	bf_list_t* list = cgmalloc(sizeof(bf_list_t));
 	list->head = NULL;
 	list->tail = NULL;
@@ -972,7 +1000,8 @@ bf_list_t* renoncework_list_init() {
 	return list;
 }
 
-int8_t renoncework_list_deinit(bf_list_t* list) {
+int8_t renoncework_list_deinit(bf_list_t* list)
+{
 	if (list == NULL)
 		return -1;
 
@@ -994,7 +1023,8 @@ int8_t renoncework_list_deinit(bf_list_t* list) {
 	return 0;
 }
 
-int8_t renoncework_list_push(bf_list_t* list, bf_chip_address_t src_address, uint32_t nonce) {
+int8_t renoncework_list_push(bf_list_t* list, bf_chip_address_t src_address, uint32_t nonce)
+{
 	if (list == NULL)
 		return -1;
 
@@ -1012,7 +1042,8 @@ int8_t renoncework_list_push(bf_list_t* list, bf_chip_address_t src_address, uin
 	return 0;
 }
 
-int8_t renoncework_list_pop(bf_list_t* list) {
+int8_t renoncework_list_pop(bf_list_t* list)
+{
 	if (list == NULL)
 		return -1;
 
@@ -1029,7 +1060,8 @@ int8_t renoncework_list_pop(bf_list_t* list) {
 }
 
 /* noncework list primitives */
-bf_list_t* noncework_list_init() {
+bf_list_t* noncework_list_init(void)
+{
 	bf_list_t* list = cgmalloc(sizeof(bf_list_t));
 	list->head = NULL;
 	list->tail = NULL;
@@ -1039,7 +1071,8 @@ bf_list_t* noncework_list_init() {
 	return list;
 }
 
-int8_t noncework_list_deinit(bf_list_t* list) {
+int8_t noncework_list_deinit(bf_list_t* list)
+{
 	if (list == NULL)
 		return -1;
 
@@ -1062,7 +1095,8 @@ int8_t noncework_list_deinit(bf_list_t* list) {
 }
 
 int8_t noncework_list_push(bf_list_t* list, bf_chip_address_t chip_address,
-		bf_chip_address_t src_address, bf_works_t cwork, bf_works_t owork, uint32_t nonce) {
+		bf_chip_address_t src_address, bf_works_t cwork, bf_works_t owork, uint32_t nonce)
+{
 	if (list == NULL)
 		return -1;
 
@@ -1083,7 +1117,8 @@ int8_t noncework_list_push(bf_list_t* list, bf_chip_address_t chip_address,
 	return 0;
 }
 
-int8_t noncework_list_pop(bf_list_t* list) {
+int8_t noncework_list_pop(bf_list_t* list)
+{
 	if (list == NULL)
 		return -1;
 
@@ -1100,7 +1135,8 @@ int8_t noncework_list_pop(bf_list_t* list) {
 }
 
 /* renonce list primitives */
-bf_list_t* renonce_list_init() {
+bf_list_t* renonce_list_init(void)
+{
 	bf_list_t* list = cgmalloc(sizeof(bf_list_t));
 	list->head = NULL;
 	list->tail = NULL;
@@ -1110,7 +1146,8 @@ bf_list_t* renonce_list_init() {
 	return list;
 }
 
-int8_t renonce_list_deinit(bf_list_t* list) {
+int8_t renonce_list_deinit(bf_list_t* list)
+{
 	if (list == NULL)
 		return -1;
 
@@ -1133,7 +1170,8 @@ int8_t renonce_list_deinit(bf_list_t* list) {
 }
 
 int8_t renonce_list_push(bf_list_t* list, uint32_t id, uint32_t nonce, bf_chip_address_t src_address,
-		bf_works_t cwork, bf_works_t owork) {
+		bf_works_t cwork, bf_works_t owork)
+{
 	if (list == NULL)
 		return -1;
 
@@ -1158,7 +1196,8 @@ int8_t renonce_list_push(bf_list_t* list, uint32_t id, uint32_t nonce, bf_chip_a
 	return 0;
 }
 
-int8_t renonce_list_pop(bf_list_t* list) {
+int8_t renonce_list_pop(bf_list_t* list)
+{
 	if (list == NULL)
 		return -1;
 
@@ -1174,7 +1213,8 @@ int8_t renonce_list_pop(bf_list_t* list) {
 	return 0;
 }
 
-int8_t renonce_list_remove(bf_list_t* list, bf_data_t* rdata) {
+int8_t renonce_list_remove(bf_list_t* list, bf_data_t* rdata)
+{
 	if (list == NULL)
 		return -1;
 

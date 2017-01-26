@@ -1,10 +1,7 @@
-#pragma once
+#ifndef BF16_GPIODEVICE_H
+#define BF16_GPIODEVICE_H
 
 #include "bf16-device.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #define GPIO_BUFFER_SIZE 64
 
@@ -66,7 +63,4 @@ int8_t gpio_write_ctrl(gpio_rq_t* rq);
 int8_t gpio_init(device_t* attr, char *device, uint16_t size);
 void gpio_release(device_t *attr);
 
-/** @endcond */
-#ifdef __cplusplus
-} /*extern "C" */
-#endif
+#endif /* BF16_GPIODEVICE_H */

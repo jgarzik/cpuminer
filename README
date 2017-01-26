@@ -97,6 +97,9 @@ Optional:
 	curses dev library
 	(libncurses5-dev or libpdcurses on WIN32 for text user interface)
 
+	libusb-1 dev library (libusb-1.0-0-dev)
+	(This is only required for USB device support)
+
 	libudev dev library (libudev-dev)
 	(This is only required for USB device support and is linux only)
 
@@ -104,13 +107,10 @@ If building from git:
 	autoconf
 	automake
 
-If building on Red Hat:
-        sudo yum install autoconf automake autoreconf libtool openssl-compat-bitcoin-devel.x86_64 \
-                         curl libcurl libcurl-devel openssh
-
 If building on Ubuntu:
 	sudo apt-get install build-essential autoconf automake libtool pkg-config \
-                             libcurl3-dev libudev-dev
+                             libcurl4-openssl-dev libudev-dev libusb-1.0-0-dev \
+                             libncurses5-dev
 
 CGMiner specific configuration options:
   --enable-ants1          Compile support for Antminer S1 Bitmain (default
@@ -149,8 +149,6 @@ CGMiner specific configuration options:
   --enable-libsystemd     Compile support for system watchdog and status
                           notifications (default disabled)
   --without-curses        Compile support for curses TUI (default enabled)
-  --with-system-libusb    Compile against dynamic system libusb (default use
-                          included static libusb)
   --with-system-jansson   Compile against dynamic system jansson (default use
                           included static jansson)
 
@@ -231,6 +229,8 @@ Options for both config file and command line:
 --avalon4-least-pll <arg> Set least pll check threshold for smart speed mode 2 (default: 768)
 --avalon4-most-pll <arg> Set most pll check threshold for smart speed mode 2 (default: 256)
 --avalon7-voltage   Set Avalon7 default core voltage, in millivolts, step: 78
+--avalon7-voltage-level Set Avalon7 default level of core voltage, range:[0, 15], step: 1
+--avalon7-voltage-offset Set Avalon7 default offset of core voltage, range:[-2, 1], step: 1
 --avalon7-freq      Set Avalon7 default frequency, range:[24, 1404], step: 12, example: 500
 --avalon7-freq-sel <arg> Set Avalon7 default frequency select, range:[0, 5], step: 1, example: 3 (default: 0)
 --avalon7-fan       Set Avalon7 target fan speed, range:[0, 100], step: 1, example: 0-100
@@ -279,6 +279,7 @@ Options for both config file and command line:
 --bxm-bits <arg>    Set BXM bits for overclocking (default: 54)
 --btc-address <arg> Set bitcoin target address when solo mining to bitcoind
 --btc-sig <arg>     Set signature to add to coinbase when solo mining (optional)
+--compac-freq <arg> Set GekkoScience Compac frequency in MHz, range 100-500 (default: 150.0)
 --compact           Use compact display without per device statistics
 --debug|-D          Enable debug output
 --disable-rejecting Automatically disable pools that continually reject shares
@@ -391,6 +392,8 @@ ASIC only options:
 --avalon4-aucspeed <arg> Set Avalon4 AUC IIC bus speed (default: 400000)
 --avalon4-aucxdelay <arg> Set Avalon4 AUC IIC xfer read delay, 4800 ~= 1ms (default: 9600)
 --avalon7-voltage   Set Avalon7 default core voltage, in millivolts, step: 78
+--avalon7-voltage-level Set Avalon7 default level of core voltage, range:[0, 15], step: 1
+--avalon7-voltage-offset Set Avalon7 default offset of core voltage, range:[-2, 1], step: 1
 --avalon7-freq      Set Avalon7 default frequency, range:[24, 1404], step: 12, example: 500
 --avalon7-freq-sel <arg> Set Avalon7 default frequency select, range:[0, 5], step: 1, example: 3 (default: 0)
 --avalon7-fan       Set Avalon7 target fan speed, range:[0, 100], step: 1, example: 0-100
@@ -419,6 +422,7 @@ ASIC only options:
 --bitmine-a1-options <ref_clk>:<sys_clk>:<spi_clk>:<max_chip>
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
 --bxm-bits <arg>    Set BXM bits for overclocking (default: 50)
+--compac-freq <arg> Set GekkoScience Compac frequency in MHz, range 100-500 (default: 150.0)
 --hfa-hash-clock <arg> Set hashfast clock speed (default: 550)
 --hfa-fail-drop <arg> Set how many MHz to drop clockspeed each failure on an overlocked hashfast device (default: 10)
 --hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)

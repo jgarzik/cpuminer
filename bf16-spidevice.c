@@ -9,7 +9,8 @@
 char *spi0_device_name  = "/dev/spidev1.1";
 char *spi1_device_name  = "/dev/spidev2.1";
 
-int8_t spi_init(device_t* attr, spi_channel_id_t channel_id, int8_t mode, uint32_t speed, uint16_t size) {
+int8_t spi_init(device_t* attr, spi_channel_id_t channel_id, int8_t mode, uint32_t speed, uint16_t size)
+{
 	switch (channel_id) {
 	case SPI_CHANNEL1:
 		attr->device = spi1_device_name;
@@ -71,7 +72,8 @@ int8_t spi_init(device_t* attr, spi_channel_id_t channel_id, int8_t mode, uint32
 	return 0;
 }
 
-void spi_transfer(device_t *attr) {
+void spi_transfer(device_t *attr)
+{
 	struct spi_ioc_transfer tr = {
 		.tx_buf = (unsigned long) (attr->tx),
 		.rx_buf = (unsigned long) (attr->rx),
@@ -100,7 +102,8 @@ void spi_transfer(device_t *attr) {
 
 }
 
-void spi_release(device_t *attr) {
+void spi_release(device_t *attr)
+{
 	free(attr->rx);
 	free(attr->tx);
 	close(attr->fd);

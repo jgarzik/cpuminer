@@ -1,10 +1,7 @@
-#pragma once
+#ifndef BF16_SPIDEVICE_H
+#define BF16_SPIDEVICE_H
 
 #include "bf16-device.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #define SPI_BUFFER_SIZE  4096
 #define SPI_SPEED        20000000
@@ -22,7 +19,4 @@ int8_t spi_init(device_t* attr, spi_channel_id_t channel_id,
 void spi_transfer(device_t *attr);
 void spi_release(device_t *attr);
 
-/** @endcond */
-#ifdef __cplusplus
-} /*extern "C" */
-#endif
+#endif /* BF16_SPIDEVICE_H */

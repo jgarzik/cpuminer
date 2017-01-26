@@ -1,3 +1,230 @@
+Version 4.10.0 - 23rd January 2017
+
+- Silence warning.
+- Clean up compac driver.
+- Allocate appropriate memory size for PSECURITY_DESCRIPTOR
+- Remove jansson memory tricks.
+- Increase header size for gbt solo.
+- Increase header size.
+- Fix curl build on mingw
+- Windows build fixes.
+- Fix avalon4 warnings.
+- We can only change diff once per notify so assume successive diffs are stacked
+for successive notifies.
+- Enable avalon4 building with avalon7.
+- Move to system libusb.
+- Upgrade to jansson 2.9
+- display restart thread errno
+- String length sanity checks in config parsing.
+- Make pool_no and block height logging more consistent
+- Always clean swork when prev_hash changes
+- Add nonce mask to api for Avalon7
+- Add new options for Avalon7
+- Add a device table for Avalon7
+- Update AVA7_DEFAULT_MINER_CNT usage
+- Add frequency range support 100MHz - 500MHz
+- Added roll_work_ntime() to enchance performance
+- Revert "Set default ava7 nonce mask to 27 which empiric testing shows stable
+and more rapid rise in frequency without significant overshoot."
+- Remove useless code in avalon7
+- Detect avalon7 modules during ava7 init and only add the device if any modules
+exist.
+- Unplug avalon7 on failing to re-init AUC to allow a clean hotplug event which
+is more reliable.
+- Fix warning without ava4/7
+- Re-initialise libusb if there are no active devices before the next hotplug
+event.
+- Reset the tv_end variable before each libusb handle events call.
+- Fix Vo display for A741
+- Update AVA7_DEFAULT_ASIC_MAX for A741
+- Tweak ava7 fan control further.
+- Set default ava7 nonce mask to 27 which empiric testing shows stable and more
+rapid rise in frequency without significant overshoot.
+- Set ava7 starting fan to 1/3 speed between min and max.
+- Convert the avalon7 fan control to use a PID-like feedback mechanism for
+optimal fan speed and quasi-constant temperature. Change meaning of target
+temperature to actual desired temperature, setting it to 90C. Set minimum
+fanspeed to 5% as a safety fallback.
+- Inherit the diff from the original stratum in submit_nonce2_nonce, fixing
+wrong diff submits on avalon6/7.
+- Use diff1 and diff rejected to calculate hashrate in avalon7 for a more stable
+displayed hashrate.
+- Check for nodev errors after usb transfers to not change the err value.
+- There is no need for complicated locking in usb_reset; simply use the write
+lock and avoid locking risks.
+- Update nonce mask from 31 to 29
+- Send jobid when it's update
+- Flush useless works when new block was found
+- Update error polling count
+- Fix frequency mode for Avalon7
+- Added connection overload detection and API entry
+- Fixed some English mistakes
+- Fix display mm status when stratum pool is failed
+- Update api display
+- Reset usb devices if they fail to initialise.
+- TIMER_ABSTIME is not available on osx
+- Get rid of binary stratum work based on avalon7 define.
+- Remove impossible comparisons from avalon7.c
+- Style police.
+- Don't use the stratum work generator for Avalon7
+- Add STRATUM_USER_AGENT macro for utils
+- Update README and ASIC-README for Avalon7
+- Add Avalon7 support
+- Fix warning in AV4 driver
+- Update AVA4_DEFAULT_MODULARS
+- Update nonce2 start and range
+- Add more options for AVA4_FREQ_TEMPADJ_MODE
+- Double check data size when use avalon4_auc_xfer
+- Update AVA4_MM60_TEMP_FREQADJ
+- Fix xfer_err_cnt
+- Avoid thread block when use AV4 iic driver
+- Update check rules for AUC
+- Support AV4 miner detect through iic
+- Fix some settings for AvalonMiner 6.0
+- advertise segwit support for solo mining
+- add support for segwit commitment insertion
+- add bip9 support
+- Fix work update for hash_work
+- Fix various minor once-off memory leaks
+- Fix read beyond stack size issue
+- Reattach kernel driver to correct IF
+- Fix clobbered by ‘longjmp’ or ‘vfork’ warning
+- Fix unreachable code
+- allow for independent target freq so bad stick doesn't effect group
+- +1 freq hex alignment
+- tidy up naming to match general conventions
+- tidy up some unused vars
+- Add in ramp code. Untie compac detect from default icarus fallback detect to
+have a cleaner device detect path.
+- move over code to fit serial number on screen
+- changed a few spaces to tabs
+- Added GekkoScience Compac detection and support to the icarus driver.
+- Show Current Block Version under pools api
+- Show Current Block Height under pools api
+- Update avalon4 options
+- Update AVA4_DEFAULT_SMART_SPEED to AVA4_DEFAULT_SMARTSPEED_MODE3
+- Update avalon4_update process
+- Code cleanup
+- Minor update
+- Detach the duplicate dev when detect in xfer
+- Update mm count when scan hash
+- Check module if exits when detect
+- Update hashmeter for avalon devs
+- Fix i_5s usage
+- Update smart frequency for AVA4_DEFAULT_SMARTSPEED_MODE3
+- Add new smart speed mode (mode 3)
+- Update default value
+- Add more options for smartspeed
+- Don't label threads of devices that are paused as sick
+- Set avalon4 to cut off if thread should be paused
+- ASIC-README: Avalon6 will come up as AV6
+- Update the ASIC-README and help message of Avalon4/4.1/6
+- fix cgminer-api compilation on osx
+- Support low diffs like those on testnets
+- Restart being missed outside of block change
+- Set default frequencies for ava4/6 in the correct place if none is specified
+- Use a generic zero stats function for drivers that don't implement their own
+- The fan control for ava6 overshoots often so use a safer non-linear curve
+mechanism relative to the target temperature and remove inappropriate caps to
+opt_avalon4_overheat and opt_avalon4_temp_target
+- 450 would appear to be the most reliable startup speed for ava6 so revise it
+down further
+- Avoid double locking when checking if a block exists to prevent a further race
+between seeing it and adding it
+- AVA6 is more reliable starting up at the slightly slower speed of 470, making
+it internally start at 450 before working its way up
+- Set the freq array variables when setting default frequency as well
+- Set default frequency according to ava type if none is specified on the
+command line, choosing 475 as default for ava6
+- Use AV6 name for avalon6 in ava4 driver
+- Update copyright notices for ava4 driver
+- Fix warnings
+- Log blockheight when the pool changes to a new block.
+- Check for stratum clean message in test_work_current to not give false
+positive messages for missed pool notifications of block changes
+- Update AVA4_DEFAULT_SPEED_ERROR
+- Add new option for Avalon6
+- Update frequency process
+- Update AVA4_DEFAULT_TEMP_TARGET for Avalon6
+- Update voltage decode for Avalon6
+- Update temperature target and overheat
+- Update target temp settting
+- Update fan adjust
+- Update Vol api display
+- Update avalon4 option
+- Display stratum difficulty in pool api
+- Fix divide by zero
+- Fix nonce counter
+- Fix GHS display
+- Display total asics for Avalon6
+- Update max diff for Avalon4 and Avalon6
+- Update temperature check
+- Fix typo
+- By default we enable automatic frequency
+- Minor changes
+- Update display
+- Update api display
+- Fix GHSmm
+- Update api for Avalon6
+- Display pll infomation for Avalon6
+- Update frequency for Avalon6
+- Turn on avalon6 nonce check as default
+- Update convert voltage
+- Update voltage display
+- Display more status
+- Enable adjust frequency automatically
+- Update convert voltage
+- Update temperature display for Avalon6
+- Add more options for Avalon6
+- Update asic count for Avalon6
+- Update hashrate counter
+- Decode voltage and temperature for Avalon6
+- Support error code for Avalon6
+- Support 2 miners for Avalon6
+- Show ASCI status for Avalon6
+- Don't need config voltage for Avalon6
+- Update MM60 profile
+- Add nonce counter for Avalon6
+- Hide MW for Avalon6.0
+- Count hw for Avalon6
+- Increse stat buffer size
+- Fix job_idcmp when copy stratum
+- Add Avalon6 support
+- Apply immediately the first set_difficulty
+- store the next difficulty
+- Make pool fallback time configurable and default to 2 minutes instead of 5.
+Rework fallback mechanism to check pool status every 5 seconds and not miss a
+recovering pool.
+- Fix error message for pools such as p2pool that use no nonce1 in their stratum
+templates
+- Set work delay to 1 for AntS1 and AntS2
+- driver-bitmain default tempoverctrl off so it can be disabled
+- API add Work Difficulty to pools
+- remove some documention references to getwork
+- Support multiple modulars frequency setting
+- Decode frequency for Avalon nano 2.0
+- Decode adc status for Avalon nano 2.0
+- Display temperature in api (Avalon nano 2.0
+- Display asic match works for Avalon5
+- Support adjust frequency by asics
+- Display asic freq in status
+- Diplay moving average dh for Avalon5
+- Fix api display
+- Upgrade date/timestamp strings to millisecond accuracy
+- Support voltage adjustment automatically by modular
+- Support Avalon5
+- Increase AVAM_DEFAULT_ADJ_INTERVAL
+- Boundary check
+- Update AVAM_DEFAULT_VOLTAGE_MIN
+- Check the final freq
+- Support frequency adjust automatically
+- Add simple moving sum of the hardware errors
+- Add elapsed info for Avalon miner
+- Advise against building blockerupter driver
+- Move blockerupter driver to after icarus to not interfere with their detection
+if built in
+
+
 Version 4.9.2 - 12th June 2015
 
 - Only blacklist devices on iManufacturer if they don't have an iProduct

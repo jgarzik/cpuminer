@@ -8,11 +8,13 @@ char *ctrl_device_name  = "ctrl";
 static char *d_state_on  = "ON";
 static char *d_state_off = "OFF";
 
-static char* D_STATE(int state) {
+static char* D_STATE(int state)
+{
 	return (state == 0) ? d_state_off : d_state_on;
 }
 
-char* get_ctrl_data(int channel, int state, int fn) {
+char* get_ctrl_data(int channel, int state, int fn)
+{
 	char *request = malloc(CTRL_BUFFER_SIZE);
 	memset(request, 0, CTRL_BUFFER_SIZE);
 	int index = (state == 0) ? 0 : 1;
@@ -50,7 +52,8 @@ char* get_ctrl_data(int channel, int state, int fn) {
 	return request;
 }
 
-static int D_VALUE(char *value) {
+static int D_VALUE(char *value)
+{
 	if (strcasecmp(value, d_state_on) == 0)
 		return 1;
 
@@ -60,7 +63,8 @@ static int D_VALUE(char *value) {
 	return -1;
 }
 
-static int8_t D_FUNCTION(uint8_t value, char *cmd) {
+static int8_t D_FUNCTION(uint8_t value, char *cmd)
+{
 	if (strcmp(cmd, BUZZER) == 0)
 		return set_buzzer(value);
 	else if (strcmp(cmd, LED_GREEN) == 0)
@@ -81,7 +85,8 @@ static int8_t D_FUNCTION(uint8_t value, char *cmd) {
 	return -1;
 }
 
-static int split_tokens(char* cmd, char token, char** tokens) {
+static int split_tokens(char* cmd, char token, char** tokens)
+{
 	int len=0;
 	char *src, *ptr;
 
@@ -104,7 +109,8 @@ static int split_tokens(char* cmd, char token, char** tokens) {
 	return len;
 }
 
-int8_t ctrl_init(device_t* attr, char *device, uint16_t size) {
+int8_t ctrl_init(device_t* attr, char *device, uint16_t size)
+{
 	attr->device = device;
 	attr->mode = 0;
 	attr->speed = 0;
@@ -118,7 +124,8 @@ int8_t ctrl_init(device_t* attr, char *device, uint16_t size) {
 	return 0;
 }
 
-int8_t ctrl_transfer(device_t *attr) {
+int8_t ctrl_transfer(device_t *attr)
+{
 	char* cmd = (char*) attr->tx;
 	char* tokens[MAX_TOKENS_ALLOWED];
 	int8_t ret = 0;
@@ -168,7 +175,8 @@ int8_t ctrl_transfer(device_t *attr) {
 	return ret;
 }
 
-void ctrl_release(device_t *attr) {
+void ctrl_release(device_t *attr)
+{
 	free(attr->rx);
 	free(attr->tx);
 }

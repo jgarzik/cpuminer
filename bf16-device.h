@@ -1,10 +1,7 @@
-#pragma once
+#ifndef BF16_DEVICE_H
+#define BF16_DEVICE_H
 
 #include <stdint.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 typedef struct {
 	char        *device;
@@ -21,7 +18,4 @@ typedef struct {
 	uint8_t     *tx;
 } device_t;
 
-/** @endcond */
-#ifdef __cplusplus
-} /*extern "C" */
-#endif
+#endif /* BF16_DEVICE_H */

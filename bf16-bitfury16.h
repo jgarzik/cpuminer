@@ -1,12 +1,9 @@
-#pragma once
+#ifndef BF16_BITFURY16_H
+#define BF16_BITFURY16_H
 
 #include <stdint.h>
 
 #include "bf16-spidevice.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /******************************************************
  *                      Macros
@@ -301,23 +298,27 @@ extern bf_cmd_description_t cmd_description[CHIP_CMD_NUM];
  ******************************************************/
 
 /* BF16 command primitives */
-uint8_t spi_command_init(bf_command_t* command, const uint8_t depth, const bf_chip_address_t chip_address, const bf_cmd_code_t cmd_code, const uint8_t data_length, const uint8_t* tx);
+uint8_t spi_command_init(bf_command_t* command, const uint8_t depth,
+		const bf_chip_address_t chip_address, const bf_cmd_code_t cmd_code,
+		const uint8_t data_length, const uint8_t* tx);
 uint8_t spi_command_exec(spi_channel_id_t spi_channel, bf_command_t* command, uint32_t* nonces);
 
 /* data preparation routines */
 uint8_t gen_clock_data(uint8_t clock, uint8_t prescaler, uint8_t data[4]);
-uint8_t gen_task_data(uint32_t* midstate, uint32_t merkle, uint32_t ntime, uint32_t nbits, uint32_t mask, uint8_t* task);
+uint8_t gen_task_data(uint32_t* midstate, uint32_t merkle, uint32_t ntime,
+		uint32_t nbits, uint32_t mask, uint8_t* task);
 uint32_t gen_mask(uint32_t nonce, uint8_t nbits);
 
 /* SPI BCM250 primitives */
-int     create_channel(spi_channel_id_t spi_channel, uint8_t* channel_path, uint8_t channel_length);
+uint8_t create_channel(spi_channel_id_t spi_channel, uint8_t* channel_path, uint8_t channel_length);
 uint8_t destroy_channel(spi_channel_id_t spi_channel, uint8_t depth);
 
 /* SPI BTC16 primitives  */
 void    spi_emit_reset(spi_channel_id_t spi_channel);
-uint8_t send_toggle(spi_channel_id_t spi_channel, uint8_t depth, bf_chip_address_t chip_address);
-uint8_t set_clock(spi_channel_id_t spi_channel, uint8_t depth, bf_chip_address_t chip_address, uint8_t clock);
-uint8_t set_mask(spi_channel_id_t spi_channel, uint8_t depth, bf_chip_address_t chip_address, uint32_t mask);
+uint8_t send_toggle(spi_channel_id_t spi_channel, uint8_t depth,
+		bf_chip_address_t chip_address);
+uint8_t set_clock(spi_channel_id_t spi_channel, uint8_t depth,
+		bf_chip_address_t chip_address, uint8_t clock);
 
 /* cmd buffer primitives */
 int8_t  cmd_buffer_init(bf_cmd_buffer_t* cmd_buffer);
@@ -330,43 +331,46 @@ int8_t  cmd_buffer_push(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth,
 int8_t  cmd_buffer_pop(bf_cmd_buffer_t* cmd_buffer, bf_cmd_status_t* cmd_status, uint32_t* nonces);
 int8_t  cmd_buffer_exec(spi_channel_id_t spi_channel, bf_cmd_buffer_t* cmd_buffer);
 
-int8_t  cmd_buffer_push_create_channel(bf_cmd_buffer_t* cmd_buffer, uint8_t* channel_path, uint8_t channel_length);
+int8_t  cmd_buffer_push_create_channel(bf_cmd_buffer_t* cmd_buffer, uint8_t* channel_path,
+		uint8_t channel_length);
 int8_t  cmd_buffer_push_destroy_channel(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth);
 
-int8_t  cmd_buffer_push_send_toggle(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth, const bf_chip_address_t chip_address);
+int8_t  cmd_buffer_push_send_toggle(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth,
+		const bf_chip_address_t chip_address);
 int8_t  cmd_buffer_push_set_clock(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth,
 		const bf_chip_address_t chip_address, uint8_t clock);
-int8_t  cmd_buffer_push_set_mask(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth, const bf_chip_address_t chip_address, uint8_t mask);
+int8_t  cmd_buffer_push_set_mask(bf_cmd_buffer_t* cmd_buffer, const uint8_t depth,
+		const bf_chip_address_t chip_address, uint8_t mask);
 
 char*   get_cmd_description(bf_cmd_code_t cmd_code);
 
 /* dynamic work list primitives */
-bf_list_t* workd_list_init();
+bf_list_t* workd_list_init(void);
 int8_t workd_list_deinit(bf_list_t* list, struct cgpu_info *bitfury);
 int8_t workd_list_push(bf_list_t* list, bf_workd_t* work);
 int8_t workd_list_pop(bf_list_t* list, struct cgpu_info *bitfury);
-int8_t workd_list_remove(bf_list_t* list, struct cgpu_info *bitfury, bf_works_t* work);
+int8_t workd_list_remove(bf_list_t* list, bf_works_t* work);
 
 /* nonce list primitives */
-bf_list_t* nonce_list_init();
+bf_list_t* nonce_list_init(void);
 int8_t nonce_list_deinit(bf_list_t* list);
 int8_t nonce_list_push(bf_list_t* list, uint32_t nonce);
 uint32_t nonce_list_pop(bf_list_t* list);
 
 /* noncework list primitives */
-bf_list_t* noncework_list_init();
+bf_list_t* noncework_list_init(void);
 int8_t noncework_list_deinit(bf_list_t* list);
 int8_t noncework_list_push(bf_list_t* list, bf_chip_address_t chip_address,
 		bf_chip_address_t src_address, bf_works_t cwork, bf_works_t owork, uint32_t nonce);
 int8_t noncework_list_pop(bf_list_t* list);
 
-bf_list_t* renoncework_list_init();
+bf_list_t* renoncework_list_init(void);
 int8_t renoncework_list_deinit(bf_list_t* list);
 int8_t renoncework_list_push(bf_list_t* list, bf_chip_address_t src_address, uint32_t nonce);
 int8_t renoncework_list_pop(bf_list_t* list);
 	
 /* renonce list primitives */
-bf_list_t* renonce_list_init();
+bf_list_t* renonce_list_init(void);
 int8_t renonce_list_deinit(bf_list_t* list);
 int8_t renonce_list_push(bf_list_t* list, uint32_t id, uint32_t nonce, bf_chip_address_t src_address,
 		bf_works_t cwork, bf_works_t owork);
@@ -376,7 +380,4 @@ int8_t renonce_list_remove(bf_list_t* list, bf_data_t* rdata);
 uint8_t find_nonces(uint32_t* curr_nonces, uint32_t* prev_nonces, uint32_t* valid_nonces);
 bool match_nonce(uint32_t nonce, uint32_t mask, uint8_t nbits);
 
-/** @endcond */
-#ifdef __cplusplus
-} /*extern "C" */
-#endif
+#endif /* BF16_BITFURY16_H */

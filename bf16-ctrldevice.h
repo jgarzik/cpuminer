@@ -1,11 +1,8 @@
-#pragma once
+#ifndef BF16_CTRLDEVICE_H
+#define BF16_CTRLDEVICE_H
 
 #include "bf16-brd-control.h"
 #include "bf16-device.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #define CTRL_BUFFER_SIZE    96
 
@@ -43,7 +40,4 @@ int8_t ctrl_transfer(device_t *attr);
 void ctrl_release(device_t *attr);
 char* get_ctrl_data(int channel, int state, int fn);
 
-/** @endcond */
-#ifdef __cplusplus
-} /*extern "C" */
-#endif
+#endif /* BF16_CTRLDEVICE_H */
