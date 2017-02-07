@@ -21,11 +21,6 @@ compat/jansson-2.6/src/strbuffer.lo
 compat/jansson-2.6/src/strconv.lo
 compat/jansson-2.6/src/utf.lo
 compat/jansson-2.6/src/value.lo
-compat/libusb-1.0/libtool
-compat/libusb-1.0/libusb-1.0.pc
-compat/libusb-1.0/libusb/.libs/
-compat/libusb-1.0/libusb/os/.dirstamp
-compat/libusb-1.0/ltmain.sh
 libtool
 ltmain.sh
 m4/libtool.m4
