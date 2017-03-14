@@ -11,7 +11,7 @@ SUBDIRS		= compat
 
 INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES)
 
-bin_PROGRAMS	= minerd
+sbin_PROGRAMS	= minerd
 
 minerd_SOURCES	= elist.h miner.h compat.h			\
 		  cpu-miner.c util.c				\

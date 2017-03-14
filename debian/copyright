@@ -1,0 +1,71 @@
+This package was debianized by Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com> on
+Thu,  2 Dec 2010 21:20:20 -0600.
+
+It was downloaded from https://github.com/jgarzik/cpuminer
+
+Copyright: 2010, Jeff Garzik <jeff@garzik.org>
+License: GPL-2+
+
+Files: ./compat/jasson/*
+Copyright: 2009-2010, Petri Lehtinen <petri@digip.org>
+License: MIT
+
+File: ./sha256_4way.c
+Copyright: 2010, Satoshi Nakamoto <satoshin@gmx.com>
+License: MIT
+
+File: ./sha256_generic.c
+Copyright: Jean-Luc Cooke <jlcooke@certainkey.com>
+           Andrew McDonald <andrew@mcdonald.org.uk>
+           2002, James Morris <jmorris@intercode.com.au>
+           SHA224 Support Copyright 2007, Intel Corporation <jonathan.lynch@intel.com>
+License: GPL-2+
+
+File: ./sha256_sse2_amd64.c
+Copyright: Mark Crichton <crichton@gimp.org>
+License: GPL-2+
+
+File: ./x86_64/sha256_xmm_amd64.asm
+Copyright: 2011, Ufasoft <support@ufasoft.com>
+License: Public Domain
+
+Files: ./debian/*
+Copyright: 2010, Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com>
+License: GPL-2+
+
+License: GPL-2+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation; either version 2 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this package; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
+
+License: MIT
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+  THE SOFTWARE.
+
+The Debian packaging is (C) 2010, Mario Oyorzabal Salgado <tuxsoul@tuxsoul.com> and
+is licensed under the GPL-2, see `/usr/share/common-licenses/GPL-2'.

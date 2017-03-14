@@ -1,0 +1,19 @@
+#
+# I pledge to donate the money that's sent to this address earn to Debian.
+ADDRESS=1BJuHUqihF9KwpGTTCd6ZZMdgGNv6u96c1
+#
+# the sha256 algorithm to use.
+# Default is cryptopp_asm32 on i386, sse2_64 on amd64,
+# the miner's default (c) otherwise.
+#ALGORITHM=sse2_64
+#
+# How often to retry talking to the server.
+# Default: indefinitely.
+#RETRIES=10
+#
+# How many threads to start.
+# Default: One per CPU.
+#THREADS=2
+#
+#DAEMON_ARGS="--url http://mining.eligius.st:8337 --userpass $ADDRESS:x"
+DAEMON_ARGS="--url http://pit.deepbit.net:8332 --userpass matthias@urlichs.de_debian:CoinMeHarder"

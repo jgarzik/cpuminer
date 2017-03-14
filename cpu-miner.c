@@ -107,6 +107,7 @@ static const char *algo_names[] = {
 };
 
 bool opt_debug = false;
+bool opt_daemon = false;
 bool opt_protocol = false;
 bool want_longpoll = true;
 bool have_longpoll = false;
@@ -114,6 +115,7 @@ bool use_syslog = false;
 static bool opt_quiet = false;
 static int opt_retries = 10;
 static int opt_fail_pause = 30;
+static char *pidfile = NULL;
 int opt_scantime = 5;
 static json_t *opt_config;
 static const bool opt_time = true;
@@ -168,6 +170,11 @@ static struct option_help options_help[] = {
 	{ "quiet",
 	  "(-q) Disable per-thread hashmeter output (default: off)" },
 
+#ifdef HAVE_DAEMON
+	{ "daemon",
+	  "(-d) Run in the background (default: off)" },
+#endif
+
 	{ "debug",
 	  "(-D) Enable debug output (default: off)" },
 
@@ -176,6 +183,9 @@ static struct option_help options_help[] = {
 
 	{ "protocol-dump",
 	  "(-P) Verbose dump of protocol-level activities (default: off)" },
+
+	{ "pid-file FILE",
+	  "Write my process ID to a file (default: off)" },
 
 	{ "retries N",
 	  "(-r N) Number of times to retry, if JSON-RPC call fails\n"
@@ -217,10 +227,14 @@ static struct option_help options_help[] = {
 static struct option options[] = {
 	{ "algo", 1, NULL, 'a' },
 	{ "config", 1, NULL, 'c' },
+#ifdef HAVE_DAEMON
+	{ "daemon", 0, NULL, 'd' },
+#endif
 	{ "debug", 0, NULL, 'D' },
 	{ "help", 0, NULL, 'h' },
 	{ "no-longpoll", 0, NULL, 1003 },
 	{ "pass", 1, NULL, 'p' },
+	{ "pid-file", 1, NULL, 1005 },
 	{ "protocol-dump", 0, NULL, 'P' },
 	{ "quiet", 0, NULL, 'q' },
 	{ "threads", 1, NULL, 't' },
@@ -794,8 +808,8 @@ static void parse_arg (int key, char *arg)
 		}
 		break;
 	}
-	case 'q':
-		opt_quiet = true;
+	case 'd':
+		opt_daemon = true;
 		break;
 	case 'D':
 		opt_debug = true;
@@ -806,6 +820,9 @@ static void parse_arg (int key, char *arg)
 		break;
 	case 'P':
 		opt_protocol = true;
+		break;
+	case 'q':
+		opt_quiet = true;
 		break;
 	case 'r':
 		v = atoi(arg);
@@ -860,6 +877,9 @@ static void parse_arg (int key, char *arg)
 	case 1004:
 		use_syslog = true;
 		break;
+	case 1005:
+		pidfile = strdup(arg);
+		break;
 	default:
 		show_usage();
 	}
@@ -911,7 +931,7 @@ static void parse_cmdline(int argc, char *argv[])
 	int key;
 
 	while (1) {
-		key = getopt_long(argc, argv, "a:c:qDPr:s:t:h?", options, NULL);
+		key = getopt_long(argc, argv, "a:c:dDPqr:s:t:h?", options, NULL);
 		if (key < 0)
 			break;
 
@@ -944,10 +964,32 @@ int main (int argc, char *argv[])
 
 	pthread_mutex_init(&time_lock, NULL);
 
+#ifdef HAVE_DAEMON
+	if (opt_daemon) {
+		if (daemon(0,0)) {
+			perror("daemon");
+			/* If this doesn't work, we may still be in the foreground.
+			   That may cause system boot to hang.
+			   Not good.
+			 */
+			return 1;
+		}
+	}
+#endif
+
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog)
 		openlog("cpuminer", LOG_PID, LOG_USER);
 #endif
+
+	if (pidfile) {
+		FILE *pf = fopen(pidfile, "w");
+		if (pf) {
+			(void) fprintf(pf, "%d\n", getpid());
+			(void) fclose(pf);
+		} else
+			perror("open pid-file");
+	}
 
 	work_restart = calloc(opt_n_threads, sizeof(*work_restart));
 	if (!work_restart)
