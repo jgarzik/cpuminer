@@ -8,6 +8,12 @@ Dependencies:
 	jansson			http://www.digip.org/jansson/
 		(jansson is optional, and is included in-tree)
 
+
+To install deps on Ubuntu/Debian systems:
+
+    sudo aptitude install autoconf yasm libcurl4-openssl-dev
+
+
 Basic *nix build instructions:
 	./autogen.sh	# only needed if building from git repo
 	CFLAGS="-O3 -Wall -msse2" ./configure
