@@ -36,6 +36,7 @@
 
 #ifdef __linux /* Linux specific policy and affinity management */
 #include <sched.h>
+#include <linux/sched.h>
 static inline void drop_policy(void)
 {
 	struct sched_param param;
