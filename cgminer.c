@@ -860,7 +860,7 @@ static char *set_int_0_to_7680(const char *arg, int *i)
         return set_int_range(arg, i, 0, 7680);
 }
 
-#if defined(USE_AVALON4) || defined(USE_AVALON7)
+#if defined(USE_AVALON4)
 static char *set_int_1_to_60(const char *arg, int *i)
 {
         return set_int_range(arg, i, 1, 60);
@@ -1464,18 +1464,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--avalon7-iic-detect",
 		     opt_set_bool, &opt_avalon7_iic_detect,
 		     "Enable Avalon7 detect through iic controller"),
-	OPT_WITH_ARG("--avalon7-freqadj-time",
-		     set_int_1_to_60, opt_show_intval, &opt_avalon7_freqadj_time,
-		     "Set Avalon7 check interval when run in AVA7_FREQ_TEMPADJ_MODE"),
-	OPT_WITH_ARG("--avalon7-delta-temp",
-		     opt_set_intval, opt_show_intval, &opt_avalon7_delta_temp,
-		     "Set Avalon7 delta temperature when reset freq in AVA7_FREQ_TEMPADJ_MODE"),
-	OPT_WITH_ARG("--avalon7-delta-freq",
-		     opt_set_intval, opt_show_intval, &opt_avalon7_delta_freq,
-		     "Set Avalon7 delta freq when adjust freq in AVA7_FREQ_TEMPADJ_MODE"),
-	OPT_WITH_ARG("--avalon7-freqadj-temp",
-		     opt_set_intval, opt_show_intval, &opt_avalon7_freqadj_temp,
-		     "Set Avalon7 check temperature when run into AVA7_FREQ_TEMPADJ_MODE"),
 	OPT_WITH_ARG("--avalon7-nonce-mask",
 		     set_int_24_to_32, opt_show_intval, &opt_avalon7_nonce_mask,
 		     "Set A3212 nonce mask, range 24-32."),
