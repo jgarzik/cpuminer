@@ -47,10 +47,6 @@ int opt_avalon7_smart_speed = AVA7_DEFAULT_SMART_SPEED;
  * 2. option 1 + adjust by average frequency
  */
 bool opt_avalon7_iic_detect = AVA7_DEFAULT_IIC_DETECT;
-int opt_avalon7_freqadj_time = AVA7_DEFAULT_FREQADJ_TIME;
-int opt_avalon7_delta_temp = AVA7_DEFAULT_DELTA_T;
-int opt_avalon7_delta_freq = AVA7_DEFAULT_DELTA_FREQ;
-int opt_avalon7_freqadj_temp = AVA7_TEMP_FREQADJ;
 
 uint32_t opt_avalon7_th_pass = AVA7_DEFAULT_TH_PASS;
 uint32_t opt_avalon7_th_fail = AVA7_DEFAULT_TH_FAIL;
@@ -521,8 +517,6 @@ static inline uint32_t adjust_fan(struct avalon7_info *info, int id)
 		info->fan_pct[id] = opt_avalon7_fan_min;
 out:
 	pwm = get_fan_pwm(info->fan_pct[id]);
-	if (info->freq_mode[id] == AVA7_FREQ_TEMPADJ_MODE)
-		pwm = get_fan_pwm(opt_avalon7_fan_max);
 
 	if (info->cutoff[id])
 		pwm = get_fan_pwm(opt_avalon7_fan_max);
@@ -1356,8 +1350,6 @@ static bool avalon7_prepare(struct thr_info *thr)
 	cgtime(&(info->last_fan_adj));
 	cgtime(&info->last_stratum);
 	cgtime(&info->last_detect);
-	cgtime(&info->last_fadj);
-	cgtime(&info->last_tcheck);
 
 	cglock_init(&info->update_lock);
 	cglock_init(&info->pool0.data_lock);
@@ -1387,7 +1379,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 	struct avalon7_pkg send_pkg;
 	struct avalon7_ret ret_pkg;
 	uint32_t tmp;
-	int i, j, err, rlen;
+	int i, j, k, err, rlen;
 	uint8_t dev_index;
 	uint8_t rbuf[AVA7_AUC_P_SIZE];
 
@@ -1467,6 +1459,9 @@ static void detect_modules(struct cgpu_info *avalon7)
 				info->set_voltage[i][j] = opt_avalon7_voltage;
 			info->get_voltage[i][j] = 0;
 			info->get_vin[i][j] = 0;
+
+			for (k = 0; k < 5; k++)
+				info->temp[i][j][k] = -273;
 		}
 
 		info->freq_mode[i] = AVA7_FREQ_INIT_MODE;
@@ -1805,39 +1800,6 @@ static void avalon7_set_finish(struct cgpu_info *avalon7, int addr)
 	avalon7_iic_xfer_pkg(avalon7, addr, &send_pkg, NULL);
 }
 
-/* miner [0, miner_count], 0 means all miners */
-static void avalon7_freq_dec(struct cgpu_info *avalon7, int addr, unsigned int miner_id, unsigned int freq[][AVA7_DEFAULT_PLL_CNT], unsigned int val)
-{
-	struct avalon7_info *info = avalon7->device_data;
-	int i, j;
-
-	if (!miner_id) {
-		for (i = 0; i < info->miner_count[addr]; i++) {
-			for (j = 0; j < AVA7_DEFAULT_PLL_CNT; j++) {
-				if (freq[i][j] <= val) {
-					freq[i][j] = AVA7_DEFAULT_FREQUENCY_MIN;
-					continue;
-				}
-
-				if ((freq[i][j] - val) >= AVA7_DEFAULT_FREQUENCY_MIN)
-					freq[i][j] -= val;
-				else
-					freq[i][j] = AVA7_DEFAULT_FREQUENCY_MIN;
-			}
-		}
-	} else {
-		for (i = 0; i < AVA7_DEFAULT_PLL_CNT; i++) {
-			if (freq[miner_id][i] <= val)
-				freq[miner_id][i] = AVA7_DEFAULT_FREQUENCY_MIN;
-
-			if (freq[miner_id][i] >= AVA7_DEFAULT_FREQUENCY_MIN)
-				freq[miner_id][i] -= val;
-			else
-				freq[miner_id][i] -= AVA7_DEFAULT_FREQUENCY_MIN;
-		}
-	}
-}
-
 static void avalon7_sswork_update(struct cgpu_info *avalon7)
 {
 	struct avalon7_info *info = avalon7->device_data;
@@ -1901,12 +1863,9 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 	struct avalon7_info *info = avalon7->device_data;
 	struct timeval current;
 	int i, j, k, count = 0;
-	double device_tdiff;
 	int temp_max;
 	int64_t ret;
 	bool update_settings = false;
-	bool freq_dec_check = false;
-	bool freq_adj_check = false;
 
 	if ((info->connecter == AVA7_CONNECTER_AUC) &&
 		(unlikely(avalon7->usbinfo.nodev))) {
@@ -1935,18 +1894,6 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 	}
 
 	/* Step 3: ASIC configrations (voltage and frequency) */
-	device_tdiff = tdiff(&current, &(info->last_tcheck));
-	if (device_tdiff > 3.0 || device_tdiff < 0) {
-		freq_dec_check = true;
-		copy_time(&info->last_tcheck, &current);
-	}
-
-	device_tdiff = tdiff(&current, &(info->last_fadj));
-	if (device_tdiff > opt_avalon7_freqadj_time || device_tdiff < 0) {
-		freq_adj_check = true;
-		copy_time(&info->last_fadj, &current);
-	}
-
 	for (i = 1; i < AVA7_DEFAULT_MODULARS; i++) {
 		if (!info->enable[i])
 			continue;
@@ -1956,33 +1903,14 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		/* Check temperautre */
 		temp_max = get_temp_max(info, i);
 
-		/* Check if frequency need decrease */
-		if (freq_dec_check && (info->freq_mode[i] != AVA7_FREQ_TEMPADJ_MODE)) {
-			if (temp_max >= opt_avalon7_freqadj_temp) {
-				update_settings = true;
-				info->temp_last_max[i] = temp_max;
-				avalon7_freq_dec(avalon7, i, 0, info->set_frequency[i], opt_avalon7_delta_freq + 50);
-				applog(LOG_DEBUG, "%s-%d-%d: set freq after temp check %d-%d",
-					avalon7->drv->name, avalon7->device_id, i,
-					info->set_frequency[i][0][0],
-					info->set_frequency[i][info->miner_count[i] - 1][0]);
-				info->freq_mode[i] = AVA7_FREQ_TEMPADJ_MODE;
-			}
-		}
-
 		/* Enter too hot */
-		if (temp_max >= info->temp_overheat[i]) {
+		if (temp_max >= info->temp_overheat[i])
 			info->cutoff[i] = 1;
-			info->freq_mode[i] = AVA7_FREQ_CUTOFF_MODE;
-		}
 
 		/* Exit too hot */
 		if (info->cutoff[i] && (temp_max <= (info->temp_overheat[i] - 10)))
 			info->cutoff[i] = 0;
 
-		/* State machine for settings
-		 * https://en.bitcoin.it/wiki/Avalon6#Frequency_Statechart
-		 * */
 		switch (info->freq_mode[i]) {
 			case AVA7_FREQ_INIT_MODE:
 				update_settings = true;
@@ -1994,39 +1922,6 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 				avalon7_init_setting(avalon7, i);
 
 				info->freq_mode[i] = AVA7_FREQ_PLLADJ_MODE;
-				break;
-			case AVA7_FREQ_CUTOFF_MODE:
-				if (!info->cutoff[i])
-					info->freq_mode[i] = AVA7_FREQ_INIT_MODE;
-				break;
-			case AVA7_FREQ_TEMPADJ_MODE:
-				if (freq_adj_check) {
-					/* if temp_max goes down ,then we don't need adjust frequency */
-					if (info->temp_last_max[i] > temp_max) {
-						applog(LOG_DEBUG, "AVA7_FREQ_TEMPADJ_MODE temp goes down");
-						info->temp_last_max[i] = get_temp_max(info, i);
-						break;
-					}
-
-					update_settings = true;
-					info->temp_last_max[i] = get_temp_max(info, i);
-					avalon7_freq_dec(avalon7, i, 0, info->set_frequency[i], opt_avalon7_delta_freq);
-					applog(LOG_DEBUG, "%s-%d-%d: update freq (%d-%d) AVA7_FREQ_PLLADJ_MODE",
-							avalon7->drv->name, avalon7->device_id, i,
-							info->set_frequency[i][0][0],
-							info->set_frequency[i][info->miner_count[i] - 1][0]);
-				}
-
-				if (get_temp_max(info, i) <= (info->temp_target[i] - opt_avalon7_delta_temp)) {
-					update_settings = true;
-					for (j = 0; j < info->miner_count[i]; j++) {
-						for (k = 0; k < AVA7_DEFAULT_PLL_CNT; k++)
-							info->set_frequency[i][j][k] = opt_avalon7_freq[k];
-					}
-
-					info->freq_mode[i] = AVA7_FREQ_INIT_MODE;
-					break;
-				}
 				break;
 			case AVA7_FREQ_PLLADJ_MODE:
 				if (opt_avalon7_smart_speed == AVA7_DEFAULT_SMARTSPEED_OFF)

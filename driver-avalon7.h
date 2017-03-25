@@ -16,7 +16,6 @@
 
 #ifdef USE_AVALON7
 
-#define AVA7_TEMP_FREQADJ		104
 #define AVA7_FREQUENCY_MAX	1404
 
 #define AVA7_DEFAULT_FAN_MIN		5 /* % */
@@ -149,9 +148,7 @@
 #define AVA7_IIC_INFO		0xa6
 
 #define AVA7_FREQ_INIT_MODE	0x0
-#define AVA7_FREQ_CUTOFF_MODE	0x1
-#define AVA7_FREQ_TEMPADJ_MODE	0x2
-#define AVA7_FREQ_PLLADJ_MODE	0x3
+#define AVA7_FREQ_PLLADJ_MODE	0x1
 
 #define AVA7_DEFAULT_FAVG_TIME	(15 * 60.0)
 #define AVA7_DEFAULT_FREQADJ_TIME	60
@@ -190,8 +187,6 @@ struct avalon7_info {
 	struct timeval last_fan_adj;
 	struct timeval last_stratum;
 	struct timeval last_detect;
-	struct timeval last_fadj;
-	struct timeval last_tcheck;
 
 	cglock_t update_lock;
 
@@ -305,10 +300,6 @@ extern int opt_avalon7_aucspeed;
 extern int opt_avalon7_aucxdelay;
 extern int opt_avalon7_smart_speed;
 extern bool opt_avalon7_iic_detect;
-extern int opt_avalon7_freqadj_time;
-extern int opt_avalon7_delta_temp;
-extern int opt_avalon7_delta_freq;
-extern int opt_avalon7_freqadj_temp;
 extern int opt_avalon7_freq_sel;
 extern uint32_t opt_avalon7_th_pass;
 extern uint32_t opt_avalon7_th_fail;
