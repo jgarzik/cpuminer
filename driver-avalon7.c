@@ -202,6 +202,14 @@ struct avalon7_dev_description avalon7_dev_table[] = {
 		22,
 		AVA7_MM741_VOUT_ADC_RATIO,
 		4825,
+	},
+	{
+		"761",
+		761,
+		4,
+		26,
+		AVA7_MM761_VOUT_ADC_RATIO,
+		4825,
 	}
 };
 
