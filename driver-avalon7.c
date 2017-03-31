@@ -184,6 +184,7 @@ struct avalon7_dev_description avalon7_dev_table[] = {
 		711,
 		4,
 		18,
+		AVA7_MM711_VIN_ADC_RATIO,
 		AVA7_MM711_VOUT_ADC_RATIO,
 		4981
 	},
@@ -192,6 +193,7 @@ struct avalon7_dev_description avalon7_dev_table[] = {
 		721,
 		4,
 		18,
+		AVA7_MM721_VIN_ADC_RATIO,
 		AVA7_MM721_VOUT_ADC_RATIO,
 		4981
 	},
@@ -200,6 +202,7 @@ struct avalon7_dev_description avalon7_dev_table[] = {
 		741,
 		4,
 		22,
+		AVA7_MM741_VIN_ADC_RATIO,
 		AVA7_MM741_VOUT_ADC_RATIO,
 		4825,
 	},
@@ -208,6 +211,7 @@ struct avalon7_dev_description avalon7_dev_table[] = {
 		761,
 		4,
 		26,
+		AVA7_MM761_VIN_ADC_RATIO,
 		AVA7_MM761_VOUT_ADC_RATIO,
 		4825,
 	}
@@ -242,9 +246,9 @@ static uint32_t decode_voltage(struct avalon7_info *info, int modular_id, uint32
 	return (volt * info->vout_adc_ratio[modular_id] / info->asic_count[modular_id] / 100);
 }
 
-static uint16_t decode_vin(uint16_t volt)
+static uint16_t decode_vin(struct avalon7_info *info, int modular_id, uint16_t volt)
 {
-	return (volt * AVA7_VIN_ADC_RATIO);
+	return (volt * info->vin_adc_ratio[modular_id] / 10);
 }
 
 static double decode_pvt_temp(uint16_t pvt_code)
@@ -692,7 +696,7 @@ static int decode_pkg(struct cgpu_info *avalon7, struct avalon7_ret *ar, int mod
 
 		for (i = 0; i < info->miner_count[modular_id]; i++) {
 			memcpy(&vin, ar->data + 8 + i * 2, 2);
-			info->get_vin[modular_id][i] = decode_vin(be16toh(vin));
+			info->get_vin[modular_id][i] = decode_vin(info, modular_id, be16toh(vin));
 		}
 		break;
 	case AVA7_P_STATUS_VOLT:
@@ -1544,6 +1548,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 				info->mod_type[i] = avalon7_dev_table[dev_index].mod_type;
 				info->miner_count[i] = avalon7_dev_table[dev_index].miner_count;
 				info->asic_count[i] = avalon7_dev_table[dev_index].asic_count;
+				info->vin_adc_ratio[i] = avalon7_dev_table[dev_index].vin_adc_ratio;
 				info->vout_adc_ratio[i] = avalon7_dev_table[dev_index].vout_adc_ratio;
 				break;
 			}

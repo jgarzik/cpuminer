@@ -166,7 +166,10 @@
 
 #define AVA7_DEFAULT_FACTORY_INFO_CNT	1
 
-#define AVA7_VIN_ADC_RATIO	(3.3 / 1024.0 * 27.15 / 7.15 * 100.0)
+#define AVA7_MM711_VIN_ADC_RATIO	(3.3 / 1024.0 * 27.15 / 7.15 * 1000.0)
+#define AVA7_MM721_VIN_ADC_RATIO	(3.3 / 1024.0 * 27.15 / 7.15 * 1000.0)
+#define AVA7_MM741_VIN_ADC_RATIO	(3.3 / 1024.0 * 27.15 / 7.15 * 1000.0)
+#define AVA7_MM761_VIN_ADC_RATIO	(3.3 / 1024.0 * 26.0 / 6.0 * 1000.0)
 
 #define AVA7_MM711_VOUT_ADC_RATIO	(3.3 / 1024.0 * 125.0 / 43.0 * 10000.0 * 100.0)
 #define AVA7_MM721_VOUT_ADC_RATIO	(3.3 / 1024.0 * 125.0 / 43.0 * 10000.0 * 100.0)
@@ -274,6 +277,7 @@ struct avalon7_info {
 	char pmu_version[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_PMU_CNT][5];
 	uint64_t diff1[AVA7_DEFAULT_MODULARS];
 
+	uint16_t vin_adc_ratio[AVA7_DEFAULT_MODULARS];
 	uint16_t vout_adc_ratio[AVA7_DEFAULT_MODULARS];
 
 	bool conn_overloaded;
@@ -299,6 +303,7 @@ struct avalon7_dev_description {
 	int mod_type;
 	uint8_t miner_count; /* it should not greater than AVA7_DEFAULT_MINER_CNT */
 	uint8_t asic_count; /* asic count each miner, it should not great than AVA7_DEFAULT_ASIC_MAX */
+	uint16_t vin_adc_ratio;
 	uint16_t vout_adc_ratio;
 	uint32_t set_voltage;
 };
