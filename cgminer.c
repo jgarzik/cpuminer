@@ -6839,10 +6839,6 @@ static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 		applog(LOG_DEBUG, "Pool %d coinbase %s", pool->pool_no, cb);
 		free(cb);
 	}
-	pool->gbt_curl = curl_easy_init();
-	if (unlikely(!pool->gbt_curl))
-		quit(1, "GBT CURL initialisation failed");
-
 out:
 	if (val)
 		json_decref(val);
@@ -6964,8 +6960,14 @@ retry_stratum:
 				pool->has_gbt = true;
 				pool->rpc_req = gbt_req;
 			} else if (transactions) {
-				pool->gbt_solo = true;
 				pool->rpc_req = gbt_solo_req;
+				/* Set up gbt_curl before setting gbt_solo
+				 * flag to prevent longpoll thread from
+				 * trying to use an un'inited gbt_curl */
+				pool->gbt_curl = curl_easy_init();
+				if (unlikely(!pool->gbt_curl))
+					quit(1, "GBT CURL initialisation failed");
+				pool->gbt_solo = true;
 			}
 		}
 		/* Reset this so we can probe fully just after this. It will be
