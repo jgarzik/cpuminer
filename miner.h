@@ -57,13 +57,6 @@ void *alloca (size_t);
 # endif
 #endif
 
-#ifdef __MINGW32__
-#include <io.h>
-static inline int fsync (int fd)
-{
-	return (FlushFileBuffers ((HANDLE) _get_osfhandle (fd))) ? 0 : -1;
-}
-
 #ifdef HAVE_LIBCURL
 #include <curl/curl.h>
 #else
@@ -75,6 +68,13 @@ extern char *curly;
 #define CURL_GLOBAL_ALL 0
 #define curl_global_init(X) (0)
 #endif
+
+#ifdef __MINGW32__
+#include <io.h>
+static inline int fsync (int fd)
+{
+	return (FlushFileBuffers ((HANDLE) _get_osfhandle (fd))) ? 0 : -1;
+}
 
 #ifndef EWOULDBLOCK
 # define EWOULDBLOCK EAGAIN
@@ -245,6 +245,7 @@ extern char *curly;
 	DRIVER_ADD_COMMAND(avalonm) \
 	DRIVER_ADD_COMMAND(bflsc) \
 	DRIVER_ADD_COMMAND(bitfury) \
+	DRIVER_ADD_COMMAND(bitfury16) \
 	DRIVER_ADD_COMMAND(blockerupter) \
 	DRIVER_ADD_COMMAND(cointerra) \
 	DRIVER_ADD_COMMAND(hashfast) \
