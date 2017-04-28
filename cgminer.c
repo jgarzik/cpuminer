@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2015 Con Kolivas
+ * Copyright 2011-2017 Con Kolivas
  * Copyright 2011-2015 Andrew Smith
  * Copyright 2011-2012 Luke Dashjr
  * Copyright 2010 Jeff Garzik
@@ -164,6 +164,7 @@ enum benchwork {
 #ifdef HAVE_LIBCURL
 static char *opt_btc_address;
 static char *opt_btc_sig;
+struct pool *opt_btcd;
 #endif
 static char *opt_benchfile;
 static bool opt_benchfile_display;
@@ -178,6 +179,7 @@ bool opt_quiet;
 bool opt_realquiet;
 bool opt_loginput;
 bool opt_compact;
+bool opt_decode;
 const int opt_cutofftemp = 95;
 int opt_log_interval = 5;
 static const int max_queue = 1;
@@ -1684,6 +1686,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--debug|-D",
 		     enable_debug, &opt_debug,
 		     "Enable debug output"),
+#ifdef HAVE_CURSES
+	OPT_WITHOUT_ARG("--decode",
+			opt_set_bool, &opt_decode,
+			"Decode 2nd pool coinbase transactions (1st must be bitcoind) and exit"),
+#endif
 	OPT_WITHOUT_ARG("--disable-rejecting",
 			opt_set_bool, &opt_disable_pool,
 			"Automatically disable pools that continually reject shares"),
@@ -6850,8 +6857,10 @@ static bool setup_gbt_solo(CURL *curl, struct pool *pool)
 	json_t *val = NULL, *res_val, *valid_val;
 
 	if (!opt_btc_address) {
-		applog(LOG_ERR, "No BTC address specified, unable to mine solo on %s",
-		       pool->rpc_url);
+		if (!opt_decode) {
+			applog(LOG_ERR, "No BTC address specified, unable to mine solo on %s",
+			       pool->rpc_url);
+		}
 		goto out;
 	}
 	snprintf(s, 256, "{\"id\": 1, \"method\": \"validateaddress\", \"params\": [\"%s\"]}\n", opt_btc_address);
@@ -7010,6 +7019,8 @@ retry_stratum:
 				if (unlikely(!pool->gbt_curl))
 					quit(1, "GBT CURL initialisation failed");
 				pool->gbt_solo = true;
+				if (!opt_btcd)
+					opt_btcd = pool;
 			}
 		}
 		/* Reset this so we can probe fully just after this. It will be
@@ -9918,7 +9929,7 @@ int main(int argc, char *argv[])
 	}
 
 #ifdef HAVE_CURSES
-	if (opt_realquiet || opt_display_devs)
+	if (opt_realquiet || opt_display_devs || opt_decode)
 		use_curses = false;
 
 	if (use_curses)

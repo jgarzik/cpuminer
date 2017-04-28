@@ -19,6 +19,7 @@ enum {
 
 /* debug flags */
 extern bool opt_debug;
+extern bool opt_decode;
 extern bool opt_log_output;
 extern bool opt_realquiet;
 extern bool want_per_device_stats;

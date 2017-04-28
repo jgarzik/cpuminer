@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2015 Con Kolivas
+ * Copyright 2011-2017 Con Kolivas
  * Copyright 2011-2015 Andrew Smith
  * Copyright 2010 Jeff Garzik
  *
@@ -1966,6 +1966,40 @@ static char *json_array_string(json_t *val, unsigned int entry)
 
 static char *blank_merkle = "0000000000000000000000000000000000000000000000000000000000000000";
 
+#ifdef HAVE_LIBCURL
+static void decode_exit(struct pool *pool, char *cb)
+{
+	CURL *curl = curl_easy_init();
+	char *decreq, *s;
+	json_t *val;
+	int dummy;
+
+	if (!opt_btcd) {
+		applog(LOG_ERR, "No bitcoind specified, unable to decode coinbase.");
+		exit(1);
+	}
+	decreq = cgmalloc(strlen(cb) + 256);
+
+	sprintf(decreq, "{\"id\": 0, \"method\": \"decoderawtransaction\", \"params\": [\"%s\"]}\n",
+		cb);
+	val = json_rpc_call(curl, opt_btcd->rpc_url, opt_btcd->rpc_userpass, decreq,
+			    false, false, &dummy, opt_btcd, false);
+	free(decreq);
+	if (!val) {
+		applog(LOG_ERR, "Failed json_rpc_call to btcd %s", opt_btcd->rpc_url);
+		exit(1);
+	}
+	s = json_dumps(val, JSON_INDENT(4));
+	printf("Pool %s:\n%s\n", pool->rpc_url, s);
+	free(s);
+	exit(0);
+}
+#else
+static void decode_exit(struct pool __maybe_unused *pool, char __maybe_unused *b)
+{
+}
+#endif
+
 static bool parse_notify(struct pool *pool, json_t *val)
 {
 	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit,
@@ -2090,9 +2124,11 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	if (pool->n1_len)
 		cg_memcpy(pool->coinbase + cb1_len, pool->nonce1bin, pool->n1_len);
 	cg_memcpy(pool->coinbase + cb1_len + pool->n1_len + pool->n2size, cb2, cb2_len);
-	if (opt_debug) {
+	if (opt_debug || opt_decode) {
 		char *cb = bin2hex(pool->coinbase, pool->coinbase_len);
 
+		if (opt_decode)
+			decode_exit(pool, cb);
 		applog(LOG_DEBUG, "Pool %d coinbase %s", pool->pool_no, cb);
 		free(cb);
 	}
