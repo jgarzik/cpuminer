@@ -1689,7 +1689,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef HAVE_CURSES
 	OPT_WITHOUT_ARG("--decode",
 			opt_set_bool, &opt_decode,
-			"Decode 2nd pool coinbase transactions (1st must be bitcoind) and exit"),
+			"Decode 2nd pool stratum coinbase transactions (1st must be bitcoind) and exit"),
 #endif
 	OPT_WITHOUT_ARG("--disable-rejecting",
 			opt_set_bool, &opt_disable_pool,
@@ -10007,15 +10007,17 @@ int main(int argc, char *argv[])
 	for (i = 0; i < total_devices; ++i)
 		enable_device(devices[i]);
 
+	if (!opt_decode) {
 #ifdef USE_USBUTILS
-	if (!total_devices) {
-		applog(LOG_WARNING, "No devices detected!");
-		applog(LOG_WARNING, "Waiting for USB hotplug devices or press q to quit");
-	}
+		if (!total_devices) {
+			applog(LOG_WARNING, "No devices detected!");
+			applog(LOG_WARNING, "Waiting for USB hotplug devices or press q to quit");
+		}
 #else
-	if (!total_devices)
-		early_quit(1, "All devices disabled, cannot mine!");
+		if (!total_devices)
+			early_quit(1, "All devices disabled, cannot mine!");
 #endif
+	}
 
 	most_devices = total_devices;
 
