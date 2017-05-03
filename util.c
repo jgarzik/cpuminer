@@ -1974,7 +1974,7 @@ static void decode_exit(struct pool *pool, char *cb)
 	json_t *val;
 	int dummy;
 
-	if (!opt_btcd) {
+	if (!opt_btcd && !sleep(3) && !opt_btcd) {
 		applog(LOG_ERR, "No bitcoind specified, unable to decode coinbase.");
 		exit(1);
 	}
