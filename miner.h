@@ -571,6 +571,7 @@ struct thr_info {
 
 	bool	work_restart;
 	bool	work_update;
+	bool	clean_jobs;
 };
 
 struct string_elist {
@@ -981,6 +982,7 @@ struct pool;
 #define API_MCAST_ADDR "224.0.0.75"
 
 extern bool opt_work_update;
+extern bool opt_clean_jobs;
 extern bool opt_protocol;
 extern bool have_longpoll;
 extern char *opt_kernel_path;

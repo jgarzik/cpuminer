@@ -142,6 +142,7 @@ struct strategies strategies[] = {
 static char packagename[256];
 
 bool opt_work_update;
+bool opt_clean_jobs = false;
 bool opt_protocol;
 static struct benchfile_layout {
 	int length;
@@ -5046,6 +5047,18 @@ static void signal_work_update(void)
 	rd_unlock(&mining_thr_lock);
 }
 
+static void signal_clean_jobs(void)
+{
+	int i;
+
+	applog(LOG_NOTICE, "Job clean message received");
+
+	rd_lock(&mining_thr_lock);
+	for (i = 0; i < mining_threads; i++)
+		mining_thr[i]->clean_jobs = true;
+	rd_unlock(&mining_thr_lock);
+}
+
 static void set_curblock(const char *hexstr, const unsigned char *bedata)
 {
 	int ofs;
@@ -5161,6 +5174,7 @@ static bool test_work_current(struct work *work)
 	if (pool->swork.clean) {
 		pool->swork.clean = false;
 		work->longpoll = true;
+		opt_clean_jobs = true;
 	}
 	if (pool->current_height != height) {
 		pool->current_height = height;
@@ -10271,6 +10285,11 @@ begin_bench:
 			signal_work_update();
 
 		opt_work_update = false;
+
+		if (opt_clean_jobs) {
+			signal_clean_jobs();
+			opt_clean_jobs = false;
+		}
 
 		mutex_lock(stgd_lock);
 		ts = __total_staged();
