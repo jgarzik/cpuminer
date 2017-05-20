@@ -2007,6 +2007,9 @@ static void decode_exit(struct pool __maybe_unused *pool, char __maybe_unused *b
 
 static bool parse_notify(struct pool *pool, json_t *val)
 {
+	static int32_t th_clean_jobs;
+	static struct timeval last_notify;
+	struct timeval current;
 	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit,
 	     *ntime, header[260];
 	unsigned char *cb1 = NULL, *cb2 = NULL;
@@ -2159,8 +2162,36 @@ out_unlock:
 	if (pool == current_pool()) {
 		opt_work_update = true;
 #ifdef USE_AVALON7
-		if (opt_avalon7_ssplus_enable & pool->has_stratum & clean)
-			ssp_hasher_update_stratum(pool, true);
+		if (opt_avalon7_ssplus_enable & pool->has_stratum) {
+			/* -1:Ignore, 0:Accept, n:Accept after n seconds, n > 0 */
+			if (opt_force_clean_jobs == -1 && clean)
+				opt_clean_jobs = true;
+
+			if (!opt_force_clean_jobs)
+				opt_clean_jobs = true;
+
+			if (opt_force_clean_jobs > 0) {
+				if (clean)
+					opt_clean_jobs = true;
+				else {
+					if (!last_notify.tv_sec && !last_notify.tv_usec)
+						cgtime(&last_notify);
+					else {
+						cgtime(&current);
+						th_clean_jobs += (int32_t)ms_tdiff(&current, &last_notify);
+						cgtime(&last_notify);
+					}
+
+					if (th_clean_jobs >= opt_force_clean_jobs * 1000)
+						opt_clean_jobs = true;
+				}
+			}
+
+			if (opt_clean_jobs) {
+				ssp_hasher_update_stratum(pool, true);
+				th_clean_jobs = 0;
+			}
+		}
 #endif
 	}
 out:

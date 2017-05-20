@@ -465,6 +465,7 @@ static struct stratum_share *stratum_shares = NULL;
 
 char *opt_socks_proxy = NULL;
 int opt_suggest_diff;
+int opt_force_clean_jobs = 20;
 static const char def_conf[] = "cgminer.conf";
 static char *default_config;
 static bool config_loaded;
@@ -1981,6 +1982,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--worktime",
 			opt_set_bool, &opt_worktime,
 			"Display extra work time debug information"),
+	OPT_WITH_ARG("--force-clean-jobs",
+		     opt_set_intval, NULL, &opt_force_clean_jobs,
+		     "Force clean jobs to miners (default: 20)"),
 	OPT_ENDTABLE
 };
 
