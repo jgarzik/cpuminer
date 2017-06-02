@@ -38,6 +38,10 @@
 #define AVA7_DEFAULT_VOLTAGE_OFFSET	0
 #define AVA7_DEFAULT_VOLTAGE_OFFSET_MAX	1
 
+#define AVA7_DEFAULT_FACTORY_INFO_0_MIN	-15
+#define AVA7_DEFAULT_FACTORY_INFO_0	0
+#define AVA7_DEFAULT_FACTORY_INFO_0_MAX	15
+
 #define AVA7_DEFAULT_FREQUENCY_MIN	24 /* NOTE: It cann't support 0 */
 #define AVA7_DEFAULT_FREQUENCY_0	600
 #define AVA7_DEFAULT_FREQUENCY_1	636
@@ -120,6 +124,7 @@
 #define AVA7_P_SET_PLL	0x25
 #define AVA7_P_SET_SS	0x26
 #define AVA7_P_PAIRS	0x27
+#define AVA7_P_SET_FAC	0x28
 
 /* Have to send with I2C address */
 #define AVA7_P_POLLING	0x30
@@ -139,6 +144,7 @@
 #define AVA7_P_STATUS_LOG	0x4a
 #define AVA7_P_STATUS_ASIC	0x4b
 #define AVA7_P_STATUS_PVT	0x4c
+#define AVA7_P_STATUS_FAC	0x4d
 
 #define AVA7_MODULE_BROADCAST	0
 /* End of avalon7 protocol package type */
@@ -157,6 +163,8 @@
 
 #define AVA7_DEFAULT_DELTA_T	0
 #define AVA7_DEFAULT_DELTA_FREQ	100
+
+#define AVA7_DEFAULT_FACTORY_INFO_CNT	1
 
 #define AVA7_VIN_ADC_RATIO	(3.3 / 1024.0 * 27.15 / 7.15 * 100.0)
 
@@ -248,6 +256,8 @@ struct avalon7_info {
 	uint32_t get_pll[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_DEFAULT_PLL_CNT];
 	/* spd_pass(4B), spd_fail(4B), sum_failed(4B), sum_num(4B), sum_xor(4B), PLL(6 * 4B) */
 	uint32_t get_asic[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT][AVA7_DEFAULT_ASIC_MAX][11];
+
+	int8_t factory_info[AVA7_DEFAULT_FACTORY_INFO_CNT];
 
 	uint64_t local_works[AVA7_DEFAULT_MODULARS];
 	uint64_t local_works_i[AVA7_DEFAULT_MODULARS][AVA7_DEFAULT_MINER_CNT];
