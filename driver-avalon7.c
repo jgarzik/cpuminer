@@ -248,7 +248,7 @@ static uint32_t decode_voltage(struct avalon7_info *info, int modular_id, uint32
 
 static uint16_t decode_vin(struct avalon7_info *info, int modular_id, uint16_t volt)
 {
-	return (volt * info->vin_adc_ratio[modular_id] / 10);
+	return (volt * info->vin_adc_ratio[modular_id] / 1000);
 }
 
 static double decode_pvt_temp(uint16_t pvt_code)
