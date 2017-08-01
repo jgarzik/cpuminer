@@ -5457,8 +5457,9 @@ void write_config(FILE *fcfg)
 			}
 
 			if (opt->type & OPT_HASARG &&
-			    (((void *)opt->cb_arg == (void *)set_float_125_to_500) ||
-			     (void *)opt->cb_arg == (void *)set_float_100_to_250)) {
+			    ((void *)opt->cb_arg == (void *)set_float_125_to_500 ||
+			     (void *)opt->cb_arg == (void *)set_float_100_to_250 ||
+			     (void *)opt->cb_arg == (void *)set_float_100_to_500)) {
 				fprintf(fcfg, ",\n\"%s\" : \"%.1f\"", p+2, *(float *)opt->u.arg);
 				continue;
 			}
