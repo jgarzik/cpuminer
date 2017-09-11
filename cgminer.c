@@ -87,6 +87,10 @@ char *curly = ":D";
 #include "libssplus.h"
 #endif
 
+#ifdef USE_AVALON8
+#include "driver-avalon8.h"
+#endif
+
 #ifdef USE_AVALON_MINER
 #include "driver-avalon-miner.h"
 #endif
@@ -268,6 +272,13 @@ static char *opt_set_avalon7_voltage;
 static char *opt_set_avalon7_voltage_level;
 static char *opt_set_avalon7_voltage_offset;
 static char *opt_set_avalon7_freq;
+#endif
+#ifdef USE_AVALON8
+static char *opt_set_avalon8_fan;
+static char *opt_set_avalon8_voltage;
+static char *opt_set_avalon8_voltage_level;
+static char *opt_set_avalon8_voltage_offset;
+static char *opt_set_avalon8_freq;
 #endif
 #ifdef USE_AVALON_MINER
 static char *opt_set_avalonm_voltage;
@@ -834,6 +845,13 @@ static char *set_int_1_to_65535(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 1, 65535);
 }
+
+#ifdef USE_AVALON8
+static char *set_int_0_to_3(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 0, 3);
+}
+#endif
 
 static char *set_int_0_to_5(const char *arg, int *i)
 {
@@ -1480,6 +1498,62 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--avalon7-ssplus-enable",
 		     opt_set_bool, &opt_avalon7_ssplus_enable,
 		     "Enable avalon7 smart speed plus."),
+#endif
+#ifdef USE_AVALON8
+	OPT_WITH_CBARG("--avalon8-voltage",
+		     set_avalon8_voltage, NULL, &opt_set_avalon8_voltage,
+		     "Set Avalon8 default core voltage, in millivolts, step: 78"),
+	OPT_WITH_CBARG("--avalon8-voltage-level",
+		     set_avalon8_voltage_level, NULL, &opt_set_avalon8_voltage_level,
+		     "Set Avalon8 default level of core voltage, range:[0, 15], step: 1"),
+	OPT_WITH_CBARG("--avalon8-voltage-offset",
+		     set_avalon8_voltage_offset, NULL, &opt_set_avalon8_voltage_offset,
+		     "Set Avalon8 default offset of core voltage, range:[-2, 1], step: 1"),
+	OPT_WITH_CBARG("--avalon8-freq",
+		     set_avalon8_freq, NULL, &opt_set_avalon8_freq,
+		     "Set Avalon8 default frequency, range:[24, 1404], step: 12, example: 500"),
+	OPT_WITH_ARG("--avalon8-freq-sel",
+		     set_int_0_to_3, opt_show_intval, &opt_avalon8_freq_sel,
+		     "Set Avalon8 default frequency select, range:[0, 3], step: 1, example: 3"),
+	OPT_WITH_CBARG("--avalon8-fan",
+		     set_avalon8_fan, NULL, &opt_set_avalon8_fan,
+		     "Set Avalon8 target fan speed, range:[0, 100], step: 1, example: 0-100"),
+	OPT_WITH_ARG("--avalon8-temp",
+		     set_int_0_to_100, opt_show_intval, &opt_avalon8_temp_target,
+		     "Set Avalon8 target temperature, range:[0, 100]"),
+	OPT_WITH_ARG("--avalon8-polling-delay",
+		     set_int_1_to_65535, opt_show_intval, &opt_avalon8_polling_delay,
+		     "Set Avalon8 polling delay value (ms)"),
+	OPT_WITH_ARG("--avalon8-aucspeed",
+		     opt_set_intval, opt_show_intval, &opt_avalon8_aucspeed,
+		     "Set AUC3 IIC bus speed"),
+	OPT_WITH_ARG("--avalon8-aucxdelay",
+		     opt_set_intval, opt_show_intval, &opt_avalon8_aucxdelay,
+		     "Set AUC3 IIC xfer read delay, 4800 ~= 1ms"),
+	OPT_WITH_ARG("--avalon8-smart-speed",
+		     opt_set_intval, opt_show_intval, &opt_avalon8_smart_speed,
+		     "Set Avalon8 smart speed, range 0-1. 0 means Disable"),
+	OPT_WITH_ARG("--avalon8-th-pass",
+		     set_int_0_to_65535, opt_show_intval, &opt_avalon8_th_pass,
+		     "Set A3210 th pass value"),
+	OPT_WITH_ARG("--avalon8-th-fail",
+		     set_int_0_to_65535, opt_show_intval, &opt_avalon8_th_fail,
+		     "Set A3210 th fail value"),
+	OPT_WITH_ARG("--avalon8-th-init",
+		     set_int_0_to_65535, opt_show_intval, &opt_avalon8_th_init,
+		     "Set A3210 th init value"),
+	OPT_WITH_ARG("--avalon8-th-ms",
+		     set_int_0_to_65535, opt_show_intval, &opt_avalon8_th_ms,
+		     "Set A3210 th ms value"),
+	OPT_WITH_ARG("--avalon8-th-timeout",
+		     opt_set_uintval, opt_show_uintval, &opt_avalon8_th_timeout,
+		     "Set A3210 th timeout value"),
+	OPT_WITHOUT_ARG("--avalon8-iic-detect",
+		     opt_set_bool, &opt_avalon8_iic_detect,
+		     "Enable Avalon8 detect through iic controller"),
+	OPT_WITH_ARG("--avalon8-nonce-mask",
+		     set_int_24_to_32, opt_show_intval, &opt_avalon8_nonce_mask,
+		     "Set A3210 nonce mask, range 24-32."),
 #endif
 #ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",
@@ -2183,6 +2257,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_AVALON7
 		"avalon7 "
+#endif
+#ifdef USE_AVALON8
+		"avalon8 "
 #endif
 #ifdef USE_AVALON_MINER
 		"avalon miner"
@@ -7289,7 +7366,7 @@ void set_target(unsigned char *dest_target, double diff)
 	cg_memcpy(dest_target, target, 32);
 }
 
-#if defined (USE_AVALON2) || defined (USE_AVALON4) || defined (USE_AVALON7) || defined (USE_AVALON_MINER) || defined (USE_HASHRATIO)
+#if defined (USE_AVALON2) || defined (USE_AVALON4) || defined (USE_AVALON7) || defined (USE_AVALON8) || defined (USE_AVALON_MINER) || defined (USE_HASHRATIO)
 bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool,
 			 uint32_t nonce2, uint32_t nonce,  uint32_t ntime)
 {
