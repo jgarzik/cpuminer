@@ -2007,9 +2007,11 @@ static void decode_exit(struct pool __maybe_unused *pool, char __maybe_unused *b
 
 static bool parse_notify(struct pool *pool, json_t *val)
 {
+#ifdef USE_AVALON7
 	static int32_t th_clean_jobs;
 	static struct timeval last_notify;
 	struct timeval current;
+#endif
 	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit,
 	     *ntime, header[260];
 	unsigned char *cb1 = NULL, *cb2 = NULL;
