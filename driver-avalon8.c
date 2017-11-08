@@ -56,122 +56,19 @@ uint32_t opt_avalon8_nonce_mask = AVA8_DEFAULT_NONCE_MASK;
 
 uint32_t cpm_table[] =
 {
-	0x0173f813,
-	0x0175f813,
-	0x0163f813,
-	0x0164f813,
-	0x0165f813,
-	0x0166f813,
-	0x0153f813,
-	0x01547813,
-	0x0154f813,
-	0x01557813,
-	0x0155f813,
-	0x01567813,
-	0x0156f813,
-	0x01577813,
-	0x0143f813,
-	0x01443813,
-	0x01447813,
-	0x0144b813,
-	0x0144f813,
-	0x01453813,
-	0x01457813,
-	0x0145b813,
-	0x0145f813,
-	0x01463813,
-	0x01467813,
-	0x0146b813,
-	0x0146f813,
-	0x01473813,
-	0x01477813,
-	0x0147b813,
-	0x0133f813,
-	0x01341813,
-	0x01343813,
-	0x01345813,
-	0x01347813,
-	0x01349813,
-	0x0134b813,
-	0x0134d813,
-	0x0134f813,
-	0x01351813,
-	0x01353813,
-	0x01355813,
-	0x01357813,
-	0x01359813,
-	0x0135b813,
-	0x0135d813,
-	0x0135f813,
-	0x01361813,
-	0x01363813,
-	0x01365813,
-	0x01367813,
-	0x01369813,
-	0x0136b813,
-	0x0136d813,
-	0x0136f813,
-	0x01371813,
-	0x01373813,
-	0x01375813,
-	0x01377813,
-	0x01379813,
-	0x0137b813,
-	0x0123e813,
-	0x0123f813,
-	0x01240813,
-	0x01241813,
-	0x01242813,
-	0x01243813,
-	0x01244813,
-	0x01245813,
-	0x01246813,
-	0x01247813,
-	0x01248813,
-	0x01249813,
-	0x0124a813,
-	0x0124b813,
-	0x0124c813,
-	0x0124d813,
-	0x0124e813,
-	0x0124f813,
-	0x01250813,
-	0x01251813,
-	0x01252813,
-	0x01253813,
-	0x01254813,
-	0x01255813,
-	0x01256813,
-	0x01257813,
-	0x01258813,
-	0x01259813,
-	0x0125a813,
-	0x0125b813,
-	0x0125c813,
-	0x0125d813,
-	0x0125e813,
-	0x0125f813,
-	0x01260813,
-	0x01261813,
-	0x01262813,
-	0x01263813,
-	0x01264813,
-	0x01265813,
-	0x01266813,
-	0x01267813,
-	0x01268813,
-	0x01269813,
-	0x0126a813,
-	0x0126b813,
-	0x0126c813,
-	0x0126d813,
-	0x0126e813,
-	0x0126f813,
-	0x01270813,
-	0x01271813,
-	0x01272813,
-	0x01273813,
-	0x01274813,
+	0x008ffbe1,
+	0x009fffe1,
+	0x009fbfe1,
+	0x009da761,
+	0x009f9fe1,
+	0x009d9761,
+	0x00978de1,
+	0x009b8ee1,
+	0x009f8fe1,
+	0x00918461,
+	0x009384e1,
+	0x00958561,
+	0x009785e1
 };
 
 struct avalon8_dev_description avalon8_dev_table[] = {
@@ -188,7 +85,13 @@ struct avalon8_dev_description avalon8_dev_table[] = {
 
 static uint32_t api_get_cpm(uint32_t freq)
 {
-	return cpm_table[freq / 12 - 2];
+	uint8_t idx;
+
+	idx = freq / 100;
+	if (idx >= (sizeof(cpm_table) / sizeof(cpm_table[0]))
+		idx = sizeof(cpm_table) / sizeof(cpm_table[0] - 1;
+
+	return cpm_table[idx];
 }
 
 static uint32_t encode_voltage(uint32_t volt)
@@ -1647,13 +1550,6 @@ static void avalon8_set_freq(struct cgpu_info *avalon8, int addr, int miner_id, 
 	struct avalon8_pkg send_pkg;
 	uint32_t tmp, f;
 	uint8_t i;
-
-	send_pkg.idx = 0; 	
-	/*
-	* TODO: This is only for broadcast to all miners
-	* This should be support 4 miners
-	*/
-	send_pkg.cnt = info->miner_count[addr];
 
 	memset(send_pkg.data, 0, AVA8_P_DATA_LEN);
 	for (i = 0; i < AVA8_DEFAULT_PLL_CNT; i++) {
