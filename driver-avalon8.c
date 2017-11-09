@@ -53,6 +53,9 @@ uint32_t opt_avalon8_th_init = AVA8_DEFAULT_TH_INIT;
 uint32_t opt_avalon8_th_ms = AVA8_DEFAULT_TH_MS;
 uint32_t opt_avalon8_th_timeout = AVA8_DEFAULT_TH_TIMEOUT;
 uint32_t opt_avalon8_nonce_mask = AVA8_DEFAULT_NONCE_MASK;
+uint32_t opt_avalon8_mux_l2h = AVA8_DEFAULT_MUX_L2H;
+uint32_t opt_avalon8_mux_h2l = AVA8_DEFAULT_MUX_H2L;
+uint32_t opt_avalon8_h2ltime0_spd = AVA8_DEFAULT_H2LTIME0_SPD;
 
 uint32_t cpm_table[] =
 {
@@ -1637,6 +1640,24 @@ static void avalon8_set_ss_param(struct cgpu_info *avalon8, int addr)
 	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set th timeout %u",
 			avalon8->drv->name, avalon8->device_id, addr,
 			opt_avalon8_th_timeout);
+
+	tmp = be32toh(opt_avalon8_mux_l2h);
+	memcpy(send_pkg.data + 20, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set mux l2h %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_mux_l2h);
+
+	tmp = be32toh(opt_avalon8_mux_h2l);
+	memcpy(send_pkg.data + 24, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set mux h2l %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_mux_h2l);
+
+	tmp = be32toh(opt_avalon8_h2ltime0_spd);
+	memcpy(send_pkg.data + 28, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set h2ltime0 spd %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_h2ltime0_spd);
 
 	/* Package the data */
 	avalon8_init_pkg(&send_pkg, AVA8_P_SET_SS, 1, 1);

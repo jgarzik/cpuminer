@@ -1554,6 +1554,15 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalon8-nonce-mask",
 		     set_int_24_to_32, opt_show_intval, &opt_avalon8_nonce_mask,
 		     "Set A3210 nonce mask, range 24-32."),
+	OPT_WITH_ARG("--avalon8-mux-l2h",
+		     opt_set_intval, opt_show_intval, &opt_avalon8_mux_l2h,
+		     "Set Avalon8 mux l2h, range 0-2."),
+	OPT_WITH_ARG("--avalon8-mux-h2l",
+		     opt_set_intval, opt_show_intval, &opt_avalon8_mux_h2l,
+		     "Set Avalon8 mux h2l, range 0-1."),
+	OPT_WITH_ARG("--avalon8-h2ltime0-spd",
+		     opt_set_intval, opt_show_intval, &opt_avalon8_h2ltime0_spd,
+		     "Set Avalon8 h2ltime0 spd, range 0-7."),
 #endif
 #ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",
