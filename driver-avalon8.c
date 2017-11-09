@@ -1508,9 +1508,27 @@ static void avalon8_init_setting(struct cgpu_info *avalon8, int addr)
 	tmp = 1;
 	if (!opt_avalon8_smart_speed)
 	      tmp = 0;
-	tmp |= (0 << 1); /* Enable nonce check */
+	tmp |= (1 << 1); /* Enable nonce check */
 	send_pkg.data[8] = tmp & 0xff;
 	send_pkg.data[9] = opt_avalon8_nonce_mask & 0xff;
+
+	tmp = be32toh(opt_avalon8_mux_l2h);
+	memcpy(send_pkg.data + 10, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set mux l2h %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_mux_l2h);
+
+	tmp = be32toh(opt_avalon8_mux_h2l);
+	memcpy(send_pkg.data + 14, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set mux h2l %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_mux_h2l);
+
+	tmp = be32toh(opt_avalon8_h2ltime0_spd);
+	memcpy(send_pkg.data + 18, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set h2ltime0 spd %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_h2ltime0_spd);
 
 	/* Package the data */
 	avalon8_init_pkg(&send_pkg, AVA8_P_SET, 1, 1);
@@ -1573,6 +1591,7 @@ static void avalon8_set_freq(struct cgpu_info *avalon8, int addr, int miner_id, 
 	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set freq miner %x-%x",
 			avalon8->drv->name, avalon8->device_id, addr,
 			miner_id, be32toh(tmp));
+
 
 	/* Package the data */
 	avalon8_init_pkg(&send_pkg, AVA8_P_SET_PLL, miner_id + 1, info->miner_count[addr]);
@@ -1640,24 +1659,6 @@ static void avalon8_set_ss_param(struct cgpu_info *avalon8, int addr)
 	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set th timeout %u",
 			avalon8->drv->name, avalon8->device_id, addr,
 			opt_avalon8_th_timeout);
-
-	tmp = be32toh(opt_avalon8_mux_l2h);
-	memcpy(send_pkg.data + 20, &tmp, 4);
-	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set mux l2h %u",
-			avalon8->drv->name, avalon8->device_id, addr,
-			opt_avalon8_mux_l2h);
-
-	tmp = be32toh(opt_avalon8_mux_h2l);
-	memcpy(send_pkg.data + 24, &tmp, 4);
-	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set mux h2l %u",
-			avalon8->drv->name, avalon8->device_id, addr,
-			opt_avalon8_mux_h2l);
-
-	tmp = be32toh(opt_avalon8_h2ltime0_spd);
-	memcpy(send_pkg.data + 28, &tmp, 4);
-	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set h2ltime0 spd %u",
-			avalon8->drv->name, avalon8->device_id, addr,
-			opt_avalon8_h2ltime0_spd);
 
 	/* Package the data */
 	avalon8_init_pkg(&send_pkg, AVA8_P_SET_SS, 1, 1);
