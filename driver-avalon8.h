@@ -230,6 +230,7 @@ struct avalon8_info {
 	int fan_pct[AVA8_DEFAULT_MODULARS];
 	int fan_cpm[AVA8_DEFAULT_MODULARS];
 
+	/* min pos, min temp, max pos, max temp, avg temp */
 	int temp[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT][5];
 	int temp_mm[AVA8_DEFAULT_MODULARS];
 

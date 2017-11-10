@@ -158,13 +158,14 @@ static uint16_t decode_vin(struct avalon8_info *info, int modular_id, uint16_t v
 
 static double decode_pvt_temp(uint16_t pvt_code)
 {
-	double a4 = -1.1876E-11;
-	double a3 =  6.6675E-08;
-	double a2 = -1.7724E-04;
-	double a1 =  3.3691E-01;
-	double a0 = -6.0605E+01;
+	double g = 60.0;
+	double h = 200.0;
+	double cal5 = 4094.0;
+	double j = -0.1;
+	double fclkm = 6.25;
 
-	return a4 * pow(pvt_code, 4) + a3 * pow(pvt_code, 3) + a2 * pow(pvt_code, 2) + a1 * pow(pvt_code, 1) + a0;
+	/* Mode2 temperature equation */
+	return g + h * (pvt_code / cal5 - 0.5) + j * fclkm;
 }
 
 #define SERIESRESISTOR          10000
