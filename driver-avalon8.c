@@ -61,19 +61,53 @@ uint32_t opt_avalon8_h2ltime0_spd = AVA8_DEFAULT_H2LTIME0_SPD;
 
 uint32_t cpm_table[] =
 {
-	0x008ffbe1,
-	0x009fffe1,
-	0x009fbfe1,
-	0x009da761,
-	0x009f9fe1,
-	0x009d9761,
-	0x00978de1,
-	0x009b8ee1,
-	0x009f8fe1,
-	0x00918461,
-	0x009384e1,
-	0x00958561,
-	0x009785e1
+	0x8ffbe1,
+	0x97fde1,
+	0x9fffe1,
+	0x9ddf61,
+	0x9dcf61,
+	0x9f47c1,
+	0x9fbfe1,
+	0x9f37c1,
+	0x9daf61,
+	0x9b26c1,
+	0x9da761,
+	0x999e61,
+	0x9b9ee1,
+	0x9d9f61,
+	0x9f9fe1,
+	0x991641,
+	0x9a96a1,
+	0x9c1701,
+	0x9d9761,
+	0x9f17c1,
+	0x958d61,
+	0x968da1,
+	0x978de1,
+	0x988e21,
+	0x998e61,
+	0x9a8ea1,
+	0x9b8ee1,
+	0x9c8f21,
+	0x9d8f61,
+	0x9e8fa1,
+	0x9f8fe1,
+	0x900401,
+	0x908421,
+	0x910441,
+	0x918461,
+	0x920481,
+	0x9284a1,
+	0x9304c1,
+	0x9384e1,
+	0x940501,
+	0x948521,
+	0x950541,
+	0x958561,
+	0x960581,
+	0x9685a1,
+	0x9705c1,
+	0x9785e1
 };
 
 struct avalon8_dev_description avalon8_dev_table[] = {
@@ -90,13 +124,7 @@ struct avalon8_dev_description avalon8_dev_table[] = {
 
 static uint32_t api_get_cpm(uint32_t freq)
 {
-	uint8_t idx;
-
-	idx = freq / 100;
-	if (idx >= (sizeof(cpm_table) / sizeof(cpm_table[0])))
-		idx = sizeof(cpm_table) / sizeof(cpm_table[0]) - 1;
-
-	return cpm_table[idx];
+	return cpm_table[freq / 25 - 2];
 }
 
 static uint32_t encode_voltage(uint32_t volt)
