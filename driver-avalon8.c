@@ -52,7 +52,9 @@ uint32_t opt_avalon8_th_fail = AVA8_DEFAULT_TH_FAIL;
 uint32_t opt_avalon8_th_init = AVA8_DEFAULT_TH_INIT;
 uint32_t opt_avalon8_th_ms = AVA8_DEFAULT_TH_MS;
 uint32_t opt_avalon8_th_timeout = AVA8_DEFAULT_TH_TIMEOUT;
+uint32_t opt_avalon8_th_add = AVA8_DEFAULT_TH_ADD;
 uint32_t opt_avalon8_nonce_mask = AVA8_DEFAULT_NONCE_MASK;
+uint32_t opt_avalon8_nonce_check = AVA8_DEFAULT_NONCE_CHECK;
 uint32_t opt_avalon8_mux_l2h = AVA8_DEFAULT_MUX_L2H;
 uint32_t opt_avalon8_mux_h2l = AVA8_DEFAULT_MUX_H2L;
 uint32_t opt_avalon8_h2ltime0_spd = AVA8_DEFAULT_H2LTIME0_SPD;
@@ -1508,7 +1510,7 @@ static void avalon8_init_setting(struct cgpu_info *avalon8, int addr)
 	tmp = 1;
 	if (!opt_avalon8_smart_speed)
 	      tmp = 0;
-	tmp |= (1 << 1); /* Enable nonce check */
+	tmp |= (opt_avalon8_nonce_check << 1);
 	send_pkg.data[8] = tmp & 0xff;
 	send_pkg.data[9] = opt_avalon8_nonce_mask & 0xff;
 
@@ -1659,6 +1661,12 @@ static void avalon8_set_ss_param(struct cgpu_info *avalon8, int addr)
 	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set th timeout %u",
 			avalon8->drv->name, avalon8->device_id, addr,
 			opt_avalon8_th_timeout);
+
+	tmp = be32toh(opt_avalon8_th_add);
+	memcpy(send_pkg.data + 20, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set th add %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_th_add);
 
 	/* Package the data */
 	avalon8_init_pkg(&send_pkg, AVA8_P_SET_SS, 1, 1);

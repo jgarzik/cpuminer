@@ -847,9 +847,14 @@ static char *set_int_1_to_65535(const char *arg, int *i)
 }
 
 #ifdef USE_AVALON8
-static char *set_int_0_to_3(const char *arg, int *i)
+static char *set_int_0_to_1(const char *arg, int *i)
 {
-	return set_int_range(arg, i, 0, 3);
+	return set_int_range(arg, i, 0, 1);
+}
+
+static char *set_int_0_to_7(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 0, 7);
 }
 #endif
 
@@ -1513,8 +1518,8 @@ static struct opt_table opt_config_table[] = {
 		     set_avalon8_freq, NULL, &opt_set_avalon8_freq,
 		     "Set Avalon8 default frequency, range:[24, 1404], step: 12, example: 500"),
 	OPT_WITH_ARG("--avalon8-freq-sel",
-		     set_int_0_to_3, opt_show_intval, &opt_avalon8_freq_sel,
-		     "Set Avalon8 default frequency select, range:[0, 3], step: 1, example: 3"),
+		     set_int_0_to_4, opt_show_intval, &opt_avalon8_freq_sel,
+		     "Set Avalon8 default frequency select, range:[0, 4], step: 1, example: 3"),
 	OPT_WITH_CBARG("--avalon8-fan",
 		     set_avalon8_fan, NULL, &opt_set_avalon8_fan,
 		     "Set Avalon8 target fan speed, range:[0, 100], step: 1, example: 0-100"),
@@ -1548,20 +1553,26 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalon8-th-timeout",
 		     opt_set_uintval, opt_show_uintval, &opt_avalon8_th_timeout,
 		     "Set A3210 th timeout value"),
+	OPT_WITH_ARG("--avalon8-th-add",
+		     set_int_0_to_1, opt_show_intval, &opt_avalon8_th_add,
+		     "Set A3210 th add value"),
 	OPT_WITHOUT_ARG("--avalon8-iic-detect",
 		     opt_set_bool, &opt_avalon8_iic_detect,
 		     "Enable Avalon8 detect through iic controller"),
 	OPT_WITH_ARG("--avalon8-nonce-mask",
 		     set_int_24_to_32, opt_show_intval, &opt_avalon8_nonce_mask,
 		     "Set A3210 nonce mask, range 24-32."),
+	OPT_WITH_ARG("--avalon8-nonce-check",
+		     set_int_0_to_1, opt_show_intval, &opt_avalon8_nonce_check,
+		     "Set A3210 nonce check, range 0-1."),
 	OPT_WITH_ARG("--avalon8-mux-l2h",
-		     opt_set_intval, opt_show_intval, &opt_avalon8_mux_l2h,
+		     set_int_0_to_2, opt_show_intval, &opt_avalon8_mux_l2h,
 		     "Set Avalon8 mux l2h, range 0-2."),
 	OPT_WITH_ARG("--avalon8-mux-h2l",
-		     opt_set_intval, opt_show_intval, &opt_avalon8_mux_h2l,
+		     set_int_0_to_1, opt_show_intval, &opt_avalon8_mux_h2l,
 		     "Set Avalon8 mux h2l, range 0-1."),
 	OPT_WITH_ARG("--avalon8-h2ltime0-spd",
-		     opt_set_intval, opt_show_intval, &opt_avalon8_h2ltime0_spd,
+		     set_int_0_to_7, opt_show_intval, &opt_avalon8_h2ltime0_spd,
 		     "Set Avalon8 h2ltime0 spd, range 0-7."),
 #endif
 #ifdef USE_AVALON_MINER
