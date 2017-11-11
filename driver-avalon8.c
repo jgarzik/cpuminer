@@ -168,6 +168,20 @@ static double decode_pvt_temp(uint16_t pvt_code)
 	return g + h * (pvt_code / cal5 - 0.5) + j * fclkm;
 }
 
+static uint32_t decode_pvt_volt(uint16_t volt)
+{
+	double vref = 1.20;
+	double r = 16384.0; /* 2 ** 14 */
+	double c;
+
+	c = vref / 5.0 * (6 * (volt - 0.5) / r - 1.0);
+
+	if (c < 0)
+		c = 0;
+
+	return c * 1000;
+}
+
 #define SERIESRESISTOR          10000
 #define THERMISTORNOMINAL       10000
 #define BCOEFFICIENT            3500
@@ -617,22 +631,24 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 		break;
 	case AVA8_P_STATUS_PVT:
 		applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_PVT", avalon8->drv->name, avalon8->device_id, modular_id);
-		for (i = 0; i < info->miner_count[modular_id]; i++) {
-			memcpy(&tmp, ar->data + i * 8, 4);
-			tmp = be32toh(tmp);
-			info->temp[modular_id][i][0] = (tmp >> 24) & 0xff;
-			info->temp[modular_id][i][1] = (tmp >> 16) & 0xff;
-			info->temp[modular_id][i][2] = tmp & 0xffff;
+		{
+			uint16_t pvt_tmp;
 
-			memcpy(&tmp, ar->data + (i + 1) * 8 - 4, 4);
-			tmp = be32toh(tmp);
-			info->temp[modular_id][i][3] = (tmp >> 16) & 0xffff;
-			info->temp[modular_id][i][4] = tmp & 0xffff;
+			if (!info->asic_count[modular_id])
+				break;
 
-			/* Update the pvt code to real temperature */
-			info->temp[modular_id][i][2] = (int)decode_pvt_temp((uint16_t)info->temp[modular_id][i][2]);
-			info->temp[modular_id][i][3] = (int)decode_pvt_temp((uint16_t)info->temp[modular_id][i][3]);
-			info->temp[modular_id][i][4] = (int)decode_pvt_temp((uint16_t)info->temp[modular_id][i][4]);
+			miner = ar->idx / info->asic_count[modular_id];
+			chip_id = ar->idx % info->asic_count[modular_id];
+
+			memcpy(&pvt_tmp, ar->data, 2);
+			pvt_tmp = be16toh(pvt_tmp);
+			info->temp[modular_id][miner][chip_id] = decode_pvt_temp(pvt_tmp);
+
+			for (i = 0; i < AVA8_DEFAULT_CORE_VOLT_CNT; i++) {
+				memcpy(&pvt_tmp, ar->data + 2 + 2 * i, 2);
+				pvt_tmp = be16toh(pvt_tmp);
+				info->core_volt[modular_id][miner][chip_id][i] = decode_pvt_volt(pvt_tmp);
+			}
 		}
 		break;
 	case AVA8_P_STATUS_FAC:
@@ -1930,7 +1946,7 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 {
 	struct api_data *root = NULL;
 	struct avalon8_info *info = avalon8->device_data;
-	int i, j, k;
+	int i, j, k, m;
 	char buf[256];
 	char *statbuf = NULL;
 	struct timeval current;
@@ -2098,16 +2114,27 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 
 		strcat(statbuf, " PVT_T[");
 		for (j = 0; j < info->miner_count[i]; j++) {
-			sprintf(buf, "%d-%d/%d-%d/%d ",
-				info->temp[i][j][0],
-				info->temp[i][j][2],
-				info->temp[i][j][1],
-				info->temp[i][j][3],
-				info->temp[i][j][4]);
-			strcat(statbuf, buf);
+			for (k = 0; k < info->asic_count[i]; k++) {
+				sprintf(buf, "%d ", info->temp[i][j][k]);
+				strcat(statbuf, buf);
+			}
 		}
 		statbuf[strlen(statbuf) - 1] = ']';
 		statbuf[strlen(statbuf)] = '\0';
+
+		for (j = 0; j < info->miner_count[i]; j++) {
+			for (k = 0; k < info->asic_count[i]; k++) {
+				sprintf(buf, " PVT_V%d_%d[", j, k);
+				strcat(statbuf, buf);
+				for (m = 0; m < AVA8_DEFAULT_CORE_VOLT_CNT; m++) {
+					sprintf(buf, "%d ", info->core_volt[i][j][k][m]);
+					strcat(statbuf, buf);
+				}
+
+				statbuf[strlen(statbuf) - 1] = ']';
+				statbuf[strlen(statbuf)] = '\0';
+			}
+		}
 
 		sprintf(buf, "MM ID%d", i);
 		root = api_add_string(root, buf, statbuf, true);
