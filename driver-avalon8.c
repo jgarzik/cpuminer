@@ -137,7 +137,7 @@ static uint32_t encode_voltage(uint32_t volt)
 	if (volt < AVA8_DEFAULT_VOLTAGE_MIN)
 	      volt = AVA8_DEFAULT_VOLTAGE_MIN;
 
-	return 0x60 - ((volt - AVA8_DEFAULT_VOLTAGE_MIN) / AVA8_DEFAULT_VOLTAGE_STEP);
+	return 0x8000 | ((volt - AVA8_DEFAULT_VOLTAGE_MIN) / AVA8_DEFAULT_VOLTAGE_STEP);
 }
 
 static uint32_t convert_voltage_level(uint32_t level)
@@ -1598,7 +1598,8 @@ static void avalon8_set_voltage(struct cgpu_info *avalon8, int addr, unsigned in
 
 	/* NOTE: miner_count should <= 8 */
 	for (i = 0; i < info->miner_count[addr]; i++) {
-		tmp = be32toh(encode_voltage(voltage[i]));
+		tmp = be32toh(encode_voltage(voltage[i] +
+				opt_avalon8_voltage_offset * AVA8_DEFAULT_VOLTAGE_STEP));
 		memcpy(send_pkg.data + i * 4, &tmp, 4);
 	}
 	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set voltage miner %d, (%d-%d)",
