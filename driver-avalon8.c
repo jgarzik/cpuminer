@@ -116,8 +116,8 @@ struct avalon8_dev_description avalon8_dev_table[] = {
 	{
 		"821",
 		821,
-		1,
-		2,
+		4,
+		24,
 		AVA8_MM821_VIN_ADC_RATIO,
 		AVA8_MM821_VOUT_ADC_RATIO,
 		4500,
@@ -2103,6 +2103,32 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 				strcat(statbuf, buf);
 			}
 			statbuf[strlen(statbuf) - 1] = ']';
+
+			for (j = 0; j < info->miner_count[i]; j++) {
+				sprintf(buf, " PVT_T%d[", j);
+				strcat(statbuf, buf);
+				for (k = 0; k < info->asic_count[i]; k++) {
+					sprintf(buf, "%d ", info->temp[i][j][k]);
+					strcat(statbuf, buf);
+				}
+
+				statbuf[strlen(statbuf) - 1] = ']';
+				statbuf[strlen(statbuf)] = '\0';
+			}
+
+			for (j = 0; j < info->miner_count[i]; j++) {
+				for (k = 0; k < info->asic_count[i]; k++) {
+					sprintf(buf, " PVT_V%d_%d[", j, k);
+					strcat(statbuf, buf);
+					for (m = 0; m < AVA8_DEFAULT_CORE_VOLT_CNT; m++) {
+						sprintf(buf, "%d ", info->core_volt[i][j][k][m]);
+						strcat(statbuf, buf);
+					}
+
+					statbuf[strlen(statbuf) - 1] = ']';
+					statbuf[strlen(statbuf)] = '\0';
+				}
+			}
 		}
 
 		sprintf(buf, " FM[%d]", info->freq_mode[i]);
@@ -2114,30 +2140,6 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 			strcat(statbuf, buf);
 		}
 		statbuf[strlen(statbuf) - 1] = ']';
-
-		strcat(statbuf, " PVT_T[");
-		for (j = 0; j < info->miner_count[i]; j++) {
-			for (k = 0; k < info->asic_count[i]; k++) {
-				sprintf(buf, "%d ", info->temp[i][j][k]);
-				strcat(statbuf, buf);
-			}
-		}
-		statbuf[strlen(statbuf) - 1] = ']';
-		statbuf[strlen(statbuf)] = '\0';
-
-		for (j = 0; j < info->miner_count[i]; j++) {
-			for (k = 0; k < info->asic_count[i]; k++) {
-				sprintf(buf, " PVT_V%d_%d[", j, k);
-				strcat(statbuf, buf);
-				for (m = 0; m < AVA8_DEFAULT_CORE_VOLT_CNT; m++) {
-					sprintf(buf, "%d ", info->core_volt[i][j][k][m]);
-					strcat(statbuf, buf);
-				}
-
-				statbuf[strlen(statbuf) - 1] = ']';
-				statbuf[strlen(statbuf)] = '\0';
-			}
-		}
 
 		sprintf(buf, "MM ID%d", i);
 		root = api_add_string(root, buf, statbuf, true);
