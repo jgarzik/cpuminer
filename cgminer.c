@@ -1516,7 +1516,7 @@ static struct opt_table opt_config_table[] = {
 		     "Set Avalon8 default offset of core voltage, range:[-2, 1], step: 1"),
 	OPT_WITH_CBARG("--avalon8-freq",
 		     set_avalon8_freq, NULL, &opt_set_avalon8_freq,
-		     "Set Avalon8 default frequency, range:[24, 1404], step: 12, example: 500"),
+		     "Set Avalon8 default frequency, range:[25, 1200], step: 25, example: 800"),
 	OPT_WITH_ARG("--avalon8-freq-sel",
 		     set_int_0_to_4, opt_show_intval, &opt_avalon8_freq_sel,
 		     "Set Avalon8 default frequency select, range:[0, 4], step: 1, example: 3"),
