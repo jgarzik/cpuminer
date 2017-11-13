@@ -381,12 +381,14 @@ static int job_idcmp(uint8_t *job_id, char *pool_job_id)
 
 static inline int get_temp_max(struct avalon8_info *info, int addr)
 {
-	int i;
+	int i, j;
 	int max = -273;
 
 	for (i = 0; i < info->miner_count[addr]; i++) {
-		if (info->temp[addr][i][3] > max)
-			max = info->temp[addr][i][3];
+		for (j = 0; j < info->asic_count[addr]; j++) {
+			if (info->temp[addr][i][j] > max)
+				max = info->temp[addr][i][j];
+		}
 	}
 
 	if (max < info->temp_mm[addr])
