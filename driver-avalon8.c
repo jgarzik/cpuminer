@@ -61,7 +61,7 @@ uint32_t opt_avalon8_h2ltime0_spd = AVA8_DEFAULT_H2LTIME0_SPD;
 
 uint32_t cpm_table[] =
 {
-	0x04000000,
+	0x04400000,
 	0x04000000,
 	0x008ffbe1,
 	0x0097fde1,
@@ -266,7 +266,7 @@ char *set_avalon8_freq(char *arg)
 			/* last value */
 			if (*data) {
 				val[i] = atoi(data);
-				if (val[i] < AVA8_DEFAULT_FREQUENCY_MIN || val[i] > AVA8_DEFAULT_FREQUENCY_MAX)
+				if (val[i] > AVA8_DEFAULT_FREQUENCY_MAX)
 					return "Invalid value passed to avalon8-freq";
 			}
 			break;
@@ -274,17 +274,14 @@ char *set_avalon8_freq(char *arg)
 
 		if (*data) {
 			val[i] = atoi(data);
-			if (val[i] < AVA8_DEFAULT_FREQUENCY_MIN || val[i] > AVA8_DEFAULT_FREQUENCY_MAX)
+			if (val[i] > AVA8_DEFAULT_FREQUENCY_MAX)
 				return "Invalid value passed to avalon8-freq";
 		}
 		data = colon;
 	}
 
-	for (i = 0; i < AVA8_DEFAULT_PLL_CNT; i++) {
-		if (!val[i] && i)
-			val[i] = val[i - 1];
+	for (i = 0; i < AVA8_DEFAULT_PLL_CNT; i++)
 		opt_avalon8_freq[i] = val[i];
-	}
 
 	return NULL;
 }
@@ -1633,6 +1630,8 @@ static void avalon8_set_freq(struct cgpu_info *avalon8, int addr, int miner_id, 
 	for (i = 1; i < AVA8_DEFAULT_PLL_CNT; i++)
 		f = f > freq[i] ? f : freq[i];
 
+	f = f ? f : 1;
+
 	tmp = ((AVA8_ASIC_TIMEOUT_CONST / f) * AVA8_DEFAULT_NTIME_OFFSET * 5 / 100);
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + AVA8_DEFAULT_PLL_CNT * 4, &tmp, 4);
@@ -1643,7 +1642,6 @@ static void avalon8_set_freq(struct cgpu_info *avalon8, int addr, int miner_id, 
 	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set freq miner %x-%x",
 			avalon8->drv->name, avalon8->device_id, addr,
 			miner_id, be32toh(tmp));
-
 
 	/* Package the data */
 	avalon8_init_pkg(&send_pkg, AVA8_P_SET_PLL, miner_id + 1, info->miner_count[addr]);
@@ -2248,10 +2246,8 @@ char *set_avalon8_device_freq(struct cgpu_info *avalon8, char *arg)
 		return NULL;
 
 	sscanf(arg, "%d-%d-%d", &val, &addr, &miner_id);
-	if (!val)
-		val = AVA8_DEFAULT_FREQUENCY_MIN;
 
-	if (val < AVA8_DEFAULT_FREQUENCY_MIN || val > AVA8_DEFAULT_FREQUENCY_MAX)
+	if (val > AVA8_DEFAULT_FREQUENCY_MAX)
 		return "Invalid value passed to set_avalon8_device_freq";
 
 	if (addr >= AVA8_DEFAULT_MODULARS) {
