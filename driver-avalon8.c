@@ -58,6 +58,7 @@ uint32_t opt_avalon8_nonce_check = AVA8_DEFAULT_NONCE_CHECK;
 uint32_t opt_avalon8_mux_l2h = AVA8_DEFAULT_MUX_L2H;
 uint32_t opt_avalon8_mux_h2l = AVA8_DEFAULT_MUX_H2L;
 uint32_t opt_avalon8_h2ltime0_spd = AVA8_DEFAULT_H2LTIME0_SPD;
+uint32_t opt_avalon8_roll_enable = AVA8_DEFAULT_ROLL_ENABLE;
 
 uint32_t cpm_table[] =
 {
@@ -1552,11 +1553,13 @@ static void avalon8_init_setting(struct cgpu_info *avalon8, int addr)
 	 * set flags:
 	 * 0: ss switch
 	 * 1: nonce check
+	 * 2: roll enable
 	 */
 	tmp = 1;
 	if (!opt_avalon8_smart_speed)
 	      tmp = 0;
 	tmp |= (opt_avalon8_nonce_check << 1);
+	tmp |= (opt_avalon8_roll_enable << 2);
 	send_pkg.data[8] = tmp & 0xff;
 	send_pkg.data[9] = opt_avalon8_nonce_mask & 0xff;
 

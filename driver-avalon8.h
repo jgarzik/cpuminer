@@ -75,6 +75,7 @@
 #define AVA8_DEFAULT_MUX_L2H	0
 #define AVA8_DEFAULT_MUX_H2L	1
 #define AVA8_DEFAULT_H2LTIME0_SPD	3
+#define AVA8_DEFAULT_ROLL_ENABLE	1
 
 #define AVA8_DEFAULT_IIC_DETECT	false
 
@@ -318,5 +319,6 @@ extern uint32_t opt_avalon8_nonce_check;
 extern uint32_t opt_avalon8_mux_l2h;
 extern uint32_t opt_avalon8_mux_h2l;
 extern uint32_t opt_avalon8_h2ltime0_spd;
+extern uint32_t opt_avalon8_roll_enable;
 #endif /* USE_AVALON8 */
 #endif	/* _AVALON8_H_ */
