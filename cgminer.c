@@ -275,9 +275,8 @@ static char *opt_set_avalon7_freq;
 #endif
 #ifdef USE_AVALON8
 static char *opt_set_avalon8_fan;
-static char *opt_set_avalon8_voltage;
 static char *opt_set_avalon8_voltage_level;
-static char *opt_set_avalon8_voltage_offset;
+static char *opt_set_avalon8_voltage_level_offset;
 static char *opt_set_avalon8_freq;
 #endif
 #ifdef USE_AVALON_MINER
@@ -1505,15 +1504,12 @@ static struct opt_table opt_config_table[] = {
 		     "Enable avalon7 smart speed plus."),
 #endif
 #ifdef USE_AVALON8
-	OPT_WITH_CBARG("--avalon8-voltage",
-		     set_avalon8_voltage, NULL, &opt_set_avalon8_voltage,
-		     "Set Avalon8 default core voltage, in millivolts, step: 78"),
 	OPT_WITH_CBARG("--avalon8-voltage-level",
 		     set_avalon8_voltage_level, NULL, &opt_set_avalon8_voltage_level,
 		     "Set Avalon8 default level of core voltage, range:[0, 15], step: 1"),
-	OPT_WITH_CBARG("--avalon8-voltage-offset",
-		     set_avalon8_voltage_offset, NULL, &opt_set_avalon8_voltage_offset,
-		     "Set Avalon8 default offset of core voltage, range:[-2, 1], step: 1"),
+	OPT_WITH_CBARG("--avalon8-voltage-level-offset",
+		     set_avalon8_voltage_level_offset, NULL, &opt_set_avalon8_voltage_level_offset,
+		     "Set Avalon8 default offset of core voltage level, range:[-2, 1], step: 1"),
 	OPT_WITH_CBARG("--avalon8-freq",
 		     set_avalon8_freq, NULL, &opt_set_avalon8_freq,
 		     "Set Avalon8 default frequency, range:[25, 1200], step: 25, example: 800"),

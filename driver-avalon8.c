@@ -24,8 +24,8 @@ int opt_avalon8_temp_target = AVA8_DEFAULT_TEMP_TARGET;
 int opt_avalon8_fan_min = AVA8_DEFAULT_FAN_MIN;
 int opt_avalon8_fan_max = AVA8_DEFAULT_FAN_MAX;
 
-int opt_avalon8_voltage = AVA8_INVALID_VOLTAGE;
-int opt_avalon8_voltage_offset = AVA8_DEFAULT_VOLTAGE_OFFSET;
+int opt_avalon8_voltage_level = AVA8_INVALID_VOLTAGE_LEVEL;
+int opt_avalon8_voltage_level_offset = AVA8_DEFAULT_VOLTAGE_LEVEL_OFFSET;
 
 int opt_avalon8_freq[AVA8_DEFAULT_PLL_CNT] = {AVA8_DEFAULT_FREQUENCY_0,
 					      AVA8_DEFAULT_FREQUENCY_1,
@@ -130,23 +130,17 @@ static uint32_t api_get_cpm(uint32_t freq)
 	return cpm_table[freq / 25];
 }
 
-static uint32_t encode_voltage(uint32_t volt)
+static uint32_t encode_voltage(int volt_level)
 {
-	if (volt > AVA8_DEFAULT_VOLTAGE_MAX)
-	      volt = AVA8_DEFAULT_VOLTAGE_MAX;
+	if (volt_level > AVA8_DEFAULT_VOLTAGE_LEVEL_MAX)
+	      volt_level = AVA8_DEFAULT_VOLTAGE_LEVEL_MAX;
+	else if (volt_level < AVA8_DEFAULT_VOLTAGE_LEVEL_MIN)
+	      volt_level = AVA8_DEFAULT_VOLTAGE_LEVEL_MIN;
 
-	if (volt < AVA8_DEFAULT_VOLTAGE_MIN)
-	      volt = AVA8_DEFAULT_VOLTAGE_MIN;
+	if (volt_level < 0)
+		return 0x8080 | (-volt_level);
 
-	return 0x8000 | ((volt - AVA8_DEFAULT_VOLTAGE_MIN) / AVA8_DEFAULT_VOLTAGE_STEP);
-}
-
-static uint32_t convert_voltage_level(uint32_t level)
-{
-	if (level > AVA8_DEFAULT_VOLTAGE_LEVEL_MAX)
-             level = AVA8_DEFAULT_VOLTAGE_LEVEL_MAX;
-
-       return AVA8_DEFAULT_VOLTAGE_MIN + level * AVA8_DEFAULT_VOLTAGE_STEP;
+	return 0x8000 | volt_level;
 }
 
 static uint32_t decode_voltage(struct avalon8_info *info, int modular_id, uint32_t volt)
@@ -287,22 +281,6 @@ char *set_avalon8_freq(char *arg)
 	return NULL;
 }
 
-char *set_avalon8_voltage(char *arg)
-{
-	int val, ret;
-
-	ret = sscanf(arg, "%d", &val);
-	if (ret < 1)
-		return "No value passed to avalon8-voltage";
-
-	if (val < AVA8_DEFAULT_VOLTAGE_MIN || val > AVA8_DEFAULT_VOLTAGE_MAX)
-		return "Invalid value passed to avalon8-voltage";
-
-	opt_avalon8_voltage = val;
-
-	return NULL;
-}
-
 char *set_avalon8_voltage_level(char *arg)
 {
        int val, ret;
@@ -314,23 +292,23 @@ char *set_avalon8_voltage_level(char *arg)
        if (val < AVA8_DEFAULT_VOLTAGE_LEVEL_MIN || val > AVA8_DEFAULT_VOLTAGE_LEVEL_MAX)
                return "Invalid value passed to avalon8-voltage-level";
 
-       opt_avalon8_voltage = convert_voltage_level(val);
+       opt_avalon8_voltage_level = val;
 
        return NULL;
 }
 
-char *set_avalon8_voltage_offset(char *arg)
+char *set_avalon8_voltage_level_offset(char *arg)
 {
        int val, ret;
 
        ret = sscanf(arg, "%d", &val);
        if (ret < 1)
-               return "No value passed to avalon8-voltage-offset";
+               return "No value passed to avalon8-voltage-level-offset";
 
-       if (val < AVA8_DEFAULT_VOLTAGE_OFFSET_MIN || val > AVA8_DEFAULT_VOLTAGE_OFFSET_MAX)
-               return "Invalid value passed to avalon8-voltage-offset";
+       if (val < AVA8_DEFAULT_VOLTAGE_LEVEL_OFFSET_MIN || val > AVA8_DEFAULT_VOLTAGE_LEVEL_OFFSET_MAX)
+               return "Invalid value passed to avalon8-voltage-level-offset";
 
-       opt_avalon8_voltage_offset = val;
+       opt_avalon8_voltage_level_offset = val;
 
        return NULL;
 }
@@ -1357,10 +1335,10 @@ static void detect_modules(struct cgpu_info *avalon8)
 		info->temp_target[i] = opt_avalon8_temp_target;
 		info->fan_pct[i] = opt_avalon8_fan_min;
 		for (j = 0; j < info->miner_count[i]; j++) {
-			if (opt_avalon8_voltage == AVA8_INVALID_VOLTAGE)
-				info->set_voltage[i][j] = avalon8_dev_table[dev_index].set_voltage;
+			if (opt_avalon8_voltage_level == AVA8_INVALID_VOLTAGE_LEVEL)
+				info->set_voltage_level[i][j] = avalon8_dev_table[dev_index].set_voltage_level;
 			else
-				info->set_voltage[i][j] = opt_avalon8_voltage;
+				info->set_voltage_level[i][j] = opt_avalon8_voltage_level;
 			info->get_voltage[i][j] = 0;
 			info->get_vin[i][j] = 0;
 
@@ -1589,7 +1567,7 @@ static void avalon8_init_setting(struct cgpu_info *avalon8, int addr)
 		avalon8_iic_xfer_pkg(avalon8, addr, &send_pkg, NULL);
 }
 
-static void avalon8_set_voltage(struct cgpu_info *avalon8, int addr, unsigned int voltage[])
+static void avalon8_set_voltage_level(struct cgpu_info *avalon8, int addr, unsigned int voltage[])
 {
 	struct avalon8_info *info = avalon8->device_data;
 	struct avalon8_pkg send_pkg;
@@ -1601,7 +1579,7 @@ static void avalon8_set_voltage(struct cgpu_info *avalon8, int addr, unsigned in
 	/* NOTE: miner_count should <= 8 */
 	for (i = 0; i < info->miner_count[addr]; i++) {
 		tmp = be32toh(encode_voltage(voltage[i] +
-				opt_avalon8_voltage_offset * AVA8_DEFAULT_VOLTAGE_STEP));
+				opt_avalon8_voltage_level_offset));
 		memcpy(send_pkg.data + i * 4, &tmp, 4);
 	}
 	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set voltage miner %d, (%d-%d)",
@@ -1882,7 +1860,7 @@ static int64_t avalon8_scanhash(struct thr_info *thr)
 		}
 		if (update_settings) {
 			cg_wlock(&info->update_lock);
-			avalon8_set_voltage(avalon8, i, info->set_voltage[i]);
+			avalon8_set_voltage_level(avalon8, i, info->set_voltage_level[i]);
 			for (j = 0; j < info->miner_count[i]; j++)
 				avalon8_set_freq(avalon8, i, j, info->set_frequency[i][j]);
 			if (opt_avalon8_smart_speed)
@@ -2165,73 +2143,10 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 	}
 
 	root = api_add_bool(root, "Connection Overloaded", &info->conn_overloaded, true);
-	root = api_add_int(root, "Voltage Offset", &opt_avalon8_voltage_offset, true);
+	root = api_add_int(root, "Voltage Level Offset", &opt_avalon8_voltage_level_offset, true);
 	root = api_add_uint32(root, "Nonce Mask", &opt_avalon8_nonce_mask, true);
 
 	return root;
-}
-
-/* format: voltage[-addr[-miner]]
- * add4[0, AVA8_DEFAULT_MODULARS - 1], 0 means all modulars
- * miner[0, miner_count], 0 means all miners
- */
-char *set_avalon8_device_voltage(struct cgpu_info *avalon8, char *arg)
-{
-	struct avalon8_info *info = avalon8->device_data;
-	unsigned int val, addr = 0, i, j;
-	uint32_t miner_id = 0;
-
-	if (!(*arg))
-		return NULL;
-
-	sscanf(arg, "%d-%d-%d", &val, &addr, &miner_id);
-	if (!val)
-		val = AVA8_DEFAULT_VOLTAGE_MIN;
-
-	if (val < AVA8_DEFAULT_VOLTAGE_MIN || val > AVA8_DEFAULT_VOLTAGE_MAX)
-		return "Invalid value passed to set_avalon8_device_voltage";
-
-	if (addr >= AVA8_DEFAULT_MODULARS) {
-		applog(LOG_ERR, "invalid modular index: %d, valid range 0-%d", addr, (AVA8_DEFAULT_MODULARS - 1));
-		return "Invalid modular index to set_avalon8_device_voltage";
-	}
-
-	if (!info->enable[addr]) {
-		applog(LOG_ERR, "Disabled modular:%d", addr);
-		return "Disabled modular to set_avalon8_device_voltage";
-	}
-	if (miner_id > info->miner_count[addr]) {
-		applog(LOG_ERR, "invalid miner index: %d, valid range 0-%d", miner_id, info->miner_count[addr]);
-		return "Invalid miner index to set_avalon8_device_voltage";
-	}
-
-	if (!addr) {
-		for (i = 1; i < AVA8_DEFAULT_MODULARS; i++) {
-			if (!info->enable[i])
-				continue;
-
-			if (miner_id)
-				info->set_voltage[i][miner_id - 1] = val;
-			else {
-				for (j = 0; j < info->miner_count[i]; j++)
-					info->set_voltage[i][j] = val;
-			}
-			avalon8_set_voltage(avalon8, i, info->set_voltage[i]);
-		}
-	} else {
-		if (miner_id)
-			info->set_voltage[addr][miner_id - 1] = val;
-		else {
-			for (j = 0; j < info->miner_count[addr]; j++)
-				info->set_voltage[addr][j] = val;
-		}
-		avalon8_set_voltage(avalon8, addr, info->set_voltage[addr]);
-	}
-
-	applog(LOG_NOTICE, "%s-%d: Update voltage to %d",
-		avalon8->drv->name, avalon8->device_id, val);
-
-	return NULL;
 }
 
 /*
@@ -2425,15 +2340,6 @@ static char *avalon8_set_device(struct cgpu_info *avalon8, char *option, char *s
 				val, info->led_indicator[val] ? "on" : "off");
 
 		return NULL;
-	}
-
-	if (strcasecmp(option, "voltage") == 0) {
-		if (!setting || !*setting) {
-			sprintf(replybuf, "missing voltage value");
-			return replybuf;
-		}
-
-		return set_avalon8_device_voltage(avalon8, setting);
 	}
 
 	if (strcasecmp(option, "factory") == 0) {

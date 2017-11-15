@@ -27,17 +27,13 @@
 #define AVA8_DEFAULT_TEMP_OVERHEAT	105
 #define AVA8_DEFAULT_TEMP_HYSTERESIS	5
 
-#define AVA8_DEFAULT_VOLTAGE_MIN	3000
-#define AVA8_DEFAULT_VOLTAGE_MAX	15000
-#define AVA8_INVALID_VOLTAGE	0
-#define AVA8_DEFAULT_VOLTAGE_STEP	125
-
-#define AVA8_DEFAULT_VOLTAGE_LEVEL_MIN	0
+#define AVA8_DEFAULT_VOLTAGE_LEVEL_MIN	-15
 #define AVA8_DEFAULT_VOLTAGE_LEVEL_MAX	15
+#define AVA8_INVALID_VOLTAGE_LEVEL	-16
 
-#define AVA8_DEFAULT_VOLTAGE_OFFSET_MIN	-2
-#define AVA8_DEFAULT_VOLTAGE_OFFSET	0
-#define AVA8_DEFAULT_VOLTAGE_OFFSET_MAX	1
+#define AVA8_DEFAULT_VOLTAGE_LEVEL_OFFSET_MIN	-2
+#define AVA8_DEFAULT_VOLTAGE_LEVEL_OFFSET	0
+#define AVA8_DEFAULT_VOLTAGE_LEVEL_OFFSET_MAX	1
 
 #define AVA8_DEFAULT_FACTORY_INFO_0_MIN	-15
 #define AVA8_DEFAULT_FACTORY_INFO_0	0
@@ -243,7 +239,7 @@ struct avalon8_info {
 	int temp_overheat[AVA8_DEFAULT_MODULARS];
 	time_t last_temp_time[AVA8_DEFAULT_MODULARS];
 
-	uint32_t set_voltage[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT];
+	int set_voltage_level[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT];
 	uint32_t set_frequency[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT][AVA8_DEFAULT_PLL_CNT];
 
 	uint16_t get_vin[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT];
@@ -287,7 +283,7 @@ struct avalon8_dev_description {
 	uint8_t asic_count; /* asic count each miner, it should not great than AVA8_DEFAULT_ASIC_MAX */
 	uint16_t vin_adc_ratio;
 	uint16_t vout_adc_ratio;
-	uint32_t set_voltage;
+	int set_voltage_level;
 };
 
 #define AVA8_WRITE_SIZE (sizeof(struct avalon8_pkg))
@@ -298,9 +294,8 @@ struct avalon8_dev_description {
 
 extern char *set_avalon8_fan(char *arg);
 extern char *set_avalon8_freq(char *arg);
-extern char *set_avalon8_voltage(char *arg);
 extern char *set_avalon8_voltage_level(char *arg);
-extern char *set_avalon8_voltage_offset(char *arg);
+extern char *set_avalon8_voltage_level_offset(char *arg);
 extern int opt_avalon8_temp_target;
 extern int opt_avalon8_polling_delay;
 extern int opt_avalon8_aucspeed;
