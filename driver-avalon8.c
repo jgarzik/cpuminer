@@ -118,10 +118,10 @@ struct avalon8_dev_description avalon8_dev_table[] = {
 		"821",
 		821,
 		4,
-		24,
+		26,
 		AVA8_MM821_VIN_ADC_RATIO,
 		AVA8_MM821_VOUT_ADC_RATIO,
-		4500,
+		14,
 	}
 };
 
@@ -1613,11 +1613,11 @@ static void avalon8_set_freq(struct cgpu_info *avalon8, int addr, int miner_id, 
 
 	f = f ? f : 1;
 
-	tmp = ((AVA8_ASIC_TIMEOUT_CONST / f) * AVA8_DEFAULT_NTIME_OFFSET * 5 / 100);
+	tmp = (AVA8_ASIC_TIMEOUT_CONST / f) * AVA8_DEFAULT_NTIME_OFFSET;
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + AVA8_DEFAULT_PLL_CNT * 4, &tmp, 4);
 
-	tmp = AVA8_ASIC_TIMEOUT_CONST / f * 98 / 100;
+	tmp = AVA8_ASIC_TIMEOUT_CONST / f * 96 / 100;
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + AVA8_DEFAULT_PLL_CNT * 4 + 4, &tmp, 4);
 	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set freq miner %x-%x",
