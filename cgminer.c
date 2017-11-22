@@ -1571,7 +1571,7 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_1, opt_show_intval, &opt_avalon8_mux_h2l,
 		     "Set Avalon8 mux h2l, range 0-1."),
 	OPT_WITH_ARG("--avalon8-h2ltime0-spd",
-		     set_int_0_to_7, opt_show_intval, &opt_avalon8_h2ltime0_spd,
+		     set_int_0_to_255, opt_show_intval, &opt_avalon8_h2ltime0_spd,
 		     "Set Avalon8 h2ltime0 spd, range 0-7."),
 #endif
 #ifdef USE_AVALON_MINER
