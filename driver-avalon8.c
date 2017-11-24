@@ -1613,11 +1613,12 @@ static void avalon8_set_freq(struct cgpu_info *avalon8, int addr, int miner_id, 
 
 	f = f ? f : 1;
 
-	tmp = (AVA8_ASIC_TIMEOUT_CONST / f) * AVA8_DEFAULT_NTIME_OFFSET;
+	/* TODO: adjust it according to frequency */
+	tmp = 1;
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + AVA8_DEFAULT_PLL_CNT * 4, &tmp, 4);
 
-	tmp = AVA8_ASIC_TIMEOUT_CONST / f * 96 / 100;
+	tmp = AVA8_ASIC_TIMEOUT_CONST / f * 83 / 100;
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + AVA8_DEFAULT_PLL_CNT * 4 + 4, &tmp, 4);
 	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set freq miner %x-%x",
