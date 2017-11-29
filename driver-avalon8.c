@@ -1445,7 +1445,7 @@ static int polling(struct cgpu_info *avalon8)
 			memset(send_pkg.data, 0, AVA8_P_DATA_LEN);
 			avalon8_init_pkg(&send_pkg, AVA8_P_RSTMMTX, 1, 1);
 			avalon8_iic_xfer_pkg(avalon8, i, &send_pkg, NULL);
-			if (info->error_polling_cnt[i] >= 10)
+			if (info->error_polling_cnt[i] >= 100)
 				detach_module(avalon8, i);
 		}
 
