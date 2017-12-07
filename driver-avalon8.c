@@ -2150,6 +2150,73 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 	return root;
 }
 
+/* format: voltage[-addr[-miner]]
+ * addr[0, AVA8_DEFAULT_MODULARS - 1], 0 means all modulars
+ * miner[0, miner_count], 0 means all miners
+ */
+char *set_avalon8_device_voltage_level(struct cgpu_info *avalon8, char *arg)
+{
+	struct avalon8_info *info = avalon8->device_data;
+	int val;
+	unsigned int addr = 0, i, j;
+	uint32_t miner_id = 0;
+
+	if (!(*arg))
+		return NULL;
+
+	sscanf(arg, "%d-%d-%d", &val, &addr, &miner_id);
+
+	if (val < AVA8_DEFAULT_VOLTAGE_LEVEL_MIN || val > AVA8_DEFAULT_VOLTAGE_LEVEL_MAX)
+		return "Invalid value passed to set_avalon8_device_voltage_level";
+
+	if (addr >= AVA8_DEFAULT_MODULARS) {
+		applog(LOG_ERR, "invalid modular index: %d, valid range 0-%d", addr, (AVA8_DEFAULT_MODULARS - 1));
+		return "Invalid modular index to set_avalon8_device_voltage_level";
+	}
+
+	if (!addr) {
+		for (i = 1; i < AVA8_DEFAULT_MODULARS; i++) {
+			if (!info->enable[i])
+				continue;
+
+			if (miner_id > info->miner_count[i]) {
+				applog(LOG_ERR, "invalid miner index: %d, valid range 0-%d", miner_id, info->miner_count[i]);
+				return "Invalid miner index to set_avalon8_device_voltage_level";
+			}
+
+			if (miner_id)
+				info->set_voltage_level[i][miner_id - 1] = val;
+			else {
+				for (j = 0; j < info->miner_count[i]; j++)
+					info->set_voltage_level[i][j] = val;
+			}
+			avalon8_set_voltage_level(avalon8, i, info->set_voltage_level[i]);
+		}
+	} else {
+		if (!info->enable[addr]) {
+			applog(LOG_ERR, "Disabled modular:%d", addr);
+			return "Disabled modular to set_avalon8_device_voltage_level";
+		}
+
+		if (miner_id > info->miner_count[addr]) {
+			applog(LOG_ERR, "invalid miner index: %d, valid range 0-%d", miner_id, info->miner_count[addr]);
+			return "Invalid miner index to set_avalon8_device_voltage_level";
+		}
+
+		if (miner_id)
+			info->set_voltage_level[addr][miner_id - 1] = val;
+		else {
+			for (j = 0; j < info->miner_count[addr]; j++)
+				info->set_voltage_level[addr][j] = val;
+		}
+		avalon8_set_voltage_level(avalon8, addr, info->set_voltage_level[addr]);
+	}
+
+	applog(LOG_NOTICE, "%s-%d: Update voltage-level to %d", avalon8->drv->name, avalon8->device_id, val);
+
+	return NULL;
+}
+
 /*
  * format: freq[-addr[-miner]]
  * add4[0, AVA8_DEFAULT_MODULARS - 1], 0 means all modulars
@@ -2341,6 +2408,15 @@ static char *avalon8_set_device(struct cgpu_info *avalon8, char *option, char *s
 				val, info->led_indicator[val] ? "on" : "off");
 
 		return NULL;
+	}
+
+	if (strcasecmp(option, "voltage-level") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing voltage-level value");
+			return replybuf;
+		}
+
+		return set_avalon8_device_voltage_level(avalon8, setting);
 	}
 
 	if (strcasecmp(option, "factory") == 0) {
