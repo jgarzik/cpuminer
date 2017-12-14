@@ -2219,7 +2219,7 @@ char *set_avalon8_device_voltage_level(struct cgpu_info *avalon8, char *arg)
 
 /*
  * format: freq[-addr[-miner]]
- * add4[0, AVA8_DEFAULT_MODULARS - 1], 0 means all modulars
+ * addr[0, AVA8_DEFAULT_MODULARS - 1], 0 means all modulars
  * miner[0, miner_count], 0 means all miners
  */
 char *set_avalon8_device_freq(struct cgpu_info *avalon8, char *arg)
@@ -2240,25 +2240,22 @@ char *set_avalon8_device_freq(struct cgpu_info *avalon8, char *arg)
 		applog(LOG_ERR, "invalid modular index: %d, valid range 0-%d", addr, (AVA8_DEFAULT_MODULARS - 1));
 		return "Invalid modular index to set_avalon8_device_freq";
 	}
-	if (!info->enable[addr]) {
-		applog(LOG_ERR, "Disabled modular:%d", addr);
-		return "Disabled modular to set_avalon8_device_freq";
-	}
-	if (miner_id > info->miner_count[addr]) {
-		applog(LOG_ERR, "invalid miner index: %d, valid range 0-%d", miner_id, info->miner_count[addr]);
-		return "Invalid miner index to set_avalon8_device_freq";
-	}
 
 	if (!addr) {
 		for (i = 1; i < AVA8_DEFAULT_MODULARS; i++) {
 			if (!info->enable[i])
 				continue;
 
+			if (miner_id > info->miner_count[i]) {
+				applog(LOG_ERR, "invalid miner index: %d, valid range 0-%d", miner_id, info->miner_count[i]);
+				return "Invalid miner index to set_avalon8_device_freq";
+			}
+
 			if (miner_id) {
 				for (k = 0; k < AVA8_DEFAULT_PLL_CNT; k++)
 					info->set_frequency[i][miner_id - 1][k] = val;
 
-				avalon8_set_freq(avalon8, i, miner_id, info->set_frequency[i][miner_id]);
+				avalon8_set_freq(avalon8, i, miner_id - 1, info->set_frequency[i][miner_id - 1]);
 			} else {
 				for (j = 0; j < info->miner_count[i]; j++) {
 					for (k = 0; k < AVA8_DEFAULT_PLL_CNT; k++)
@@ -2269,11 +2266,21 @@ char *set_avalon8_device_freq(struct cgpu_info *avalon8, char *arg)
 			}
 		}
 	} else {
+		if (!info->enable[addr]) {
+			applog(LOG_ERR, "Disabled modular:%d", addr);
+			return "Disabled modular to set_avalon8_device_freq";
+		}
+
+		if (miner_id > info->miner_count[addr]) {
+			applog(LOG_ERR, "invalid miner index: %d, valid range 0-%d", miner_id, info->miner_count[addr]);
+			return "Invalid miner index to set_avalon8_device_freq";
+		}
+
 		if (miner_id) {
 			for (k = 0; k < AVA8_DEFAULT_PLL_CNT; k++)
 				info->set_frequency[addr][miner_id - 1][k] = val;
 
-			avalon8_set_freq(avalon8, addr, miner_id, info->set_frequency[addr][miner_id]);
+			avalon8_set_freq(avalon8, addr, miner_id - 1, info->set_frequency[addr][miner_id - 1]);
 
 		} else {
 			for (j = 0; j < info->miner_count[addr]; j++) {
