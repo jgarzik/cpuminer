@@ -1572,7 +1572,7 @@ static struct opt_table opt_config_table[] = {
 		     "Set Avalon8 mux h2l, range 0-1."),
 	OPT_WITH_ARG("--avalon8-h2ltime0-spd",
 		     set_int_0_to_255, opt_show_intval, &opt_avalon8_h2ltime0_spd,
-		     "Set Avalon8 h2ltime0 spd, range 0-7."),
+		     "Set Avalon8 h2ltime0 spd, range 0-255."),
 #endif
 #ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",
