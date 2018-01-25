@@ -1614,7 +1614,7 @@ static void avalon8_set_freq(struct cgpu_info *avalon8, int addr, int miner_id, 
 	f = f ? f : 1;
 
 	/* TODO: adjust it according to frequency */
-	tmp = 1;
+	tmp = 100;
 	tmp = be32toh(tmp);
 	memcpy(send_pkg.data + AVA8_DEFAULT_PLL_CNT * 4, &tmp, 4);
 
