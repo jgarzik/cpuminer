@@ -39,6 +39,10 @@
 #define AVA8_DEFAULT_FACTORY_INFO_0	0
 #define AVA8_DEFAULT_FACTORY_INFO_0_MAX	15
 
+#define AVA8_DEFAULT_OVER_HASHRATE_OFF 0
+#define AVA8_DEFAULT_OVER_HASHRATE_ON  1
+#define AVA8_DEFAULT_OVER_HASHRATE	(AVA8_DEFAULT_OVER_HASHRATE_OFF)
+
 #define AVA8_DEFAULT_FREQUENCY_0	0
 #define AVA8_DEFAULT_FREQUENCY_1	0
 #define AVA8_DEFAULT_FREQUENCY_2	0
@@ -114,14 +118,15 @@
 #define AVA8_P_JOB_FIN	0x17
 
 /* Broadcase or with I2C address */
-#define AVA8_P_SET	0x20
-#define AVA8_P_SET_FIN	0x21
-#define AVA8_P_SET_VOLT	0x22
-#define AVA8_P_SET_PMU	0x24
-#define AVA8_P_SET_PLL	0x25
-#define AVA8_P_SET_SS	0x26
+#define AVA8_P_SET			0x20
+#define AVA8_P_SET_FIN			0x21
+#define AVA8_P_SET_VOLT			0x22
+#define AVA8_P_SET_PMU			0x24
+#define AVA8_P_SET_PLL			0x25
+#define AVA8_P_SET_SS			0x26
 /* 0x27 reserved */
-#define AVA8_P_SET_FAC	0x28
+#define AVA8_P_SET_FAC			0x28
+#define AVA8_P_SET_OVER_HASHRATE	0x29
 
 /* Have to send with I2C address */
 #define AVA8_P_POLLING	0x30
@@ -131,17 +136,18 @@
 #define AVA8_P_GET_VOLT	0x34
 
 /* Back to host */
-#define AVA8_P_ACKDETECT	0x40
-#define AVA8_P_STATUS		0x41
-#define AVA8_P_NONCE		0x42
-#define AVA8_P_TEST_RET		0x43
-#define AVA8_P_STATUS_VOLT	0x46
-#define AVA8_P_STATUS_PMU	0x48
-#define AVA8_P_STATUS_PLL	0x49
-#define AVA8_P_STATUS_LOG	0x4a
-#define AVA8_P_STATUS_ASIC	0x4b
-#define AVA8_P_STATUS_PVT	0x4c
-#define AVA8_P_STATUS_FAC	0x4d
+#define AVA8_P_ACKDETECT		0x40
+#define AVA8_P_STATUS			0x41
+#define AVA8_P_NONCE			0x42
+#define AVA8_P_TEST_RET			0x43
+#define AVA8_P_STATUS_VOLT		0x46
+#define AVA8_P_STATUS_PMU		0x48
+#define AVA8_P_STATUS_PLL		0x49
+#define AVA8_P_STATUS_LOG		0x4a
+#define AVA8_P_STATUS_ASIC		0x4b
+#define AVA8_P_STATUS_PVT		0x4c
+#define AVA8_P_STATUS_FAC		0x4d
+#define AVA8_P_STATUS_OVER_HASHRATE	0x4e
 
 #define AVA8_MODULE_BROADCAST	0
 /* End of avalon8 protocol package type */
@@ -156,6 +162,8 @@
 #define AVA8_FREQ_PLLADJ_MODE	0x1
 
 #define AVA8_DEFAULT_FACTORY_INFO_CNT	1
+
+#define AVA8_DEFAULT_OVER_HASHRATE_CNT	1
 
 #define AVA8_MM821_VIN_ADC_RATIO	(3.3 / 4095.0 * 25.62 / 5.62 * 1000.0 * 100.0)
 #define AVA8_MM821_VOUT_ADC_RATIO	(3.3 / 4095.0 * 63.0 / 20.0 * 10000.0 * 100.0)
@@ -247,6 +255,7 @@ struct avalon8_info {
 	uint32_t get_pll[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT][AVA8_DEFAULT_PLL_CNT];
 
 	int8_t factory_info[AVA8_DEFAULT_FACTORY_INFO_CNT];
+	int8_t over_hashrate_info[AVA8_DEFAULT_OVER_HASHRATE_CNT];
 
 	uint64_t local_works[AVA8_DEFAULT_MODULARS];
 	uint64_t local_works_i[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT];
@@ -315,5 +324,6 @@ extern uint32_t opt_avalon8_mux_l2h;
 extern uint32_t opt_avalon8_mux_h2l;
 extern uint32_t opt_avalon8_h2ltime0_spd;
 extern uint32_t opt_avalon8_roll_enable;
+extern uint32_t opt_avalon8_over_hashrate;
 #endif /* USE_AVALON8 */
-#endif	/* _AVALON8_H_ */
+#endif /* _AVALON8_H_ */

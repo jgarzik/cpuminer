@@ -1573,6 +1573,10 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalon8-h2ltime0-spd",
 		     set_int_0_to_255, opt_show_intval, &opt_avalon8_h2ltime0_spd,
 		     "Set Avalon8 h2ltime0 spd, range 0-255."),
+	OPT_WITH_ARG("--avalon8-over-hashrate",
+		     set_int_0_to_1, opt_show_intval, &opt_avalon8_over_hashrate,
+		     "Set Avalon8 over hashrate, range 0-1."),
+
 #endif
 #ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",

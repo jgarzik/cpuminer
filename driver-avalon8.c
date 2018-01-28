@@ -59,6 +59,7 @@ uint32_t opt_avalon8_mux_l2h = AVA8_DEFAULT_MUX_L2H;
 uint32_t opt_avalon8_mux_h2l = AVA8_DEFAULT_MUX_H2L;
 uint32_t opt_avalon8_h2ltime0_spd = AVA8_DEFAULT_H2LTIME0_SPD;
 uint32_t opt_avalon8_roll_enable = AVA8_DEFAULT_ROLL_ENABLE;
+uint32_t opt_avalon8_over_hashrate = AVA8_DEFAULT_OVER_HASHRATE;
 
 uint32_t cpm_table[] =
 {
@@ -634,6 +635,10 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 	case AVA8_P_STATUS_FAC:
 		applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_FAC", avalon8->drv->name, avalon8->device_id, modular_id);
 		info->factory_info[0] = ar->data[0];
+		break;
+	case AVA8_P_STATUS_OVER_HASHRATE:
+		applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_OVER_HASHRATE", avalon8->drv->name, avalon8->device_id, modular_id);
+		info->over_hashrate_info[0] = ar->data[0];
 		break;
 	default:
 		applog(LOG_DEBUG, "%s-%d-%d: Unknown response %x", avalon8->drv->name, avalon8->device_id, modular_id, ar->type);
@@ -1559,6 +1564,12 @@ static void avalon8_init_setting(struct cgpu_info *avalon8, int addr)
 			avalon8->drv->name, avalon8->device_id, addr,
 			opt_avalon8_h2ltime0_spd);
 
+	tmp = be32toh(opt_avalon8_over_hashrate);
+	memcpy(send_pkg.data + 22, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set over hashrate %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_over_hashrate);
+
 	/* Package the data */
 	avalon8_init_pkg(&send_pkg, AVA8_P_SET, 1, 1);
 	if (addr == AVA8_MODULE_BROADCAST)
@@ -1646,6 +1657,24 @@ static void avalon8_set_factory_info(struct cgpu_info *avalon8, int addr, uint8_
 
 	/* Package the data */
 	avalon8_init_pkg(&send_pkg, AVA8_P_SET_FAC, 1, 1);
+	if (addr == AVA8_MODULE_BROADCAST)
+		avalon8_send_bc_pkgs(avalon8, &send_pkg);
+	else
+		avalon8_iic_xfer_pkg(avalon8, addr, &send_pkg, NULL);
+}
+
+static void avalon8_set_over_hashrate_info(struct cgpu_info *avalon8, int addr, uint8_t value[])
+{
+	struct avalon8_pkg send_pkg;
+	uint8_t i;
+
+	memset(send_pkg.data, 0, AVA8_P_DATA_LEN);
+
+	for (i = 0; i < AVA8_DEFAULT_OVER_HASHRATE_CNT; i++)
+		send_pkg.data[i] = value[i];
+
+	/* Package the data */
+	avalon8_init_pkg(&send_pkg, AVA8_P_SET_OVER_HASHRATE, 1, 1);
 	if (addr == AVA8_MODULE_BROADCAST)
 		avalon8_send_bc_pkgs(avalon8, &send_pkg);
 	else
@@ -2068,6 +2097,9 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 			sprintf(buf, " FAC0[%d]", info->factory_info[0]);
 			strcat(statbuf, buf);
 
+			sprintf(buf, " OHR[%d]", info->over_hashrate_info[0]);
+			strcat(statbuf, buf);
+
 			for (j = 0; j < info->miner_count[i]; j++) {
 				sprintf(buf, " SF%d[", j);
 				strcat(statbuf, buf);
@@ -2322,6 +2354,28 @@ char *set_avalon8_factory_info(struct cgpu_info *avalon8, char *arg)
 	return NULL;
 }
 
+char *set_avalon8_over_hashrate_info(struct cgpu_info *avalon8, char *arg)
+{
+	struct avalon8_info *info = avalon8->device_data;
+	int val;
+
+	if (!(*arg))
+		return NULL;
+
+	sscanf(arg, "%d", &val);
+
+	if (val != AVA8_DEFAULT_OVER_HASHRATE_OFF && val != AVA8_DEFAULT_OVER_HASHRATE_ON)
+		return "Invalid value passed to set_avalon8_over_hashrate_info";
+
+	info->over_hashrate_info[0] = val;
+	avalon8_set_over_hashrate_info(avalon8, 0, (uint8_t *)info->over_hashrate_info);
+
+	applog(LOG_NOTICE, "%s-%d: Update Over Hashrate info %d",
+		avalon8->drv->name, avalon8->device_id, val);
+
+	return NULL;
+}
+
 static char *avalon8_set_device(struct cgpu_info *avalon8, char *option, char *setting, char *replybuf)
 {
 	unsigned int val;
@@ -2450,6 +2504,15 @@ static char *avalon8_set_device(struct cgpu_info *avalon8, char *option, char *s
 		info->reboot[val] = true;
 
 		return NULL;
+	}
+
+	if (strcasecmp(option, "over-hashrate") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing over hashrate info");
+			return replybuf;
+		}
+
+		return set_avalon8_over_hashrate_info(avalon8, setting);
 	}
 
 	sprintf(replybuf, "Unknown option: %s", option);
