@@ -165,7 +165,10 @@
 #define AVA8_DEFAULT_OVERCLOCKING_CNT	1
 
 #define AVA8_MM821_VIN_ADC_RATIO	(3.3 / 4095.0 * 25.62 / 5.62 * 1000.0 * 100.0)
+#define AVA8_MM841_VIN_ADC_RATIO	(3.3 / 4095.0 * 25.62 / 5.62 * 1000.0 * 100.0)
+
 #define AVA8_MM821_VOUT_ADC_RATIO	(3.3 / 4095.0 * 63.0 / 20.0 * 10000.0 * 100.0)
+#define AVA8_MM841_VOUT_ADC_RATIO	(3.3 / 4095.0 * 63.0 / 20.0 * 10000.0 * 100.0)
 
 struct avalon8_pkg {
 	uint8_t head[2];
