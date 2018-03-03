@@ -42,11 +42,11 @@
 #define AVA8_DEFAULT_OVERCLOCKING_OFF 0
 #define AVA8_DEFAULT_OVERCLOCKING_ON  1
 
-#define AVA8_DEFAULT_FREQUENCY_0	0
-#define AVA8_DEFAULT_FREQUENCY_1	0
-#define AVA8_DEFAULT_FREQUENCY_2	0
-#define AVA8_DEFAULT_FREQUENCY_3	650
+#define AVA8_DEFAULT_FREQUENCY_0M	0
+#define AVA8_DEFAULT_FREQUENCY_650M	650
+#define AVA8_DEFAULT_FREQUENCY_775M	775
 #define AVA8_DEFAULT_FREQUENCY_MAX	1200
+#define AVA8_DEFAULT_FREQUENCY		(AVA8_DEFAULT_FREQUENCY_MAX)
 #define AVA8_DEFAULT_FREQUENCY_SEL	3
 
 #define AVA8_DEFAULT_MODULARS	7	/* Only support 6 modules maximum with one AUC */
@@ -295,6 +295,7 @@ struct avalon8_dev_description {
 	uint16_t vin_adc_ratio;
 	uint16_t vout_adc_ratio;
 	int set_voltage_level;
+	uint16_t set_freq[AVA8_DEFAULT_PLL_CNT];
 };
 
 #define AVA8_WRITE_SIZE (sizeof(struct avalon8_pkg))

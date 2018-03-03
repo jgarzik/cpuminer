@@ -27,10 +27,13 @@ int opt_avalon8_fan_max = AVA8_DEFAULT_FAN_MAX;
 int opt_avalon8_voltage_level = AVA8_INVALID_VOLTAGE_LEVEL;
 int opt_avalon8_voltage_level_offset = AVA8_DEFAULT_VOLTAGE_LEVEL_OFFSET;
 
-int opt_avalon8_freq[AVA8_DEFAULT_PLL_CNT] = {AVA8_DEFAULT_FREQUENCY_0,
-					      AVA8_DEFAULT_FREQUENCY_1,
-					      AVA8_DEFAULT_FREQUENCY_2,
-					      AVA8_DEFAULT_FREQUENCY_3};
+int opt_avalon8_freq[AVA8_DEFAULT_PLL_CNT] =
+{
+	AVA8_DEFAULT_FREQUENCY,
+	AVA8_DEFAULT_FREQUENCY,
+	AVA8_DEFAULT_FREQUENCY,
+	AVA8_DEFAULT_FREQUENCY
+};
 
 int opt_avalon8_freq_sel = AVA8_DEFAULT_FREQUENCY_SEL;
 
@@ -122,6 +125,12 @@ struct avalon8_dev_description avalon8_dev_table[] = {
 		AVA8_MM821_VIN_ADC_RATIO,
 		AVA8_MM821_VOUT_ADC_RATIO,
 		5,
+		{
+			AVA8_DEFAULT_FREQUENCY_0M,
+			AVA8_DEFAULT_FREQUENCY_0M,
+			AVA8_DEFAULT_FREQUENCY_0M,
+			AVA8_DEFAULT_FREQUENCY_650M
+		}
 	},
 	{
 		"841",
@@ -131,6 +140,12 @@ struct avalon8_dev_description avalon8_dev_table[] = {
 		AVA8_MM841_VIN_ADC_RATIO,
 		AVA8_MM841_VOUT_ADC_RATIO,
 		5,
+		{
+			AVA8_DEFAULT_FREQUENCY_0M,
+			AVA8_DEFAULT_FREQUENCY_0M,
+			AVA8_DEFAULT_FREQUENCY_0M,
+			AVA8_DEFAULT_FREQUENCY_775M
+		}
 	}
 };
 
@@ -1334,6 +1349,11 @@ static void detect_modules(struct cgpu_info *avalon8)
 				info->asic_count[i] = avalon8_dev_table[dev_index].asic_count;
 				info->vin_adc_ratio[i] = avalon8_dev_table[dev_index].vin_adc_ratio;
 				info->vout_adc_ratio[i] = avalon8_dev_table[dev_index].vout_adc_ratio;
+
+				for (j = 0; j < AVA8_DEFAULT_PLL_CNT; j++) {
+					if (opt_avalon8_freq[j] == AVA8_DEFAULT_FREQUENCY)
+						opt_avalon8_freq[j] = avalon8_dev_table[dev_index].set_freq[j];
+				}
 				break;
 			}
 		}
