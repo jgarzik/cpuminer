@@ -1349,11 +1349,6 @@ static void detect_modules(struct cgpu_info *avalon8)
 				info->asic_count[i] = avalon8_dev_table[dev_index].asic_count;
 				info->vin_adc_ratio[i] = avalon8_dev_table[dev_index].vin_adc_ratio;
 				info->vout_adc_ratio[i] = avalon8_dev_table[dev_index].vout_adc_ratio;
-
-				for (j = 0; j < AVA8_DEFAULT_PLL_CNT; j++) {
-					if (opt_avalon8_freq[j] == AVA8_DEFAULT_FREQUENCY)
-						opt_avalon8_freq[j] = avalon8_dev_table[dev_index].set_freq[j];
-				}
 				break;
 			}
 		}
@@ -1382,10 +1377,12 @@ static void detect_modules(struct cgpu_info *avalon8)
 
 			for (k = 0; k < 5; k++)
 				info->temp[i][j][k] = -273;
+
+			for (k = 0; k < AVA8_DEFAULT_PLL_CNT; k++)
+				info->set_frequency[i][j][k] = avalon8_dev_table[dev_index].set_freq[k];
 		}
 
 		info->freq_mode[i] = AVA8_FREQ_INIT_MODE;
-		memset(info->set_frequency[i], 0, sizeof(unsigned int) * info->miner_count[i] * AVA8_DEFAULT_PLL_CNT);
 		memset(info->get_pll[i], 0, sizeof(uint32_t) * info->miner_count[i] * AVA8_DEFAULT_PLL_CNT);
 
 		info->led_indicator[i] = 0;
@@ -1896,8 +1893,10 @@ static int64_t avalon8_scanhash(struct thr_info *thr)
 			case AVA8_FREQ_INIT_MODE:
 				update_settings = true;
 				for (j = 0; j < info->miner_count[i]; j++) {
-					for (k = 0; k < AVA8_DEFAULT_PLL_CNT; k++)
-						info->set_frequency[i][j][k] = opt_avalon8_freq[k];
+					for (k = 0; k < AVA8_DEFAULT_PLL_CNT; k++) {
+						if (opt_avalon8_freq[k] != AVA8_DEFAULT_FREQUENCY)
+							info->set_frequency[i][j][k] = opt_avalon8_freq[k];
+					}
 				}
 
 				avalon8_init_setting(avalon8, i);
