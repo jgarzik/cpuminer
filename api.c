@@ -1,6 +1,6 @@
 /*
  * Copyright 2011-2015 Andrew Smith
- * Copyright 2011-2015 Con Kolivas
+ * Copyright 2011-2015,2018 Con Kolivas
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -1510,7 +1510,10 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 			root = api_add_time(root, "When", &when, false);
 			root = api_add_int(root, "Code", &messageid, false);
 			root = api_add_escape(root, "Msg", buf, false);
-			root = api_add_escape(root, "Description", opt_api_description, false);
+			/* Do not give out description for random probes to
+			 * addresses with inappropriately open API ports. */
+			if (messageid != MSG_INVCMD)
+				root = api_add_escape(root, "Description", opt_api_description, false);
 
 			root = print_data(io_data, root, isjson, false);
 			if (isjson)
