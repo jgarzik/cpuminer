@@ -1401,6 +1401,8 @@ foundit:
 }
 #endif
 
+#define LIMSIZ (TMPBUFSIZ - 1)
+
 // All replies (except BYE and RESTART) start with a message
 //  thus for JSON, message() inserts JSON_START at the front
 //  and send_result() adds JSON_END at the end
@@ -1444,28 +1446,28 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 				case PARAM_ASC:
 				case PARAM_PID:
 				case PARAM_INT:
-					sprintf(buf, codes[i].description, paramid);
+					snprintf(buf, LIMSIZ, codes[i].description, paramid);
 					break;
 				case PARAM_POOL:
-					sprintf(buf, codes[i].description, paramid, pools[paramid]->rpc_url);
+					snprintf(buf, LIMSIZ, codes[i].description, paramid, pools[paramid]->rpc_url);
 					break;
 #ifdef HAVE_AN_FPGA
 				case PARAM_PGAMAX:
 					pga = numpgas();
-					sprintf(buf, codes[i].description, paramid, pga - 1);
+					snprintf(buf, LIMSIZ, codes[i].description, paramid, pga - 1);
 					break;
 #endif
 #ifdef HAVE_AN_ASIC
 				case PARAM_ASCMAX:
 					asc = numascs();
-					sprintf(buf, codes[i].description, paramid, asc - 1);
+					snprintf(buf, LIMSIZ, codes[i].description, paramid, asc - 1);
 					break;
 #endif
 				case PARAM_PMAX:
-					sprintf(buf, codes[i].description, total_pools);
+					snprintf(buf, LIMSIZ, codes[i].description, total_pools);
 					break;
 				case PARAM_POOLMAX:
-					sprintf(buf, codes[i].description, paramid, total_pools - 1);
+					snprintf(buf, LIMSIZ, codes[i].description, paramid, total_pools - 1);
 					break;
 				case PARAM_DMAX:
 #ifdef HAVE_AN_ASIC
@@ -1475,7 +1477,7 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 					pga = numpgas();
 #endif
 
-					sprintf(buf, codes[i].description
+					snprintf(buf, LIMSIZ, codes[i].description
 #ifdef HAVE_AN_ASIC
 						, asc
 #endif
@@ -1485,19 +1487,19 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 						);
 					break;
 				case PARAM_CMD:
-					sprintf(buf, codes[i].description, JSON_COMMAND);
+					snprintf(buf, LIMSIZ, codes[i].description, JSON_COMMAND);
 					break;
 				case PARAM_STR:
-					sprintf(buf, codes[i].description, param2);
+					snprintf(buf, LIMSIZ, codes[i].description, param2);
 					break;
 				case PARAM_BOTH:
-					sprintf(buf, codes[i].description, paramid, param2);
+					snprintf(buf, LIMSIZ, codes[i].description, paramid, param2);
 					break;
 				case PARAM_BOOL:
-					sprintf(buf, codes[i].description, paramid ? TRUESTR : FALSESTR);
+					snprintf(buf, LIMSIZ, codes[i].description, paramid ? TRUESTR : FALSESTR);
 					break;
 				case PARAM_SET:
-					sprintf(buf, codes[i].description, param2, paramid);
+					snprintf(buf, LIMSIZ, codes[i].description, param2, paramid);
 					break;
 				case PARAM_NONE:
 				default:
@@ -4972,7 +4974,9 @@ void api(int api_thr_id)
 					connectaddr, addrok ? "Accepted" : "Ignored");
 
 		if (addrok) {
-			n = recv(c, &buf[0], TMPBUFSIZ-1, 0);
+			/* Accept only half the TMPBUFSIZ to account for space
+			 * potentially used by escaping chars. */
+			n = recv(c, &buf[0], TMPBUFSIZ / 2 - 1, 0);
 			if (SOCKETFAIL(n))
 				buf[0] = '\0';
 			else
