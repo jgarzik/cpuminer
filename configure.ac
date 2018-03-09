@@ -549,29 +549,26 @@ else
 	LIBUSB_LIBS=""
 fi
 
-djansson="no"
-AC_ARG_WITH([system-jansson],
-	[AC_HELP_STRING([--with-system-jansson],[NOT RECOMMENDED! Compile against dynamic system jansson. (Default use included static jansson)])],
-	[djansson=$withval]
-)
+djansson="yes"
+case $target in
+	*-*-freebsd*)
+		JANSSON_LIBS="-ljansson"
+		JANSSON_CFLAGS=""
+		AC_DEFINE(HAVE_JANSSON, 1, [Define if you have jansson >= 2.6])
+		;;
+	*)
+		PKG_CHECK_MODULES(JANSSON, jansson >= 2.6, [AC_DEFINE(HAVE_JANSSON, 1, [Define if you have jansson >= 2.6])], [djansson="no"])
+		;;
+esac
 
-if test "x$djansson" != xno; then
-	case $target in
-		*-*-freebsd*)
-			JANSSON_LIBS="-ljansson"
-			JANSSON_CFLAGS=""
-			AC_DEFINE(HAVE_JANSSON, 1, [Define if you have jansson >= 2.6])
-			;;
-		*)
-			PKG_CHECK_MODULES(JANSSON, jansson >= 2.6, [AC_DEFINE(HAVE_JANSSON, 1, [Define if you have jansson >= 2.6])], [AC_MSG_ERROR([Could not find jansson library - please install jansson >= 2.6])])
-			;;
-	esac
-else
+if test "x$djansson" = xno; then
 	AC_CONFIG_SUBDIRS([compat/jansson-2.9])
 	JANSSON_LIBS="compat/jansson-2.9/src/.libs/libjansson.a"
 fi
 
 AM_CONDITIONAL([WANT_STATIC_JANSSON], [test x$djansson = xno])
+
+AC_CHECK_HEADERS([uthash.h])
 
 PKG_PROG_PKG_CONFIG()
 

@@ -13,7 +13,13 @@
 #include <sched.h>
 
 #include "elist.h"
-#include "uthash.h"
+
+#if HAVE_UTHASH_H
+# include <uthash.h>
+#else
+# include "uthash.h"
+#endif
+
 #include "logging.h"
 #include "util.h"
 #include <sys/types.h>

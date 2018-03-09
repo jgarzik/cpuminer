@@ -23,7 +23,6 @@
 #include "compat.h"
 #include "miner.h"
 #include "usbutils.h"
-#include "uthash.h"
 #include "driver-bflsc.h"
 
 int opt_bflsc_overheat = BFLSC_TEMP_OVERHEAT;

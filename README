@@ -103,6 +103,12 @@ Optional:
 	libudev dev library (libudev-dev)
 	(This is only required for USB device support and is linux only)
 
+	uthash dev (uthash-dev)
+	Will use a copy included with the source if unavailable.
+
+	libjansson dev (libjansson-dev)
+	Will use a copy included with the source if unavailable.
+
 If building from git:
 	autoconf
 	automake
