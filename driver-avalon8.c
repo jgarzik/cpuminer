@@ -2359,19 +2359,24 @@ char *set_avalon8_device_freq(struct cgpu_info *avalon8, char *arg)
 char *set_avalon8_factory_info(struct cgpu_info *avalon8, char *arg)
 {
 	struct avalon8_info *info = avalon8->device_data;
+	char type[AVA8_DEFAULT_FACTORY_INFO_1_CNT];
 	int val;
 
 	if (!(*arg))
 		return NULL;
 
-	sscanf(arg, "%d", &val);
-	if (!val)
-		val = AVA8_DEFAULT_FACTORY_INFO_0;
+	memset(type, 0, AVA8_DEFAULT_FACTORY_INFO_1_CNT);
 
-	if (val < AVA8_DEFAULT_FACTORY_INFO_0_MIN || val > AVA8_DEFAULT_FACTORY_INFO_0_MAX)
+	sscanf(arg, "%d-%s", &val, type);
+
+	if ((val != AVA8_DEFAULT_FACTORY_INFO_0_IGNORE) &&
+				(val < AVA8_DEFAULT_FACTORY_INFO_0_MIN || val > AVA8_DEFAULT_FACTORY_INFO_0_MAX))
 		return "Invalid value passed to set_avalon8_factory_info";
 
 	info->factory_info[0] = val;
+
+	memcpy(&info->factory_info[1], type, AVA8_DEFAULT_FACTORY_INFO_1_CNT);
+
 	avalon8_set_factory_info(avalon8, 0, (uint8_t *)info->factory_info);
 
 	applog(LOG_NOTICE, "%s-%d: Update factory info %d",
