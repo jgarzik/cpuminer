@@ -1375,7 +1375,7 @@ static void detect_modules(struct cgpu_info *avalon8)
 			info->get_voltage[i][j] = 0;
 			info->get_vin[i][j] = 0;
 
-			for (k = 0; k < 5; k++)
+			for (k = 0; k < info->asic_count[i]; k++)
 				info->temp[i][j][k] = -273;
 
 			for (k = 0; k < AVA8_DEFAULT_PLL_CNT; k++)
