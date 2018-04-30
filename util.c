@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2017 Con Kolivas
+ * Copyright 2011-2018 Con Kolivas
  * Copyright 2011-2015 Andrew Smith
  * Copyright 2010 Jeff Garzik
  *
@@ -1331,13 +1331,18 @@ void timeraddspec(struct timespec *a, const struct timespec *b)
 	spec_nscheck(a);
 }
 
-static int __maybe_unused timespec_to_ms(struct timespec *ts)
+static int timespec_to_ms(struct timespec *ts)
 {
 	return ts->tv_sec * 1000 + ts->tv_nsec / 1000000;
 }
 
+static int64_t timespec_to_us(struct timespec *ts)
+{
+	return (int64_t)ts->tv_sec * 1000000 + ts->tv_nsec / 1000;
+}
+
 /* Subtract b from a */
-static void __maybe_unused timersubspec(struct timespec *a, const struct timespec *b)
+static void timersubspec(struct timespec *a, const struct timespec *b)
 {
 	a->tv_sec -= b->tv_sec;
 	a->tv_nsec -= b->tv_nsec;
@@ -1463,22 +1468,38 @@ static void nanosleep_abstime(struct timespec *ts_end)
 /* Reentrant version of cgsleep functions allow start time to be set separately
  * from the beginning of the actual sleep, allowing scheduling delays to be
  * counted in the sleep. */
-void cgsleep_ms_r(cgtimer_t *ts_start, int ms)
+int cgsleep_ms_r(cgtimer_t *ts_start, int ms)
 {
-	struct timespec ts_end;
+	struct timespec ts_end, ts_diff;
+	int msdiff;
 
 	ms_to_timespec(&ts_end, ms);
 	timeraddspec(&ts_end, ts_start);
+	cgtimer_time(&ts_diff);
+	/* Should be a negative value if we still have to sleep */
+	timersubspec(&ts_diff, &ts_end);
+	msdiff = -timespec_to_ms(&ts_diff);
+	if (msdiff <= 0)
+		return 0;
+
 	nanosleep_abstime(&ts_end);
+	return msdiff;
 }
 
-void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
+int64_t cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
 {
-	struct timespec ts_end;
+	struct timespec ts_end, ts_diff;
+	int64_t usdiff;
 
 	us_to_timespec(&ts_end, us);
 	timeraddspec(&ts_end, ts_start);
+	cgtimer_time(&ts_diff);
+	usdiff = -timespec_to_us(&ts_diff);
+	if (usdiff <= 0)
+		return 0;
+
 	nanosleep_abstime(&ts_end);
+	return usdiff;
 }
 #else /* CLOCK_MONOTONIC */
 #ifdef __MACH__
@@ -1613,10 +1634,27 @@ void cgsleep_ms(int ms)
 	cgsleep_ms_r(&ts_start, ms);
 }
 
+static void busywait_us(int64_t us)
+{
+	struct timeval diff, end, now;
+
+	cgtime(&end);
+	us_to_timeval(&diff, us);
+	addtime(&diff, &end);
+	do {
+		sched_yield();
+		cgtime(&now);
+	} while (time_less(&now, &end));
+}
+
 void cgsleep_us(int64_t us)
 {
 	cgtimer_t ts_start;
 
+	/* Most timer resolution is unlikely to be able to sleep accurately
+	 * for less than 1ms so busywait instead. */
+	if (us < 1000)
+		return busywait_us(us);
 	cgsleep_prepare_r(&ts_start);
 	cgsleep_us_r(&ts_start, us);
 }
@@ -2000,6 +2038,225 @@ static void decode_exit(struct pool __maybe_unused *pool, char __maybe_unused *b
 }
 #endif
 
+static int calculate_num_bits(int num)
+{
+	int ret=0;
+	while(num != 0)
+	{
+		ret++;
+		num /= 16;
+	}
+	return ret;
+}
+
+static void get_vmask(struct pool *pool, char *bbversion)
+{
+	char defaultStr[9]= "00000000";
+	int bversion, num_bits, i, j;
+	uint8_t buffer[4] = {};
+	uint32_t uiMagicNum;
+	char *tmpstr;
+	uint32_t *p1;
+
+	p1 = (uint32_t *)buffer;
+	bversion = strtol(bbversion, NULL, 16);
+
+	for (i = 0; i < 4; i++) {
+		uiMagicNum = bversion | pool->vmask_003[i];
+		//printf("[ccx]uiMagicNum:0x%x. \n", uiMagicNum);
+		*p1 = bswap_32(uiMagicNum);
+
+		//printf("[ccx]*p1:0x%x. \n", *p1);
+		switch(i) {
+			case 0:
+				pool->vmask_001[8] = *p1;
+				break;
+			case 1:
+				pool->vmask_001[4] = *p1;
+				break;
+			case 2:
+				pool->vmask_001[2] = *p1;
+				break;
+			case 3:
+				pool->vmask_001[0] = *p1;
+				break;
+			default:
+				break;
+		}
+	}
+
+	for (i = 0; i < 16; i++) {
+		if ((i!= 2) && (i!=4) && (i!=8))
+			pool->vmask_001[i] = pool->vmask_001[0];
+	}
+
+	for (i = 0; i < 16; i++)
+		memcpy(pool->vmask_002[i], defaultStr, 9);
+
+	for (i = 0; i < 3; i++) {
+		char cMask[12];
+
+		tmpstr = (char *)cgcalloc(9, 1);
+		num_bits = calculate_num_bits(pool->vmask_003[i]);
+		for (j = 0; j < (8-num_bits); j++)
+			tmpstr[j] = '0';
+
+		snprintf(cMask, 9, "%x", pool->vmask_003[i]);
+		memcpy(tmpstr + 8 - num_bits, cMask, num_bits);
+		tmpstr[8] = '\0';
+
+		//printf("[ccx]tmpstr:%s. \n", tmpstr);
+		switch(i) {
+			case 0:
+				memcpy(pool->vmask_002[8], tmpstr, 9);
+				break;
+			case 1:
+				memcpy(pool->vmask_002[4], tmpstr, 9);
+				break;
+			case 2:
+				memcpy(pool->vmask_002[2], tmpstr, 9);
+				break;
+			default:
+				break;
+		}
+		free(tmpstr);
+	}
+}
+
+static bool set_vmask(struct pool *pool, json_t *val)
+{
+	int mask, tmpMask = 0, cnt = 0, i, rem;
+	const char *version_mask;
+
+	version_mask = json_string_value(val);
+	applog(LOG_INFO, "Pool %d version_mask:%s.", pool->pool_no, version_mask);
+
+	mask = strtol(version_mask, NULL, 16);
+	if (!mask)
+		return false;
+
+	pool->vmask_003[0] = mask;
+
+	while (mask % 16 == 0) {
+		cnt++;
+		mask /= 16;
+	}
+
+	if ((rem = mask % 16))
+		tmpMask = rem;
+	else if ((rem = mask % 8))
+		tmpMask = rem;
+	else if ((rem = mask % 4))
+		tmpMask = rem;
+	else if ((rem = mask % 2))
+		tmpMask = rem;
+
+	for (i = 0; i < cnt; i++)
+		tmpMask *= 16;
+	pool->vmask_003[2] = tmpMask;
+	pool->vmask_003[1] = pool->vmask_003[0] - tmpMask;
+
+	return true;
+}
+
+#ifdef USE_VMASK
+
+#define STRATUM_VERSION_ROLLING "version-rolling"
+#define STRATUM_VERSION_ROLLING_LEN (sizeof(STRATUM_VERSION_ROLLING) - 1)
+
+/**
+ * Configures stratum mining based on connected hardware capabilities
+ * (version rolling etc.)
+ *
+ * Sample communication
+ * Request:
+ * {"id": 1, "method": "mining.configure", "params": [ ["version-rolling"], "version-rolling.mask": "ffffffff" }]}\n
+ * Response:
+ * {"id": 1, "result": { "version-rolling": True, "version-rolling.mask": "00003000" }, "error": null}\n
+ *
+ * @param pool
+ *
+ *
+ * @return
+ */
+static bool configure_stratum_mining(struct pool *pool)
+{
+	char s[RBUFSIZE];
+	char *response_str = NULL;
+	bool config_status = false;
+	bool version_rolling_status = false;
+	bool version_mask_valid = false;
+	const char *key;
+	json_t *response, *value, *res_val, *err_val;
+	json_error_t err;
+
+	snprintf(s, RBUFSIZE,
+		 "{\"id\": %d, \"method\": \"mining.configure\", \"params\": "
+		 "[[\""STRATUM_VERSION_ROLLING"\"], "
+		 "{\""STRATUM_VERSION_ROLLING".mask\": \"%x\""
+		 "}]}",
+	  swork_id++, 0xffffffff);
+
+	if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {
+		applog(LOG_DEBUG, "Failed to send mining.configure");
+		goto out;
+	}
+	if (!socket_full(pool, DEFAULT_SOCKWAIT)) {
+		applog(LOG_DEBUG, "Timed out waiting for response in %s", __FUNCTION__);
+		goto out;
+	}
+	response_str = recv_line(pool);
+	if (!response_str)
+		goto out;
+
+	response = JSON_LOADS(response_str, &err);
+	free(response_str);
+
+	res_val = json_object_get(response, "result");
+	err_val = json_object_get(response, "error");
+
+	if (!res_val || json_is_null(res_val) ||
+		(err_val && !json_is_null(err_val))) {
+				char *ss;
+
+			if (err_val)
+				ss = json_dumps(err_val, JSON_INDENT(3));
+			else
+				ss = strdup("(unknown reason)");
+
+			applog(LOG_INFO, "JSON-RPC decode failed: %s", ss);
+
+			free(ss);
+
+			goto json_response_error;
+	}
+
+	json_object_foreach(res_val, key, value) {
+		if (!strcasecmp(key, STRATUM_VERSION_ROLLING) &&
+		    strlen(key) == STRATUM_VERSION_ROLLING_LEN)
+			version_rolling_status = json_boolean_value(value);
+		else if (!strcasecmp(key, STRATUM_VERSION_ROLLING ".mask"))
+			pool->vmask = version_mask_valid = set_vmask(pool, value);
+		else
+			applog(LOG_ERR, "JSON-RPC unexpected mining.configure value: %s", key);
+	}
+
+	/* Valid configuration for now only requires enabled version rolling and valid bit mask */
+	config_status = version_rolling_status && version_mask_valid;
+
+	json_response_error:
+	json_decref(response);
+
+out:
+	return config_status;
+}
+#else
+static inline bool configure_stratum_mining(struct pool __maybe_unused *pool)
+{
+	return true;
+}
+#endif
+
 static bool parse_notify(struct pool *pool, json_t *val)
 {
 	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit,
@@ -2024,6 +2281,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	nbit = __json_array_string(val, 6);
 	ntime = __json_array_string(val, 7);
 	clean = json_is_true(json_array_get(val, 8));
+
+	get_vmask(pool, bbversion);
 
 	if (!valid_ascii(job_id) || !valid_hex(prev_hash) || !valid_hex(coinbase1) ||
 	    !valid_hex(coinbase2) || !valid_hex(bbversion) || !valid_hex(nbit) ||
@@ -2311,6 +2570,28 @@ static bool show_message(struct pool *pool, json_t *val)
 	return true;
 }
 
+static bool parse_vmask(struct pool *pool, json_t *params)
+{
+	bool ret = false;
+
+	if (!params) {
+		applog(LOG_INFO, "No params with parse_vmask given for pool %d",
+		       pool->pool_no);
+		goto out;
+	}
+	if (json_is_array(params))
+		params = json_array_get(params, 0);
+	if (!json_is_string(params) || !json_string_length(params)) {
+		applog(LOG_INFO, "Params invalid string for parse_vmask for pool %d",
+		       pool->pool_no);
+		goto out;
+	}
+	pool->vmask = set_vmask(pool, params);
+	ret = true;
+out:
+	return ret;
+}
+
 bool parse_method(struct pool *pool, char *s)
 {
 	json_t *val = NULL, *method, *err_val, *params;
@@ -2341,7 +2622,7 @@ bool parse_method(struct pool *pool, char *s)
 		else
 			ss = strdup("(unknown reason)");
 
-		applog(LOG_INFO, "JSON-RPC method decode failed: %s", ss);
+		applog(LOG_INFO, "JSON-RPC method decode of %s failed: %s", s, ss);
 		free(ss);
 		goto out_decref;
 	}
@@ -2383,6 +2664,12 @@ bool parse_method(struct pool *pool, char *s)
 		ret = send_pong(pool, val);
 		goto out_decref;
 	}
+
+	if (!strncasecmp(buf, "mining.set_version_mask", 23)) {
+		ret = parse_vmask(pool, params);
+		goto out_decref;
+	}
+	applog(LOG_INFO, "Unknown JSON-RPC from pool %d: %s", pool->pool_no, s);
 out_decref:
 	json_decref(val);
 out:
@@ -2879,6 +3166,13 @@ resend:
 	if (recvd) {
 		/* Get rid of any crap lying around if we're resending */
 		clear_sock(pool);
+	}
+
+	/* Attempt to configure stratum protocol feature set first. */
+	if (!configure_stratum_mining(pool))
+		goto out;
+
+	if (recvd) {
 		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 	} else {
 		if (pool->sessionid)
@@ -2896,7 +3190,7 @@ resend:
 		applog(LOG_DEBUG, "Timed out waiting for response in initiate_stratum");
 		goto out;
 	}
-
+rereceive:
 	sret = recv_line(pool);
 	if (!sret)
 		goto out;
@@ -2904,7 +3198,6 @@ resend:
 	recvd = true;
 
 	val = JSON_LOADS(sret, &err);
-	free(sret);
 	if (!val) {
 		applog(LOG_INFO, "JSON decode failed(%d): %s", err.line, err.text);
 		goto out;
@@ -2912,6 +3205,17 @@ resend:
 
 	res_val = json_object_get(val, "result");
 	err_val = json_object_get(val, "error");
+
+	if (!res_val) {
+		/* Check for a method just in case */
+		json_t *method_val = json_object_get(val, "method");
+
+		if (method_val && parse_method(pool, sret)) {
+			free(sret);
+			sret = NULL;
+			goto rereceive;
+		}
+	}
 
 	if (!res_val || json_is_null(res_val) ||
 	    (err_val && !json_is_null(err_val))) {
@@ -2922,7 +3226,7 @@ resend:
 		else
 			ss = strdup("(unknown reason)");
 
-		applog(LOG_INFO, "JSON-RPC decode failed: %s", ss);
+		applog(LOG_INFO, "JSON-RPC decode of message %s failed: %s", sret, ss);
 
 		free(ss);
 
@@ -3003,6 +3307,7 @@ out:
 	}
 
 	json_decref(val);
+	free(sret);
 	return ret;
 }
 

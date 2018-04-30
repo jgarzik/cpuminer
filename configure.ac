@@ -282,6 +282,7 @@ if test "x$bitfury" = xyes; then
 fi
 AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
 
+
 bitfury16="no"
 
 AC_ARG_ENABLE([bitfury16],
@@ -295,6 +296,7 @@ if test "x$bitfury16" = xyes; then
 fi
 AM_CONDITIONAL([HAS_BITFURY16], [test x$bitfury16 = xyes])
 
+
 bitmine_A1="no"
 
 AC_ARG_ENABLE([bitmine_A1],
@@ -307,6 +309,21 @@ if test "x$bitmine_A1" = xyes; then
 	standalone="yes"
 fi
 AM_CONDITIONAL([HAS_BITMINE_A1], [test x$bitmine_A1 = xyes])
+
+
+dragonmint_t1="no"
+
+AC_ARG_ENABLE([dragonmint_t1],
+	[AC_HELP_STRING([--enable-dragonmint_t1],[Compile support for Dragonmint T1 ASICs STANDALONE(default disabled)])],
+	[dragonmint_t1=$enableval]
+	)
+if test "x$dragonmint_t1" = xyes; then
+	AC_DEFINE([USE_DRAGONMINT_T1], [1], [Defined to 1 if Dragonmint T1 support is wanted])
+	AC_DEFINE([USE_VMASK], [1], [Defined to 1 if version mask rolling is wanted])
+	drivercount=x$drivercount
+	standalone="yes"
+fi
+AM_CONDITIONAL([HAS_DRAGONMINT_T1], [test x$dragonmint_t1 = xyes])
 
 
 blockerupter="no"
@@ -718,6 +735,12 @@ echo "  curses.TUI...........: $cursesmsg"
 
 
 echo
+if test "x$dragonmint_t1" = xyes; then
+	echo "  DragonMint.T1.Halong.: Enabled"
+else
+        echo "  DragonMint.T1.Halong.: Disabled"
+fi
+
 if test "x$ants1" = xyes; then
 	echo "  Antminer.S1.Bitmain..: Enabled"
 else
@@ -827,11 +850,16 @@ else
 	echo "  Spond-sp30.ASICs.....: Disabled"
 fi
 
-
 if test "x$bitmine_A1" = xyes; then
 	echo "  Bitmine-A1.ASICs.....: Enabled"
 else
 	echo "  Bitmine-A1.ASICs.....: Disabled"
+fi
+
+if test "x$dragonmint_t1" = xyes; then
+	echo "  Dragonmint.T1.ASICs..: Enabled"
+else
+	echo "  Dragonmint.T1.ASICs..: Disabled"
 fi
 
 if test "x$drillbit" = xyes; then
@@ -877,7 +905,7 @@ else
 fi
 
 #Add any new device to this, along with a no on the end of the test
-if test "x$avalon$avalon2$avalon4$avalon7$avalon_miner$bab$bflsc$bitforce$bitfury$bitfury16$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$ants3$sp10$sp30" = xnononononononononononononononononononononononononono; then
+if test "x$avalon$avalon2$avalon4$avalon7$avalon_miner$bab$bflsc$bitforce$bitfury$bitfury16$blockerupter$hashfast$hashratio$icarus$klondike$knc$modminer$drillbit$minion$cointerra$bitmine_A1$ants1$ants2$ants3$sp10$sp30$dragonmint_t1" = xnonononononononononononononononononononononononononono; then
 	echo
 	AC_MSG_ERROR([No mining devices configured in])
 	echo

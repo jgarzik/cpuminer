@@ -112,6 +112,7 @@ cgminer_SOURCES += bf16-uartdevice.c bf16-uartdevice.h
 cgminer_SOURCES += driver-bitfury16.c driver-bitfury16.h
 endif
 
+
 if HAS_BITMINE_A1
 cgminer_SOURCES += driver-SPI-bitmine-A1.c
 cgminer_SOURCES += spi-context.c spi-context.h
@@ -120,6 +121,14 @@ cgminer_SOURCES += A1-board-selector.h
 cgminer_SOURCES += A1-board-selector-CCD.c A1-board-selector-CCR.c
 cgminer_SOURCES += A1-trimpot-mcp4x.h A1-trimpot-mcp4x.c
 cgminer_SOURCES += i2c-context.c i2c-context.h
+endif
+
+if HAS_DRAGONMINT_T1
+cgminer_SOURCES += driver-SPI-dragonmint-t1.c
+cgminer_SOURCES += dragonmint_t1.c
+cgminer_SOURCES += dm_temp_ctrl.c
+cgminer_SOURCES += dm_fan_ctrl.c
+cgminer_SOURCES += dm_compat.c
 endif
 
 if HAS_DRILLBIT
