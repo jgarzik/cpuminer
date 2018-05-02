@@ -133,12 +133,12 @@ struct avalon8_dev_description avalon8_dev_table[] = {
 		}
 	},
 	{
-		"822",
-		822,
+		"831",
+		831,
 		4,
 		26,
-		AVA8_MM822_VIN_ADC_RATIO,
-		AVA8_MM822_VOUT_ADC_RATIO,
+		AVA8_MM831_VIN_ADC_RATIO,
+		AVA8_MM831_VOUT_ADC_RATIO,
 		5,
 		{
 			AVA8_DEFAULT_FREQUENCY_0M,
