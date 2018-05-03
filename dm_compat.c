@@ -747,15 +747,14 @@ void mcompat_set_start_en(unsigned char chain_id, int val)
 }
 
 
-void mcompat_set_reset(unsigned char chain_id, int val)
+bool mcompat_set_reset(unsigned char chain_id, int val)
 {
-	if (s_gpio_ops_p->set_reset == NULL)
-	{
+	if (s_gpio_ops_p->set_reset == NULL) {
 		applog(LOG_ERR, "%s not register !", __FUNCTION__);
-		return;
+		return false;
 	}
 
-	s_gpio_ops_p->set_reset(chain_id, val);
+	return s_gpio_ops_p->set_reset(chain_id, val);
 }
 
 void mcompat_set_led(unsigned char chain_id, int val)
@@ -809,14 +808,12 @@ bool mcompat_set_vid_by_step(unsigned char chain_id, int start_vid, int target_v
 		for (i = start_vid + 1; i <= target_vid; ++i) {
 			mcompat_set_vid(chain_id, i);
 			applog(LOG_NOTICE, "set_vid_value_G19: %d", i);
-			cgsleep_ms(500);
 		}
 	} else if (target_vid < start_vid) {
 		// decrease vid step by step
 		for (i = start_vid - 1; i >= target_vid; --i) {
 			mcompat_set_vid(chain_id, i);
 			applog(LOG_NOTICE, "set_vid_value_G19: %d", i);
-			cgsleep_ms(500);
 		}
 	}
 
@@ -1714,39 +1711,39 @@ void zynq_gpio_init(int pin, int dir)
 	return;
 }
 
-void zynq_gpio_write(int pin, int val)
+static bool zynq_gpio_write(int pin, int val)
 {
 	int  fd = 0;
 	ssize_t  write_bytes = 0;
 	char fpath[BUF_MAX] = {'\0'};
+	bool ret = false;
 
 	memset(fpath, 0, sizeof(fpath));
 	sprintf(fpath, SYSFS_GPIO_VAL_STR, pin);
 	fd = open(fpath, O_WRONLY);
-	if (-1 == fd)
-	{
+	if (-1 == fd) {
 		applog(LOG_ERR, "%s,%d: %s.", __FILE__, __LINE__, strerror(errno));
+		goto out;
 	}
 
-	if (0 == val)
-	{
+	if (0 == val) {
 		write_bytes = write(fd, SYSFS_GPIO_VAL_LOW, sizeof(SYSFS_GPIO_VAL_LOW));
-		if (-1 == write_bytes)
-		{
+		if (-1 == write_bytes) {
 			applog(LOG_ERR, "%s,%d: %s.", __FILE__, __LINE__, strerror(errno));
+			goto out_close;
 		}
-	}
-	else
-	{
+	} else {
 		write_bytes = write(fd, SYSFS_GPIO_VAL_HIGH, sizeof(SYSFS_GPIO_VAL_HIGH));
-		if (-1 == write_bytes)
-		{
+		if (-1 == write_bytes) {
 			applog(LOG_ERR, "%s,%d: %s,%s.", __FILE__, __LINE__, fpath, strerror(errno));
+			goto out_close;
 		}
 	}
-
+	ret = true;
+out_close:
 	close(fd);
-	return;
+out:
+	return ret;
 }
 
 int zynq_gpio_read(int pin)
@@ -3125,7 +3122,7 @@ void hub_set_start_en(uint8_t chain_id, int value)
 }
 
 // 1.8v GPIO output
-void hub_set_reset(uint8_t chain_id, int value)
+bool hub_set_reset(uint8_t chain_id, int value)
 {
 	uint32_t reg_val;
 
@@ -3133,6 +3130,7 @@ void hub_set_reset(uint8_t chain_id, int value)
 	Xil_Peripheral_Out32(MCOMPAT_PERIPHERAL_S00_AXI_SLV_REG8_OFFSET, (reg_val & (~(0x1 << (9 + chain_id)))) | ((value & 0x1) << (9 + chain_id)));
 	//reg_val = Xil_Peripheral_In32(XPAR_VID_LED_BUZZER_CTRL_0_S00_AXI_BASEADDR + VID_LED_BUZZER_CTRL_S00_AXI_SLV_REG0_OFFSET + chain_id*4);
 	//Xil_Peripheral_Out32(XPAR_VID_LED_BUZZER_CTRL_0_S00_AXI_BASEADDR + VID_LED_BUZZER_CTRL_S00_AXI_SLV_REG0_OFFSET + chain_id*4, (reg_val & 0xfffdffff) | ((value & 0x1) << 17));
+	return true;
 }
 
 void hub_set_led(uint8_t chain_id, int mode)
@@ -3666,7 +3664,7 @@ void opi_set_start_en(unsigned char chain_id, int val)
 }
 
 
-void opi_set_reset(unsigned char chain_id, int val)
+bool opi_set_reset(unsigned char chain_id, int val)
 {
 	unsigned char tx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
 
@@ -3675,17 +3673,16 @@ void opi_set_reset(unsigned char chain_id, int val)
 	tx_buf[0] = (val >> 0) & 0xff;
 	tx_buf[1] = (val >> 8) & 0xff;
 
-	if (!opi_send_cmd(chain_id, OPI_SET_RESET, tx_buf, 2))
-	{
+	if (!opi_send_cmd(chain_id, OPI_SET_RESET, tx_buf, 2)) {
 		applog(LOG_WARNING, "%s,%d: %s send fail !", __FILE__, __LINE__, __FUNCTION__);
-		return;
+		return false;
 	}
 
-	if (!opi_poll_rslt(chain_id, OPI_SET_RESET, NULL, 0))
-	{
+	if (!opi_poll_rslt(chain_id, OPI_SET_RESET, NULL, 0)) {
 		applog(LOG_WARNING, "%s,%d: %s poll fail !", __FILE__, __LINE__, __FUNCTION__);
-		return;
+		return false;
 	}
+	return true;
 }
 
 
@@ -4088,9 +4085,9 @@ void spi_set_start_en(unsigned char chain_id, int val)
 	zynq_gpio_write(pin_start_en[chain_id], val);
 }
 
-void spi_set_reset(unsigned char chain_id, int val)
+bool spi_set_reset(unsigned char chain_id, int val)
 {
-	zynq_gpio_write(pin_reset[chain_id], val);
+	return zynq_gpio_write(pin_reset[chain_id], val);
 }
 
 void spi_set_led(unsigned char chain_id, int val)

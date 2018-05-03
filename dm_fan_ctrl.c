@@ -25,10 +25,6 @@
  * Macros & Constants
  ******************************************************************************/
 #define FAN_MODE_DEF			FAN_MODE_AUTO		// default fan control mode
-#define FAN_SPEED_MAX			(100)			// max fan speed (%)
-#define FAN_SPEED_MIN			(0)			// min fan speed (%)
-#define FAN_SPEED_DEF			(80)			// default fan speed (%)
-#define FAN_SPEED_PREHEAT		(10)			// preheat fan speed
 
 #define WORK_CYCLE_DEF			(2)			// default time interval between temperature checks
 #define DEV_TMP_CHK_CNT			(3)

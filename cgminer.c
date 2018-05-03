@@ -4460,9 +4460,9 @@ static void __kill_work(void)
 	}
 
 	/* Give the threads a chance to shut down gracefully */
-	cg_completion_timeout(&wait_mining, NULL, 3000);
+	cg_completion_timeout(&wait_mining, NULL, 5000);
 	/* Kill the threads and wait for them to return if not */
-	cg_completion_timeout(&kill_mining, NULL, 3000);
+	cg_completion_timeout(&kill_mining, NULL, 5000);
 
 	/* Stop the others */
 	forcelog(LOG_DEBUG, "Killing off API thread");

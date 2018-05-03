@@ -48,13 +48,7 @@
 #define DRAGONMINT_MINER_TYPE_FILE				"/tmp/type"
 #define DRAGONMINT_HARDWARE_VERSION_FILE			"/tmp/hwver"
 #define DRAGONMINT_CHIP_NUM_FILE				"/tmp/chip_nums"
-#define DRAGONMINT_MINER_RETRY_FILE				"/tmp/retryCnt"
-#define DRAGONMINT_CHAIN_ABNORMAL_FILE				"/tmp/chainretryCnt"
 #define MINER_AGEING_STATUS_FILE				"/tmp/ageingStatus"
-#define LOG_FILE_ENCORE_PREFIX					"/tmp/encore_flag_chain"
-#define DRAGONMINT_MINER_RETRY_COUNT				(2)
-#define DRAGONMINT_CHAIN_ABNORMAL_RETRY_CNT			(3)
-#define DRAGONMINT_MINER_ENCORE_RETRY_COUNT			(3)
 
 #define T1_PLL(prediv,fbdiv,postdiv) ((prediv<<(89-64))|fbdiv<<(80-64)|0b010<<(77-64)|postdiv<<(70-64))
 
@@ -178,8 +172,6 @@ struct T1_chain {
 	double pllhwerr[T1_PLL_TUNE_RANGE]; // hwerr vs pll level
 	int pllvid[T1_PLL_TUNE_RANGE]; // Associated VID per pll
 
-	cgtimer_t cgt_pll; // Last time we set pll
-
 	bool VidOptimal; // We've stopped tuning voltage
 	bool pllOptimal; // We've stopped tuning frequency
 	bool sampling; // Results are valid for tuning
@@ -233,11 +225,9 @@ uint32_t dragonmint_get_chipnum(void);
 
 void chain_all_exit(void);
 void power_down_all_chain(void);
-void dragonmint_miner_encore_save(void);
 void write_miner_ageing_status(uint32_t statusCode);
 int dragonmint_get_voltage_stats(struct T1_chain *t1, dragonmint_reg_ctrl_t *s_reg_ctrl);
 
-extern void dragonmint_miner_get_encore_flag(int chain_id);
 bool t1_set_pll(struct T1_chain *t1, int chip_id, int target_pll);
 
 bool T1_SetT1PLLClock(struct T1_chain *t1,int pllClkIdx, int chip_id);

@@ -200,7 +200,7 @@ typedef struct MCOMPAT_GPIO_TAG{
 	//
 	void (*set_start_en)(unsigned char, int);
 	//
-	void (*set_reset)(unsigned char, int);
+	bool (*set_reset)(unsigned char, int);
 	//
 	void (*set_led)(unsigned char, int);
 	//
@@ -397,7 +397,7 @@ extern void mcompat_set_power_en(unsigned char chain_id, int val);
 
 extern void mcompat_set_start_en(unsigned char chain_id, int val);
 
-extern void mcompat_set_reset(unsigned char chain_id, int val);
+extern bool mcompat_set_reset(unsigned char chain_id, int val);
 
 extern void mcompat_set_led(unsigned char chain_id, int val);
 
@@ -532,8 +532,6 @@ extern int g_chip_num;
 extern void zynq_gpio_init(int pin, int dir);
 
 extern void zynq_gpio_exit(int pin);
-
-extern void zynq_gpio_write(int pin, int val);
 
 extern int zynq_gpio_read(int pin);
 
@@ -1225,7 +1223,7 @@ void hub_set_power_en(uint8_t chain_id, int value);
 
 void hub_set_start_en(uint8_t chain_id, int value);
 
-void hub_set_reset(uint8_t chain_id, int value);
+bool hub_set_reset(uint8_t chain_id, int value);
 
 void hub_set_led(uint8_t chain_id, int mode);
 
@@ -1427,7 +1425,7 @@ void opi_set_power_en(unsigned char chain_id, int val);
 
 void opi_set_start_en(unsigned char chain_id, int val);
 
-void opi_set_reset(unsigned char chain_id, int val);
+bool opi_set_reset(unsigned char chain_id, int val);
 
 void opi_set_led(unsigned char chain_id, int val);
 
@@ -1470,7 +1468,7 @@ void exit_spi_gpio(int chain_num);
 
 void spi_set_power_en(unsigned char chain_id, int val);
 void spi_set_start_en(unsigned char chain_id, int val);
-void spi_set_reset(unsigned char chain_id, int val);
+bool spi_set_reset(unsigned char chain_id, int val);
 void spi_set_led(unsigned char chain_id, int val);
 bool spi_set_vid(unsigned char chain_id, int vid);
 int spi_get_plug(unsigned char chain_id);

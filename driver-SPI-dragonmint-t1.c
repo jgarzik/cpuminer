@@ -64,6 +64,8 @@ char volShowLog[MAX_CHAIN_NUM][256];
 
 static int spi_status_err_cnt = 0;
 
+static pthread_t fan_tid;
+
 /*
  * for now, we have one global config, defaulting values:
  * - ref_clk 16MHz / sys_clk 800MHz
@@ -78,10 +80,6 @@ static struct T1_config_options *parsed_config_options;
 
 int chain_plug[MAX_CHAIN_NUM];
 int chain_flag[MAX_CHAIN_NUM];
-
-extern int chain_encore_flag[MAX_CHAIN_NUM];
-
-extern bool miner_retry_flag;
 
 #define  LOG_VOL_PREFIX "/tmp/log/volAnalys"
 void dragonmint_log_record(int cid, void* log, int len)
@@ -258,7 +256,6 @@ static bool prechain_detect(struct T1_chain *t1, int idxpll)
 	}
 
 	/* Read chip voltages */
-	cgsleep_ms(3000);
 	get_voltages(t1);
 	applog(LOG_NOTICE, "chain%d: volt = %d, vid = %d after calibration", chain_id,
 	       opt_T1Vol[chain_id], t1->iVid);
@@ -481,72 +478,31 @@ static bool detect_T1_chain(void)
 
 	/* Go back and try chains that have failed after cycling through all of
 	 * them. */
-	for (retries = 1; retries <= 12; retries++) {
+	for (retries = 0; retries < 3; retries++) {
 		for (i = 0; i < MAX_CHAIN_NUM; i++) {
 			if (chain_plug[i] != 1)
 				continue;
 			if (chain[i])
 				continue;
-			/* Power down first */
-			applog(LOG_NOTICE, "chain%d: power down", i);
-			mcompat_chain_power_down(i);
-			sleep(3);
-			/* Try different power-on modes 3 times each */
-			if (chain_encore_flag[i] == 0) {
-				applog(LOG_NOTICE, "chain%d: encore first mode", i);
-				mcompat_set_reset(i, 1);
+			mcompat_set_reset(i, 1);
+			if (retries)
 				sleep(1);
-				mcompat_set_power_en(i, 1);
+			mcompat_set_power_en(i, 1);
+			if (retries)
 				sleep(1);
-				mcompat_set_reset(i, 0);
+			mcompat_set_reset(i, 0);
+			if (retries)
 				sleep(1);
-				mcompat_set_start_en(i, 1);
+			mcompat_set_start_en(i, 1);
+			if (retries)
 				sleep(1);
-				mcompat_set_reset(i, 1);
-				sleep(1);
-			} else if (chain_encore_flag[i] == 1) {
-				applog(LOG_NOTICE, "chain%d: encore second mode", i);
-				mcompat_set_start_en(i, 1);
-				mcompat_set_reset(i, 1);
-				sleep(1);
-				mcompat_set_power_en(i, 1);
-				sleep(1);
-				mcompat_set_start_en(i, 0);
-				mcompat_set_reset(i, 0);
-				sleep(1);
-				mcompat_set_start_en(i, 1);
-				mcompat_set_reset(i, 1);
-				sleep(1);
-			} else if (chain_encore_flag[i] == 2) {
-				applog(LOG_NOTICE, "chain%d: encore third mode", i);
-				mcompat_set_power_en(i, 1);
-				sleep(1);
-				mcompat_set_start_en(i, 1);
-				sleep(1);
-				mcompat_set_reset(i, 1);
-				sleep(1);
-				mcompat_set_reset(i, 0);
-				sleep(1);
-				mcompat_set_reset(i, 1);
-				sleep(1);
-			} else {
-				applog(LOG_NOTICE, "chain%d: encore fourth mode", i);
-				mcompat_set_power_en(i, 1);
-				sleep(1);
-				mcompat_set_reset(i, 1);
-				sleep(1);
-				mcompat_set_start_en(i, 1);
-				sleep(1);
-			}
+			mcompat_set_reset(i, 1);
+
 			/* pre-init chain */
 			if ((chain[i] = pre_init_T1_chain(i))) {
 				chain_flag[i] = 1;
 				if (chain[i]->num_chips > chip_num)
 					chip_num = chain[i]->num_chips;
-			} else if (!(retries % 3)) {
-				/* After 3 retries, try another encore flag */
-				if (++chain_encore_flag[i] > 4)
-					chain_encore_flag[i] = 0;
 			}
 		}
 	}
@@ -571,8 +527,6 @@ static bool detect_T1_chain(void)
 		mcompat_cfg_tsadc_divider(i, PLL_Clk_12Mhz[0].speedMHz);
 	}
 
-	sleep(3);
-
 	// init temp ctrl
 	dm_tempctrl_get_defcfg(&tmp_cfg);
 	/* Set initial target temperature lower for more reliable startup */
@@ -586,8 +540,7 @@ static bool detect_T1_chain(void)
 	fan_cfg.fan_speed = T1_FANSPEED_INIT;
 	dm_fanctrl_init(&fan_cfg);
 //	dm_fanctrl_init(NULL);			// using default cfg
-	pthread_t tid;
-	pthread_create(&tid, NULL, dm_fanctrl_thread, NULL);
+	pthread_create(&fan_tid, NULL, dm_fanctrl_thread, NULL);
 
 	for(i = 0; i < MAX_CHAIN_NUM; i++) {
 		if (chain_flag[i] != 1)
@@ -662,7 +615,6 @@ static bool detect_T1_chain(void)
 /* Probe SPI channel and register chip chain */
 void T1_detect(bool hotplug)
 {
-	struct timeval test_tv;
 	int i;
 
 	if (hotplug)
@@ -712,8 +664,6 @@ void T1_detect(bool hotplug)
 	dm_fanctrl_set_fan_speed(T1_FANSPEED_INIT);
 
 	//dragonmint_miner_init_voltage_flag();
-	for (i = 0; i < MAX_CHAIN_NUM; i++)
-		dragonmint_miner_get_encore_flag(i);
 
 	for (i = MAX_CHAIN_NUM - 1; i >= 0; i--) {
 		if (mcompat_get_plug(i) == 0) {
@@ -723,12 +673,7 @@ void T1_detect(bool hotplug)
 			applog(LOG_INFO, "chain:%d the plat is not inserted", i);
 			write_miner_ageing_status(AGEING_PLUG_STATUS_ERROR);
 		}
-		// power down to avoid to run with working freq and highest voltage
-		applog(LOG_NOTICE, "chain%d: power down", i);
-		mcompat_chain_power_down(i);
 	}
-
-	sleep(3);	// wait for powerdown done
 
 	/* If hardware version is g19, continue init cgminer. Else power off*/
 	if (HARDWARE_VERSION_G19 == g_hwver) {
@@ -753,15 +698,6 @@ void T1_detect(bool hotplug)
 		return;
 	}
 
-	// update time
-	for (i = 0; i < 100; i++) {
-		cgtime(&test_tv);
-		if (test_tv.tv_sec > 1000000000)
-			break;
-
-		cgsleep_ms(500);
-	}
-
 	for(i = 0; i < MAX_CHAIN_NUM; ++i) {
 		int pll = DEFAULT_PLL;
 
@@ -782,7 +718,6 @@ void T1_detect(bool hotplug)
 			set_timeout_on_i2c(30);
 		applog(LOG_WARNING, "T1 detect finish");
 	}
-	dragonmint_miner_encore_save();
 }
 
 #define VOLTAGE_UPDATE_INT  121
@@ -1438,8 +1373,7 @@ static int64_t T1_scanwork(struct thr_info *thr)
 		applog(LOG_EMERG, "T1 chain %d not producing shares for more than 5 mins, shutting down.",
 		       cid);
 		/* Exit cgminer, allowing systemd watchdog to restart */
-		power_down_all_chain();
-		exit(1);
+		kill_work(); // Does not return
 	}
 
 	cgsleep_prepare_r(&t1->cgt);
@@ -1534,8 +1468,7 @@ static int64_t T1_scanwork(struct thr_info *thr)
 				       cid);
 				/* Exit cgminer, allowing systemd watchdog to
 				 * restart */
-				power_down_all_chain();
-				exit(1);
+				kill_work();
 #if 0
 				g_cmd_fails[cid] = 0;
 				g_cmd_resets[cid] = 0;
@@ -1562,6 +1495,7 @@ static int64_t T1_scanwork(struct thr_info *thr)
 		// shut down chain
 		applog(LOG_ERR, "DANGEROUS TEMPERATURE(%.0f): power down chain %d",
 			cgpu->temp_max, cid);
+		/* Only time we power down is for dangerous overheat */
 		mcompat_chain_power_down(cid);
 		cgpu->status = LIFE_DEAD;
 		cgtime(&thr->sick);
@@ -1603,6 +1537,37 @@ static int64_t T1_scanwork(struct thr_info *thr)
 		usleep((10 - slept) * 1000);
 
 	return hashes * 0x100000000ull;
+}
+
+static int chains_shutdown;
+
+/* Shut down the chains gracefully. We do not want to power them down as it
+ * makes the next start unreliable, so we decrease power usage to a minimum. */
+static void T1_shutdown(struct thr_info *thr)
+{
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct T1_chain *t1 = cgpu->device_data;
+	int cid = t1->chain_id;
+
+	/* Set a very low frequency. Ignore the return value as often it will
+	 * refuse to go back to 0 on the way down. */
+	t1_set_pll(t1, CMD_ADDR_BROADCAST, 0);
+
+	/* Set a very low voltage */
+	mcompat_set_vid_by_step(cid, t1->iVid, T1_VID_MAX);
+
+	/* Confirm we have actually reset the chains */
+	if (!mcompat_set_reset(cid, 0)) {
+		applog(LOG_ERR, "Failed to reset chain %d on shutdown", cid);
+		return;
+	}
+	/* Only once all chains are successfully shut down is it safe to turn
+	 * down fan speed */
+	if (++chains_shutdown < total_chains)
+		return;
+
+	pthread_cancel(fan_tid);
+	dm_fanctrl_set_fan_speed(FAN_SPEED_PREHEAT);
 }
 
 static void T1_get_statline_before(char *buf, size_t len, struct cgpu_info *cgpu)
@@ -1706,6 +1671,7 @@ struct device_drv dragonmintT1_drv = {
 
 	.hash_work = hash_driver_work,
 	.scanwork = T1_scanwork,
+	.thread_shutdown = T1_shutdown,
 	.get_api_stats = T1_api_stats,
 	.get_api_debug = T1_api_debug,
 	.get_statline_before = T1_get_statline_before,

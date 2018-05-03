@@ -1,5 +1,6 @@
 /*
  * Copyright 2018 Duan Hao
+ * Copyright 2018 Con Kolivas <kernel@kolivas.org>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -9,6 +10,11 @@
 
 #ifndef _DM_FAN_CTRL_H_
 #define _DM_FAN_CTRL_H_
+
+#define FAN_SPEED_MAX			(100)			// max fan speed (%)
+#define FAN_SPEED_MIN			(0)			// min fan speed (%)
+#define FAN_SPEED_DEF			(80)			// default fan speed (%)
+#define FAN_SPEED_PREHEAT		(10)			// preheat fan speed
 
 typedef enum _FAN_MODE
 {

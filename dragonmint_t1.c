@@ -711,8 +711,6 @@ extern struct T1_chain *chain[MAX_CHAIN_NUM];
 extern uint8_t chain_mask;
 extern hardware_version_e g_hwver;
 //int chain_voltage_flag[MAX_CHAIN_NUM];
-int chain_encore_flag[MAX_CHAIN_NUM];
-bool alreadyRetryFull = false;
 
 #if 0
 const unsigned short wCRCTalbeAbs[] =
@@ -824,13 +822,10 @@ bool T1_SetT1PLLClock(struct T1_chain *t1, int pllClkIdx, int chip_id)
 
 	memcpy(temp_reg, default_reg[pllClkIdx], REG_LENGTH);
 
-	/* Sleep 120ms since the LAST time we set pll */
-	cgsleep_ms_r(&t1->cgt_pll, 10);
 	if (!mcompat_cmd_write_register(cid, chip_id, temp_reg, REG_LENGTH)) {
 		applog(LOG_WARNING, "Failed to set PLL Lv.%d on T1 %d in T1_SetT1PLLClock", pllClkIdx, cid);
 		return false;
 	}
-	cgsleep_prepare_r(&t1->cgt_pll);
 	if (chip_id) {
 		applog(LOG_NOTICE, "T1 %d chip %d PLL set to %d %d MHz", cid, chip_id,
 		       pllClkIdx, PLL_Clk_12Mhz[pllClkIdx].speedMHz);
@@ -1323,28 +1318,6 @@ void power_down_all_chain(void)
 	}
 }
 
-void dragonmint_miner_encore_save(void)
-{
-	FILE* fd;
-	int i;
-
-	for (i = 0; i < MAX_CHAIN_NUM; i++) {
-		char fileName[128];
-
-		if (chain_plug[i] != 1 || !chain_encore_flag[i])
-			continue;
-
-		sprintf(fileName, "%s%d.log", LOG_FILE_ENCORE_PREFIX, i);
-		fd = fopen(fileName, "w+");
-		if (fd == NULL){
-			applog(LOG_ERR, "Open to write miner encore retry file failed!");
-			return;
-		}
-		fprintf(fd, "%d", chain_encore_flag[i]);
-		fclose(fd);
-	}
-}
-
 void write_miner_ageing_status(uint32_t statusCode)
 {
 	FILE* fd;
@@ -1364,7 +1337,7 @@ void write_miner_ageing_status(uint32_t statusCode)
 
 bool t1_set_pll(struct T1_chain *t1, int chip_id, int target_pll)
 {
-	int i, start_pll = t1->pll, chain_id = t1->chain_id;
+	int i, start_pll = t1->pll;
 	uint8_t reg[REG_LENGTH] = {0};
 
 	if (target_pll > start_pll) {
@@ -1372,8 +1345,6 @@ bool t1_set_pll(struct T1_chain *t1, int chip_id, int target_pll)
 		for (i = start_pll; i <= target_pll; i++) {
 			memcpy(reg, default_reg[i], REG_LENGTH);
 			if (!T1_SetT1PLLClock(t1, i, chip_id)) {
-				mcompat_chain_power_down(chain_id);
-				chain_flag[chain_id] = 0;
 				applog(LOG_WARNING, "set default PLL fail");
 				write_miner_ageing_status(AGEING_CONFIG_PLL_FAILED);
 				return false;
@@ -1388,8 +1359,6 @@ bool t1_set_pll(struct T1_chain *t1, int chip_id, int target_pll)
 		for (i = start_pll; i >= target_pll; i--) {
 			memcpy(reg, default_reg[i], REG_LENGTH);
 			if (!T1_SetT1PLLClock(t1, i, chip_id)) {
-				mcompat_chain_power_down(chain_id);
-				chain_flag[chain_id] = 0;
 				applog(LOG_WARNING, "set default PLL fail");
 				write_miner_ageing_status(AGEING_CONFIG_PLL_FAILED);
 				return false;
@@ -1405,29 +1374,4 @@ bool t1_set_pll(struct T1_chain *t1, int chip_id, int target_pll)
 	mcompat_cfg_tsadc_divider(t1->chain_id, PLL_Clk_12Mhz[t1->pll].speedMHz);
 
 	return true;
-}
-
-void dragonmint_miner_get_encore_flag(int chain_id)
-{
-	FILE* fd;
-	int retryCnt;
-	char fileName[128];
-
-	sprintf(fileName, "%s%d.log", LOG_FILE_ENCORE_PREFIX, chain_id);
-	if ((access(fileName, F_OK)) != -1) {
-		applog(LOG_ERR, "Miner init encore retry file already exists!");
-		fd = fopen(fileName, "r+");
-		if (fd == NULL) {
-			applog(LOG_ERR, "Open miner init encore retry file failed!");
-			return;
-		}
-		if (fscanf(fd, "%d", &retryCnt) < 1)
-			applog(LOG_ERR, "Fscanf of miner init encore retry file failed!");
-		else {
-			applog(LOG_INFO, "Miner init encore retry count is %d!", retryCnt);
-			chain_encore_flag[chain_id] = retryCnt;
-		}
-		fclose(fd);
-	}
-	return;
 }
