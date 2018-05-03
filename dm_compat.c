@@ -1544,14 +1544,12 @@ double mcompat_get_average_volt(int *volt, int size)
 		return 0;
 }
 
-#define VOLT_STEP       (-3.0f)		// mV
-
+/* Adjust vid till we are just above volt_target. We should have already set
+ * vid_start before calling this function. */
 int mcompat_find_chain_vid(int chain_id, int chip_num, int vid_start, double volt_target)
 {
 	int chip_volt[MCOMPAT_CONFIG_MAX_CHIP_NUM] = {0};
 	int vid = vid_start;
-	double volt_diff_prev;
-	double volt_diff;
 	double volt_avg;
 
 	mcompat_cfg_tsadc_divider(chain_id, 120);
@@ -1563,75 +1561,43 @@ int mcompat_find_chain_vid(int chain_id, int chip_num, int vid_start, double vol
 	applog(LOG_NOTICE, "chain%d find_chain_vid: start_vid = %d, target_volt = %.1f",
 		chain_id, vid_start, volt_target);
 
-	// set start vid
-	mcompat_set_vid(chain_id, vid);
-	cgsleep_ms(3000);
 	mcompat_get_chip_volt(chain_id, chip_volt);
 	volt_avg = mcompat_get_average_volt(chip_volt, chip_num);
-	volt_diff_prev = volt_avg - volt_target;
-
 	applog(LOG_NOTICE, "Chain %d VID %d voltage %.1f", chain_id, vid, volt_avg);
 
-	// set vid again with estimated value when volt_diff > 10mV
-	if (abs(volt_diff_prev) > 10) {
-		// estimate new vid
-		vid = vid_start - volt_diff_prev / VOLT_STEP;
-		if (vid > VID_MAX)
-			vid = VID_MAX;
-		else if (vid < VID_MIN)
-			vid = VID_MIN;
-
-		mcompat_set_vid_by_step(chain_id, vid_start, vid);
-		cgsleep_ms(3000);
+	/* Go down voltage till we're below the target */
+	while (volt_avg >= volt_target) {
+		if (vid >= VID_MAX) {
+			applog(LOG_WARNING, "Chain %d unable to get below target voltage %.1f by VID %d",
+			       chain_id, volt_target, vid);
+			break;
+		}
+		vid++;
+		mcompat_set_vid(chain_id, vid);
 		mcompat_get_chip_volt(chain_id, chip_volt);
 		volt_avg = mcompat_get_average_volt(chip_volt, chip_num);
-		volt_diff_prev = volt_avg - volt_target;
-
 		applog(LOG_NOTICE, "Chain %d VID %d voltage %.1f", chain_id, vid, volt_avg);
 	}
+	cgsleep_ms(500);
 
-	while (1) {
-		(volt_diff_prev < 0) ? (vid--) : (vid++);
-		if (vid > VID_MAX)
-			vid = VID_MAX;
-		else if (vid < VID_MIN)
-			vid = VID_MIN;
+	mcompat_get_chip_volt(chain_id, chip_volt);
+	volt_avg = mcompat_get_average_volt(chip_volt, chip_num);
+	applog(LOG_NOTICE, "Chain %d VID %d voltage %.1f", chain_id, vid, volt_avg);
 
+	/* Now go down VID till we're above the target, final point should
+	 * be closest without going below voltage */
+	while (volt_avg < volt_target) {
+		if (vid <= VID_MIN) {
+			applog(LOG_WARNING, "Chain %d unable to get above target voltage %.1f by VID %d",
+			       chain_id, volt_target, vid);
+			break;
+		}
+		vid--;
 		mcompat_set_vid(chain_id, vid);
-		cgsleep_ms(5000);
+		cgsleep_ms(500);
 		mcompat_get_chip_volt(chain_id, chip_volt);
 		volt_avg = mcompat_get_average_volt(chip_volt, chip_num);
-		volt_diff = volt_avg - volt_target;
-
 		applog(LOG_NOTICE, "Chain %d VID %d voltage %.1f", chain_id, vid, volt_avg);
-
-		if (volt_diff_prev < 0) {
-			/* voltage increasing, vid decreasing */
-			// finish searching if the sign of volt_diff is changed
-			// or reaches the minimal vid
-			if (volt_diff >= 0 || vid == VID_MIN) {
-				if (-volt_diff_prev < volt_diff) {
-					// the last vid is closer to the target
-				    mcompat_set_vid(chain_id, ++vid);
-				    cgsleep_ms(500);
-				}
-				break;
-			}
-		} else {
-			/* voltage decreasing, vid increasing */
-			// finish searching if the sign of volt_diff is changed
-			// or reaches the maximal vid
-			if (volt_diff <= 0 || vid == VID_MAX) {
-				if (volt_diff_prev < -volt_diff) {
-					// the last vid is closer to the target
-				    mcompat_set_vid(chain_id, --vid);
-				    cgsleep_ms(500);
-				}
-				break;
-			}
-		}
-
-	    volt_diff_prev = volt_diff;
 	}
 
 	mcompat_configure_tvsensor(chain_id, CMD_ADDR_BROADCAST, 1);
