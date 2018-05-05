@@ -1251,7 +1251,7 @@ static void t1_raise(struct T1_chain *t1, int cid)
 	}
 }
 
-#define MAX_CMD_FAILS		(20)
+#define MAX_CMD_FAILS		(0)
 #define MAX_CMD_RESETS		(50)
 
 static int g_cmd_fails[MAX_CHAIN_NUM];
@@ -1424,6 +1424,9 @@ static int64_t T1_scanwork(struct thr_info *thr)
 		reset_tune(t1);
 	}
 
+	/* Clean spi buffer before read 0a reg */
+	hub_spi_clean_chain(cid);
+
 	if (thr->work_restart || mcompat_cmd_read_register(cid, MAX_CHIP_NUM >> 1, reg, REG_LENGTH)) {
 		uint8_t qstate = reg[9] & 0x03;
 
@@ -1434,7 +1437,6 @@ static int64_t T1_scanwork(struct thr_info *thr)
 		/* qstate will always be 0x0 when work_restart is set */
 		if (qstate != 0x03) {
 			if (qstate == 0x0) {
-				//applog(LOG_NOTICE, "qstate == 0x0,the number of work is %d. \t", t1->active_wq.num_elems);
 				for (i = t1->num_active_chips; i > 0; i--) {
 					struct T1_chip *chip = &t1->chips[i - 1];
 					struct work *work = wq_dequeue(t1, true);
@@ -1472,9 +1474,7 @@ static int64_t T1_scanwork(struct thr_info *thr)
 		if (g_cmd_fails[cid] > MAX_CMD_FAILS) {
 			// TODO: replaced with mcompat_spi_reset()
 			applog(LOG_ERR, "Chain %d reset spihub", cid);
-//			hub_spi_reset(cid);
 			hub_spi_clean_chain(cid);
-//			g_cmd_fails[cid] = 0;
 			g_cmd_resets[cid]++;
 			if (g_cmd_resets[cid] > MAX_CMD_RESETS) {
 				applog(LOG_ERR, "Chain %d is not working due to multiple resets. shutdown.",
@@ -1482,17 +1482,6 @@ static int64_t T1_scanwork(struct thr_info *thr)
 				/* Exit cgminer, allowing systemd watchdog to
 				 * restart */
 				kill_work();
-#if 0
-				g_cmd_fails[cid] = 0;
-				g_cmd_resets[cid] = 0;
-				// TODO: restart chain
-				mcompat_chain_power_down(cid);
-				cgpu->status = LIFE_DEAD;
-				cgtime(&thr->sick);
-				while (42) {
-					cgsleep_ms(1000);
-				}
-#endif
 			}
 		}
 	}

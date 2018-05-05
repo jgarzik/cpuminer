@@ -2751,9 +2751,11 @@ int push_one_cmd(uint8_t spi_id, uint8_t* tx_buf8, uint32_t len_cfg, uint32_t la
 	// send command execution
 	Xil_SPI_Out32(SPI_BASEADDR_GAP*spi_id+CMD_CTRL_REG0_ADDR, len_cfg);
 	if (last_job)
-		Xil_SPI_Out32(SPI_BASEADDR_GAP*spi_id+CMD_CTRL_REG1_ADDR, (0x00000003 | CHK_HY | CHK_LN));
+		Xil_SPI_Out32(SPI_BASEADDR_GAP*spi_id+CMD_CTRL_REG1_ADDR, 
+			0x00000001 | CHK_CMD | CHK_HY | CHK_LN);
 	else
-		Xil_SPI_Out32(SPI_BASEADDR_GAP*spi_id+CMD_CTRL_REG1_ADDR, (0x00000013 | CHK_HY | CHK_LN));
+		Xil_SPI_Out32(SPI_BASEADDR_GAP*spi_id+CMD_CTRL_REG1_ADDR, 
+			0x00000011 | CHK_CMD | CHK_HY | CHK_LN);
 
 	return XST_SUCCESS;
 }
@@ -2792,7 +2794,8 @@ int hub_spi_init(uint8_t spi_id, uint8_t chip_num)
 	// config max chip number
 	Xil_SPI_Out32(SPI_BASEADDR_GAP*spi_id+MAIN_CFG_REG0_ADDR,0x00041004|(chip_num<<24));
 	// config not check header
-	Xil_SPI_Out32(SPI_BASEADDR_GAP*spi_id+CMD_CTRL_REG3_ADDR,0x000F00FF);
+//	Xil_SPI_Out32(SPI_BASEADDR_GAP*spi_id+CMD_CTRL_REG3_ADDR,0x000F00FF);
+	Xil_SPI_Out32(SPI_BASEADDR_GAP*spi_id+CMD_CTRL_REG3_ADDR, 0x000F0000 & chip_num);
 	// config mask of each interrupt
 	Xil_SPI_Out32(MAIN_CFG_REG2_ADDR, 0x00000);
 
@@ -2999,15 +3002,21 @@ int do_spi_cmd(uint8_t spi_id, uint8_t* tx_buf8, uint8_t* rx_buf8, uint32_t len_
 	// reset_rx_buffer(spi_id);
 
 	// push tx data to send buffer and start command
-	if (push_one_cmd(spi_id, tx_buf8, len_cfg, 1) != XST_SUCCESS)
+	if (push_one_cmd(spi_id, tx_buf8, len_cfg, 1) != XST_SUCCESS) {
+		applog(LOG_ERR, "ERROR - failed to send spi cmd");
 		return XST_FAILURE;
+	}
 
 	// read back rx data
-	if (pop_one_rece(spi_id, rx_buf8, len_cfg) != XST_SUCCESS)
+	if (pop_one_rece(spi_id, rx_buf8, len_cfg) != XST_SUCCESS) {
+		applog(LOG_ERR, "ERROR - failed to recv spi data");
 		return XST_FAILURE;
+	}
 
-	if ((tx_buf8[0] & 0x0f) != (rx_buf8[0] & 0x0f))
+	if ((tx_buf8[0] & 0x0f) != (rx_buf8[0] & 0x0f)) {
+		//hexdump_error("ERROR - recvbuf:", rx_buf8, 16);
 		return XST_FAILURE;
+	}
 
 	// Clear status. Not mandatory but suggest
 	clear_wait_st_idle(spi_id, 200);
@@ -3019,6 +3028,7 @@ int do_spi_cmd(uint8_t spi_id, uint8_t* tx_buf8, uint8_t* rx_buf8, uint32_t len_
 void enable_auto_cmd0a(uint8_t spi_id, uint32_t threshold, uint32_t msb, uint32_t lsb, uint32_t large_en, uint32_t mode )//mode : 1 only cmd0a;0 cmd08 follows cmd0a
 {
 	uint32_t val;
+	Xil_SPI_Out32(SPI_BASEADDR_GAP*spi_id+CMD_CTRL_REG1_ADDR, 0x00000000 | CHK_CMD);
 	val = ((msb << 24) & 0xff000000) | ((lsb << 16) & 0xff0000) | ((mode & 0x1) << 14) | ((large_en & 0x1) << 13) | (0x1 << 12) | ( threshold & 0xfff );
 	Xil_SPI_Out32(SPI_BASEADDR_GAP*spi_id+AUTO_CMD0A_REG0_ADDR, val);
 }
@@ -3046,7 +3056,7 @@ int enable_auto_nonce(uint8_t spi_id, uint16_t cmd08_cmd, uint32_t len_cfg)
 	Xil_SPI_Out32(SPI_BASEADDR_GAP*spi_id+MAIN_CFG_REG3_ADDR, 0x000000ff); // auto cmd08 gap
 	Xil_SPI_Out32(SPI_BASEADDR_GAP*spi_id+CMD_CTRL_REG0_ADDR, len_cfg);
 	//Xil_SPI_Out32(SPI_BASEADDR_GAP*spi_id+CMD_CTRL_REG1_ADDR, 0x00000002); // clear status
-	Xil_SPI_Out32(SPI_BASEADDR_GAP*spi_id+CMD_CTRL_REG1_ADDR, 0x00000304); // cmd08 do
+	Xil_SPI_Out32(SPI_BASEADDR_GAP*spi_id+CMD_CTRL_REG1_ADDR, 0x00000300 | CHK_CMD); // cmd08 do
 
 	return XST_SUCCESS;
 }
@@ -4490,11 +4500,11 @@ bool hub_cmd_read_result(unsigned char chain_id, unsigned char chip_id, unsigned
 	spi_tx[0] = CMD_READ_RESULT;
 	spi_tx[1] = chip_id;
 
-	cfg_len = 0x02000605;
-//	cfg_len += (0x02) << 24;
-//	cfg_len += (0x00) << 16;
-//	cfg_len += (((len / 2) + 3) & 0xff) << 8;
-//	cfg_len += (((len / 2) + 2) & 0xff) << 0;
+//	cfg_len = 0x02000605;
+	cfg_len += (0x02) << 24;
+	cfg_len += (0x00) << 16;
+	cfg_len += (((len / 2) + 3) & 0xff) << 8;
+	cfg_len += (((len / 2) + 2) & 0xff) << 0;
 
 	if (do_spi_cmd(chain_id, spi_tx, spi_rx, cfg_len) == XST_FAILURE)
 		return false;
@@ -4520,16 +4530,16 @@ bool hub_cmd_read_result(unsigned char chain_id, unsigned char chip_id, unsigned
 }
 
 
-bool hub_cmd_auto_nonce(unsigned char chain_id, int mode, int __maybe_unused len)
+bool hub_cmd_auto_nonce(unsigned char chain_id, int mode, int len)
 {
 	uint16_t cmd08 = 0x0800;
 	uint32_t cfg_len = 0;
 
-	cfg_len = 0x02000605;
-//	cfg_len += (0x02) << 24;
-//	cfg_len += (0x00) << 16;
-//	cfg_len += (((len / 2) + 3) & 0xff) << 8;
-//	cfg_len += (((len / 2) + 2) & 0xff) << 0;
+//	cfg_len = 0x02000605;
+	cfg_len += (0x02) << 24;
+	cfg_len += (0x00) << 16;
+	cfg_len += (((len / 2) + 3) & 0xff) << 8;
+	cfg_len += (((len / 2) + 2) & 0xff) << 0;
 
 	if (mode == 0)
 		disable_auto_nonce(chain_id);
@@ -4548,11 +4558,11 @@ bool hub_cmd_read_nonce(unsigned char chain_id, unsigned char *res, int len)
 	memset(spi_tx, 0, sizeof(spi_tx));
 	memset(spi_rx, 0, sizeof(spi_rx));
 
-	cfg_len = 0x02000605;
-//	cfg_len += (0x02) << 24;
-//	cfg_len += (0x00) << 16;
-//	cfg_len += (((len / 2) + 3) & 0xff) << 8;
-//	cfg_len += (((len / 2) + 2) & 0xff) << 0;
+//	cfg_len = 0x02000605;
+	cfg_len += (0x02) << 24;
+	cfg_len += (0x00) << 16;
+	cfg_len += (((len / 2) + 3) & 0xff) << 8;
+	cfg_len += (((len / 2) + 2) & 0xff) << 0;
 
 	if (!rece_queue_has_nonce(chain_id, 1000))
 		return false;
