@@ -146,6 +146,7 @@ uint32_t dm_tempctrl_update_chain_temp(int chain_id)
 	if (!mcompat_get_chain_temp(chain_id, &chain_temp))
 		applog(LOG_ERR, "chain%d: failed to read chain temperature", chain_id);
 #else
+	int chip_temp[MCOMPAT_CONFIG_MAX_CHIP_NUM];
 	mcompat_get_chip_temp(chain_id, chip_temp);
 	dm_tempctrl_get_chain_temp(chip_temp, &chain_temp);
 #endif

@@ -22,7 +22,10 @@
 #define NONCE_LEN						(6)
 
 #define T1_PLL_LV_NUM                  	(324)
+#define T1_PLL_SETSPI					(310)
 #define T1_PLL_SETVID					(1000)
+
+#define T1_SPI_SPEED_DEF				SPI_SPEED_390K
 
 #define STARTUP_VID						(0)
 #define DEFAULT_PLL						(1344)

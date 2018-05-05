@@ -2804,7 +2804,7 @@ void hub_spi_clean_chain(uint32_t spi_id)
 	uint8_t spi_tx[MCOMPAT_CONFIG_MAX_CMD_LENGTH] = {0};
 	uint8_t spi_rx[MCOMPAT_CONFIG_MAX_CMD_LENGTH] = {0};
 
-	spi_tx[0] = CMD_READ_RESULT;
+	spi_tx[0] = CMD_RESET;
 	spi_tx[1] = CMD_ADDR_BROADCAST;
 	spi_tx[2] = 0xff;
 	spi_tx[3] = 0xff;

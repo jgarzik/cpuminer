@@ -206,6 +206,7 @@ static void get_voltages(struct T1_chain *t1)
 
 static bool prechain_detect(struct T1_chain *t1, int idxpll)
 {
+	int pll_lv_to_setspi;
 	int pll_lv_to_setvid;
 	int chain_id = t1->chain_id;
 
@@ -228,6 +229,16 @@ static bool prechain_detect(struct T1_chain *t1, int idxpll)
 		else
 			opt_T1Vol[chain_id] = TUNE_VOLT_START_BAL;
 	}
+
+	pll_lv_to_setspi = T1_ConfigT1PLLClock(T1_PLL_SETSPI);
+	if (!t1_set_pll(t1, CMD_ADDR_BROADCAST, pll_lv_to_setspi))
+		return false;
+
+	/* Using 390K spi speed at first and raising to 1.5M at 310M PLL
+	 * to avoid spi failure on 150M PLL */
+	applog(LOG_NOTICE, "chain%d: spi speed set to 1.5M", chain_id);
+	mcompat_set_spi_speed(chain_id, SPI_SPEED_1562K);
+	cgsleep_ms(10);
 
 	pll_lv_to_setvid = T1_ConfigT1PLLClock(T1_PLL_SETVID);
 	if (!t1_set_pll(t1, CMD_ADDR_BROADCAST, pll_lv_to_setvid))
@@ -257,8 +268,8 @@ static bool prechain_detect(struct T1_chain *t1, int idxpll)
 
 	/* Read chip voltages */
 	get_voltages(t1);
-	applog(LOG_NOTICE, "chain%d: volt = %d, vid = %d after calibration", chain_id,
-	       opt_T1Vol[chain_id], t1->iVid);
+	applog(LOG_NOTICE, "chain%d: volt = %.1f, vid = %d after calibration", chain_id,
+	       s_reg_ctrl.average_vol[chain_id], t1->iVid);
 
 	return true;
 }
@@ -302,8 +313,9 @@ static struct T1_chain *pre_init_T1_chain(int chain_id)
 
 	applog(LOG_INFO, "pre %d: T1 init chain", t1->chain_id);
 
-	//spi speed : 1.5625M
-	mcompat_set_spi_speed(chain_id, SPI_SPEED_1562K);
+	//spi speed init
+	applog(LOG_NOTICE, "chain%d: spi speed set to 390K", chain_id);
+	mcompat_set_spi_speed(chain_id, T1_SPI_SPEED_DEF);
 	cgsleep_ms(10);
 
 	if (!dm_cmd_resetall(chain_id, CMD_ADDR_BROADCAST, buffer)) {
@@ -368,6 +380,7 @@ static bool init_T1_chain(struct T1_chain *t1)
 
 	applog(LOG_INFO, "%d: T1 init chain", chain_id);
 
+	applog(LOG_NOTICE, "chain%d: spi speed set to 6.25M", chain_id);
 	mcompat_set_spi_speed(chain_id, SPI_SPEED_6250K);
 	cgsleep_ms(1);
 
@@ -426,11 +439,11 @@ static bool init_T1_chain(struct T1_chain *t1)
 	else
 		applog(LOG_NOTICE, "T1 chain %d applies ck tuning scheme", chain_id);
 
-	return t1;
+	return true;
 
 failure:
 	exit_T1_chain(t1);
-	return NULL;
+	return false;
 }
 
 /* Asynchronous work generation since get_work is a blocking function */
@@ -521,7 +534,7 @@ static bool detect_T1_chain(void)
 		}
 
 		// re-config spi speed after platform init
-		mcompat_set_spi_speed(i, SPI_SPEED_1562K);
+		mcompat_set_spi_speed(i, T1_SPI_SPEED_DEF);
 		cgsleep_ms(10);
 
 		mcompat_cfg_tsadc_divider(i, PLL_Clk_12Mhz[0].speedMHz);
