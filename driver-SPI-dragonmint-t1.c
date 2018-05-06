@@ -471,6 +471,25 @@ static void *T1_work_thread(void *arg)
 	return NULL;
 }
 
+static void start_T1_chain(int cid, int retries)
+{
+	mcompat_set_reset(cid, 1);
+	if (retries)
+		sleep(1);
+	mcompat_set_power_en(cid, 1);
+	if (retries)
+		sleep(1);
+	mcompat_set_reset(cid, 0);
+	if (retries)
+		sleep(1);
+	mcompat_set_start_en(cid, 1);
+	if (retries)
+		sleep(1);
+	mcompat_set_reset(cid, 1);
+	if (retries)
+		sleep(1);
+}
+
 static bool detect_T1_chain(void)
 {
 	int i, retries, chain_num = 0, chip_num = 0, iPll;
@@ -497,19 +516,7 @@ static bool detect_T1_chain(void)
 				continue;
 			if (chain[i])
 				continue;
-			mcompat_set_reset(i, 1);
-			if (retries)
-				sleep(1);
-			mcompat_set_power_en(i, 1);
-			if (retries)
-				sleep(1);
-			mcompat_set_reset(i, 0);
-			if (retries)
-				sleep(1);
-			mcompat_set_start_en(i, 1);
-			if (retries)
-				sleep(1);
-			mcompat_set_reset(i, 1);
+			start_T1_chain(i, retries);
 
 			/* pre-init chain */
 			if ((chain[i] = pre_init_T1_chain(i))) {
