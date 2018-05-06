@@ -304,14 +304,10 @@ static int chain_detect(struct T1_chain *t1)
 	return n_chips;
 }
 
-static struct T1_chain *pre_init_T1_chain(int chain_id)
+static bool prepare_T1(struct T1_chain *t1, int chain_id)
 {
-	uint8_t buffer[4] = {0};
-	struct T1_chain *t1 = cgcalloc(sizeof(*t1), 1);
-
-	t1->chain_id = chain_id;
-
-	applog(LOG_INFO, "pre %d: T1 init chain", t1->chain_id);
+	uint8_t buffer[4] = {};
+	bool ret = false;
 
 	//spi speed init
 	applog(LOG_NOTICE, "chain%d: spi speed set to 390K", chain_id);
@@ -320,11 +316,11 @@ static struct T1_chain *pre_init_T1_chain(int chain_id)
 
 	if (!dm_cmd_resetall(chain_id, CMD_ADDR_BROADCAST, buffer)) {
 		applog(LOG_ERR, "failed to reset chain %d!", chain_id);
-		goto failure;
+		goto out;
 	}
 	if (CMD_TYPE_T1 != (buffer[0] & 0xf0)) {
 		applog(LOG_ERR, "incompatible chip type %02X for chain %d!", buffer[0] & 0xf0, chain_id);
-		goto failure;
+		goto out;
 	}
 
 	t1->num_chips = chain_detect(t1);
@@ -341,7 +337,7 @@ static struct T1_chain *pre_init_T1_chain(int chain_id)
 				write_miner_ageing_status(AGEING_SPI_STATUS_ERROR);
 			}
 		}
-		goto failure;
+		goto out;
 	}
 
 	if (chain_id == (MAX_CHAIN_NUM - 1)){
@@ -359,15 +355,29 @@ static struct T1_chain *pre_init_T1_chain(int chain_id)
 		t1->num_chips > T1_config_options.override_chip_num) {
 		t1->num_active_chips = T1_config_options.override_chip_num;
 		applog(LOG_WARNING, "%d: limiting chain to %d chips",
-		       t1->chain_id, t1->num_active_chips);
+		       chain_id, t1->num_active_chips);
 	}
 
+	/* Free this in case we are re-initialising a chain */
+	free(t1->chips);
 	t1->chips = cgcalloc(t1->num_active_chips, sizeof(struct T1_chip));
-	return t1;
+	ret = true;
+out:
+	return ret;
+}
 
-failure:
-	exit_T1_chain(t1);
-	return NULL;
+static struct T1_chain *pre_init_T1_chain(int chain_id)
+{
+	struct T1_chain *t1 = cgcalloc(sizeof(*t1), 1);
+
+	applog(LOG_INFO, "pre %d: T1 init chain", chain_id);
+
+	t1->chain_id = chain_id;
+	if (!prepare_T1(t1, chain_id)) {
+		exit_T1_chain(t1);
+		t1 = NULL;
+	}
+	return t1;
 }
 
 static bool init_T1_chain(struct T1_chain *t1)
