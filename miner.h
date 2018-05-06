@@ -1158,6 +1158,7 @@ bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *r
 #endif
 extern int restart_wait(struct thr_info *thr, unsigned int mstime);
 
+extern void raise_cgminer(void);
 extern void kill_work(void);
 
 extern void reinit_device(struct cgpu_info *cgpu);

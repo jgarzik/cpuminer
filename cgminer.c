@@ -4496,6 +4496,22 @@ const
 #endif
 char **initial_args;
 
+static void *raise_thread(void __maybe_unused *arg)
+{
+	raise(SIGTERM);
+	return NULL;
+}
+
+/* This provides a mechanism for driver threads to initiate a shutdown without
+ * the cyclical problem of the shutdown path being cancelled while the driver
+ * thread shuts down.*/
+void raise_cgminer(void)
+{
+	pthread_t pth;
+
+	pthread_create(&pth, NULL, raise_thread, NULL);
+}
+
 static void clean_up(bool restarting);
 
 void app_restart(void)

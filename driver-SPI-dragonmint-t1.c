@@ -1291,7 +1291,7 @@ static int64_t T1_scanwork(struct thr_info *thr)
 
 	if (unlikely((t1->num_cores == 0) || (t1->num_cores > MAX_CORES))) {
 		cgpu->deven = DEV_DISABLED;
-		return 0;
+		return -1;
 	}
 
 	/* We start with low diff to speed up tuning and increase hashrate
@@ -1386,7 +1386,8 @@ static int64_t T1_scanwork(struct thr_info *thr)
 		applog(LOG_EMERG, "T1 chain %d not producing shares for more than 5 mins, shutting down.",
 		       cid);
 		/* Exit cgminer, allowing systemd watchdog to restart */
-		kill_work(); // Does not return
+		raise_cgminer();
+		return -1;
 	}
 
 	cgsleep_prepare_r(&t1->cgt);
@@ -1481,7 +1482,8 @@ static int64_t T1_scanwork(struct thr_info *thr)
 				       cid);
 				/* Exit cgminer, allowing systemd watchdog to
 				 * restart */
-				kill_work();
+				raise_cgminer();
+				return -1;
 			}
 		}
 	}
