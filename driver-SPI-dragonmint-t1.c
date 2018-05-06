@@ -387,6 +387,7 @@ static bool init_T1_chain(struct T1_chain *t1)
 	uint8_t reg[REG_LENGTH] = {0};
 	int chain_id = t1->chain_id;
 	int num_chips;
+	bool ret = false;
 
 	applog(LOG_INFO, "%d: T1 init chain", chain_id);
 
@@ -414,12 +415,12 @@ static bool init_T1_chain(struct T1_chain *t1)
 
 	if (num_chips != 0 && num_chips != t1->num_chips) {
 		applog(LOG_WARNING, "T1 %d: Num chips failure", chain_id);
-		goto failure;
+		goto out;
 	}
 
 	if (!mcompat_cmd_bist_fix(chain_id, CMD_ADDR_BROADCAST)) {
 		write_miner_ageing_status(AGEING_BIST_FIX_FAILED);
-		goto failure;
+		goto out;
 	}
 
 	cgsleep_us(200);
@@ -434,13 +435,13 @@ static bool init_T1_chain(struct T1_chain *t1)
 		chain_id, s_reg_ctrl.highest_vol[chain_id], s_reg_ctrl.average_vol[chain_id],
 		s_reg_ctrl.lowest_vol[chain_id]);
 
+	/* Reset value in case we are re-initialising */
+	t1->num_cores = 0;
 	for (i = 0; i < t1->num_active_chips; i++)
 		check_chip(t1, i);
 
 	applog(LOG_WARNING, "%d: found %d chips with total %d active cores",
 	       chain_id, t1->num_active_chips, t1->num_cores);
-
-	INIT_LIST_HEAD(&t1->active_wq.head);
 
 	if (!opt_T1auto)
 		t1->VidOptimal = t1->pllOptimal = true;
@@ -449,11 +450,9 @@ static bool init_T1_chain(struct T1_chain *t1)
 	else
 		applog(LOG_NOTICE, "T1 chain %d applies ck tuning scheme", chain_id);
 
-	return true;
-
-failure:
-	exit_T1_chain(t1);
-	return false;
+	ret = true;
+out:
+	return ret;
 }
 
 /* Asynchronous work generation since get_work is a blocking function */
@@ -586,6 +585,7 @@ static bool detect_T1_chain(void)
 			continue;
 
 		if (!init_T1_chain(chain[i])) {
+			exit_T1_chain(chain[i]);
 			applog(LOG_ERR, "init %d T1 chain fail", i);
 			chain_flag[i] = 0;
 			continue;
@@ -626,6 +626,8 @@ static bool detect_T1_chain(void)
 		mcompat_set_led(i, LED_ON);
 		applog(LOG_WARNING, "Detected the %d T1 chain with %d chips / %d cores",
 			i, chain[i]->num_active_chips, chain[i]->num_cores);
+
+		INIT_LIST_HEAD(&t1->active_wq.head);
 
 		mutex_init(&t1->lock);
 		pthread_cond_init(&t1->cond, NULL);
@@ -747,6 +749,34 @@ void T1_detect(bool hotplug)
 		if (misc_get_vid_type() == MCOMPAT_LIB_VID_I2C_TYPE)
 			set_timeout_on_i2c(30);
 		applog(LOG_WARNING, "T1 detect finish");
+	}
+}
+
+/* Exit cgminer on failure, allowing systemd watchdog to restart */
+static void reinit_T1_chain(struct T1_chain *t1, int cid)
+{
+	bool success = false;
+	int i;
+
+	applog(LOG_WARNING, "T1: %d attempting to re-initialise!", cid);
+	for (i = 0; i < 3; i++) {
+		start_T1_chain(cid, i);
+		if (prepare_T1(t1, cid)) {
+			success = true;
+			break;
+		}
+	}
+	if (!success) {
+		applog(LOG_EMERG, "T1: %d FAILED TO PREPARE, SHUTTING DOWN", cid);
+		raise_cgminer();
+	}
+	if (!prechain_detect(t1, T1Pll[cid])) {
+		applog(LOG_EMERG, "T1: %d FAILED TO PRECHAIN DETECT, SHUTTING DOWN", cid);
+		raise_cgminer();
+	}
+	if (!init_T1_chain(t1)) {
+		applog(LOG_EMERG, "T1: %d FAILED TO INIT, SHUTTING DOWN", cid);
+		raise_cgminer();
 	}
 }
 
@@ -1400,11 +1430,9 @@ static int64_t T1_scanwork(struct thr_info *thr)
 	}
 
 	if (unlikely(now.tv_sec - t1->lastshare > 300)) {
-		applog(LOG_EMERG, "T1 chain %d not producing shares for more than 5 mins, shutting down.",
+		applog(LOG_EMERG, "T1 chain %d not producing shares for more than 5 mins.",
 		       cid);
-		/* Exit cgminer, allowing systemd watchdog to restart */
-		raise_cgminer();
-		return -1;
+		reinit_T1_chain(t1, cid);
 	}
 
 	cgsleep_prepare_r(&t1->cgt);
@@ -1495,12 +1523,9 @@ static int64_t T1_scanwork(struct thr_info *thr)
 			hub_spi_clean_chain(cid);
 			g_cmd_resets[cid]++;
 			if (g_cmd_resets[cid] > MAX_CMD_RESETS) {
-				applog(LOG_ERR, "Chain %d is not working due to multiple resets. shutdown.",
+				applog(LOG_ERR, "Chain %d is not working due to multiple resets.",
 				       cid);
-				/* Exit cgminer, allowing systemd watchdog to
-				 * restart */
-				raise_cgminer();
-				return -1;
+				reinit_T1_chain(t1, cid);
 			}
 		}
 	}

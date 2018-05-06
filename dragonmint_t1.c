@@ -1083,11 +1083,9 @@ bool check_chip(struct T1_chain *t1, int i)
 	//  cid, chip_id, t1->chips[i].num_cores);
 
 	memcpy(t1->chips[i].reg, buffer, REG_LENGTH);
-    t1->chips[i].temp= mcompat_temp_to_centigrade(
-		0x000003ff & ((buffer[7] << 8) | buffer[8]));
+	t1->chips[i].temp= mcompat_temp_to_centigrade(0x000003ff & ((buffer[7] << 8) | buffer[8]));
 
-	if (t1->chips[i].num_cores < BROKEN_CHIP_THRESHOLD)
-	{
+	if (t1->chips[i].num_cores < BROKEN_CHIP_THRESHOLD) {
 		applog(LOG_WARNING, "%d: broken chip %d with %d active "
 		"cores (threshold = %d)", cid, chip_id,
 		       t1->chips[i].num_cores, BROKEN_CHIP_THRESHOLD);
@@ -1098,8 +1096,7 @@ bool check_chip(struct T1_chain *t1, int i)
 		return false;
 	}
 
-	if (t1->chips[i].num_cores < WEAK_CHIP_THRESHOLD)
-	{
+	if (t1->chips[i].num_cores < WEAK_CHIP_THRESHOLD) {
 		applog(LOG_WARNING, "%d: weak chip %d with %d active "
 		"cores (threshold = %d)", cid,
 		       chip_id, t1->chips[i].num_cores, WEAK_CHIP_THRESHOLD);
