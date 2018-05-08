@@ -1595,7 +1595,7 @@ static void T1_shutdown(struct thr_info *thr)
 	struct T1_chain *t1 = cgpu->device_data;
 	int cid = t1->chain_id;
 
-	mcompat_set_spi_speed(cid, SPI_SPEED_1562K);
+	mcompat_set_spi_speed(cid, T1_SPI_SPEED_DEF);
 
 	/* Set a very low frequency. */
 	t1_set_pll(t1, CMD_ADDR_BROADCAST, 0);
