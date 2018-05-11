@@ -28,7 +28,7 @@
 #define T1_SPI_SPEED_DEF				SPI_SPEED_390K
 
 #define STARTUP_VID						(0)
-#define DEFAULT_PLL						(1344)
+#define DEFAULT_PLL						(1332)
 #define MIN_PLL							(1200)
 #define MAX_PLL							(1392)
 
