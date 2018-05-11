@@ -1429,7 +1429,10 @@ void cgtime(struct timeval *tv)
 #else /* WIN32 */
 void cgtime(struct timeval *tv)
 {
-	gettimeofday(tv, NULL);
+	cgtimer_t cgt;
+
+	cgtimer_time(&cgt);
+	timespec_to_val(tv, &cgt);
 }
 
 int cgtimer_to_ms(cgtimer_t *cgt)
