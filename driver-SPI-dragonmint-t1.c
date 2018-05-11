@@ -362,20 +362,6 @@ out:
 	return ret;
 }
 
-static struct T1_chain *pre_init_T1_chain(int chain_id)
-{
-	struct T1_chain *t1 = cgcalloc(sizeof(*t1), 1);
-
-	applog(LOG_INFO, "pre %d: T1 init chain", chain_id);
-
-	t1->chain_id = chain_id;
-	if (!prepare_T1(t1, chain_id)) {
-		exit_T1_chain(t1);
-		t1 = NULL;
-	}
-	return t1;
-}
-
 static bool init_T1_chain(struct T1_chain *t1)
 {
 	int i;
@@ -479,74 +465,52 @@ static void *T1_work_thread(void *arg)
 static void start_T1_chain(int cid, int retries)
 {
 	mcompat_set_reset(cid, 1);
-	if (retries)
-		sleep(1);
+	sleep(retries);
 	mcompat_set_power_en(cid, 1);
-	if (retries)
-		sleep(1);
+	sleep(retries);
 	mcompat_set_reset(cid, 0);
-	if (retries)
-		sleep(1);
+	sleep(retries);
 	mcompat_set_start_en(cid, 1);
-	if (retries)
-		sleep(1);
+	sleep(retries);
 	mcompat_set_reset(cid, 1);
-	if (retries)
-		sleep(1);
+	sleep(retries);
+
+	mcompat_set_spi_speed(cid, T1_SPI_SPEED_DEF);
+	cgsleep_ms(10);
+
+	mcompat_cfg_tsadc_divider(cid, PLL_Clk_12Mhz[0].speedMHz);
 }
 
-static bool detect_T1_chain(void)
+static void detect_T1_chain(void)
 {
-	int i, retries, chain_num = 0, chip_num = 0, iPll;
+	int i, chain_num = 0, chip_num = 0;
+	struct T1_chain *t1;
 	c_temp_cfg tmp_cfg;
 
 	applog(LOG_NOTICE, "T1: checking T1 chain");
 
-	for(i = 0; i < MAX_CHAIN_NUM; i++) {
+	for (i = 0; i < MAX_CHAIN_NUM; i++) {
 		if (chain_plug[i] != 1)
 			continue;
+		chain[i] = t1 = cgcalloc(sizeof(struct T1_chain), 1);
+		t1->chain_id = i;
 		chain_num++;
+		start_T1_chain(i, 0);
+		if (!prepare_T1(t1, i))
+			continue;
+		if (t1->num_chips > chip_num)
+			chip_num = t1->num_chips;
 	}
 
-
-	/* Go back and try chains that have failed after cycling through all of
-	 * them. */
-	for (retries = 0; retries < 3; retries++) {
-		for (i = 0; i < MAX_CHAIN_NUM; i++) {
-			if (chain_plug[i] != 1)
-				continue;
-			if (chain[i])
-				continue;
-			start_T1_chain(i, retries);
-
-			/* pre-init chain */
-			if ((chain[i] = pre_init_T1_chain(i))) {
-				chain_flag[i] = 1;
-				if (chain[i]->num_chips > chip_num)
-					chip_num = chain[i]->num_chips;
-			}
-		}
+	if (!chip_num) {
+		applog(LOG_ERR, "Failed to prepare any chains, assuming max chips!");
+		chip_num = MAX_CHIP_NUM;
 	}
 
 	// reinit platform with real chain number and chip number
 	applog(LOG_NOTICE, "platform re-init: chain_num(%d), chip_num(%d)", chain_num, chip_num);
 	sys_platform_exit();
 	sys_platform_init(PLATFORM_ZYNQ_HUB_G19, MCOMPAT_LIB_MINER_TYPE_T1, chain_num, chip_num);
-
-	for (i = 0; i < MAX_CHAIN_NUM; i++) {
-		if (chain_plug[i] != 1)
-			continue;
-		if (chain[i] == NULL){
-			applog(LOG_ERR, "init %d T1 chain fail", i);
-			continue;
-		}
-
-		// re-config spi speed after platform init
-		mcompat_set_spi_speed(i, T1_SPI_SPEED_DEF);
-		cgsleep_ms(10);
-
-		mcompat_cfg_tsadc_divider(i, PLL_Clk_12Mhz[0].speedMHz);
-	}
 
 	// init temp ctrl
 	dm_tempctrl_get_defcfg(&tmp_cfg);
@@ -564,35 +528,9 @@ static bool detect_T1_chain(void)
 	pthread_create(&fan_tid, NULL, dm_fanctrl_thread, NULL);
 
 	for(i = 0; i < MAX_CHAIN_NUM; i++) {
-		if (chain_flag[i] != 1)
-			continue;
-		if (!prechain_detect(chain[i], T1Pll[i])) {
-			chain_flag[i] = 0;
-			exit_T1_chain(chain[i]);
-		}
-	}
-
-	for(i = 0; i < MAX_CHAIN_NUM; i++) {
-		if (chain_flag[i] != 1)
-			continue;
-
-		if (!init_T1_chain(chain[i])) {
-			exit_T1_chain(chain[i]);
-			applog(LOG_ERR, "init %d T1 chain fail", i);
-			chain_flag[i] = 0;
-			continue;
-		}
-	}
-
-	for(i = 0; i < MAX_CHAIN_NUM; i++) {
 		struct cgpu_info *cgpu;
-		struct T1_chain *t1;
 		pthread_t pth;
 
-		if (chain_flag[i] != 1)
-			continue;
-
-		total_chains++;
 		cgpu = cgcalloc(sizeof(*cgpu), 1);
 		cgpu->drv = &dragonmintT1_drv;
 		cgpu->name = "DragonmintT1.SingleChain";
@@ -601,15 +539,6 @@ static bool detect_T1_chain(void)
 		cgpu->device_data = t1 = chain[i];
 		cgtime(&cgpu->dev_start_tv);
 		t1->lastshare = cgpu->dev_start_tv.tv_sec;
-
-		iPll = T1Pll[i];
-
-		if ((chain[i]->num_chips <= MAX_CHIP_NUM) && (chain[i]->num_cores <= MAX_CORES)) {
-			cgpu->mhs_av = (double)PLL_Clk_12Mhz[iPll].speedMHz * 2ull * (chain[i]->num_cores);
-		} else {
-			cgpu->mhs_av = 0;
-			chain_flag[i] = 0;
-		}
 
 		chain[i]->cgpu = cgpu;
 		cgpu->device_id = i;
@@ -626,14 +555,9 @@ static bool detect_T1_chain(void)
 		pthread_create(&pth, NULL, T1_work_thread, cgpu);
 	}
 
-	if (!total_chains)
-		return false;
-
 	/* Now adjust target temperature for runtime setting */
 	tmp_cfg.tmp_target = T1_TEMP_TARGET_RUN;
 	dm_tempctrl_set(&tmp_cfg);
-
-	return true;
 }
 
 /* Probe SPI channel and register chip chain */
@@ -722,7 +646,7 @@ void T1_detect(bool hotplug)
 		return;
 	}
 
-	for(i = 0; i < MAX_CHAIN_NUM; ++i) {
+	for (i = 0; i < MAX_CHAIN_NUM; ++i) {
 		int pll = DEFAULT_PLL;
 
 		/* Tune voltage to highest frequency in Performance mode, and
@@ -737,39 +661,44 @@ void T1_detect(bool hotplug)
 		T1Pll[i] = T1_ConfigT1PLLClock(pll);
 	}
 
-	if (detect_T1_chain()) {
-		if (misc_get_vid_type() == MCOMPAT_LIB_VID_I2C_TYPE)
-			set_timeout_on_i2c(30);
-		applog(LOG_WARNING, "T1 detect finish");
-	}
+	detect_T1_chain();
+	if (misc_get_vid_type() == MCOMPAT_LIB_VID_I2C_TYPE)
+		set_timeout_on_i2c(30);
+	applog(LOG_WARNING, "T1 detect finish");
 }
 
 /* Exit cgminer on failure, allowing systemd watchdog to restart */
-static void reinit_T1_chain(struct T1_chain *t1, int cid)
+static void reinit_T1_chain(struct cgpu_info *cgpu, struct T1_chain *t1, int cid)
 {
-	bool success = false;
-	int i;
+	int retries = 0;
 
-	applog(LOG_WARNING, "T1: %d attempting to re-initialise!", cid);
-	for (i = 0; i < 3; i++) {
-		start_T1_chain(cid, i);
-		if (prepare_T1(t1, cid)) {
-			success = true;
-			break;
+	applog(LOG_WARNING, "T1: %d attempting to Initialise!", cid);
+	while (42) {
+		start_T1_chain(cid, retries++);
+		if (!prepare_T1(t1, cid)) {
+			applog(LOG_WARNING, "Failed to prepare T1 %d", cid);
+			continue;
 		}
+
+		if (t1->num_chips <= MAX_CHIP_NUM && t1->num_cores <= MAX_CORES)
+			cgpu->mhs_av = (double)PLL_Clk_12Mhz[T1Pll[cid]].speedMHz * 2ull * t1->num_cores;
+		else {
+			applog(LOG_WARNING, "T1 %d Wrong chip num %d or core num %d",
+			       cid, t1->num_chips, t1->num_cores);
+			continue;
+		}
+
+		if (!prechain_detect(t1, T1Pll[cid])) {
+			applog(LOG_WARNING, "Failed to prechain detect T1 %d", cid);
+			continue;
+		}
+		if (!init_T1_chain(t1)) {
+			applog(LOG_WARNING, "Failed to init T1 %d", cid);
+			continue;
+		}
+		break;
 	}
-	if (!success) {
-		applog(LOG_EMERG, "T1: %d FAILED TO PREPARE, SHUTTING DOWN", cid);
-		raise_cgminer();
-	}
-	if (!prechain_detect(t1, T1Pll[cid])) {
-		applog(LOG_EMERG, "T1: %d FAILED TO PRECHAIN DETECT, SHUTTING DOWN", cid);
-		raise_cgminer();
-	}
-	if (!init_T1_chain(t1)) {
-		applog(LOG_EMERG, "T1: %d FAILED TO INIT, SHUTTING DOWN", cid);
-		raise_cgminer();
-	}
+	chain_flag[cid] = 1;
 }
 
 #define VOLTAGE_UPDATE_INT  121
@@ -1328,10 +1257,8 @@ static int64_t T1_scanwork(struct thr_info *thr)
 #endif
 	struct timeval now;
 
-	if (unlikely((t1->num_cores == 0) || (t1->num_cores > MAX_CORES))) {
-		cgpu->deven = DEV_DISABLED;
-		return -1;
-	}
+	if (unlikely(!chain_flag[cid]))
+		reinit_T1_chain(cgpu, t1, cid);
 
 	/* We start with low diff to speed up tuning and increase hashrate
 	 * resolution reported and then increase diff after an hour to decrease
@@ -1424,7 +1351,7 @@ static int64_t T1_scanwork(struct thr_info *thr)
 	if (unlikely(now.tv_sec - t1->lastshare > 300)) {
 		applog(LOG_EMERG, "T1 chain %d not producing shares for more than 5 mins.",
 		       cid);
-		reinit_T1_chain(t1, cid);
+		reinit_T1_chain(cgpu, t1, cid);
 	}
 
 	cgsleep_prepare_r(&t1->cgt);
@@ -1517,7 +1444,7 @@ static int64_t T1_scanwork(struct thr_info *thr)
 			if (g_cmd_resets[cid] > MAX_CMD_RESETS) {
 				applog(LOG_ERR, "Chain %d is not working due to multiple resets.",
 				       cid);
-				reinit_T1_chain(t1, cid);
+				reinit_T1_chain(cgpu, t1, cid);
 			}
 		}
 	}
