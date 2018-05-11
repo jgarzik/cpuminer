@@ -44,10 +44,6 @@ uint16_t T1Pll[MCOMPAT_CONFIG_MAX_CHAIN_NUM];
 
 /* FAN CTRL */
 //dragonmint_fan_temp_s g_fan_ctrl;
-static uint32_t show_log[MAX_CHAIN_NUM];
-static uint32_t update_cnt[MAX_CHAIN_NUM];
-static uint32_t write_flag[MAX_CHAIN_NUM];
-static uint32_t check_disable_flag[MAX_CHAIN_NUM];
 static volatile uint8_t g_debug_stats[MAX_CHAIN_NUM];
 
 static int total_chains;
@@ -510,10 +506,6 @@ static bool detect_T1_chain(void)
 		if (chain_plug[i] != 1)
 			continue;
 		chain_num++;
-		show_log[i] = 0;
-		update_cnt[i] = 0;
-		write_flag[i] = 0;
-		check_disable_flag[i] = 0;
 	}
 
 
