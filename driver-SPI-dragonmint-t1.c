@@ -670,6 +670,7 @@ void T1_detect(bool hotplug)
 /* Exit cgminer on failure, allowing systemd watchdog to restart */
 static void reinit_T1_chain(struct cgpu_info *cgpu, struct T1_chain *t1, int cid)
 {
+	struct timeval now;
 	int retries = 0;
 
 	applog(LOG_WARNING, "T1: %d attempting to Initialise!", cid);
@@ -699,6 +700,8 @@ static void reinit_T1_chain(struct cgpu_info *cgpu, struct T1_chain *t1, int cid
 		break;
 	}
 	chain_flag[cid] = 1;
+	cgtime(&now);
+	t1->lastshare = now.tv_sec;
 }
 
 #define VOLTAGE_UPDATE_INT  121
