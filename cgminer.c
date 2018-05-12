@@ -304,6 +304,7 @@ bool opt_T1auto = true;
 bool opt_T1_efficient;
 bool opt_T1_factory;
 bool opt_T1_performance;
+int opt_T1_target = 100;
 #endif
 #if defined(USE_ANT_S1) || defined(USE_ANT_S2)
 char *opt_bitmain_options;
@@ -1739,6 +1740,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--T1performance",
 			opt_set_bool, &opt_T1_performance,
 		        "Tune Dragonmint T1 per chain voltage and frequency for maximum performance"),
+	OPT_WITH_ARG("--T1fantarget",
+			opt_set_intval, opt_show_intval, &opt_T1_target,
+			"Throttle T1 frequency to keep fan less than target fan speed"),
 	OPT_WITH_ARG("--T1Pll1",
 		     set_int_0_to_9999, opt_show_intval, &opt_T1Pll[0],
 	            "Set PLL Clock 1 in Dragonmint T1 broad 1 chip (-1: 1000MHz, >0:Lookup PLL table)"),

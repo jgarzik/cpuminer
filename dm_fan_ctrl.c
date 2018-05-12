@@ -30,7 +30,6 @@
 #define DEV_TMP_CHK_CNT			(3)
 #define DEV_TMP_CHK_SPAN		(6)
 #define TIMEOUT_GET_TMP			(3)
-#define TEMP_TOLERANCE			(5)
 
 /******************************************************************************
  * Global variables

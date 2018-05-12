@@ -127,6 +127,7 @@ static void dm_tempctrl_get_chain_temp(int *chip_temp, c_temp *chain_temp)
  * Arguments: 	chain_id		chain id
  * Return:	device temperature state
  ******************************************************************************/
+
 uint32_t dm_tempctrl_update_chain_temp(int chain_id)
 {
 	uint32_t *tstatus = &g_temp_status[chain_id];
@@ -164,6 +165,7 @@ uint32_t dm_tempctrl_update_chain_temp(int chain_id)
 
 	g_chain_tmp[chain_id] = chain_temp;
 
+	g_chain_tmp[chain_id].optimal = false;
 	if (g_chain_tmp[chain_id].tmp_hi >= g_tmp_cfg.tmp_thr_pd)
 		*tstatus = TEMP_SHUTDOWN;
 	else if (g_chain_tmp[chain_id].tmp_hi >= g_tmp_cfg.tmp_thr_warn)
@@ -172,8 +174,11 @@ uint32_t dm_tempctrl_update_chain_temp(int chain_id)
 		*tstatus = TEMP_TOO_HIGH;
 	else if (g_chain_tmp[chain_id].tmp_lo < g_tmp_cfg.tmp_thr_lo)
 		*tstatus = TEMP_TOO_LOW;
-	else
+	else {
+		if (g_chain_tmp[chain_id].tmp_avg > g_tmp_cfg.tmp_target - TEMP_TOLERANCE)
+			g_chain_tmp[chain_id].optimal = true;
 		*tstatus = TEMP_NORMAL;
+	}
 out:
 	return *tstatus;
 }

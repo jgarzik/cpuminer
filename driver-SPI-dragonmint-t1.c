@@ -28,7 +28,7 @@
 
 #include "sys/time.h"
 
-#define T1_FANSPEED_INIT	(100)
+#define T1_FANSPEED_INIT	(opt_T1_target)
 #define T1_TEMP_TARGET_INIT	(60)
 #define T1_TEMP_TARGET_RUN	(75)
 
@@ -1538,10 +1538,12 @@ static int64_t T1_scanwork(struct thr_info *thr)
 
 		/* Function doesn't currently return */
 		T1_overheated_blinking(cid);
-	} else if (chain_temp_status == TEMP_WARNING)
-		t1_throttle(t1, cid);
-	else if (t1->throttled && chain_temp_status == TEMP_NORMAL)
-		t1_raise(t1, cid);
+	} else if (chain_temp_status == TEMP_WARNING ||
+		   (g_chain_tmp[cid].optimal && g_fan_cfg.fan_speed > opt_T1_target))
+			t1_throttle(t1, cid);
+	else if (t1->throttled && chain_temp_status == TEMP_NORMAL &&
+		 g_fan_cfg.fan_speed < opt_T1_target)
+			t1_raise(t1, cid);
 
 	/* Tuning */
 	if (!thr->work_restart && !t1->throttled && opt_T1auto) {

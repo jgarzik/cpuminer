@@ -258,6 +258,7 @@ typedef struct _c_temp
 	short tmp_lo;       // lowest temperature
 	short tmp_hi;       // highest temperature
 	short tmp_avg;      // average temperature
+	bool optimal;       // temp considered in optimal range
 } c_temp;
 
 extern int  mcompat_temp_to_centigrade(int temp);

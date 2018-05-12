@@ -1058,6 +1058,7 @@ extern bool opt_T1auto;
 extern bool opt_T1_efficient;
 extern bool opt_T1_factory;
 extern bool opt_T1_performance;
+extern int opt_T1_target;
 #endif
 #ifdef USE_ANT_S1
 extern char *opt_bitmain_options;

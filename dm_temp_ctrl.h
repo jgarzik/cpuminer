@@ -19,6 +19,8 @@
 #define TEMP_WARNING				(3)
 #define TEMP_SHUTDOWN				(4)
 
+#define TEMP_TOLERANCE			(5)
+
 typedef struct _c_temp_cfg
 {
 	short	tmp_min;		// min value of temperature
@@ -28,10 +30,10 @@ typedef struct _c_temp_cfg
 	short	tmp_thr_hi;		// high temperature threshold
 	short	tmp_thr_warn;		// warning threshold
 	short	tmp_thr_pd;		// power down threshold
-	int		tmp_exp_time;	// temperature expiring time (ms)
+	int	tmp_exp_time;	// temperature expiring time (ms)
 } c_temp_cfg;
 
-extern volatile c_temp_cfg	g_tmp_cfg;					// configs of temperature control
+extern volatile c_temp_cfg	g_tmp_cfg;			// configs of temperature control
 extern volatile c_temp		g_chain_tmp[MAX_CHAIN_NUM];	// current temperature for each chain
 
 void		dm_tempctrl_get_defcfg(c_temp_cfg *p_cfg);
