@@ -197,6 +197,10 @@ static bool dm_fanctrl_check_preheat(void)
 	return false;
 }
 
+static int8_t last_tmp_rise[8];
+static int64_t *last_tmp_int = (int64_t *)last_tmp_rise;
+static int tmp_rise_cnt;
+
 static void dm_fanctrl_update_fan_speed(void)
 {
 	int fan_speed;
@@ -233,7 +237,7 @@ static void dm_fanctrl_update_fan_speed(void)
 
 		/* Is the temp already coming down */
 		if (tmp_rise < 0)
-			return;
+			goto out;
 		/* Adjust fanspeed by temperature over and any further rise */
 		fan_speed = g_fan_cfg.fan_speed + delta_tmp_avg + tmp_rise;
 	} else {
@@ -246,15 +250,22 @@ static void dm_fanctrl_update_fan_speed(void)
 			/* Adjust fanspeed by temperature change proportional to
 			 * diff from optimal. */
 			diff /= divisor;
-		} else {
-			/* Is the temp below optimal and unchanging, gently lower speed */
-			if (g_dev_tmp.tmp_avg < g_tmp_cfg.tmp_target - TEMP_TOLERANCE && !tmp_rise)
+		} else if (!tmp_rise) {
+			/* Is the temp below optimal and unchanging, gently
+			 * lower speed. Allow tighter temperature tolerance if
+			 * temperature is unchanged for longer. */
+			if ((g_dev_tmp.tmp_avg < g_tmp_cfg.tmp_target - TEMP_TOLERANCE) ||
+			    (!(*last_tmp_int) && (g_dev_tmp.tmp_avg < g_tmp_cfg.tmp_target))) {
+				*last_tmp_int = 0xFFFFFFFFFFFFFFFF;
 				diff -= 1;
+			}
 		}
 		fan_speed = g_fan_cfg.fan_speed + diff;
 	}
 
 	// set fan speed
 	dm_fanctrl_set_fan_speed(fan_speed);
+out:
+	last_tmp_rise[(tmp_rise_cnt++) % 8] = tmp_rise;
 }
 
