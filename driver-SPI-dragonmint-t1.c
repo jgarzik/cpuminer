@@ -479,20 +479,15 @@ static void *T1_work_thread(void *arg)
 static void start_T1_chain(int cid, int retries)
 {
 	mcompat_set_reset(cid, 1);
-	if (retries)
-		sleep(1);
+	sleep(retries);
 	mcompat_set_power_en(cid, 1);
-	if (retries)
-		sleep(1);
+	sleep(retries);
 	mcompat_set_reset(cid, 0);
-	if (retries)
-		sleep(1);
+	sleep(retries);
 	mcompat_set_start_en(cid, 1);
-	if (retries)
-		sleep(1);
+	sleep(retries);
 	mcompat_set_reset(cid, 1);
-	if (retries)
-		sleep(1);
+	sleep(retries);
 }
 
 static bool detect_T1_chain(void)
@@ -748,6 +743,7 @@ void T1_detect(bool hotplug)
 static void reinit_T1_chain(struct T1_chain *t1, int cid)
 {
 	bool success = false;
+	struct timeval now;
 	int i;
 
 	applog(LOG_WARNING, "T1: %d attempting to re-initialise!", cid);
@@ -770,6 +766,8 @@ static void reinit_T1_chain(struct T1_chain *t1, int cid)
 		applog(LOG_EMERG, "T1: %d FAILED TO INIT, SHUTTING DOWN", cid);
 		raise_cgminer();
 	}
+	cgtime(&now);
+	t1->lastshare = now.tv_sec;
 }
 
 #define VOLTAGE_UPDATE_INT  121
