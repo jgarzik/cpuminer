@@ -211,9 +211,7 @@ static bool prechain_detect(struct T1_chain *t1, int idxpll)
 	if (opt_T1auto) {
 		/* Start tuning at a different voltage depending on tuning
 		 * strategy. */
-		if (opt_T1_factory)
-			opt_T1Vol[chain_id] = TUNE_VOLT_START_FAC;
-		else if (opt_T1_performance)
+		if (opt_T1_performance)
 			opt_T1Vol[chain_id] = TUNE_VOLT_START_PER;
 		else if (opt_T1_efficient)
 			opt_T1Vol[chain_id] = TUNE_VOLT_START_EFF;
@@ -436,10 +434,6 @@ static bool init_T1_chain(struct T1_chain *t1)
 
 	if (!opt_T1auto)
 		t1->VidOptimal = t1->pllOptimal = true;
-	else if (opt_T1_factory)
-		applog(LOG_NOTICE, "T1 chain %d applies factory tuning scheme", chain_id);
-	else
-		applog(LOG_NOTICE, "T1 chain %d applies ck tuning scheme", chain_id);
 
 	ret = true;
 out:
@@ -1089,154 +1083,6 @@ tune_freq:
 	T1_tune_complete(t1, cid);
 }
 
-/*******************************************************************************
- * factory tuning start
- *******************************************************************************/
-static void T1_fac_set_optimal_vid(struct T1_chain *t1)
-{
-	int i, vid = t1->iVid;
-	double max_product = 0;
-	double hw_rate, min_rate = 0.2;	// result which makes hw rate > 20% is ignored
-	bool found = false;
-
-	// Find vid which makes minimal hw_error rate
-	for (i = 0; i < T1_VID_TUNE_RANGE; i++)
-	{
-		applog(LOG_ERR, "vid%d: volt=%.1f, product=%.5f, hwerr=%.5f",
-			T1_VID_MIN + i, t1->vidvol[i], t1->vidproduct[i], t1->vidhwerr[i]);
-		if (t1->vidhwerr[i] < 0.0005)
-			t1->vidhwerr[i] = 0.0005;
-		hw_rate = (t1->vidproduct[i] > 0.0000001) ?
-			(t1->vidhwerr[i] / t1->vidproduct[i]) : 1;
-		if (hw_rate < min_rate)
-		{
-			min_rate = hw_rate;
-			vid = T1_VID_MIN + i;
-			found = true;
-		}
-	}
-
-	// Select maximum product if none of vids makes 20% or lower hw_rate
-	if (!found)
-	{
-		for (i = 0; i < T1_VID_TUNE_RANGE; i++)
-		{
-			// '>=' ensures a lower vid result for the same product
-			if (t1->vidproduct[i] >= max_product)
-			{
-				max_product = t1->vidproduct[i];
-				vid = T1_VID_MIN + i;
-			}
-			/* Reset values for clean reuse */
-			t1->vidproduct[i] = 0;
-		}
-	}
-
-	// Set to best vid first to avoid failure in reading voltages
-	mcompat_set_vid_by_step(t1->chain_id, t1->iVid, vid);
-	// Voltage calibration: set to best average voltage
-	t1->iVid = mcompat_find_chain_vid(
-		t1->chain_id, t1->num_active_chips, vid, t1->vidvol[vid - T1_VID_MIN]);
-	// Set opt_T1Vol for saving to config file
-	opt_T1VID[t1->chain_id] = t1->iVid;
-	opt_T1Vol[t1->chain_id] = t1->vidvol[vid - T1_VID_MIN];
-
-	t1->optimalVid = t1->iVid;
-	t1->VidOptimal = true;
-}
-
-static void T1_factory_tune(struct T1_chain *t1)
-{
-	int i, hw_cnt, hw_diff;
-	double hwerr;
-	double product, tdiff;
-	struct timeval now;
-	int cid = t1->chain_id;
-
-	if (t1->pllOptimal)
-		return;
-
-	cgtime(&now);
-
-	if (unlikely(!t1->cycle_start.tv_sec)) {
-		copy_time(&t1->cycle_start, &now);
-		t1->cycles = 0;
-		return;
-	}
-
-	tdiff = ms_tdiff(&now, &t1->cycle_start);
-
-	/* Bring the tuning out of endless loop after chain shutdown due to low voltage */
-	if (!t1->VidOptimal && tdiff > T1_CYCLES_CHAIN * 200)	// threshold is 0.005 hashes per ms
-	{
-		applog(LOG_NOTICE, "chain%d testing iVid %d timeout, resuming from low voltage",
-			cid, t1->iVid);
-		goto tune_volt_done;
-	}
-
-	if (t1->cycles < T1_CYCLES_CHAIN)
-		return;
-
-	product = (double)t1->cycles / tdiff;
-
-	// hwerr stat.
-	hw_cnt = 0;
-	for(i = 0; i < t1->num_active_chips; ++i)
-		hw_cnt += t1->chips[i].hw_errors;
-	hw_diff = hw_cnt - t1->hw_errors;
-	t1->hw_errors = hw_cnt;
-	hwerr = (double) hw_diff / tdiff;
-
-	reset_tune(t1);
-
-	if (!t1->sampling) {
-		/* Discard the first lot of samples due to changing diff on
-		 * startup and possible init times invalidating data. */
-		t1->sampling = true;
-		return;
-	}
-
-	if (t1->VidOptimal)
-		goto tune_freq;
-
-	applog(LOG_NOTICE,
-		   "chain%d hw %d, vid %d, pll %d, %.1fms product %f, hw %f",
-	       cid, hw_diff, t1->iVid, t1->pll, tdiff, product, hwerr);
-
-	t1->vidproduct[t1->iVid] = product;
-	t1->vidhwerr[t1->iVid] = hwerr;
-	if (t1->iVid < T1_VID_MAX) {
-		t1->vidvol[t1->iVid] = s_reg_ctrl.average_vol[cid];
-		mcompat_set_vid(cid, ++t1->iVid);
-		cgsleep_ms(3000);
-		get_voltages(t1);
-		opt_T1Vol[cid] = s_reg_ctrl.average_vol[cid];
-		applog(LOG_NOTICE, "chain%d testing iVid %d Vavg %.0f Vmin %.0f",
-			   cid, t1->iVid, s_reg_ctrl.average_vol[cid], s_reg_ctrl.lowest_vol[cid]);
-		if (s_reg_ctrl.lowest_vol[cid] >= CHIP_VOLT_MIN
-			&& s_reg_ctrl.average_vol[cid] >= TUNE_VOLT_STOP)
-			return;
-	}
-
-tune_volt_done:
-	/* Now find the iVid that corresponds with highest product */
-	T1_fac_set_optimal_vid(t1);
-	cgsleep_ms(3000);
-	get_voltages(t1);	// update chip voltages
-	opt_T1Vol[cid] = s_reg_ctrl.average_vol[cid];
-	applog(LOG_NOTICE, "chain%d optimal iVid set to %d, Vavg %.0f Vmin %.0f",
-	       cid, t1->iVid, s_reg_ctrl.average_vol[cid], s_reg_ctrl.lowest_vol[cid]);
-	return;
-
-tune_freq:
-	/* Don't do pll tuning */
-	T1_tune_complete(t1, cid);
-	t1->pllOptimal = true;
-}
-
-/******************************************************************************
- * factory tuning end
- ******************************************************************************/
 #define MAX_NONCE_SLEEP		(100)
 #define T1_THROTTLE_INTERVAL	(5)
 #define T1_RAISE_INTERVAL	(15)
@@ -1527,12 +1373,8 @@ static int64_t T1_scanwork(struct thr_info *thr)
 			t1_raise(t1, cid);
 
 	/* Tuning */
-	if (!thr->work_restart && !t1->throttled && opt_T1auto) {
-		if (opt_T1_factory)
-			T1_factory_tune(t1);
-		else
-			T1_tune(t1, cid);
-	}
+	if (!thr->work_restart && !t1->throttled && opt_T1auto)
+		T1_tune(t1, cid);
 
 	/* read chip temperatures and voltages */
 	if (g_debug_stats[cid]) {

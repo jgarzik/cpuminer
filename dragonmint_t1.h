@@ -36,7 +36,7 @@
 #define TUNE_VOLT_START_EFF					(410)
 #define TUNE_VOLT_START_BAL					(415)
 #define TUNE_VOLT_START_PER					(420)
-#define TUNE_VOLT_START_FAC					(425)	/* Should not be too low cause voltage will get even lower after increasing PLL to 1344 */
+
 #define TUNE_VOLT_STOP						(390)
 #define CHIP_VOLT_MAX						(445)
 #define CHIP_VOLT_MIN						(380)

@@ -302,7 +302,6 @@ int opt_T1Vol[MCOMPAT_CONFIG_MAX_CHAIN_NUM] = {
 int opt_T1VID[MCOMPAT_CONFIG_MAX_CHAIN_NUM] = {};
 bool opt_T1auto = true;
 bool opt_T1_efficient;
-bool opt_T1_factory;
 bool opt_T1_performance;
 int opt_T1_target = 100;
 #endif
@@ -1731,9 +1730,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--T1efficient",
 			opt_set_bool, &opt_T1_efficient,
 		        "Tune Dragonmint T1 per chain voltage and frequency for optimal efficiency"),
-	OPT_WITHOUT_ARG("--T1factory",
-			opt_set_bool, &opt_T1_factory,
-			"Tune Dragonmint T1 per chain voltage and frequency by factory autotune strategy"),
 	OPT_WITHOUT_ARG("--T1noauto",
 			opt_set_invbool, &opt_T1auto,
 			"Disable Dragonmint T1 per chain auto voltage and frequency tuning"),

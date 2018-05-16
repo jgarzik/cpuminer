@@ -1056,7 +1056,6 @@ extern int opt_T1Vol[];
 extern int opt_T1VID[];
 extern bool opt_T1auto;
 extern bool opt_T1_efficient;
-extern bool opt_T1_factory;
 extern bool opt_T1_performance;
 extern int opt_T1_target;
 #endif
