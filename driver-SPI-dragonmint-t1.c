@@ -32,11 +32,6 @@
 #define T1_TEMP_TARGET_INIT	(60)
 #define T1_TEMP_TARGET_RUN	(75)
 
-#define T1_DIFF_TUNE		(129)
-#define T1_DIFF_1HR		(256)
-#define T1_DIFF_4HR		(512)
-#define T1_DIFF_RUN		(1024)
-
 struct T1_chain *chain[MAX_CHAIN_NUM];
 uint8_t chain_mask;
 
@@ -1331,24 +1326,10 @@ static int64_t T1_scanwork(struct thr_info *thr)
 		return -1;
 	}
 
-	/* We start with low diff to speed up tuning and increase hashrate
-	 * resolution reported and then increase diff after an hour to decrease
-	 * load. */
-	cgtime(&now);
-	if (cgpu->drv->max_diff < T1_DIFF_RUN) {
-		int hours;
-
-		hours = tdiff(&now, &cgpu->dev_start_tv) / 3600;
-		if (hours > 8)
-			cgpu->drv->max_diff = T1_DIFF_RUN;
-		else if (hours > 4 && cgpu->drv->max_diff < T1_DIFF_4HR)
-			cgpu->drv->max_diff = T1_DIFF_4HR;
-		else if (hours > 1 && cgpu->drv->max_diff < T1_DIFF_1HR)
-			cgpu->drv->max_diff =T1_DIFF_1HR;
-	}
-
 	/* Spurious wakeups are harmless */
 	pthread_cond_signal(&t1->cond);
+
+	cgtime(&now);
 
 	/* Poll queued results. A full nonce range takes about 200ms to scan so
 	 * we're unlikely to need more work until then. Poll every 10ms for up
@@ -1704,9 +1685,8 @@ struct device_drv dragonmintT1_drv = {
 	.dname = "DragonmintT1",
 	.name = "DT1",
 	.drv_detect = T1_detect,
-	/* Set to lowest diff we can reliably use to get accurate hashrates
-	 * during tuning and initially. */
-	.max_diff = T1_DIFF_TUNE,
+	/* Set to lowest diff we can reliably use to get accurate hashrates. */
+	.max_diff = 129,
 
 	.hash_work = hash_driver_work,
 	.scanwork = T1_scanwork,
