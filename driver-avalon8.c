@@ -672,7 +672,22 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 		break;
 	case AVA8_P_STATUS_PVT:
 		applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_PVT", avalon8->drv->name, avalon8->device_id, modular_id);
-		{
+		if (!strncmp((char *)&(info->mm_version[modular_id]), "851", 3)) {
+			if (!info->asic_count[modular_id])
+				break;
+
+			if (ar->idx < info->asic_count[modular_id]) {
+				for (i = 0; i < info->miner_count[modular_id]; i++) {
+					memcpy(&tmp, ar->data + i * 4, 2);
+					tmp = be16toh(tmp);
+					info->temp[modular_id][i][ar->idx] = decode_pvt_temp(tmp);
+
+					memcpy(&tmp, ar->data + i * 4 + 2, 2);
+					tmp = be16toh(tmp);
+					info->core_volt[modular_id][i][ar->idx][0] = decode_pvt_volt(tmp);
+				}
+			}
+		} else {
 			uint16_t pvt_tmp;
 
 			if (!info->asic_count[modular_id])
