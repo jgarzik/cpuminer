@@ -675,6 +675,33 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 			}
 		}
 		break;
+	case AVA8_P_STATUS_ASIC:
+		{
+			int miner_id;
+			int asic_id;
+
+			if (!info->asic_count[modular_id])
+				break;
+
+			miner_id = ar->idx / info->asic_count[modular_id];
+			asic_id = ar->idx % info->asic_count[modular_id];
+
+			applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_ASIC %d-%d",
+						avalon8->drv->name, avalon8->device_id, modular_id,
+						miner_id, asic_id);
+
+			memcpy(&tmp, ar->data + 0, 4);
+			if (tmp)
+				info->get_asic[modular_id][miner_id][asic_id][0] = be32toh(tmp);
+
+			memcpy(&tmp, ar->data + 4, 4);
+			if (tmp)
+				info->get_asic[modular_id][miner_id][asic_id][1] = be32toh(tmp);
+
+			for (i = 0; i < AVA8_DEFAULT_PLL_CNT; i++)
+				info->get_asic[modular_id][miner_id][asic_id][2 + i] = ar->data[8 + i];
+		}
+		break;
 	case AVA8_P_STATUS_FAC:
 		applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_FAC", avalon8->drv->name, avalon8->device_id, modular_id);
 		info->factory_info[0] = ar->data[0];
