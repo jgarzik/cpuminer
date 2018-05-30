@@ -62,6 +62,8 @@ uint32_t opt_avalon8_mux_l2h = AVA8_DEFAULT_MUX_L2H;
 uint32_t opt_avalon8_mux_h2l = AVA8_DEFAULT_MUX_H2L;
 uint32_t opt_avalon8_h2ltime0_spd = AVA8_DEFAULT_H2LTIME0_SPD;
 uint32_t opt_avalon8_roll_enable = AVA8_DEFAULT_ROLL_ENABLE;
+uint32_t opt_avalon8_spdlow = AVA8_DEFAULT_SPDLOW;
+uint32_t opt_avalon8_spdhigh = AVA8_DEFAULT_SPDHIGH;
 
 uint32_t cpm_table[] =
 {
@@ -1635,6 +1637,18 @@ static void avalon8_init_setting(struct cgpu_info *avalon8, int addr)
 	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set h2ltime0 spd %u",
 			avalon8->drv->name, avalon8->device_id, addr,
 			opt_avalon8_h2ltime0_spd);
+
+	tmp = be32toh(opt_avalon8_spdlow);
+	memcpy(send_pkg.data + 22, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set spdlow %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_spdlow);
+
+	tmp = be32toh(opt_avalon8_spdhigh);
+	memcpy(send_pkg.data + 26, &tmp, 4);
+	applog(LOG_DEBUG, "%s-%d-%d: avalon8 set spdhigh %u",
+			avalon8->drv->name, avalon8->device_id, addr,
+			opt_avalon8_spdhigh);
 
 	/* Package the data */
 	avalon8_init_pkg(&send_pkg, AVA8_P_SET, 1, 1);
