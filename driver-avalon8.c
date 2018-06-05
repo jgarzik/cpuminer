@@ -1985,6 +1985,10 @@ static int64_t avalon8_scanhash(struct thr_info *thr)
 					}
 				}
 
+				if (!strncmp((char *)&(info->mm_version[i]), "851", 3)) {
+					opt_avalon8_nonce_mask = AVA851_DEFAULT_NONCE_MASK;
+					opt_avalon8_spdlow = AVA851_DEFAULT_SPDLOW;
+				}
 				avalon8_init_setting(avalon8, i);
 
 				info->freq_mode[i] = AVA8_FREQ_PLLADJ_MODE;
@@ -2005,9 +2009,14 @@ static int64_t avalon8_scanhash(struct thr_info *thr)
 			avalon8_set_voltage_level(avalon8, i, info->set_voltage_level[i]);
 			for (j = 0; j < info->miner_count[i]; j++)
 				avalon8_set_freq(avalon8, i, j, info->set_frequency[i][j]);
-			if (opt_avalon8_smart_speed)
+			if (opt_avalon8_smart_speed) {
+				if (!strncmp((char *)&(info->mm_version[i]), "851", 3)) {
+					opt_avalon8_th_pass = AVA851_DEFAULT_TH_PASS;
+					opt_avalon8_th_fail = AVA851_DEFAULT_TH_FAIL;
+					opt_avalon8_th_timeout = AVA851_DEFAULT_TH_TIMEOUT;
+				}
 				avalon8_set_ss_param(avalon8, i);
-
+			}
 			avalon8_set_finish(avalon8, i);
 			cg_wunlock(&info->update_lock);
 		}
