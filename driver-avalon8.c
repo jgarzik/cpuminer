@@ -50,19 +50,19 @@ int opt_avalon8_smart_speed = AVA8_DEFAULT_SMART_SPEED;
  */
 bool opt_avalon8_iic_detect = AVA8_DEFAULT_IIC_DETECT;
 
-uint32_t opt_avalon8_th_pass = AVA8_DEFAULT_TH_PASS;
-uint32_t opt_avalon8_th_fail = AVA8_DEFAULT_TH_FAIL;
+uint32_t opt_avalon8_th_pass = AVA8_INVALID_TH_PASS;
+uint32_t opt_avalon8_th_fail = AVA8_INVALID_TH_FAIL;
 uint32_t opt_avalon8_th_init = AVA8_DEFAULT_TH_INIT;
 uint32_t opt_avalon8_th_ms = AVA8_DEFAULT_TH_MS;
-uint32_t opt_avalon8_th_timeout = AVA8_DEFAULT_TH_TIMEOUT;
+uint32_t opt_avalon8_th_timeout = AVA8_INVALID_TH_TIMEOUT;
 uint32_t opt_avalon8_th_add = AVA8_DEFAULT_TH_ADD;
-uint32_t opt_avalon8_nonce_mask = AVA8_DEFAULT_NONCE_MASK;
+uint32_t opt_avalon8_nonce_mask = AVA8_INVALID_NONCE_MASK;
 uint32_t opt_avalon8_nonce_check = AVA8_DEFAULT_NONCE_CHECK;
 uint32_t opt_avalon8_mux_l2h = AVA8_DEFAULT_MUX_L2H;
 uint32_t opt_avalon8_mux_h2l = AVA8_DEFAULT_MUX_H2L;
 uint32_t opt_avalon8_h2ltime0_spd = AVA8_DEFAULT_H2LTIME0_SPD;
 uint32_t opt_avalon8_roll_enable = AVA8_DEFAULT_ROLL_ENABLE;
-uint32_t opt_avalon8_spdlow = AVA8_DEFAULT_SPDLOW;
+uint32_t opt_avalon8_spdlow = AVA8_INVALID_SPDLOW;
 uint32_t opt_avalon8_spdhigh = AVA8_DEFAULT_SPDHIGH;
 
 uint32_t cpm_table[] =
@@ -1994,8 +1994,15 @@ static int64_t avalon8_scanhash(struct thr_info *thr)
 				}
 
 				if (!strncmp((char *)&(info->mm_version[i]), "851", 3)) {
-					opt_avalon8_nonce_mask = AVA851_DEFAULT_NONCE_MASK;
-					opt_avalon8_spdlow = AVA851_DEFAULT_SPDLOW;
+					if (opt_avalon8_spdlow == AVA8_INVALID_SPDLOW)
+						opt_avalon8_spdlow = AVA851_DEFAULT_SPDLOW;
+					if (opt_avalon8_nonce_mask == AVA8_INVALID_NONCE_MASK)
+						opt_avalon8_nonce_mask = AVA851_DEFAULT_NONCE_MASK;
+				} else {
+					if (opt_avalon8_spdlow == AVA8_INVALID_SPDLOW)
+						opt_avalon8_spdlow = AVA8_DEFAULT_SPDLOW;
+					if (opt_avalon8_nonce_mask == AVA8_INVALID_NONCE_MASK)
+						opt_avalon8_nonce_mask = AVA8_DEFAULT_NONCE_MASK;
 				}
 				avalon8_init_setting(avalon8, i);
 
@@ -2019,9 +2026,19 @@ static int64_t avalon8_scanhash(struct thr_info *thr)
 				avalon8_set_freq(avalon8, i, j, info->set_frequency[i][j]);
 			if (opt_avalon8_smart_speed) {
 				if (!strncmp((char *)&(info->mm_version[i]), "851", 3)) {
-					opt_avalon8_th_pass = AVA851_DEFAULT_TH_PASS;
-					opt_avalon8_th_fail = AVA851_DEFAULT_TH_FAIL;
-					opt_avalon8_th_timeout = AVA851_DEFAULT_TH_TIMEOUT;
+					if (opt_avalon8_th_pass == AVA8_INVALID_TH_PASS)
+						opt_avalon8_th_pass = AVA851_DEFAULT_TH_PASS;
+					if (opt_avalon8_th_fail == AVA8_INVALID_TH_FAIL)
+						opt_avalon8_th_fail = AVA851_DEFAULT_TH_FAIL;
+					if (opt_avalon8_th_timeout == AVA8_INVALID_TH_TIMEOUT)
+						opt_avalon8_th_timeout = AVA851_DEFAULT_TH_TIMEOUT;
+				} else {
+					if (opt_avalon8_th_pass == AVA8_INVALID_TH_PASS)
+						opt_avalon8_th_pass = AVA8_DEFAULT_TH_PASS;
+					if (opt_avalon8_th_fail == AVA8_INVALID_TH_FAIL)
+						opt_avalon8_th_fail = AVA8_DEFAULT_TH_FAIL;
+					if (opt_avalon8_th_timeout == AVA8_INVALID_TH_TIMEOUT)
+						opt_avalon8_th_timeout = AVA8_DEFAULT_TH_TIMEOUT;
 				}
 				avalon8_set_ss_param(avalon8, i);
 			}
