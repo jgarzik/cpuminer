@@ -711,6 +711,7 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 		{
 			int miner_id;
 			int asic_id;
+			uint16_t freq;
 
 			if (!info->asic_count[modular_id])
 				break;
@@ -732,6 +733,13 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 
 			for (i = 0; i < AVA8_DEFAULT_PLL_CNT; i++)
 				info->get_asic[modular_id][miner_id][asic_id][2 + i] = ar->data[8 + i];
+
+			if (!strncmp((char *)&(info->mm_version[modular_id]), "851", 3)) {
+				for (i = 0; i < AVA8_DEFAULT_PLL_CNT; i++) {
+					memcpy(&freq, ar->data + 8 + AVA8_DEFAULT_PLL_CNT + i * 2, 2);
+					info->get_frequency[modular_id][miner_id][asic_id][i] = be16toh(freq);
+				}
+			}
 		}
 		break;
 	case AVA8_P_STATUS_FAC:
@@ -2060,16 +2068,25 @@ static float avalon8_hash_cal(struct cgpu_info *avalon8, int modular_id)
 {
 	struct avalon8_info *info = avalon8->device_data;
 	uint32_t tmp_freq[AVA8_DEFAULT_PLL_CNT];
-	unsigned int i, j;
+	unsigned int i, j, k;
 	float mhsmm;
 
 	mhsmm = 0;
-	for (i = 0; i < info->miner_count[modular_id]; i++) {
-		for (j = 0; j < AVA8_DEFAULT_PLL_CNT; j++)
-			tmp_freq[j] = info->set_frequency[modular_id][i][j];
+	if (!strncmp((char *)&(info->mm_version[modular_id]), "851", 3)) {
+		for (i = 0; i < info->miner_count[modular_id]; i++) {
+			for (j = 0; j < info->asic_count[modular_id]; j++) {
+				for (k = 0; k < AVA8_DEFAULT_PLL_CNT; k++)
+					mhsmm += (info->get_asic[modular_id][i][j][2 + k] * info->get_frequency[modular_id][i][j][k]);
+			}
+		}
+	} else {
+		for (i = 0; i < info->miner_count[modular_id]; i++) {
+			for (j = 0; j < AVA8_DEFAULT_PLL_CNT; j++)
+				tmp_freq[j] = info->set_frequency[modular_id][i][j];
 
-		for (j = 0; j < AVA8_DEFAULT_PLL_CNT; j++)
-			mhsmm += (info->get_pll[modular_id][i][j] * tmp_freq[j]);
+			for (j = 0; j < AVA8_DEFAULT_PLL_CNT; j++)
+				mhsmm += (info->get_pll[modular_id][i][j] * tmp_freq[j]);
+		}
 	}
 
 	return mhsmm;
@@ -2314,8 +2331,12 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 					strcat(statbuf, buf);
 					for (k = 0; k < info->asic_count[i]; k++) {
 						mhsmm = 0;
-						for (l = 2; l < 6; l++)
-							mhsmm += (info->get_asic[i][j][k][l] * info->set_frequency[i][j][l - 2]);
+						for (l = 2; l < 6; l++) {
+							if (!strncmp((char *)&(info->mm_version[i]), "851", 3))
+								mhsmm += (info->get_asic[i][j][k][l] * info->get_frequency[i][j][k][l - 2]);
+							else
+								mhsmm += (info->get_asic[i][j][k][l] * info->set_frequency[i][j][l - 2]);
+						}
 						sprintf(buf, "%7.2f ", mhsmm / 1000);
 						strcat(statbuf, buf);
 					}
