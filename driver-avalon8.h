@@ -35,6 +35,8 @@
 #define AVA8_DEFAULT_VOLTAGE_LEVEL_OFFSET	0
 #define AVA8_DEFAULT_VOLTAGE_LEVEL_OFFSET_MAX	1
 
+#define AVA8_INVALID_ASIC_OTP	-1
+
 #define AVA8_DEFAULT_FACTORY_INFO_0_MIN		-15
 #define AVA8_DEFAULT_FACTORY_INFO_0		0
 #define AVA8_DEFAULT_FACTORY_INFO_0_MAX		15
@@ -129,6 +131,8 @@
 #define AVA8_P_COUNT	40
 #define AVA8_P_DATA_LEN 32
 
+#define AVA8_OTP_LEN	        32
+
 /* Broadcase with block iic_write*/
 #define AVA8_P_DETECT	0x10
 
@@ -172,6 +176,7 @@
 #define AVA8_P_STATUS_PVT		0x4c
 #define AVA8_P_STATUS_FAC		0x4d
 #define AVA8_P_STATUS_OC		0x4e
+#define AVA8_P_STATUS_OTP		0x4f
 
 #define AVA8_MODULE_BROADCAST	0
 /* End of avalon8 protocol package type */
@@ -256,6 +261,8 @@ struct avalon8_info {
 	char mm_version[AVA8_DEFAULT_MODULARS][AVA8_MM_VER_LEN + 1]; /* It's a string */
 	uint32_t total_asics[AVA8_DEFAULT_MODULARS];
 	uint32_t max_ntime; /* Maximum: 7200 */
+
+	uint8_t otp_info[AVA8_DEFAULT_MINER_CNT][AVA8_OTP_LEN + 1];
 
 	int mod_type[AVA8_DEFAULT_MODULARS];
 	uint8_t miner_count[AVA8_DEFAULT_MODULARS];

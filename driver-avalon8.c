@@ -27,6 +27,8 @@ int opt_avalon8_fan_max = AVA8_DEFAULT_FAN_MAX;
 int opt_avalon8_voltage_level = AVA8_INVALID_VOLTAGE_LEVEL;
 int opt_avalon8_voltage_level_offset = AVA8_DEFAULT_VOLTAGE_LEVEL_OFFSET;
 
+static uint8_t opt_avalon8_cycle_hit_flag;
+
 int opt_avalon8_freq[AVA8_DEFAULT_PLL_CNT] =
 {
 	AVA8_DEFAULT_FREQUENCY,
@@ -514,6 +516,8 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 	int64_t last_diff1;
 	uint16_t vin;
 
+	uint32_t asic_id,miner_id;
+
 	if (likely(avalon8->thr))
 		thr = avalon8->thr[0];
 	if (ar->head[0] != AVA8_H1 && ar->head[1] != AVA8_H2) {
@@ -650,6 +654,40 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 			memcpy(&vin, ar->data + 8 + i * 2, 2);
 			info->get_vin[modular_id][i] = decode_vin(info, modular_id, be16toh(vin));
 		}
+		break;
+	case AVA8_P_STATUS_OTP:
+		if (opt_avalon8_cycle_hit_flag)
+			break;
+
+		applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_OTP", avalon8->drv->name, avalon8->device_id, modular_id);
+
+		/* ASIC reading cycle limit hit */
+		if (ar->data[17]) {
+			applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_OTP, OTP read cycle hit!", avalon8->drv->name, avalon8->device_id, modular_id);
+			opt_avalon8_cycle_hit_flag = 1;
+			break;
+		}
+
+		miner_id = ar->idx;
+		if (miner_id > AVA8_DEFAULT_MINER_CNT)
+			break;
+
+		/* the reading step on MM side, 0:byte 3-0, 1:byte 7-4, 2:byte 11-8 */
+		switch (ar->data[15]) {
+		case 0:
+			memcpy(info->otp_info[miner_id], ar->data, 4);
+			break;
+		case 1:
+			memcpy(info->otp_info[miner_id] + 4, ar->data + 4, 4);
+			break;
+		case 2:
+			memcpy(info->otp_info[miner_id] + 8, ar->data + 8, 4);
+			break;
+		default:
+			break;
+		}
+		memcpy(info->otp_info[miner_id] + 15, ar->data + 15, 4);
+
 		break;
 	case AVA8_P_STATUS_VOLT:
 		applog(LOG_DEBUG, "%s-%d-%d: AVA8_P_STATUS_VOLT", avalon8->drv->name, avalon8->device_id, modular_id);
@@ -2156,6 +2194,31 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 				info->mm_dna[i][6],
 				info->mm_dna[i][7]);
 		strcat(statbuf, buf);
+
+		if (opt_debug) {
+			for (k = 0; k < AVA8_DEFAULT_MINER_CNT; k++) {
+				sprintf(buf, " LotID%d_ASIC%d[%c%c%c%c%c%c%c%c%c]", k,
+				info->otp_info[k][16],
+				info->otp_info[k][0],
+				info->otp_info[k][1],
+				info->otp_info[k][2],
+				info->otp_info[k][3],
+				info->otp_info[k][4],
+				info->otp_info[k][5],
+				info->otp_info[k][6],
+				info->otp_info[k][7],
+				info->otp_info[k][8]);
+				strcat(statbuf, buf);
+			}
+
+			for (k = 0; k < AVA8_DEFAULT_MINER_CNT; k++) {
+				sprintf(buf, " WaferID%d_ASIC%d[%c%c]", k,
+				info->otp_info[k][16],
+				info->otp_info[k][9],
+				info->otp_info[k][10]);
+				strcat(statbuf, buf);
+			}
+		}
 
 		sprintf(buf, " Elapsed[%.0f]", tdiff(&current, &(info->elapsed[i])));
 		strcat(statbuf, buf);
