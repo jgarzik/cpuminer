@@ -177,6 +177,7 @@
 #define AVA8_P_STATUS_FAC		0x4d
 #define AVA8_P_STATUS_OC		0x4e
 #define AVA8_P_STATUS_OTP		0x4f
+#define AVA8_P_SET_ASIC_OTP		0x50
 
 #define AVA8_MODULE_BROADCAST	0
 /* End of avalon8 protocol package type */
@@ -289,6 +290,8 @@ struct avalon8_info {
 	uint32_t set_frequency[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT][AVA8_DEFAULT_PLL_CNT];
 	uint32_t get_frequency[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT][AVA8_DEFAULT_ASIC_MAX][AVA8_DEFAULT_PLL_CNT];
 
+	int set_asic_otp[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT];
+
 	uint16_t get_vin[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT];
 	uint32_t get_voltage[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT];
 	uint32_t get_pll[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT][AVA8_DEFAULT_PLL_CNT];
@@ -335,6 +338,7 @@ struct avalon8_dev_description {
 	uint16_t vout_adc_ratio;
 	int set_voltage_level;
 	uint16_t set_freq[AVA8_DEFAULT_PLL_CNT];
+	int set_asic_otp;
 };
 
 #define AVA8_WRITE_SIZE (sizeof(struct avalon8_pkg))
@@ -368,5 +372,7 @@ extern uint32_t opt_avalon8_h2ltime0_spd;
 extern uint32_t opt_avalon8_roll_enable;
 extern uint32_t opt_avalon8_spdlow;
 extern uint32_t opt_avalon8_spdhigh;
+extern char *set_avalon8_asic_otp(char *arg);
+
 #endif /* USE_AVALON8 */
 #endif /* _AVALON8_H_ */
