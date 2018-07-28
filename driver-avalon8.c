@@ -1998,6 +1998,11 @@ static int64_t avalon8_scanhash(struct thr_info *thr)
 						opt_avalon8_spdlow = AVA851_DEFAULT_SPDLOW;
 					if (opt_avalon8_nonce_mask == AVA8_INVALID_NONCE_MASK)
 						opt_avalon8_nonce_mask = AVA851_DEFAULT_NONCE_MASK;
+				} else if (!strncmp((char *)&(info->mm_version[i]), "831", 3)) {
+					if (opt_avalon8_spdlow == AVA8_INVALID_SPDLOW)
+						opt_avalon8_spdlow = AVA831_DEFAULT_SPDLOW;
+					if (opt_avalon8_nonce_mask == AVA8_INVALID_NONCE_MASK)
+						opt_avalon8_nonce_mask = AVA831_DEFAULT_NONCE_MASK;
 				} else {
 					if (opt_avalon8_spdlow == AVA8_INVALID_SPDLOW)
 						opt_avalon8_spdlow = AVA8_DEFAULT_SPDLOW;
@@ -2032,6 +2037,13 @@ static int64_t avalon8_scanhash(struct thr_info *thr)
 						opt_avalon8_th_fail = AVA851_DEFAULT_TH_FAIL;
 					if (opt_avalon8_th_timeout == AVA8_INVALID_TH_TIMEOUT)
 						opt_avalon8_th_timeout = AVA851_DEFAULT_TH_TIMEOUT;
+				} else if (!strncmp((char *)&(info->mm_version[i]), "831", 3)) {
+					if (opt_avalon8_th_pass == AVA8_INVALID_TH_PASS)
+						opt_avalon8_th_pass = AVA831_DEFAULT_TH_PASS;
+					if (opt_avalon8_th_fail == AVA8_INVALID_TH_FAIL)
+						opt_avalon8_th_fail = AVA831_DEFAULT_TH_FAIL;
+					if (opt_avalon8_th_timeout == AVA8_INVALID_TH_TIMEOUT)
+						opt_avalon8_th_timeout = AVA831_DEFAULT_TH_TIMEOUT;
 				} else {
 					if (opt_avalon8_th_pass == AVA8_INVALID_TH_PASS)
 						opt_avalon8_th_pass = AVA8_DEFAULT_TH_PASS;
