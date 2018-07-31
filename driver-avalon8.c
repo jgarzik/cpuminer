@@ -1534,6 +1534,11 @@ static void detect_modules(struct cgpu_info *avalon8)
 				info->set_asic_otp[i][j] = 0; /* default asic: 0 */
 			else
 				info->set_asic_otp[i][j] = opt_avalon8_asic_otp;    
+           
+            for(k = 0; k < 11; k++) {
+                if ((info->otp_info[i][j][k] < 32) || (info->otp_info[i][j][k] > 126))
+                    info->otp_info[i][j][k] = '0';
+            }
         }
 
 		info->freq_mode[i] = AVA8_FREQ_INIT_MODE;
