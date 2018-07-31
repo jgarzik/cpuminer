@@ -699,23 +699,23 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 		/* the reading step on MM side, 0:byte 3-0, 1:byte 7-4, 2:byte 11-8 */
 		switch (ar->data[15]) {
 		case 0:
-			memcpy(info->otp_info[miner_id], ar->data, 4);
+			memcpy(info->otp_info[modular_id][miner_id], ar->data, 4);
 			break;
 		case 1:
-			memcpy(info->otp_info[miner_id] + 4, ar->data + 4, 4);
+			memcpy(info->otp_info[modular_id][miner_id] + 4, ar->data + 4, 4);
 			break;
 		case 2:
-			memcpy(info->otp_info[miner_id] + 8, ar->data + 8, 4);
+			memcpy(info->otp_info[modular_id][miner_id] + 8, ar->data + 8, 4);
 			break;
 		default:
 			break;
 		}
-		memcpy(info->otp_info[miner_id] + 15, ar->data + 15, 4);
+		memcpy(info->otp_info[modular_id][miner_id] + 15, ar->data + 15, 4);
 
 		/* check for invisible charactor */
 		for(i = 0; i < 11; i++) {
-			if ((info->otp_info[miner_id][i] < 32) || (info->otp_info[miner_id][i] > 126))
-				info->otp_info[miner_id][i] = '0';
+			if ((info->otp_info[modular_id][miner_id][i] < 32) || (info->otp_info[modular_id][miner_id][i] > 126))
+				info->otp_info[modular_id][miner_id][i] = '0';
 		}
 		break;
 	case AVA8_P_STATUS_VOLT:
@@ -1533,8 +1533,8 @@ static void detect_modules(struct cgpu_info *avalon8)
 			if (AVA8_INVALID_ASIC_OTP == opt_avalon8_asic_otp)
 				info->set_asic_otp[i][j] = 0; /* default asic: 0 */
 			else
-				info->set_asic_otp[i][j] = opt_avalon8_asic_otp;
-		}
+				info->set_asic_otp[i][j] = opt_avalon8_asic_otp;    
+        }
 
 		info->freq_mode[i] = AVA8_FREQ_INIT_MODE;
 		memset(info->get_pll[i], 0, sizeof(uint32_t) * info->miner_count[i] * AVA8_DEFAULT_PLL_CNT);
@@ -2263,24 +2263,24 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 		if (opt_debug) {
 			for (k = 0; k < AVA8_DEFAULT_MINER_CNT; k++) {
 				sprintf(buf, " LotID%d_ASIC%d[%c%c%c%c%c%c%c%c%c]", k,
-				info->otp_info[k][16],
-				info->otp_info[k][0],
-				info->otp_info[k][1],
-				info->otp_info[k][2],
-				info->otp_info[k][3],
-				info->otp_info[k][4],
-				info->otp_info[k][5],
-				info->otp_info[k][6],
-				info->otp_info[k][7],
-				info->otp_info[k][8]);
+				info->otp_info[i][k][16],
+				info->otp_info[i][k][0],
+				info->otp_info[i][k][1],
+				info->otp_info[i][k][2],
+				info->otp_info[i][k][3],
+				info->otp_info[i][k][4],
+				info->otp_info[i][k][5],
+				info->otp_info[i][k][6],
+				info->otp_info[i][k][7],
+				info->otp_info[i][k][8]);
 				strcat(statbuf, buf);
 			}
 
 			for (k = 0; k < AVA8_DEFAULT_MINER_CNT; k++) {
 				sprintf(buf, " WaferID%d_ASIC%d[%c%c]", k,
-				info->otp_info[k][16],
-				info->otp_info[k][9],
-				info->otp_info[k][10]);
+				info->otp_info[i][k][16],
+				info->otp_info[i][k][9],
+				info->otp_info[i][k][10]);
 				strcat(statbuf, buf);
 			}
 		}

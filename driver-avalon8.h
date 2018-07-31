@@ -263,7 +263,7 @@ struct avalon8_info {
 	uint32_t total_asics[AVA8_DEFAULT_MODULARS];
 	uint32_t max_ntime; /* Maximum: 7200 */
 
-	uint8_t otp_info[AVA8_DEFAULT_MINER_CNT][AVA8_OTP_LEN + 1];
+	uint8_t otp_info[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT][AVA8_OTP_LEN + 1];
 
 	int mod_type[AVA8_DEFAULT_MODULARS];
 	uint8_t miner_count[AVA8_DEFAULT_MODULARS];
