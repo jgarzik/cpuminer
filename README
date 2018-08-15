@@ -2,7 +2,8 @@ This is a multi-threaded multi-pool FPGA and ASIC miner for bitcoin.
 
 This code is provided entirely free of charge by the programmer in his spare
 time so donations would be greatly appreciated. Please consider donating to the
-address below.
+address below. Driver development for new ASIC only bitcoin hardware can be
+suitably sponsored.
 
 Con Kolivas <kernel@kolivas.org>
 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
@@ -289,6 +290,35 @@ Options for both config file and command line:
 --compact           Use compact display without per device statistics
 --debug|-D          Enable debug output
 --disable-rejecting Automatically disable pools that continually reject shares
+--dragonmint-t1-options <arg> Dragonmint T1 options ref_clk_khz:sys_clk_khz:spi_clk_khz:override_chip_num
+--T1efficient       Tune Dragonmint T1 per chain voltage and frequency for optimal efficiency
+--T1noauto          Disable Dragonmint T1 per chain auto voltage and frequency tuning
+--T1performance     Tune Dragonmint T1 per chain voltage and frequency for maximum performance
+--T1fantarget <arg> Throttle T1 frequency to keep fan less than target fan speed (default: 100)
+--T1Pll1 <arg>      Set PLL Clock 1 in Dragonmint T1 broad 1 chip (-1: 1000MHz, >0:Lookup PLL table) (default: 1332)
+--T1Pll2 <arg>      Set PLL Clock 2 in Dragonmint T1 broad 1 chip (-1: 1000MHz, >0:Lookup PLL table) (default: 1332)
+--T1Pll3 <arg>      Set PLL Clock 3 in Dragonmint T1 broad 1 chip (-1: 1000MHz, >0:Lookup PLL table) (default: 1332)
+--T1Pll4 <arg>      Set PLL Clock 4 in Dragonmint T1 broad 1 chip (-1: 1000MHz, >0:Lookup PLL table) (default: 1332)
+--T1Pll5 <arg>      Set PLL Clock 5 in Dragonmint T1 broad 1 chip (-1: 1000MHz, >0:Lookup PLL table) (default: 1332)
+--T1Pll6 <arg>      Set PLL Clock 6 in Dragonmint T1 broad 1 chip (-1: 1000MHz, >0:Lookup PLL table) (default: 1332)
+--T1Pll7 <arg>      Set PLL Clock 7 in Dragonmint T1 broad 1 chip (-1: 1000MHz, >0:Lookup PLL table) (default: 1332)
+--T1Pll8 <arg>      Set PLL Clock 8 in Dragonmint T1 broad 1 chip (-1: 1000MHz, >0:Lookup PLL table) (default: 1332)
+--T1Volt1 <arg>     Dragonmint T1 set voltage 1 - VID overrides if set (390-425) (default: 404)
+--T1Volt2 <arg>     Dragonmint T1 set voltage 2 - VID overrides if set (390-425) (default: 404)
+--T1Volt3 <arg>     Dragonmint T1 set voltage 3 - VID overrides if set (390-425) (default: 404)
+--T1Volt4 <arg>     Dragonmint T1 set voltage 4 - VID overrides if set (390-425) (default: 404)
+--T1Volt5 <arg>     Dragonmint T1 set voltage 5 - VID overrides if set (390-425) (default: 404)
+--T1Volt6 <arg>     Dragonmint T1 set voltage 6 - VID overrides if set (390-425) (default: 404)
+--T1Volt7 <arg>     Dragonmint T1 set voltage 7 - VID overrides if set (390-425) (default: 404)
+--T1Volt8 <arg>     Dragonmint T1 set voltage 8 - VID overrides if set (390-425) (default: 404)
+--T1VID1 <arg>      Dragonmint T1 set VID 1 in noauto - Overrides voltage if set (1-31) (default: 0)
+--T1VID2 <arg>      Dragonmint T1 set VID 2 in noauto - Overrides voltage if set (1-31) (default: 0)
+--T1VID3 <arg>      Dragonmint T1 set VID 3 in noauto - Overrides voltage if set (1-31) (default: 0)
+--T1VID4 <arg>      Dragonmint T1 set VID 4 in noauto - Overrides voltage if set (1-31) (default: 0)
+--T1VID5 <arg>      Dragonmint T1 set VID 5 in noauto - Overrides voltage if set (1-31) (default: 0)
+--T1VID6 <arg>      Dragonmint T1 set VID 6 in noauto - Overrides voltage if set (1-31) (default: 0)
+--T1VID7 <arg>      Dragonmint T1 set VID 7 in noauto - Overrides voltage if set (1-31) (default: 0)
+--T1VID8 <arg>      Dragonmint T1 set VID 8 in noauto - Overrides voltage if set (1-31) (default: 0)
 --drillbit-options <arg> Set drillbit options <int|ext>:clock[:clock_divider][:voltage]
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
@@ -429,6 +459,35 @@ ASIC only options:
 --bxf-temp-target <arg> Set target temperature for BXF devices (default: 82)
 --bxm-bits <arg>    Set BXM bits for overclocking (default: 50)
 --compac-freq <arg> Set GekkoScience Compac frequency in MHz, range 100-500 (default: 150.0)
+--dragonmint-t1-options <arg> Dragonmint T1 options ref_clk_khz:sys_clk_khz:spi_clk_khz:override_chip_num
+--T1efficient       Tune Dragonmint T1 per chain voltage and frequency for optimal efficiency
+--T1noauto          Disable Dragonmint T1 per chain auto voltage and frequency tuning
+--T1performance     Tune Dragonmint T1 per chain voltage and frequency for maximum performance
+--T1fantarget <arg> Throttle T1 frequency to keep fan less than target fan speed (default: 100)
+--T1Pll1 <arg>      Set PLL Clock 1 in Dragonmint T1 broad 1 chip (-1: 1000MHz, >0:Lookup PLL table) (default: 1332)
+--T1Pll2 <arg>      Set PLL Clock 2 in Dragonmint T1 broad 1 chip (-1: 1000MHz, >0:Lookup PLL table) (default: 1332)
+--T1Pll3 <arg>      Set PLL Clock 3 in Dragonmint T1 broad 1 chip (-1: 1000MHz, >0:Lookup PLL table) (default: 1332)
+--T1Pll4 <arg>      Set PLL Clock 4 in Dragonmint T1 broad 1 chip (-1: 1000MHz, >0:Lookup PLL table) (default: 1332)
+--T1Pll5 <arg>      Set PLL Clock 5 in Dragonmint T1 broad 1 chip (-1: 1000MHz, >0:Lookup PLL table) (default: 1332)
+--T1Pll6 <arg>      Set PLL Clock 6 in Dragonmint T1 broad 1 chip (-1: 1000MHz, >0:Lookup PLL table) (default: 1332)
+--T1Pll7 <arg>      Set PLL Clock 7 in Dragonmint T1 broad 1 chip (-1: 1000MHz, >0:Lookup PLL table) (default: 1332)
+--T1Pll8 <arg>      Set PLL Clock 8 in Dragonmint T1 broad 1 chip (-1: 1000MHz, >0:Lookup PLL table) (default: 1332)
+--T1Volt1 <arg>     Dragonmint T1 set voltage 1 - VID overrides if set (390-425) (default: 404)
+--T1Volt2 <arg>     Dragonmint T1 set voltage 2 - VID overrides if set (390-425) (default: 404)
+--T1Volt3 <arg>     Dragonmint T1 set voltage 3 - VID overrides if set (390-425) (default: 404)
+--T1Volt4 <arg>     Dragonmint T1 set voltage 4 - VID overrides if set (390-425) (default: 404)
+--T1Volt5 <arg>     Dragonmint T1 set voltage 5 - VID overrides if set (390-425) (default: 404)
+--T1Volt6 <arg>     Dragonmint T1 set voltage 6 - VID overrides if set (390-425) (default: 404)
+--T1Volt7 <arg>     Dragonmint T1 set voltage 7 - VID overrides if set (390-425) (default: 404)
+--T1Volt8 <arg>     Dragonmint T1 set voltage 8 - VID overrides if set (390-425) (default: 404)
+--T1VID1 <arg>      Dragonmint T1 set VID 1 in noauto - Overrides voltage if set (1-31) (default: 0)
+--T1VID2 <arg>      Dragonmint T1 set VID 2 in noauto - Overrides voltage if set (1-31) (default: 0)
+--T1VID3 <arg>      Dragonmint T1 set VID 3 in noauto - Overrides voltage if set (1-31) (default: 0)
+--T1VID4 <arg>      Dragonmint T1 set VID 4 in noauto - Overrides voltage if set (1-31) (default: 0)
+--T1VID5 <arg>      Dragonmint T1 set VID 5 in noauto - Overrides voltage if set (1-31) (default: 0)
+--T1VID6 <arg>      Dragonmint T1 set VID 6 in noauto - Overrides voltage if set (1-31) (default: 0)
+--T1VID7 <arg>      Dragonmint T1 set VID 7 in noauto - Overrides voltage if set (1-31) (default: 0)
+--T1VID8 <arg>      Dragonmint T1 set VID 8 in noauto - Overrides voltage if set (1-31) (default: 0)
 --hfa-hash-clock <arg> Set hashfast clock speed (default: 550)
 --hfa-fail-drop <arg> Set how many MHz to drop clockspeed each failure on an overlocked hashfast device (default: 10)
 --hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)
@@ -1126,7 +1185,8 @@ USB on any hardware are the following:
 
 This code is provided entirely free of charge by the programmer in his spare
 time so donations would be greatly appreciated. Please consider donating to the
-address below.
+address below. Driver development for new ASIC only bitcoin hardware can be
+suitably sponsored.
 
 Con Kolivas <kernel@kolivas.org>
 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ

@@ -17,6 +17,7 @@ Currently supported devices include:
 - Bi*fury USB
 - Cointerra
 - Compac bitshopperde and GekkoScience
+- Halong Dragonmint T1
 - Hashfast Babyjet and Sierra
 - Hashratio
 - Hexfury USB
@@ -117,6 +118,15 @@ Compac devices
 Compac devices need the --enable-icarus option when compiling cgminer.
 
 bitshopperde come up as BSC and GekkoScience as GSC
+
+
+HALONG devices
+
+HALONG Dragonmint T1 devices will come up as DT1.
+
+Halong devices need the --enable-dragonmint_t1 option.
+
+
 
 
 HASHFAST devices
