@@ -82,6 +82,8 @@ case $target in
     ;;
 esac
 
+CFLAGS="$CFLAGS -Wimplicit-fallthrough=0"
+
 case $target in
   *-*-linux-gnu*)
     have_linux=true
