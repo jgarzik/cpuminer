@@ -5139,16 +5139,12 @@ static void discard_stale(void)
  */
 int restart_wait(struct thr_info *thr, unsigned int mstime)
 {
-	struct timeval now, then, tdiff;
-	struct timespec abstime;
+	struct timespec abstime, tdiff;
 	int rc;
 
-	tdiff.tv_sec = mstime / 1000;
-	tdiff.tv_usec = mstime * 1000 - (tdiff.tv_sec * 1000000);
-	cgtime(&now);
-	timeradd(&now, &tdiff, &then);
-	abstime.tv_sec = then.tv_sec;
-	abstime.tv_nsec = then.tv_usec * 1000;
+	cgcond_time(&abstime);
+	ms_to_timespec(&tdiff, mstime);
+	timeraddspec(&abstime, &tdiff);
 
 	mutex_lock(&restart_lock);
 	if (thr->work_restart)
@@ -7346,15 +7342,13 @@ static struct work *hash_pop(bool blocking)
 		if (!blocking)
 			goto out_unlock;
 		do {
-			struct timespec then;
-			struct timeval now;
+			struct timespec abstime, tdiff = {10, 0};
 			int rc;
 
-			cgtime(&now);
-			then.tv_sec = now.tv_sec + 10;
-			then.tv_nsec = now.tv_usec * 1000;
+			cgcond_time(&abstime);
+			timeraddspec(&abstime, &tdiff);
 			pthread_cond_signal(&gws_cond);
-			rc = pthread_cond_timedwait(&getq->cond, stgd_lock, &then);
+			rc = pthread_cond_timedwait(&getq->cond, stgd_lock, &abstime);
 			/* Check again for !no_work as multiple threads may be
 				* waiting on this condition and another may set the
 				* bool separately. */

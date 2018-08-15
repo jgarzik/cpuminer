@@ -1387,6 +1387,13 @@ char *Strsep(char **stringp, const char *delim)
 	return ret;
 }
 
+/* Get timespec specifically for use by cond_timedwait functions which use
+ * CLOCK_REALTIME for expiry */
+void cgcond_time(struct timespec *abstime)
+{
+	clock_gettime(CLOCK_REALTIME, abstime);
+}
+
 #ifdef WIN32
 /* Mingw32 has no strsep so create our own custom one  */
 
