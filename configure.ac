@@ -311,21 +311,6 @@ fi
 AM_CONDITIONAL([HAS_BITMINE_A1], [test x$bitmine_A1 = xyes])
 
 
-dragonmint_t1="no"
-
-AC_ARG_ENABLE([dragonmint_t1],
-	[AC_HELP_STRING([--enable-dragonmint_t1],[Compile support for Dragonmint T1 ASICs STANDALONE(default disabled)])],
-	[dragonmint_t1=$enableval]
-	)
-if test "x$dragonmint_t1" = xyes; then
-	AC_DEFINE([USE_DRAGONMINT_T1], [1], [Defined to 1 if Dragonmint T1 support is wanted])
-	AC_DEFINE([USE_VMASK], [1], [Defined to 1 if version mask rolling is wanted])
-	drivercount=x$drivercount
-	standalone="yes"
-fi
-AM_CONDITIONAL([HAS_DRAGONMINT_T1], [test x$dragonmint_t1 = xyes])
-
-
 blockerupter="no"
 
 AC_ARG_ENABLE([blockerupter],
@@ -350,6 +335,21 @@ if test "x$cointerra" = xyes; then
 	drivercount=x$drivercount
 fi
 AM_CONDITIONAL([HAS_COINTERRA], [test x$cointerra = xyes])
+
+
+dragonmint_t1="no"
+
+AC_ARG_ENABLE([dragonmint_t1],
+	[AC_HELP_STRING([--enable-dragonmint_t1],[Compile support for Dragonmint T1 ASICs STANDALONE(default disabled)])],
+	[dragonmint_t1=$enableval]
+	)
+if test "x$dragonmint_t1" = xyes; then
+	AC_DEFINE([USE_DRAGONMINT_T1], [1], [Defined to 1 if Dragonmint T1 support is wanted])
+	AC_DEFINE([USE_VMASK], [1], [Defined to 1 if version mask rolling is wanted])
+	drivercount=x$drivercount
+	standalone="yes"
+fi
+AM_CONDITIONAL([HAS_DRAGONMINT_T1], [test x$dragonmint_t1 = xyes])
 
 
 drillbit="no"
