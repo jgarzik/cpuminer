@@ -1556,7 +1556,7 @@ extern void pool_died(struct pool *pool);
 extern struct thread_q *tq_new(void);
 extern void tq_free(struct thread_q *tq);
 extern bool tq_push(struct thread_q *tq, void *data);
-extern void *tq_pop(struct thread_q *tq, const struct timespec *abstime);
+extern void *tq_pop(struct thread_q *tq);
 extern void tq_freeze(struct thread_q *tq);
 extern void tq_thaw(struct thread_q *tq);
 extern bool successful_connect;
