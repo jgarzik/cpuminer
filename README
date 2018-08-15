@@ -289,6 +289,7 @@ Options for both config file and command line:
 --compac-freq <arg> Set GekkoScience Compac frequency in MHz, range 100-500 (default: 150.0)
 --compact           Use compact display without per device statistics
 --debug|-D          Enable debug output
+--decode            Decode 2nd pool stratum coinbase transactions (1st must be bitcoind) and exit
 --disable-rejecting Automatically disable pools that continually reject shares
 --dragonmint-t1-options <arg> Dragonmint T1 options ref_clk_khz:sys_clk_khz:spi_clk_khz:override_chip_num
 --T1efficient       Tune Dragonmint T1 per chain voltage and frequency for optimal efficiency
@@ -1180,6 +1181,16 @@ USB on any hardware are the following:
 --enable-hashratio
 --enable-icarus
 --enable-klondike
+
+Q: How do I use the --decode function to decode a pool's coinbase?
+A: You need to have a bitcoind with server functionality and pass it the
+credentials as the first pool in your config, and pass the pool's address that
+you wish to decode as the second pool configured. Note the bitcoind NEEDS the
+http:// prefix.
+
+e.g.:
+./cgminer -o http://localhost:8332 -u user -p pass -o solo.ckpool.org:3333 -u 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ --decode
+
 
 ---
 
