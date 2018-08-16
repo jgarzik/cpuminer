@@ -1,3 +1,62 @@
+Version 4.11.1 - 16th August 2018
+
+- Alias T1factory option to noauto.
+- sem_timedwait needs to use CLOCK_REALTIME.
+- Conditional timedwaits need to use CLOCK_REALTIME.
+- Remove unused abstime.
+
+
+Version 4.11.0 - 15th August 2018
+
+- Disable implicit fallthrough warning for newer GCCs.
+- Alphabetical options.
+- Cope with abs timeouts not working on some OSs, fixing a logic error on
+cgsem_mswait.
+- hash table: use lookup instead of iteration
+- Do away with useless factory tune.
+- Keep diff low for accurate hashrates.
+- Take an optional fanspeed target allowing for quiet operation.
+- Change default pll back to 1332.
+- Set lastshare on successful reinit and sleep longer for each retry.
+- Allow much tighter temperature control if temperature is unchanged for a
+longer period, allowing temps to get to 75 degrees and have optimally low
+fanspeed.
+- Use clock_gettime instead of gettimeofday to not be burnt by ntp changes.
+- Remove useless variables.
+- Should be 390k.
+- Set lower spi speed to allow ultra low frequencies on shutdown.
+- Re-initialise chains first if possible instead of shutting down cgminer.
+- Abstract out prepare T1.
+- Abstract out start t1 chain.
+- More reliably shut down cgminer from the driver thread.
+- Import SPI fixes.
+- Import dev fixes.
+- Speed up mcompat_find_chain_vid since we are just going to lower voltage
+during tuning it doesn't need to be very accurate.
+- Fast start/restart with clean shutdown to lower power but powered on mode.
+- Import Dragonmint T1 driver and version rolling AKA asicboost support.
+- Do not give out API description to random probes to inappopriately open ports.
+- Use system provided uthash and libjansson if provided preferentially now.
+- Update uthash to version 2.0.2
+- Avoid potential buffer overflows in api.c
+- Fix write config with enable-icarus changes.
+- Sleep if btcd isn't immediately available and try again when attempting to
+decode a coinbase.
+- Elaborate what type of pool coinbase transactions to decode and do not print a
+warning if no devices are attached when decoding.
+- Add a --decode option that decodes a pool's coinbase transactions and exits.
+- Set up gbt_curl before setting gbt_solo flag to prevent gbt_curl deref in
+longpoll_thread.
+- remove cgminer-api libusb dependency
+- Update jasson library in gitignore
+- Fix compile guide for api-example.c
+- Cleanup libusb-1.0 in gitignore
+- Remove AVA7_FREQ_CUTOFF_MODE for Avalon7
+- Initialize default temp in detect_modules for Avalon7
+- Remove AVA7_FREQ_TEMPADJ_MODE for Avalon7
+- Fix build with disable-libcurl.
+
+
 Version 4.10.0 - 23rd January 2017
 
 - Silence warning.
