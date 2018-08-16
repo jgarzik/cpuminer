@@ -374,20 +374,20 @@ char *set_avalon8_voltage_level_offset(char *arg)
 
 char *set_avalon8_asic_otp(char *arg)
 {
-       int val, ret;
+	int val, ret;
 
-       ret = sscanf(arg, "%d", &val);
-       if (ret < 1)
+	ret = sscanf(arg, "%d", &val);
+	if (ret < 1)
 		return "No value passed to avalon8-asic-otp";
 
-       if (val < 0 || val > (AVA8_DEFAULT_ASIC_MAX - 1))
+	if (val < 0 || val > (AVA8_DEFAULT_ASIC_MAX - 1))
 		return "Invalid value passed to avalon8-asic-otp";
 
-       opt_avalon8_asic_otp = val;
+	opt_avalon8_asic_otp = val;
 
-       opt_avalon8_cycle_hit_flag = 0;
+	opt_avalon8_cycle_hit_flag = 0;
 
-       return NULL;
+	return NULL;
 }
 
 static int avalon8_init_pkg(struct avalon8_pkg *pkg, uint8_t type, uint8_t idx, uint8_t cnt)
