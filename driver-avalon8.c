@@ -375,18 +375,13 @@ char *set_avalon8_voltage_level_offset(char *arg)
 char *set_avalon8_asic_otp(char *arg)
 {
        int val, ret;
-       char buf[70], *buf_ptr;
-
-       buf_ptr = buf;
 
        ret = sscanf(arg, "%d", &val);
        if (ret < 1)
 		return "No value passed to avalon8-asic-otp";
 
-       if (val < 0 || val > (AVA8_DEFAULT_ASIC_MAX-1)) {
-		sprintf(buf, "Invalid value %d passed to avalon8-asic-otp! Valid range: 0-%d", val,(AVA8_DEFAULT_ASIC_MAX-1));
-		return buf_ptr;
-       }
+       if (val < 0 || val > (AVA8_DEFAULT_ASIC_MAX - 1))
+		return "Invalid value passed to avalon8-asic-otp";
 
        opt_avalon8_asic_otp = val;
 
@@ -713,7 +708,7 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 		default:
 			break;
 		}
-        
+
         /* get the data behind AVA8_OTP_INDEX_READ_STEP for later displaying use*/
 		memcpy(info->otp_info[modular_id][miner_id] + AVA8_OTP_INDEX_READ_STEP, ar->data + AVA8_OTP_INDEX_READ_STEP, 4);
 
@@ -1538,8 +1533,8 @@ static void detect_modules(struct cgpu_info *avalon8)
 			if (AVA8_INVALID_ASIC_OTP == opt_avalon8_asic_otp)
 				info->set_asic_otp[i][j] = 0; /* default asic: 0 */
 			else
-				info->set_asic_otp[i][j] = opt_avalon8_asic_otp;    
-           
+				info->set_asic_otp[i][j] = opt_avalon8_asic_otp;
+
             for(k = AVA8_OTP_INFO_LOTID_OFFSET; k < (AVA8_OTP_INFO_LOTID_OFFSET + 11); k++) {
                 if ((info->otp_info[i][j][k] < 32) || (info->otp_info[i][j][k] > 126))
                     info->otp_info[i][j][k] = '0';
@@ -2293,7 +2288,7 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 				info->otp_info[i][k][AVA8_OTP_INFO_LOTID_OFFSET + 10]);
 				strcat(statbuf, buf);
 			}
-            
+
 			for (k = 0; k < AVA8_DEFAULT_MINER_CNT; k++) {
 				sprintf(buf, " LotIDCRC%d_ASIC%d[%02x%02x%02x%02x]", k,
 				info->otp_info[i][k][AVA8_OTP_INDEX_ASIC_NUM],
