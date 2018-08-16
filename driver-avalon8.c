@@ -378,10 +378,10 @@ char *set_avalon8_asic_otp(char *arg)
 
 	ret = sscanf(arg, "%d", &val);
 	if (ret < 1)
-		return "No value passed to avalon8-asic-otp";
+		return "No value passed to avalon8-cinfo-asic";
 
 	if (val < 0 || val > (AVA8_DEFAULT_ASIC_MAX - 1))
-		return "Invalid value passed to avalon8-asic-otp";
+		return "Invalid value passed to avalon8-cinfo-asic";
 
 	opt_avalon8_asic_otp = val;
 

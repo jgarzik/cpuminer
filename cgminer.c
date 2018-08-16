@@ -1585,9 +1585,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalon8-spdhigh",
 		     set_int_0_to_3, opt_show_intval, &opt_avalon8_spdhigh,
 		     "Set Avalon8 spdhigh, range 0-3."),
-	OPT_WITH_CBARG("--avalon8-asic-otp",
+	OPT_WITH_CBARG("--avalon8-cinfo-asic",
 		     set_avalon8_asic_otp, NULL, &opt_set_avalon8_asic_otp,
-		     "Set Avalon8 asic index for reading otp info, range:[0, 25], step: 1"),
+		     "Set Avalon8 cinfo asic index, range:[0, 25], step: 1"),
 #endif
 #ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",
