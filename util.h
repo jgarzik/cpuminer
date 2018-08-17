@@ -140,8 +140,13 @@ void cgsleep_ms(int ms);
 void cgsleep_us(int64_t us);
 void cgtimer_time(cgtimer_t *ts_start);
 #define cgsleep_prepare_r(ts_start) cgtimer_time(ts_start)
+#ifdef USE_BITMAIN_SOC
+void cgsleep_ms_r(cgtimer_t *ts_start, int ms);
+void cgsleep_us_r(cgtimer_t *ts_start, int64_t us);
+#else
 int cgsleep_ms_r(cgtimer_t *ts_start, int ms);
 int64_t cgsleep_us_r(cgtimer_t *ts_start, int64_t us);
+#endif
 int cgtimer_to_ms(cgtimer_t *cgt);
 void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res);
 double us_tdiff(struct timeval *end, struct timeval *start);
