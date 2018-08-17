@@ -2264,21 +2264,6 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 				info->mm_dna[i][7]);
 		strcat(statbuf, buf);
 
-		if (opt_debug) {
-			for (k = 0; k < AVA8_DEFAULT_MINER_CNT; k++) {
-				sprintf(buf, " CINFO%d%d[", k,
-					info->otp_info[i][k][AVA8_OTP_INDEX_ASIC_NUM]);
-				strcat(statbuf, buf);
-
-				for (m = 0; m < 23; m++) {
-					sprintf(buf, "%02x", info->otp_info[i][k][m]);
-					strcat(statbuf, buf);
-				}
-
-				sprintf(buf, "]");
-				strcat(statbuf, buf);
-			}
-		}
 		sprintf(buf, " Elapsed[%.0f]", tdiff(&current, &(info->elapsed[i])));
 		strcat(statbuf, buf);
 
@@ -2492,6 +2477,19 @@ static struct api_data *avalon8_api_stats(struct cgpu_info *avalon8)
 						strcat(statbuf, buf);
 					}
 					statbuf[strlen(statbuf) - 1] = ']';
+				}
+
+				for (k = 0; k < info->miner_count[i]; k++) {
+					sprintf(buf, " CINFO%02d[", k);
+					strcat(statbuf, buf);
+
+					for (m = 0; m < 23; m++) {
+						sprintf(buf, "%02x", info->otp_info[i][k][m]);
+						strcat(statbuf, buf);
+					}
+
+					sprintf(buf, "]");
+					strcat(statbuf, buf);
 				}
 			} else {
 				for (j = 0; j < info->miner_count[i]; j++) {
