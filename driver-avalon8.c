@@ -718,7 +718,7 @@ static int decode_pkg(struct cgpu_info *avalon8, struct avalon8_ret *ar, int mod
 			break;
 		}
 
-        /* get the data behind AVA8_OTP_INDEX_READ_STEP for later displaying use*/
+		/* get the data behind AVA8_OTP_INDEX_READ_STEP for later displaying use */
 		memcpy(info->otp_info[modular_id][miner_id] + AVA8_OTP_INDEX_READ_STEP, ar->data + AVA8_OTP_INDEX_READ_STEP, 4);
 
 		break;
