@@ -7601,7 +7601,6 @@ void get_work_by_nonce2(struct thr_info *thr,
 						struct pool *pool,
 						struct pool *real_pool,
 						uint64_t nonce2,
-						uint32_t ntime,
 						uint32_t version)
 {
 	*work = make_work();

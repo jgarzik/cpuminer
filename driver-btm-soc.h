@@ -911,7 +911,14 @@ extern int ADD_FREQ1;
 extern int fpga_version;
 extern int opt_multi_version;
 
-
+int getChainExistFlag(int chainIndex);
+unsigned char get_pic_voltage(unsigned char chain);
+int getVolValueFromPICvoltage(unsigned char vol_pic);
+unsigned char getPICvoltageFromValue(int vol_value);
+void set_pic_voltage(unsigned char chain, unsigned char voltage);
+int getChainAsicNum(int chainIndex);
+int readRebootTestNum();
+int send_job(unsigned char *buf);
 
 
 #endif

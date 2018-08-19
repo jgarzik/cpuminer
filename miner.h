@@ -1157,6 +1157,14 @@ extern void set_target(unsigned char *dest_target, double diff);
 bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool,
 			 uint32_t nonce2, uint32_t nonce, uint32_t ntime);
 #endif
+#ifdef USE_BITMAIN_SOC
+void get_work_by_nonce2(struct thr_info *thr,
+						struct work **work,
+						struct pool *pool,
+						struct pool *real_pool,
+						uint64_t nonce2,
+						uint32_t version);
+#endif
 extern int restart_wait(struct thr_info *thr, unsigned int mstime);
 
 extern void raise_cgminer(void);

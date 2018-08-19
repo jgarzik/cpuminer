@@ -69,6 +69,7 @@ unsigned char reset_iic_pic(unsigned char chain);
 
 extern  bool clement_doTestBoard(bool showlog);
 bool clement_doTestBoardOnce(bool showlog);
+int calculate_core_number(unsigned int actual_core_number);
 
 #define hex_print(p) applog(LOG_DEBUG, "%s", p)
 
@@ -11213,7 +11214,7 @@ void set_pic_iic_flash_addr_pointer(unsigned char chain, unsigned char addr_H, u
                     continue;
             }
             c_pool = pools[pool->pool_no];
-            get_work_by_nonce2(thr,&work,pool,c_pool,nonce2,pool->ntime,version);
+            get_work_by_nonce2(thr,&work,pool,c_pool,nonce2,version);
             h += hashtest_submit(thr,work,nonce3,midstate,pool,nonce2,chain_id);
             free_work(work);
         }

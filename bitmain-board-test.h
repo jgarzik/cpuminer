@@ -239,4 +239,6 @@ struct testpatten_cgpu_info
 static void fix_result_byPercent(int chainIndex);
 #endif
 
+static int calculate_core_number(unsigned int actual_core_number);
+
 #endif
