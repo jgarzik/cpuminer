@@ -32,7 +32,7 @@
 	defined(USE_MINION) || defined(USE_COINTERRA) || defined(USE_BITMINE_A1) || \
 	defined(USE_ANT_S1) || defined(USE_ANT_S2) || defined(USE_ANT_S3) || defined(USE_SP10) || \
 	defined(USE_SP30) || defined(USE_ICARUS) || defined(USE_HASHRATIO) || defined(USE_AVALON_MINER) || \
-	defined(USE_AVALON7)
+	defined(USE_AVALON7) || defined(USE_BITMAIN_SOC)
 #define HAVE_AN_ASIC 1
 #endif
 
@@ -4868,6 +4868,16 @@ void mcast_init()
 	if (thr_info_create(thr, NULL, mcast_thread, thr))
 		quit(1, "API mcast thread create failed");
 }
+
+#ifdef USE_BITMAIN_SOC
+void reCalculateAVG()
+{
+	new_total_mhashes_done = total_mhashes_done;
+	if(total_secs>0)
+		new_total_secs = total_secs-1;
+	else new_total_secs=total_secs;
+}
+#endif
 
 void api(int api_thr_id)
 {

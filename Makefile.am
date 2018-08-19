@@ -45,7 +45,7 @@ cgminer_SOURCES := cgminer.c
 
 cgminer_SOURCES	+= elist.h miner.h compat.h bench_block.h	\
 		   util.c util.h uthash.h logging.h		\
-		   sha2.c sha2.h
+		   sha2.c sha2.h api.c
 
 cgminer_SOURCES	+= logging.c
 
@@ -116,9 +116,6 @@ if HAS_BITMAIN_SOC
 cgminer_SOURCES += driver-btm-soc.c driver-btm-soc.h
 cgminer_SOURCES += bitmain-board-test.c bitmain-board-test.h
 cgminer_SOURCES += sha2-soc.c sha2-soc.h
-cgminer_SOURCES += api-btm.c
-else
-cgminer_SOURCES += api.c
 endif
 
 if HAS_BITMINE_A1
