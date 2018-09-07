@@ -115,7 +115,6 @@ endif
 if HAS_BITMAIN_SOC
 cgminer_SOURCES += driver-btm-soc.c driver-btm-soc.h
 cgminer_SOURCES += bitmain-board-test.c bitmain-board-test.h
-cgminer_SOURCES += sha2-soc.c sha2-soc.h
 endif
 
 if HAS_BITMINE_A1
