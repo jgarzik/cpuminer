@@ -21,11 +21,9 @@
 
 #define AVA8_DEFAULT_FAN_MIN		5 /* % */
 #define AVA8_DEFAULT_FAN_MAX		100
-#define AVA8_DEFAULT_FAN_INTERVAL	15 /* Seconds */
 
 #define AVA8_DEFAULT_TEMP_TARGET	90
 #define AVA8_DEFAULT_TEMP_OVERHEAT	105
-#define AVA8_DEFAULT_TEMP_HYSTERESIS	5
 
 #define AVA8_DEFAULT_VOLTAGE_LEVEL_MIN	-15
 #define AVA8_DEFAULT_VOLTAGE_LEVEL_MAX	15
@@ -102,6 +100,13 @@
 #define AVA831_DEFAULT_TH_TIMEOUT	16000
 #define AVA831_DEFAULT_SPDLOW		2
 #define AVA831_DEFAULT_NONCE_MASK	27
+
+/* PID CONTROLLER*/
+#define AVA8_DEFAULT_PID_P		2
+#define AVA8_DEFAULT_PID_I		5
+#define AVA8_DEFAULT_PID_D		0
+#define AVA8_DEFAULT_PID_TEMP_MIN	50
+#define AVA8_DEFAULT_PID_TEMP_MAX	100
 
 #define AVA8_DEFAULT_IIC_DETECT	false
 
@@ -288,9 +293,15 @@ struct avalon8_info {
 
 	uint8_t cutoff[AVA8_DEFAULT_MODULARS];
 	int temp_target[AVA8_DEFAULT_MODULARS];
-	int temp_last_max[AVA8_DEFAULT_MODULARS];
 	int temp_overheat[AVA8_DEFAULT_MODULARS];
-	time_t last_temp_time[AVA8_DEFAULT_MODULARS];
+
+	/* pid controler*/
+	int pid_p[AVA8_DEFAULT_MODULARS];
+	int pid_i[AVA8_DEFAULT_MODULARS];
+	int pid_d[AVA8_DEFAULT_MODULARS];
+	double pid_u[AVA8_DEFAULT_MODULARS];
+	int pid_e[AVA8_DEFAULT_MODULARS][3];
+	int pid_0[AVA8_DEFAULT_MODULARS];
 
 	int set_voltage_level[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT];
 	uint32_t set_frequency[AVA8_DEFAULT_MODULARS][AVA8_DEFAULT_MINER_CNT][AVA8_DEFAULT_PLL_CNT];
@@ -379,6 +390,9 @@ extern uint32_t opt_avalon8_roll_enable;
 extern uint32_t opt_avalon8_spdlow;
 extern uint32_t opt_avalon8_spdhigh;
 extern char *set_avalon8_asic_otp(char *arg);
+extern uint32_t opt_avalon8_pid_p;
+extern uint32_t opt_avalon8_pid_i;
+extern uint32_t opt_avalon8_pid_d;
 
 #endif /* USE_AVALON8 */
 #endif /* _AVALON8_H_ */

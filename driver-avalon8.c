@@ -68,6 +68,10 @@ uint32_t opt_avalon8_roll_enable = AVA8_DEFAULT_ROLL_ENABLE;
 uint32_t opt_avalon8_spdlow = AVA8_INVALID_SPDLOW;
 uint32_t opt_avalon8_spdhigh = AVA8_DEFAULT_SPDHIGH;
 
+uint32_t opt_avalon8_pid_p = AVA8_DEFAULT_PID_P;
+uint32_t opt_avalon8_pid_i = AVA8_DEFAULT_PID_I;
+uint32_t opt_avalon8_pid_d = AVA8_DEFAULT_PID_D;
+
 uint32_t cpm_table[] =
 {
 	0x04400000,
@@ -450,69 +454,58 @@ static inline int get_temp_max(struct avalon8_info *info, int addr)
 	return max;
 }
 
-/* Use a PID-like feedback mechanism for optimal temperature and fan speed */
+/*
+ * Incremental PID controller
+ *
+ * controller input: u, output: t
+ *
+ * delta_u = P * [e(k) - e(k-1)] + I * e(k) + D * [e(k) - 2*e(k-1) + e(k-2)];
+ * e(k) = t(k) - t[target];
+ * u(k) = u(k-1) + delta_u;
+ *
+ */
 static inline uint32_t adjust_fan(struct avalon8_info *info, int id)
 {
-	int t, tdiff, delta;
+	int t;
+	double delta_u;
+	double delta_p, delta_i, delta_d;
 	uint32_t pwm;
-	time_t now_t;
 
-	now_t = time(NULL);
 	t = get_temp_max(info, id);
-	tdiff = t - info->temp_last_max[id];
-	if (!tdiff && now_t < info->last_temp_time[id] + AVA8_DEFAULT_FAN_INTERVAL)
-		goto out;
-	info->last_temp_time[id] = now_t;
-	delta = t - info->temp_target[id];
 
-	/* Check for init value and ignore it */
-	if (unlikely(info->temp_last_max[id] == -273))
-		tdiff = 0;
-	info->temp_last_max[id] = t;
+	/* update target error */
+	info->pid_e[id][2] = info->pid_e[id][1];
+	info->pid_e[id][1] = info->pid_e[id][0];
+	info->pid_e[id][0] = t - info->temp_target[id];
 
-	if (t >= info->temp_overheat[id]) {
-		/* Hit the overheat temperature limit */
-		if (info->fan_pct[id] < opt_avalon8_fan_max) {
-			applog(LOG_WARNING, "Overheat detected on AV8-%d, increasing fan to max", id);
-			info->fan_pct[id] = opt_avalon8_fan_max;
-		}
-	} else if (delta > 0) {
-		/* Over target temperature. */
-
-		/* Is the temp already coming down */
-		if (tdiff < 0)
-			goto out;
-		/* Adjust fanspeed by temperature over and any further rise */
-		info->fan_pct[id] += delta + tdiff;
+	if (t > AVA8_DEFAULT_PID_TEMP_MAX) {
+		info->pid_u[id] = opt_avalon8_fan_max;
+	} else if (t < AVA8_DEFAULT_PID_TEMP_MIN) {
+		info->pid_u[id] = opt_avalon8_fan_min;
+	} else if (!info->pid_0[id]) {
+			/* first, init u as t */
+			info->pid_0[id] = 1;
+			info->pid_u[id] = t;
 	} else {
-		/* Below target temperature */
-		int diff = tdiff;
+		delta_p = info->pid_p[id] * (info->pid_e[id][0] - info->pid_e[id][1]);
+		delta_i = info->pid_i[id] * info->pid_e[id][0];
+		delta_d = info->pid_d[id] * (info->pid_e[id][0] - 2 * info->pid_e[id][1] + info->pid_e[id][2]);
 
-		if (tdiff > 0) {
-			int divisor = -delta / AVA8_DEFAULT_TEMP_HYSTERESIS + 1;
+		/*Parameter I is int type(1, 2, 3...), but should be used as a smaller value (such as 0.1, 0.01...)*/
+		delta_u = delta_p + delta_i / 100 + delta_d;
 
-			/* Adjust fanspeed by temperature change proportional to
-			 * diff from optimal. */
-			diff /= divisor;
-		} else {
-			/* Is the temp below optimal and unchanging, gently lower speed */
-			if (t < info->temp_target[id] - AVA8_DEFAULT_TEMP_HYSTERESIS && !tdiff)
-				diff -= 1;
-		}
-		info->fan_pct[id] += diff;
+		info->pid_u[id] += delta_u;
 	}
 
-	if (info->fan_pct[id] > opt_avalon8_fan_max)
-		info->fan_pct[id] = opt_avalon8_fan_max;
-	else if (info->fan_pct[id] < opt_avalon8_fan_min)
-		info->fan_pct[id] = opt_avalon8_fan_min;
-out:
+	if(info->pid_u[id] > opt_avalon8_fan_max)
+		info->pid_u[id] = opt_avalon8_fan_max;
+
+	if (info->pid_u[id] < opt_avalon8_fan_min)
+		info->pid_u[id] = opt_avalon8_fan_min;
+
+	/* Round from float to int */
+	info->fan_pct[id] = (int)(info->pid_u[id] + 0.5);
 	pwm = get_fan_pwm(info->fan_pct[id]);
-
-	if (info->cutoff[id])
-		pwm = get_fan_pwm(opt_avalon8_fan_max);
-
-	applog(LOG_DEBUG, "[%d], Adjust_fan: %dC-%d%%(%03x)", id, t, info->fan_pct[id], pwm);
 
 	return pwm;
 }
@@ -1547,9 +1540,19 @@ static void detect_modules(struct cgpu_info *avalon8)
 		info->cutoff[i] = 0;
 		info->fan_cpm[i] = 0;
 		info->temp_mm[i] = -273;
-		info->temp_last_max[i] = -273;
 		info->local_works[i] = 0;
 		info->hw_works[i] = 0;
+
+		/*PID controller*/
+		info->pid_u[i] = opt_avalon8_fan_min;
+		info->pid_p[i] = opt_avalon8_pid_p;
+		info->pid_i[i] = opt_avalon8_pid_i;
+		info->pid_d[i] = opt_avalon8_pid_d;
+		info->pid_e[i][0] = 0;
+		info->pid_e[i][1] = 0;
+		info->pid_e[i][2] = 0;
+		info->pid_0[i] = 0;
+
 		for (j = 0; j < info->miner_count[i]; j++) {
 			memset(info->chip_matching_work[i][j], 0, sizeof(uint64_t) * info->asic_count[i]);
 			info->local_works_i[i][j] = 0;

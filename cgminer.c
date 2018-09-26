@@ -1588,6 +1588,15 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_CBARG("--avalon8-cinfo-asic",
 		     set_avalon8_asic_otp, NULL, &opt_set_avalon8_asic_otp,
 		     "Set Avalon8 cinfo asic index, range:[0, 25], step: 1"),
+	OPT_WITH_ARG("--avalon8-pid-p",
+		     set_int_0_to_9999, opt_show_intval, &opt_avalon8_pid_p,
+		     "Set Avalon8 pid-p, range 0-9999."),
+	OPT_WITH_ARG("--avalon8-pid-i",
+		     set_int_0_to_9999, opt_show_intval, &opt_avalon8_pid_i,
+		     "Set Avalon8 pid-i, range 0-9999."),
+	OPT_WITH_ARG("--avalon8-pid-d",
+		     set_int_0_to_9999, opt_show_intval, &opt_avalon8_pid_d,
+		     "Set Avalon8 pid-d, range 0-9999."),
 #endif
 #ifdef USE_AVALON_MINER
 	OPT_WITH_CBARG("--avalonm-voltage",
