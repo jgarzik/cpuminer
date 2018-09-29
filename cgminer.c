@@ -114,6 +114,12 @@ char *curly = ":D";
 #include "driver-bitfury16.h"
 #endif
 
+#ifdef USE_BITMAIN_SOC
+#include <sys/sysinfo.h>
+#include "driver-btm-soc.h"
+#endif
+
+
 #ifdef USE_COINTERRA
 #include "driver-cointerra.h"
 #endif
@@ -409,6 +415,24 @@ pthread_cond_t gws_cond;
 double rolling1, rolling5, rolling15;
 double total_rolling;
 double total_mhashes_done;
+
+#ifdef USE_BITMAIN_SOC
+char *opt_version_path = NULL;
+char displayed_hash_rate[16] = {0};
+char nonce_num10_string[NONCE_BUFF];
+char nonce_num30_string[NONCE_BUFF];
+char nonce_num60_string[NONCE_BUFF];
+char g_miner_version[256] = {0};
+char g_miner_compiletime[256] = {0};
+char g_miner_type[256] = {0};
+
+double new_total_mhashes_done;
+double new_total_secs = 1.0;
+// only used for total_secs, because we need use system info time, instead of real data time.
+time_t total_tv_start_sys;
+time_t total_tv_end_sys;
+#endif
+
 static struct timeval total_tv_start, total_tv_end;
 static struct timeval restart_tv_start, update_tv_start;
 
@@ -1272,6 +1296,15 @@ static char *set_null(const char __maybe_unused *arg)
 	return NULL;
 }
 
+#ifdef USE_BITMAIN_SOC
+static char *set_version_path(const char *arg)
+{
+    opt_set_charp(arg, &opt_version_path);
+
+    return NULL;
+}
+#endif
+
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
 #ifdef USE_ICARUS
@@ -1680,6 +1713,39 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bf16-alarm-temp",
 		     set_int_0_to_100, NULL, &opt_bf16_alarm_temp,
 		     "Set control board alarm temperature range (0 - 100)"),
+#endif
+#ifdef USE_BITMAIN_SOC
+	OPT_WITH_ARG("--version-file",
+	set_version_path, NULL, opt_hidden,
+	"Set miner version file"),
+	
+	OPT_WITHOUT_ARG("--bitmain-fan-ctrl",
+	opt_set_bool, &opt_bitmain_fan_ctrl,
+	"Enable bitmain miner fan controlling"),
+
+	OPT_WITH_ARG("--bitmain-fan-pwm",
+	set_int_0_to_100, opt_show_intval, &opt_bitmain_fan_pwm,
+	"Set bitmain fan pwm percentage 0~100"),
+
+	OPT_WITH_ARG("--bitmain-freq",
+	set_int_0_to_9999,opt_show_intval, &opt_bitmain_soc_freq,
+	"Set frequency"),
+
+	OPT_WITH_ARG("--bitmain-voltage",
+	set_int_0_to_9999,opt_show_intval, &opt_bitmain_soc_voltage,
+	"Set voltage"),
+
+	OPT_WITHOUT_ARG("--fixed-freq",
+	opt_set_bool, &opt_fixed_freq,
+	"Set bitmain miner use fixed freq"),
+
+	OPT_WITHOUT_ARG("--no-pre-heat",
+	opt_set_false, &opt_pre_heat,
+	"Set bitmain miner doesn't pre heat"),
+
+	OPT_WITH_ARG("--multi-version",
+	opt_set_intval, NULL, &opt_multi_version,
+	"Multi version mining!"),
 #endif
 #ifdef USE_BLOCKERUPTER
         OPT_WITH_ARG("--bet-clk",
@@ -4854,6 +4920,9 @@ static void _copy_work(struct work *work, const struct work *base_work, int noff
 	}
 	if (base_work->coinbase)
 		work->coinbase = strdup(base_work->coinbase);
+#ifdef USE_BITMAIN_SOC
+	work->version = base_work->version;
+#endif
 }
 
 void set_work_ntime(struct work *work, int ntime)
@@ -5694,7 +5763,20 @@ static time_t hashdisplay_t;
 void zero_stats(void)
 {
 	int i;
+#ifdef USE_BITMAIN_SOC
+	struct sysinfo sInfo;
+	if (sysinfo(&sInfo))
+	{
+		applog(LOG_INFO, "Failed to get sysinfo, errno:%u, reason:%s\n",
+			   errno, strerror(errno));
+		total_tv_start_sys=time(NULL);
+	}
+	else
+	{
+		total_tv_start_sys=sInfo.uptime;
+	}
 
+#endif
 	cgtime(&total_tv_start);
 	copy_time(&tv_hashmeter, &total_tv_start);
 	total_rolling = 0;
@@ -5702,6 +5784,9 @@ void zero_stats(void)
 	rolling5 = 0;
 	rolling15 = 0;
 	total_mhashes_done = 0;
+#ifdef USE_BITMAIN_SOC
+	new_total_mhashes_done = 0;
+#endif
 	total_getworks = 0;
 	total_accepted = 0;
 	total_rejected = 0;
@@ -5712,6 +5797,9 @@ void zero_stats(void)
 	total_go = 0;
 	total_ro = 0;
 	total_secs = 1.0;
+#ifdef USE_BITMAIN_SOC
+	new_total_secs = 1.0;
+#endif
 	total_diff1 = 0;
 	found_blocks = 0;
 	total_diff_accepted = 0;
@@ -6415,6 +6503,20 @@ static void hashmeter(int thr_id, uint64_t hashes_done)
 	time_t now_t;
 	int diff_t;
 
+#ifdef USE_BITMAIN_SOC
+	struct sysinfo sInfo;
+	if (sysinfo(&sInfo))
+	{
+		applog(LOG_INFO, "Failed to get sysinfo, errno:%u, reason:%s\n",
+			   errno, strerror(errno));
+		total_tv_end_sys=time(NULL);
+	}
+	else
+	{
+		total_tv_end_sys=sInfo.uptime;
+	}
+#endif
+
 	cgtime(&total_tv_end);
 	tv_tdiff = tdiff(&total_tv_end, &tv_hashmeter);
 	now_t = total_tv_end.tv_sec;
@@ -6489,7 +6591,11 @@ static void hashmeter(int thr_id, uint64_t hashes_done)
 	decay_time(&rolling5, hashes_done, tv_tdiff, 300.0);
 	decay_time(&rolling15, hashes_done, tv_tdiff, 900.0);
 	global_hashrate = llround(total_rolling) * 1000000;
+#ifndef USE_BITMAIN_SOC
 	total_secs = tdiff(&total_tv_end, &total_tv_start);
+#else
+	total_secs = total_tv_end_sys*1.0-total_tv_start_sys*1.0;
+#endif
 	if (showlog) {
 		char displayed_hashes[16], displayed_rolling[16];
 		char displayed_r1[16], displayed_r5[16], displayed_r15[16];
@@ -7488,6 +7594,39 @@ bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *r
 	return ret;
 }
 #endif
+
+#ifdef USE_BITMAIN_SOC
+void get_work_by_nonce2(struct thr_info *thr,
+						struct work **work,
+						struct pool *pool,
+						struct pool *real_pool,
+						uint64_t nonce2,
+						uint32_t version)
+{
+	*work = make_work();
+	const int thr_id = thr->id;
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct device_drv *drv = cgpu->drv;
+	cg_wlock(&pool->data_lock);
+	pool->nonce2 = nonce2;
+	//if(pool->support_vil) // comment as default
+	version = Swap32(version);
+	cg_memcpy(pool->header_bin, &version, 4);
+	cg_wunlock(&pool->data_lock);
+
+	gen_stratum_work(pool, *work);
+
+	(*work)->pool = real_pool;
+
+	(*work)->thr_id = thr_id;
+	(*work)->work_block = work_block;
+	(*work)->pool->works++;
+
+	(*work)->mined = true;
+	(*work)->version = version;
+}
+#endif
+
 
 /* Generates stratum based work based on the most recent notify information
  * from the pool. This will keep generating work while a pool is down so we use
@@ -9228,6 +9367,20 @@ void print_summary(void)
 
 static void clean_up(bool restarting)
 {
+#ifdef USE_BITMAIN_SOC
+	struct sysinfo sInfo;
+	if (sysinfo(&sInfo))
+	{
+		applog(LOG_INFO, "Failed to get sysinfo, errno:%u, reason:%s\n",
+			   errno, strerror(errno));
+		total_tv_end_sys=time(NULL);
+	}
+	else
+	{
+		total_tv_end_sys=sInfo.uptime;
+	}
+#endif
+
 #ifdef USE_USBUTILS
 	usb_polling = false;
 	pthread_join(usb_poll_thread, NULL);
@@ -9970,6 +10123,31 @@ static void initialise_usb(void) {
 #define initialise_usb() {}
 #endif
 
+#ifdef USE_BITMAIN_SOC
+void setStartTimePoint()
+{
+	char logstr[256];
+	struct sysinfo sInfo;
+	if (sysinfo(&sInfo))
+	{
+		sprintf(logstr, "Failed to get sysinfo, errno:%u, reason:%s\n",
+				errno, strerror(errno));
+		writeInitLogFile(logstr);
+
+		total_tv_start_sys=time(NULL);
+		total_tv_end_sys=total_tv_start_sys+1;
+	}
+	else
+	{
+		total_tv_start_sys=sInfo.uptime;
+		total_tv_end_sys=total_tv_start_sys+1;
+
+		sprintf(logstr, "setStartTimePoint total_tv_start_sys=%d total_tv_end_sys=%d\n",total_tv_start_sys, total_tv_end_sys);
+		writeInitLogFile(logstr);
+	}
+}
+#endif
+
 int main(int argc, char *argv[])
 {
 	struct sigaction handler;
@@ -10112,6 +10290,65 @@ int main(int argc, char *argv[])
 		}
 		set_target(bench_target, 32);
 	}
+
+#ifdef USE_BITMAIN_SOC
+	if(opt_version_path)
+	{
+		FILE * fpversion = fopen(opt_version_path, "rb");
+		char tmp[256] = {0};
+		int len = 0;
+		char * start = 0;
+
+		if(fpversion == NULL)
+		{
+			applog(LOG_ERR, "Open miner version file %s error", opt_version_path);
+		}
+		else
+		{
+			len = fread(tmp, 1, 256, fpversion);
+
+			if(len <= 0)
+			{
+				applog(LOG_ERR, "Read miner version file %s error %d", opt_version_path, len);
+			}
+			else
+			{
+				start = strstr(tmp, "\n");
+
+				if(start == NULL)
+				{
+					strcpy(g_miner_compiletime, tmp);
+				}
+				else
+				{
+					cg_memcpy(g_miner_compiletime, tmp, start-tmp);
+					strcpy(g_miner_type, start+1);
+				}
+
+				if(g_miner_compiletime[strlen(g_miner_compiletime)-1] == '\n')
+				{
+					g_miner_compiletime[strlen(g_miner_compiletime)-1] = 0;
+				}
+
+				if(g_miner_compiletime[strlen(g_miner_compiletime)-1] == '\r')
+				{
+					g_miner_compiletime[strlen(g_miner_compiletime)-1] = 0;
+				}
+
+				if(g_miner_type[strlen(g_miner_type)-1] == '\n')
+				{
+					g_miner_type[strlen(g_miner_type)-1] = 0;
+				}
+
+				if(g_miner_type[strlen(g_miner_type)-1] == '\r')
+				{
+					g_miner_type[strlen(g_miner_type)-1] = 0;
+				}
+			}
+		}
+		applog(LOG_ERR, "Miner compile time: %s type: %s", g_miner_compiletime, g_miner_type);
+	}
+#endif
 
 #ifdef HAVE_CURSES
 	if (opt_realquiet || opt_display_devs || opt_decode)
@@ -10346,6 +10583,21 @@ begin_bench:
 		cgpu->rolling = cgpu->total_mhashes = 0;
 	}
 
+#ifdef USE_BITMAIN_SOC
+	struct sysinfo sInfo;
+	if (sysinfo(&sInfo))
+	{
+		applog(LOG_INFO, "Failed to get sysinfo, errno:%u, reason:%s\n",
+			   errno, strerror(errno));
+		total_tv_end_sys=time(NULL);
+		total_tv_start_sys=time(NULL);
+	}
+	else
+	{
+		total_tv_end_sys=sInfo.uptime;
+		total_tv_start_sys=sInfo.uptime;
+	}
+#endif
 	cgtime(&total_tv_start);
 	cgtime(&total_tv_end);
 	cgtime(&tv_hashmeter);

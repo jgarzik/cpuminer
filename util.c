@@ -1328,6 +1328,20 @@ void timeraddspec(struct timespec *a, const struct timespec *b)
 	spec_nscheck(a);
 }
 
+#ifdef USE_BITMAIN_SOC
+static int __maybe_unused timespec_to_ms(struct timespec *ts)
+{
+	return ts->tv_sec * 1000 + ts->tv_nsec / 1000000;
+}
+
+/* Subtract b from a */
+static void __maybe_unused timersubspec(struct timespec *a, const struct timespec *b)
+{
+	a->tv_sec -= b->tv_sec;
+	a->tv_nsec -= b->tv_nsec;
+	spec_nscheck(a);
+}
+#else /* USE_BITMAIN_SOC */
 static int timespec_to_ms(struct timespec *ts)
 {
 	return ts->tv_sec * 1000 + ts->tv_nsec / 1000000;
@@ -1345,6 +1359,7 @@ static void timersubspec(struct timespec *a, const struct timespec *b)
 	a->tv_nsec -= b->tv_nsec;
 	spec_nscheck(a);
 }
+#endif /* USE_BITMAIN_SOC */
 
 char *Strcasestr(char *haystack, const char *needle)
 {
@@ -1475,6 +1490,25 @@ static void nanosleep_abstime(struct timespec *ts_end)
 /* Reentrant version of cgsleep functions allow start time to be set separately
  * from the beginning of the actual sleep, allowing scheduling delays to be
  * counted in the sleep. */
+#ifdef USE_BITMAIN_SOC
+void cgsleep_ms_r(cgtimer_t *ts_start, int ms)
+{
+	struct timespec ts_end;
+
+	ms_to_timespec(&ts_end, ms);
+	timeraddspec(&ts_end, ts_start);
+	nanosleep_abstime(&ts_end);
+}
+
+void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
+{
+	struct timespec ts_end;
+
+	us_to_timespec(&ts_end, us);
+	timeraddspec(&ts_end, ts_start);
+	nanosleep_abstime(&ts_end);
+}
+#else /* USE_BITMAIN_SOC */
 int cgsleep_ms_r(cgtimer_t *ts_start, int ms)
 {
 	struct timespec ts_end, ts_diff;
@@ -1508,6 +1542,7 @@ int64_t cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
 	nanosleep_abstime(&ts_end);
 	return usdiff;
 }
+#endif /* USE_BITMAIN_SOC */
 #else /* CLOCK_MONOTONIC */
 #ifdef __MACH__
 #include <mach/clock.h>

@@ -29,7 +29,7 @@ cgminer_CPPFLAGS = $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_CPPFLAGS) $(U
 bin_PROGRAMS	= cgminer
 
 cgminer_LDFLAGS	= $(PTHREAD_FLAGS)
-cgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
+cgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @LIBZ_LIBS@ @PTHREAD_LIBS@ \
 		  @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ \
 		  @LIBUSB_LIBS@ @MM_LIBS@ @RT_LIBS@ @LIBSYSTEMD_LIBS@ \
 		  @MATH_LIBS@ lib/libgnu.a ccan/libccan.a
@@ -112,6 +112,10 @@ cgminer_SOURCES += bf16-uartdevice.c bf16-uartdevice.h
 cgminer_SOURCES += driver-bitfury16.c driver-bitfury16.h
 endif
 
+if HAS_BITMAIN_SOC
+cgminer_SOURCES += driver-btm-soc.c driver-btm-soc.h
+cgminer_SOURCES += bitmain-board-test.c bitmain-board-test.h
+endif
 
 if HAS_BITMINE_A1
 cgminer_SOURCES += driver-SPI-bitmine-A1.c
