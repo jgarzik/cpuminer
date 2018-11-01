@@ -346,7 +346,6 @@ Options for both config file and command line:
 --verbose           Log verbose output to stderr as well as status output
 --widescreen        Use extra wide display without toggling
 --worktime          Display extra work time debug information
---force-clean-jobs <arg> Force clean jobs to miners (default: 20)
 Options for command line only:
 --config|-c <arg>   Load a JSON-format configuration file
 See example.conf for an example configuration.

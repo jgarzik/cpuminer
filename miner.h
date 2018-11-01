@@ -989,7 +989,6 @@ extern bool have_longpoll;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
 extern int opt_suggest_diff;
-extern int opt_force_clean_jobs;
 extern char *cgminer_path;
 extern bool opt_lowmem;
 extern bool opt_autofan;
