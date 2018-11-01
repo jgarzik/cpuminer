@@ -2159,7 +2159,7 @@ out_unlock:
 	if (pool == current_pool()) {
 		opt_work_update = true;
 #ifdef USE_AVALON7
-		if (opt_avalon7_ssplus_enable & pool->has_stratum & clean)
+		if (opt_avalon7_ssplus_enable & pool->has_stratum)
 			ssp_hasher_update_stratum(pool, true);
 #endif
 	}

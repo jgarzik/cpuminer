@@ -1949,31 +1949,20 @@ static void avalon7_sswork_update(struct cgpu_info *avalon7)
 	struct pool *pool;
 	int coinbase_len_posthash, coinbase_len_prehash;
 
-	cgtime(&info->last_stratum);
 	/*
 	 * NOTE: We need mark work_restart to private information,
 	 * So that it cann't reset by hash_driver_work
 	 */
 	if (thr->work_restart)
 		info->work_restart = thr->work_restart;
-	applog(LOG_NOTICE, "%s-%d: New stratum: restart: %d, update: %d, clean: %d",
+	applog(LOG_DEBUG, "%s-%d: New stratum: restart: %d, update: %d",
 	       avalon7->drv->name, avalon7->device_id,
-	       thr->work_restart, thr->work_update, thr->clean_jobs);
+	       thr->work_restart, thr->work_update);
 
 	/* Step 1: MM protocol check */
 	pool = current_pool();
 	if (!pool->has_stratum)
 		quit(1, "%s-%d: MM has to use stratum pools", avalon7->drv->name, avalon7->device_id);
-
-	if (opt_avalon7_ssplus_enable) {
-		if (thr->clean_jobs) {
-			applog(LOG_DEBUG, "%s-%d: Update the stratum", avalon7->drv->name, avalon7->device_id);
-			thr->clean_jobs = false;
-		} else {
-			applog(LOG_DEBUG, "%s-%d: Ignore the stratum", avalon7->drv->name, avalon7->device_id);
-			return;
-		}
-	}
 
 	coinbase_len_prehash = pool->nonce2_offset - (pool->nonce2_offset % SHA256_BLOCK_SIZE);
 	coinbase_len_posthash = pool->coinbase_len - coinbase_len_prehash;
@@ -1996,6 +1985,7 @@ static void avalon7_sswork_update(struct cgpu_info *avalon7)
 
 	/* Step 2: Send out stratum pkgs */
 	cg_rlock(&pool->data_lock);
+	cgtime(&info->last_stratum);
 	info->pool_no = pool->pool_no;
 	copy_pool_stratum(&info->pool2, &info->pool1);
 	copy_pool_stratum(&info->pool1, &info->pool0);
