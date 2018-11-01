@@ -182,6 +182,7 @@ struct avalon7_dev_description avalon7_dev_table[] = {
 		711,
 		4,
 		18,
+		AVA7_MM711_VIN_ADC_RATIO,
 		AVA7_MM711_VOUT_ADC_RATIO,
 		4981
 	},
@@ -190,6 +191,7 @@ struct avalon7_dev_description avalon7_dev_table[] = {
 		721,
 		4,
 		18,
+		AVA7_MM721_VIN_ADC_RATIO,
 		AVA7_MM721_VOUT_ADC_RATIO,
 		4981
 	},
@@ -198,7 +200,17 @@ struct avalon7_dev_description avalon7_dev_table[] = {
 		741,
 		4,
 		22,
+		AVA7_MM741_VIN_ADC_RATIO,
 		AVA7_MM741_VOUT_ADC_RATIO,
+		4825,
+	},
+	{
+		"761",
+		761,
+		4,
+		26,
+		AVA7_MM761_VIN_ADC_RATIO,
+		AVA7_MM761_VOUT_ADC_RATIO,
 		4825,
 	}
 };
@@ -232,9 +244,9 @@ static uint32_t decode_voltage(struct avalon7_info *info, int modular_id, uint32
 	return (volt * info->vout_adc_ratio[modular_id] / info->asic_count[modular_id] / 100);
 }
 
-static uint16_t decode_vin(uint16_t volt)
+static uint16_t decode_vin(struct avalon7_info *info, int modular_id, uint16_t volt)
 {
-	return (volt * AVA7_VIN_ADC_RATIO);
+	return (volt * info->vin_adc_ratio[modular_id] / 1000);
 }
 
 static double decode_pvt_temp(uint16_t pvt_code)
@@ -679,7 +691,7 @@ static int decode_pkg(struct cgpu_info *avalon7, struct avalon7_ret *ar, int mod
 
 		for (i = 0; i < info->miner_count[modular_id]; i++) {
 			memcpy(&vin, ar->data + 8 + i * 2, 2);
-			info->get_vin[modular_id][i] = decode_vin(be16toh(vin));
+			info->get_vin[modular_id][i] = decode_vin(info, modular_id, be16toh(vin));
 		}
 		break;
 	case AVA7_P_STATUS_VOLT:
@@ -754,6 +766,10 @@ static int decode_pkg(struct cgpu_info *avalon7, struct avalon7_ret *ar, int mod
 			tmp = *(ar->data + 25);
 			info->get_asic[modular_id][x_miner_id][x_asic_id][10] = tmp;
 		}
+		break;
+	case AVA7_P_STATUS_FAC:
+		applog(LOG_DEBUG, "%s-%d-%d: AVA7_P_STATUS_FAC", avalon7->drv->name, avalon7->device_id, modular_id);
+		info->factory_info[0] = ar->data[0];
 		break;
 	default:
 		applog(LOG_DEBUG, "%s-%d-%d: Unknown response %x", avalon7->drv->name, avalon7->device_id, modular_id, ar->type);
@@ -1433,6 +1449,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 				info->mod_type[i] = avalon7_dev_table[dev_index].mod_type;
 				info->miner_count[i] = avalon7_dev_table[dev_index].miner_count;
 				info->asic_count[i] = avalon7_dev_table[dev_index].asic_count;
+				info->vin_adc_ratio[i] = avalon7_dev_table[dev_index].vin_adc_ratio;
 				info->vout_adc_ratio[i] = avalon7_dev_table[dev_index].vout_adc_ratio;
 				break;
 			}
@@ -1451,7 +1468,7 @@ static void detect_modules(struct cgpu_info *avalon7)
 		info->total_asics[i] = tmp;
 		info->temp_overheat[i] = AVA7_DEFAULT_TEMP_OVERHEAT;
 		info->temp_target[i] = opt_avalon7_temp_target;
-		info->fan_pct[i] = opt_avalon7_fan_min + (opt_avalon7_fan_min + opt_avalon7_fan_max) / 3;
+		info->fan_pct[i] = opt_avalon7_fan_min;
 		for (j = 0; j < info->miner_count[i]; j++) {
 			if (opt_avalon7_voltage == AVA7_INVALID_VOLTAGE)
 				info->set_voltage[i][j] = avalon7_dev_table[dev_index].set_voltage;
@@ -1727,6 +1744,24 @@ static void avalon7_set_freq(struct cgpu_info *avalon7, int addr, int miner_id, 
 	/* Package the data */
 	avalon7_init_pkg(&send_pkg, AVA7_P_SET_PLL, miner_id + 1, info->miner_count[addr]);
 
+	if (addr == AVA7_MODULE_BROADCAST)
+		avalon7_send_bc_pkgs(avalon7, &send_pkg);
+	else
+		avalon7_iic_xfer_pkg(avalon7, addr, &send_pkg, NULL);
+}
+
+static void avalon7_set_factory_info(struct cgpu_info *avalon7, int addr, uint8_t value[])
+{
+	struct avalon7_pkg send_pkg;
+	uint8_t i;
+
+	memset(send_pkg.data, 0, AVA7_P_DATA_LEN);
+
+	for (i = 0; i < AVA7_DEFAULT_FACTORY_INFO_CNT; i++)
+	      send_pkg.data[i] = value[i];
+
+	/* Package the data */
+	avalon7_init_pkg(&send_pkg, AVA7_P_SET_FAC, 1, 1);
 	if (addr == AVA7_MODULE_BROADCAST)
 		avalon7_send_bc_pkgs(avalon7, &send_pkg);
 	else
@@ -2155,6 +2190,9 @@ static struct api_data *avalon7_api_stats(struct cgpu_info *avalon7)
 		strcat(statbuf, buf);
 
 		if (opt_debug) {
+			sprintf(buf, " FAC0[%d]", info->factory_info[0]);
+			strcat(statbuf, buf);
+
 			for (j = 0; j < info->miner_count[i]; j++) {
 				sprintf(buf, " SF%d[", j);
 				strcat(statbuf, buf);
@@ -2403,6 +2441,30 @@ char *set_avalon7_device_freq(struct cgpu_info *avalon7, char *arg)
 	return NULL;
 }
 
+char *set_avalon7_factory_info(struct cgpu_info *avalon7, char *arg)
+{
+	struct avalon7_info *info = avalon7->device_data;
+	int val;
+
+	if (!(*arg))
+		return NULL;
+
+	sscanf(arg, "%d", &val);
+	if (!val)
+		val = AVA7_DEFAULT_FACTORY_INFO_0;
+
+	if (val < AVA7_DEFAULT_FACTORY_INFO_0_MIN || val > AVA7_DEFAULT_FACTORY_INFO_0_MAX)
+		return "Invalid value passed to set_avalon7_factory_info";
+
+	info->factory_info[0] = val;
+	avalon7_set_factory_info(avalon7, 0, (uint8_t *)info->factory_info);
+
+	applog(LOG_NOTICE, "%s-%d: Update factory info %d",
+		avalon7->drv->name, avalon7->device_id, val);
+
+	return NULL;
+}
+
 static char *avalon7_set_device(struct cgpu_info *avalon7, char *option, char *setting, char *replybuf)
 {
 	unsigned int val;
@@ -2505,6 +2567,15 @@ static char *avalon7_set_device(struct cgpu_info *avalon7, char *option, char *s
 		}
 
 		return set_avalon7_device_voltage(avalon7, setting);
+	}
+
+	if (strcasecmp(option, "factory") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing factory info");
+			return replybuf;
+		}
+
+		return set_avalon7_factory_info(avalon7, setting);
 	}
 
 	if (strcasecmp(option, "reboot") == 0) {
