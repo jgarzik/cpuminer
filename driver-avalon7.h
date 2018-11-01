@@ -59,7 +59,6 @@
 #define AVA7_DEFAULT_PMU_CNT	2
 
 #define AVA7_DEFAULT_POLLING_DELAY	20 /* ms */
-#define AVA7_DEFAULT_NTIME_OFFSET	40
 
 #define AVA7_DEFAULT_SMARTSPEED_OFF 0
 #define AVA7_DEFAULT_SMARTSPEED_MODE1 1
@@ -123,7 +122,6 @@
 #define AVA7_P_SET_PMU	0x24
 #define AVA7_P_SET_PLL	0x25
 #define AVA7_P_SET_SS	0x26
-#define AVA7_P_PAIRS	0x27
 #define AVA7_P_SET_FAC	0x28
 
 /* Have to send with I2C address */
@@ -281,13 +279,6 @@ struct avalon7_info {
 	uint16_t vout_adc_ratio[AVA7_DEFAULT_MODULARS];
 
 	bool conn_overloaded;
-
-	uint64_t mm_got_pairs[AVA7_DEFAULT_MODULARS];
-	uint64_t mm_got_invalid_pairs[AVA7_DEFAULT_MODULARS];
-	uint64_t gen_pairs[AVA7_DEFAULT_MODULARS];
-
-	/* SSP */
-	pthread_t ssp_thr;
 };
 
 struct avalon7_iic_info {
@@ -333,6 +324,5 @@ extern uint32_t opt_avalon7_th_ms;
 extern uint32_t opt_avalon7_th_timeout;
 extern uint32_t opt_avalon7_nonce_mask;
 extern bool opt_avalon7_asic_debug;
-extern bool opt_avalon7_ssplus_enable;
 #endif /* USE_AVALON7 */
 #endif	/* _AVALON7_H_ */

@@ -173,10 +173,6 @@ if NEED_I2C_CONTEXT
 cgminer_SOURCES += i2c-context.c
 endif
 
-if SUPPORT_SSP
-cgminer_SOURCES += libssplus.c
-endif
-
 if HAS_AVALON_MINER
 cgminer_SOURCES += driver-avalon-miner.c driver-avalon-miner.h
 endif
