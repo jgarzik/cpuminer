@@ -1995,9 +1995,9 @@ static void avalon8_sswork_update(struct cgpu_info *avalon8)
 	 */
 	if (thr->work_restart)
 		info->work_restart = thr->work_restart;
-	applog(LOG_NOTICE, "%s-%d: New stratum: restart: %d, update: %d, clean: %d",
+	applog(LOG_NOTICE, "%s-%d: New stratum: restart: %d, update: %d",
 	       avalon8->drv->name, avalon8->device_id,
-	       thr->work_restart, thr->work_update, thr->clean_jobs);
+	       thr->work_restart, thr->work_update);
 
 	/* Step 1: MM protocol check */
 	pool = current_pool();
