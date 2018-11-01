@@ -1914,6 +1914,8 @@ static int64_t avalon7_scanhash(struct thr_info *thr)
 		switch (info->freq_mode[i]) {
 			case AVA7_FREQ_INIT_MODE:
 				update_settings = true;
+				/* Make sure to send configuration first */
+				thr->work_update = false;
 				for (j = 0; j < info->miner_count[i]; j++) {
 					for (k = 0; k < AVA7_DEFAULT_PLL_CNT; k++)
 						info->set_frequency[i][j][k] = opt_avalon7_freq[k];
