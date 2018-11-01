@@ -2095,6 +2095,8 @@ static int64_t avalon8_scanhash(struct thr_info *thr)
 		switch (info->freq_mode[i]) {
 			case AVA8_FREQ_INIT_MODE:
 				update_settings = true;
+				/* Make sure to send configuration first */
+				thr->work_update = false;
 				for (j = 0; j < info->miner_count[i]; j++) {
 					for (k = 0; k < AVA8_DEFAULT_PLL_CNT; k++) {
 						if (opt_avalon8_freq[k] != AVA8_DEFAULT_FREQUENCY)
