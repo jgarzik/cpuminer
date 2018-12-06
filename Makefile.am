@@ -178,6 +178,10 @@ if HAS_AVALON7
 cgminer_SOURCES += driver-avalon7.c driver-avalon7.h
 endif
 
+if HAS_AVALON8
+cgminer_SOURCES += driver-avalon8.c driver-avalon8.h
+endif
+
 if NEED_I2C_CONTEXT
 cgminer_SOURCES += i2c-context.c
 endif
