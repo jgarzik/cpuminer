@@ -328,7 +328,7 @@ ASIC SPECIFIC COMMANDS
 --avalon8-voltage-level Set Avalon8 default level of core voltage, range:[0, 15], step: 1
 --avalon8-voltage-level-offset Set Avalon8 default offset of core voltage level, range:[-2, 1], step: 1
 --avalon8-freq      Set Avalon8 default frequency, range:[25, 1200], step: 25, example: 800
---avalon8-freq-sel <arg> Set Avalon8 default frequency select, range:[0, 4], step: 1, example: 3 (default: 3)
+--avalon8-freq-sel <arg> Set Avalon8 default frequency select, range:[0, 3], step: 1, example: 3 (default: 3)
 --avalon8-fan       Set Avalon8 target fan speed, range:[0, 100], step: 1, example: 0-100
 --avalon8-temp <arg> Set Avalon8 target temperature, range:[0, 100] (default: 90)
 --avalon8-polling-delay <arg> Set Avalon8 polling delay value (ms) (default: 20)
@@ -684,7 +684,7 @@ Avalon8 Devices
 --avalon8-voltage-level Set Avalon8 default level of core voltage, range:[0, 15], step: 1
 --avalon8-voltage-level-offset Set Avalon8 default offset of core voltage level, range:[-2, 1], step: 1
 --avalon8-freq      Set Avalon8 default frequency, range:[25, 1200], step: 25, example: 800
---avalon8-freq-sel <arg> Set Avalon8 default frequency select, range:[0, 4], step: 1, example: 3 (default: 3)
+--avalon8-freq-sel <arg> Set Avalon8 default frequency select, range:[0, 3], step: 1, example: 3 (default: 3)
 --avalon8-fan       Set Avalon8 target fan speed, range:[0, 100], step: 1, example: 0-100
 --avalon8-temp <arg> Set Avalon8 target temperature, range:[0, 100] (default: 90)
 --avalon8-polling-delay <arg> Set Avalon8 polling delay value (ms) (default: 20)
