@@ -467,7 +467,7 @@ static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, unsig
         SHA256ROUND(b, c, d, e, f, g, h, a, 63, w15);
 #endif
 
-        /* store resulsts directly in thash */
+        /* store results directly in thash */
 #define store_2(x,i)  \
         w0 = _mm_set1_epi32(hInit[i]); \
         *(__m128i *)&(thash)[i][0+k] = _mm_add_epi32(w0, x);
